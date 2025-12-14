@@ -10,6 +10,7 @@ mod config;
 mod error;
 mod github;
 mod logging;
+mod output;
 mod repos;
 
 use anyhow::{Context, Result};
