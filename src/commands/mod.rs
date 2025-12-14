@@ -13,7 +13,7 @@ use crate::cli::Commands;
 /// Dispatch to the appropriate command handler.
 pub async fn run(command: Commands) -> Result<()> {
     match command {
-        Commands::Auth => auth::run().await,
+        Commands::Auth { logout } => auth::run(logout).await,
         Commands::Repos => repos::run().await,
         Commands::Issues { repo } => issues::run(repo).await,
         Commands::Triage { issue_url } => triage::run(issue_url).await,

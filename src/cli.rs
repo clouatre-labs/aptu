@@ -22,7 +22,11 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Authenticate with GitHub via OAuth device flow
-    Auth,
+    Auth {
+        /// Log out and remove stored credentials
+        #[arg(long)]
+        logout: bool,
+    },
 
     /// List curated repositories available for contribution
     Repos,
