@@ -1,169 +1,37 @@
 //! Triage an issue with AI assistance command.
 //!
-//! Fetches a GitHub issue, analyzes it with AI, displays the triage,
-//! and optionally posts a comment to GitHub.
-
-use std::time::Duration;
+//! Fetches a GitHub issue, analyzes it with AI, and optionally posts
+//! a comment to GitHub. Split into analyze() and post() for proper
+//! confirmation flow (render before asking).
 
 use anyhow::{Context, Result};
-use console::style;
-use dialoguer::Confirm;
-use indicatif::{ProgressBar, ProgressStyle};
 use tracing::{debug, info, instrument};
 
 use crate::ai::openrouter::analyze_issue;
 use crate::ai::types::TriageResponse;
-use crate::cli::{OutputContext, OutputFormat};
 use crate::config::load_config;
 use crate::github::{auth, issues};
+use crate::output::render_triage_markdown;
 
-/// Output mode for triage rendering.
-enum OutputMode {
-    /// Terminal output with colors
-    Terminal,
-    /// Markdown for GitHub comments
-    Markdown,
+/// Intermediate result from analysis (before posting decision).
+pub struct AnalyzeResult {
+    /// Issue title.
+    pub issue_title: String,
+    /// Issue number.
+    pub issue_number: u64,
+    /// AI triage analysis.
+    pub triage: TriageResponse,
+    /// Repository owner.
+    pub owner: String,
+    /// Repository name.
+    pub repo: String,
 }
 
-/// Creates a styled spinner with the given message.
-fn create_spinner(message: &str) -> ProgressBar {
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.cyan} {msg}")
-            .expect("Invalid spinner template"),
-    );
-    spinner.set_message(message.to_string());
-    spinner.enable_steady_tick(Duration::from_millis(100));
-    spinner
-}
-
-/// Renders a labeled list section.
-fn render_list_section(
-    title: &str,
-    items: &[String],
-    empty_msg: &str,
-    mode: &OutputMode,
-    numbered: bool,
-) -> String {
-    let mut output = String::new();
-
-    match mode {
-        OutputMode::Terminal => {
-            output.push_str(&format!("{}\n", style(title).cyan().bold()));
-            if items.is_empty() {
-                output.push_str(&format!("  {}\n", style(empty_msg).dim()));
-            } else if numbered {
-                for (i, item) in items.iter().enumerate() {
-                    output.push_str(&format!("  {}. {}\n", i + 1, item));
-                }
-            } else {
-                for item in items {
-                    output.push_str(&format!("  {} {}\n", style("-").dim(), item));
-                }
-            }
-        }
-        OutputMode::Markdown => {
-            output.push_str(&format!("### {}\n\n", title));
-            if items.is_empty() {
-                output.push_str(&format!("{}\n", empty_msg));
-            } else if numbered {
-                for (i, item) in items.iter().enumerate() {
-                    output.push_str(&format!("{}. {}\n", i + 1, item));
-                }
-            } else {
-                for item in items {
-                    output.push_str(&format!("- {}\n", item));
-                }
-            }
-        }
-    }
-    output.push('\n');
-    output
-}
-
-/// Renders the full triage output.
-fn render_triage(triage: &TriageResponse, mode: &OutputMode, title: Option<(&str, u64)>) -> String {
-    let mut output = String::new();
-
-    // Header
-    match mode {
-        OutputMode::Terminal => {
-            if let Some((issue_title, number)) = title {
-                output.push_str(&format!(
-                    "{}\n\n",
-                    style(format!("Triage for #{}: {}", number, issue_title))
-                        .bold()
-                        .underlined()
-                ));
-            }
-            // Summary for terminal
-            output.push_str(&format!("{}\n", style("Summary").cyan().bold()));
-            output.push_str(&format!("  {}\n\n", triage.summary));
-        }
-        OutputMode::Markdown => {
-            output.push_str("## Triage Summary\n\n");
-            output.push_str(&triage.summary);
-            output.push_str("\n\n");
-        }
-    }
-
-    // Labels - format with backticks for markdown
-    let labels: Vec<String> = match mode {
-        OutputMode::Terminal => triage.suggested_labels.clone(),
-        OutputMode::Markdown => triage
-            .suggested_labels
-            .iter()
-            .map(|l| format!("`{}`", l))
-            .collect(),
-    };
-    output.push_str(&render_list_section(
-        "Suggested Labels",
-        &labels,
-        "None",
-        mode,
-        false,
-    ));
-
-    // Questions
-    output.push_str(&render_list_section(
-        "Clarifying Questions",
-        &triage.clarifying_questions,
-        "None needed",
-        mode,
-        true,
-    ));
-
-    // Duplicates
-    output.push_str(&render_list_section(
-        "Potential Duplicates",
-        &triage.potential_duplicates,
-        "None found",
-        mode,
-        false,
-    ));
-
-    // Attribution (markdown only)
-    if matches!(mode, OutputMode::Markdown) {
-        output.push_str("---\n");
-        output.push_str(
-            "*Generated by [Aptu](https://github.com/clouatre-labs/project-aptu) - AI-assisted OSS triage*\n",
-        );
-    }
-
-    output
-}
-
-/// Triage an issue with AI assistance.
+/// Analyze an issue with AI assistance.
 ///
-/// This command:
-/// 1. Parses the issue URL to extract owner/repo/number
-/// 2. Fetches issue details from GitHub
-/// 3. Calls OpenRouter AI for analysis
-/// 4. Displays the triage for review
-/// 5. Posts a comment to GitHub (with confirmation)
+/// Fetches issue details and runs AI analysis. Does not post anything.
 #[instrument(skip_all, fields(issue_url = %issue_url))]
-pub async fn run(issue_url: String, dry_run: bool, yes: bool, ctx: OutputContext) -> Result<()> {
+pub async fn analyze(issue_url: &str) -> Result<AnalyzeResult> {
     // Load configuration
     let config = load_config().context("Failed to load configuration")?;
 
@@ -173,182 +41,45 @@ pub async fn run(issue_url: String, dry_run: bool, yes: bool, ctx: OutputContext
     }
 
     // Parse the issue URL
-    let (owner, repo, number) = issues::parse_issue_url(&issue_url)?;
+    let (owner, repo, number) = issues::parse_issue_url(issue_url)?;
 
     // Create authenticated client
     let client = auth::create_client().context("Failed to create GitHub client")?;
 
-    // Show spinner while fetching issue (only in interactive mode)
-    let spinner = if ctx.is_interactive() {
-        Some(create_spinner("Fetching issue..."))
-    } else {
-        None
-    };
-
     // Fetch issue details
     let issue_details = issues::fetch_issue_with_comments(&client, &owner, &repo, number).await?;
-
-    if let Some(ref s) = spinner {
-        s.set_message("Analyzing with AI...");
-    }
 
     // Call AI for analysis
     let triage = analyze_issue(&config.ai, &issue_details).await?;
 
-    if let Some(s) = spinner {
-        s.finish_and_clear();
-    }
-
-    // Output based on format
-    match ctx.format {
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&triage)?);
-        }
-        OutputFormat::Yaml => {
-            println!("{}", serde_yml::to_string(&triage)?);
-        }
-        OutputFormat::Text => {
-            // Display the triage (terminal mode)
-            println!();
-            print!(
-                "{}",
-                render_triage(
-                    &triage,
-                    &OutputMode::Terminal,
-                    Some((&issue_details.title, number))
-                )
-            );
-        }
-    }
-
-    // Handle dry-run
-    if dry_run {
-        if matches!(ctx.format, OutputFormat::Text) {
-            println!("{}", style("Dry run - comment not posted.").yellow());
-        }
-        return Ok(());
-    }
-
-    // For non-text output without --yes, don't post (safe default for scripts)
-    if !matches!(ctx.format, OutputFormat::Text) && !yes {
-        return Ok(());
-    }
-
-    // Handle confirmation
-    let should_post = if yes {
-        true
-    } else if config.ui.confirm_before_post {
-        println!();
-        Confirm::new()
-            .with_prompt("Post this triage as a comment to the issue?")
-            .default(false)
-            .interact()
-            .context("Failed to get user confirmation")?
-    } else {
-        true
-    };
-
-    if !should_post {
-        println!("{}", style("Triage not posted.").yellow());
-        return Ok(());
-    }
-
-    // Post the comment (markdown mode)
-    let comment_body = render_triage(&triage, &OutputMode::Markdown, None);
-
-    let spinner = if ctx.is_interactive() {
-        Some(create_spinner("Posting comment..."))
-    } else {
-        None
-    };
-
-    let comment_url = issues::post_comment(&client, &owner, &repo, number, &comment_body).await?;
-
-    if let Some(s) = spinner {
-        s.finish_and_clear();
-    }
-
-    if matches!(ctx.format, OutputFormat::Text) {
-        println!();
-        println!("{}", style("Comment posted successfully!").green().bold());
-        println!("  {}", style(&comment_url).cyan().underlined());
-    }
-
-    info!(comment_url = %comment_url, "Triage comment posted");
-    debug!("Triage complete for issue #{}", number);
-
-    Ok(())
+    Ok(AnalyzeResult {
+        issue_title: issue_details.title,
+        issue_number: number,
+        triage,
+        owner,
+        repo,
+    })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// Post a triage comment to GitHub.
+#[instrument(skip_all, fields(issue_number = analyze_result.issue_number))]
+pub async fn post(analyze_result: &AnalyzeResult) -> Result<String> {
+    // Create authenticated client
+    let client = auth::create_client().context("Failed to create GitHub client")?;
 
-    #[test]
-    fn test_render_triage_markdown_with_all_fields() {
-        let triage = TriageResponse {
-            summary: "This is a bug report about a crash.".to_string(),
-            suggested_labels: vec!["bug".to_string(), "crash".to_string()],
-            clarifying_questions: vec!["What version are you using?".to_string()],
-            potential_duplicates: vec!["#123".to_string()],
-        };
+    // Post the comment
+    let comment_body = render_triage_markdown(&analyze_result.triage);
+    let comment_url = issues::post_comment(
+        &client,
+        &analyze_result.owner,
+        &analyze_result.repo,
+        analyze_result.issue_number,
+        &comment_body,
+    )
+    .await?;
 
-        let comment = render_triage(&triage, &OutputMode::Markdown, None);
+    info!(comment_url = %comment_url, "Triage comment posted");
+    debug!("Triage complete for issue #{}", analyze_result.issue_number);
 
-        assert!(comment.contains("## Triage Summary"));
-        assert!(comment.contains("This is a bug report about a crash."));
-        assert!(comment.contains("- `bug`"));
-        assert!(comment.contains("- `crash`"));
-        assert!(comment.contains("1. What version are you using?"));
-        assert!(comment.contains("- #123"));
-        assert!(comment.contains("Aptu"));
-    }
-
-    #[test]
-    fn test_render_triage_markdown_with_empty_fields() {
-        let triage = TriageResponse {
-            summary: "Simple issue.".to_string(),
-            suggested_labels: vec!["enhancement".to_string()],
-            clarifying_questions: vec![],
-            potential_duplicates: vec![],
-        };
-
-        let comment = render_triage(&triage, &OutputMode::Markdown, None);
-
-        assert!(comment.contains("None needed"));
-        assert!(comment.contains("None found"));
-    }
-
-    #[test]
-    fn test_render_list_section_terminal_numbered() {
-        let items = vec!["First".to_string(), "Second".to_string()];
-        let output = render_list_section("Questions", &items, "None", &OutputMode::Terminal, true);
-
-        assert!(output.contains("1. First"));
-        assert!(output.contains("2. Second"));
-    }
-
-    #[test]
-    fn test_render_list_section_markdown_unnumbered() {
-        let items = vec!["bug".to_string(), "crash".to_string()];
-        let output = render_list_section("Labels", &items, "None", &OutputMode::Markdown, false);
-
-        assert!(output.contains("### Labels"));
-        assert!(output.contains("- bug"));
-        assert!(output.contains("- crash"));
-    }
-
-    #[test]
-    fn test_render_list_section_empty() {
-        let items: Vec<String> = vec![];
-        let output = render_list_section(
-            "Duplicates",
-            &items,
-            "None found",
-            &OutputMode::Markdown,
-            false,
-        );
-
-        assert!(output.contains("None found"));
-    }
+    Ok(comment_url)
 }
