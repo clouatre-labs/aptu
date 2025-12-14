@@ -305,10 +305,11 @@ async fn fetch_issue(client: &Octocrab, repo: &str, issue_num: u64) -> Result<Is
 # User preferences
 [user]
 default_repo = "block/goose"  # Optional: skip repo selection
+maintainer_mode = false       # Triage your own repos privately (Phase 2+)
 
 # AI provider settings
 [ai]
-provider = "openrouter"  # openrouter | ollama
+provider = "openrouter"  # openrouter (Phase 1) | ollama (Phase 2+)
 model = "mistralai/devstral-2512:free"
 allow_paid_models = false  # Safety: require explicit opt-in for paid models
 timeout_seconds = 30
@@ -369,6 +370,8 @@ hardcoded in the source code (safe for public/native clients per OAuth 2.0 spec)
    - Homepage URL: `https://github.com/clouatre-labs/project-aptu`
    - Authorization callback URL: `http://127.0.0.1/callback` (not used for device flow)
 4. Save Client ID and Client Secret in source code constants
+5. Enable Device Flow: Settings > Developer settings > OAuth Apps > [Your App] > Enable Device Flow
+   (One-time setup; required for CLI/headless clients; without this, device flow requests return HTTP 400)
 
 **Reference:** See `gh` CLI source: [internal/authflow/flow.go](https://github.com/cli/cli/blob/trunk/internal/authflow/flow.go)
 
@@ -470,33 +473,60 @@ Issues in block/goose:
 5. User confirms -> post comment to GitHub
 
 **AI Prompt Structure:**
+
+*System Prompt:*
 ```
-You are an OSS issue triage assistant. Analyze this issue and provide:
-1. A 2-3 sentence summary
-2. Suggested labels (bug/enhancement/docs/question/duplicate)
-3. Clarifying questions for the reporter (if needed)
-4. Potential duplicate issues (if any match)
+You are an OSS issue triage assistant. Analyze the provided GitHub issue and provide structured triage information.
 
-Issue Title: {title}
-Issue Body: {body}
-Existing Labels: {labels}
-Recent Comments: {comments}
-Similar Issues: {similar_issues}
-
-Respond in JSON format:
+Your response MUST be valid JSON with this exact schema:
 {
-  "summary": "...",
-  "suggested_labels": ["..."],
-  "clarifying_questions": ["..."],
+  "summary": "A 2-3 sentence summary of what the issue is about and its impact",
+  "suggested_labels": ["label1", "label2"],
+  "clarifying_questions": ["question1", "question2"],
   "potential_duplicates": ["#123", "#456"]
 }
+
+Guidelines:
+- summary: Concise explanation of the problem/request and why it matters
+- suggested_labels: Choose from: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix
+- clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear.
+- potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none.
+
+Be helpful, concise, and actionable. Focus on what a maintainer needs to know.
 ```
 
+*User Prompt:*
+```
+<issue_content>
+Title: {title}
+
+Body:
+{body}
+
+Existing Labels: {labels}
+
+Recent Comments:
+- @{author}: {comment_body}
+</issue_content>
+```
+
+**Context Engineering Parameters:**
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| `temperature` | 0.3 | Low temperature for deterministic, consistent triage output |
+| `max_tokens` | 1024 | Sufficient for structured JSON response |
+| `response_format` | `json_object` | OpenRouter structured output mode (model-dependent) |
+| Body truncation | 4000 chars | Stay within token limits |
+| Max comments | 5 | Limit context size |
+| Comment truncation | 500 chars each | Prevent single comment from dominating |
+
 **Security: Prompt Injection Mitigation**
-- Delimit user content with markers: `<issue_content>...</issue_content>`
-- Validate JSON schema of AI response
+- Delimit user content with `<issue_content>...</issue_content>` tags
+- Truncate inputs to prevent token overflow attacks
+- Validate JSON schema of AI response via `serde_json`
 - Never execute code from AI output
-- Show AI output to user before posting
+- Show AI output to user before posting (interactive confirmation)
 
 ### 6.5 Contribution History (`aptu history`)
 
@@ -607,7 +637,7 @@ where
 - Endpoint: `https://api.mistral.ai/v1/chat/completions`
 - Model: `devstral-small-2505` or `mistral-small-latest`
 
-**Local Fallback:** Ollama
+**Future: Local Ollama Support (Phase 2+)**
 - Endpoint: `http://localhost:11434/api/chat`
 - Model: `mistral:7b` or `codellama:7b`
 
@@ -633,6 +663,11 @@ where
 - Validate AI output against JSON schema
 - Never auto-post without user confirmation
 - Log AI interactions for debugging
+
+### AI Output Disclaimer
+- LLM outputs are suggestions only
+- Final responsibility for triage quality lies with the contributor
+- Always review AI-generated content before posting
 
 ### Rate Limiting
 - Respect GitHub's rate limits (check headers)
