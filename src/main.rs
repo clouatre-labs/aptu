@@ -7,6 +7,7 @@ mod cli;
 mod commands;
 mod config;
 mod error;
+mod github;
 mod logging;
 
 use anyhow::{Context, Result};
