@@ -13,6 +13,7 @@ use tracing::{debug, info, instrument};
 
 use crate::ai::openrouter::analyze_issue;
 use crate::ai::types::TriageResponse;
+use crate::cli::{OutputContext, OutputFormat};
 use crate::config::load_config;
 use crate::github::{auth, issues};
 
@@ -162,7 +163,7 @@ fn render_triage(triage: &TriageResponse, mode: &OutputMode, title: Option<(&str
 /// 4. Displays the triage for review
 /// 5. Posts a comment to GitHub (with confirmation)
 #[instrument(skip_all, fields(issue_url = %issue_url))]
-pub async fn run(issue_url: String, dry_run: bool, yes: bool) -> Result<()> {
+pub async fn run(issue_url: String, dry_run: bool, yes: bool, ctx: OutputContext) -> Result<()> {
     // Load configuration
     let config = load_config().context("Failed to load configuration")?;
 
@@ -177,33 +178,59 @@ pub async fn run(issue_url: String, dry_run: bool, yes: bool) -> Result<()> {
     // Create authenticated client
     let client = auth::create_client().context("Failed to create GitHub client")?;
 
-    // Show spinner while fetching issue
-    let spinner = create_spinner("Fetching issue...");
+    // Show spinner while fetching issue (only in interactive mode)
+    let spinner = if ctx.is_interactive() {
+        Some(create_spinner("Fetching issue..."))
+    } else {
+        None
+    };
 
     // Fetch issue details
     let issue_details = issues::fetch_issue_with_comments(&client, &owner, &repo, number).await?;
 
-    spinner.set_message("Analyzing with AI...");
+    if let Some(ref s) = spinner {
+        s.set_message("Analyzing with AI...");
+    }
 
     // Call AI for analysis
     let triage = analyze_issue(&config.ai, &issue_details).await?;
 
-    spinner.finish_and_clear();
+    if let Some(s) = spinner {
+        s.finish_and_clear();
+    }
 
-    // Display the triage (terminal mode)
-    println!();
-    print!(
-        "{}",
-        render_triage(
-            &triage,
-            &OutputMode::Terminal,
-            Some((&issue_details.title, number))
-        )
-    );
+    // Output based on format
+    match ctx.format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&triage)?);
+        }
+        OutputFormat::Yaml => {
+            println!("{}", serde_yml::to_string(&triage)?);
+        }
+        OutputFormat::Text => {
+            // Display the triage (terminal mode)
+            println!();
+            print!(
+                "{}",
+                render_triage(
+                    &triage,
+                    &OutputMode::Terminal,
+                    Some((&issue_details.title, number))
+                )
+            );
+        }
+    }
 
     // Handle dry-run
     if dry_run {
-        println!("{}", style("Dry run - comment not posted.").yellow());
+        if matches!(ctx.format, OutputFormat::Text) {
+            println!("{}", style("Dry run - comment not posted.").yellow());
+        }
+        return Ok(());
+    }
+
+    // For non-text output without --yes, don't post (safe default for scripts)
+    if !matches!(ctx.format, OutputFormat::Text) && !yes {
         return Ok(());
     }
 
@@ -229,15 +256,23 @@ pub async fn run(issue_url: String, dry_run: bool, yes: bool) -> Result<()> {
     // Post the comment (markdown mode)
     let comment_body = render_triage(&triage, &OutputMode::Markdown, None);
 
-    let spinner = create_spinner("Posting comment...");
+    let spinner = if ctx.is_interactive() {
+        Some(create_spinner("Posting comment..."))
+    } else {
+        None
+    };
 
     let comment_url = issues::post_comment(&client, &owner, &repo, number, &comment_body).await?;
 
-    spinner.finish_and_clear();
+    if let Some(s) = spinner {
+        s.finish_and_clear();
+    }
 
-    println!();
-    println!("{}", style("Comment posted successfully!").green().bold());
-    println!("  {}", style(&comment_url).cyan().underlined());
+    if matches!(ctx.format, OutputFormat::Text) {
+        println!();
+        println!("{}", style("Comment posted successfully!").green().bold());
+        println!("  {}", style(&comment_url).cyan().underlined());
+    }
 
     info!(comment_url = %comment_url, "Triage comment posted");
     debug!("Triage complete for issue #{}", number);
