@@ -22,6 +22,8 @@ opencode.json
 .cursor/
 .windsurf/
 .kiro/
+.goosehints
+AGENTS.md
 
 # Editor/IDE
 .idea/
