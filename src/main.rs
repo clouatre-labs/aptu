@@ -3,18 +3,28 @@
 //! A CLI tool that helps developers contribute meaningfully to open source
 //! projects through AI-assisted issue triage and PR review.
 
+mod cli;
+mod commands;
 mod config;
 mod error;
 mod logging;
 
-use anyhow::Result;
-use tracing::info;
+use anyhow::{Context, Result};
+use clap::Parser;
+use tracing::debug;
 
-fn main() -> Result<()> {
+use crate::cli::Cli;
+
+#[tokio::main]
+async fn main() -> Result<()> {
     logging::init_logging();
 
-    info!("Aptu starting...");
-    println!("Hello, world!");
+    let cli = Cli::parse();
 
-    Ok(())
+    // Load config early to validate it works (Option A from plan)
+    #[allow(unused_variables)]
+    let config = config::load_config().context("Failed to load configuration")?;
+    debug!("Configuration loaded successfully");
+
+    commands::run(cli.command).await
 }
