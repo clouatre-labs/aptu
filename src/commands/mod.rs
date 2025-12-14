@@ -16,7 +16,11 @@ pub async fn run(command: Commands) -> Result<()> {
         Commands::Auth { logout } => auth::run(logout).await,
         Commands::Repos => repos::run().await,
         Commands::Issues { repo } => issues::run(repo).await,
-        Commands::Triage { issue_url } => triage::run(issue_url).await,
+        Commands::Triage {
+            issue_url,
+            dry_run,
+            yes,
+        } => triage::run(issue_url, dry_run, yes).await,
         Commands::History => history::run().await,
     }
 }

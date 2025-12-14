@@ -60,6 +60,8 @@ pub struct AiConfig {
     pub model: String,
     /// Request timeout in seconds.
     pub timeout_seconds: u64,
+    /// Allow paid models (default: false for cost control).
+    pub allow_paid_models: bool,
 }
 
 impl Default for AiConfig {
@@ -68,6 +70,7 @@ impl Default for AiConfig {
             provider: "openrouter".to_string(),
             model: "mistralai/devstral-2512:free".to_string(),
             timeout_seconds: 30,
+            allow_paid_models: false,
         }
     }
 }
