@@ -318,18 +318,79 @@ repo_ttl_hours = 24
 
 ### 6.1 Authentication (`aptu auth`)
 
-**Flow:** GitHub OAuth Device Flow (no redirect server needed)
+#### Authentication Priority Chain
+
+Aptu checks for GitHub credentials in this order:
+
+1. **Environment variable** - `GH_TOKEN` or `GITHUB_TOKEN` (for CI/scripting)
+2. **GitHub CLI** - `gh auth token` if `gh` is installed (piggyback on existing auth)
+3. **Native OAuth** - `aptu auth` device flow (primary interactive method)
+
+This means users with `gh` CLI already installed don't need to authenticate again.
+
+#### OAuth App Registration (Developer Setup)
+
+Aptu uses a registered **OAuth App** with GitHub. The Client ID and Client Secret are
+hardcoded in the source code (safe for public/native clients per OAuth 2.0 spec).
+
+**Why OAuth App instead of GitHub App?**
+- OAuth Apps are simpler for user-facing CLI tools
+- GitHub Apps are better for bots/automation acting independently
+- `gh` CLI uses the same pattern (OAuth App with embedded credentials)
+
+**One-time setup (maintainer only):**
+1. Go to <https://github.com/settings/developers>
+2. Click "New OAuth App"
+3. Fill in:
+   - Application name: `Aptu CLI`
+   - Homepage URL: `https://github.com/clouatre-labs/project-aptu`
+   - Authorization callback URL: `http://127.0.0.1/callback` (not used for device flow)
+4. Save Client ID and Client Secret in source code constants
+
+**Reference:** See `gh` CLI source: [internal/authflow/flow.go](https://github.com/cli/cli/blob/trunk/internal/authflow/flow.go)
+
+#### Native OAuth Device Flow (`aptu auth`)
+
+When no existing token is found:
 
 1. User runs `aptu auth`
-2. CLI requests device code from GitHub
+2. CLI requests device code from GitHub using embedded Client ID
 3. CLI displays: "Visit https://github.com/login/device and enter code: XXXX-XXXX"
 4. User authorizes in browser
 5. CLI polls for access token
-6. Token stored in system keychain
+6. Token stored in system keychain via `keyring` crate
 
-**Required OAuth Scopes:**
-- `repo` - Read issues, create comments
-- `read:user` - Get user profile
+```rust
+// Example using octocrab device flow
+use octocrab::Octocrab;
+use secrecy::SecretString;
+
+const APTU_CLIENT_ID: &str = "abc123...";  // Hardcoded after OAuth App registration
+
+let client_id = SecretString::from(APTU_CLIENT_ID);
+let codes = crab.authenticate_as_device(&client_id, ["repo", "read:org"]).await?;
+println!("Go to {} and enter code {}", codes.verification_uri, codes.user_code);
+let auth = codes.poll_until_available(&crab, &client_id).await?;
+```
+
+#### Required OAuth Scopes
+
+| Scope | Purpose |
+|-------|---------|
+| `repo` | Read issues, create comments, access private repos |
+| `read:org` | List organization memberships (for org-owned repos) |
+| `gist` | Optional: for future gist-based features |
+
+#### Token Storage
+
+- **Primary:** System keychain via `keyring` crate (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- **Fallback:** `~/.config/aptu/token` with `600` permissions (if keychain unavailable)
+- **Never:** Environment variables for persistent storage (only for CI override)
+
+#### Additional Commands
+
+- `aptu auth status` - Show current auth state and token source
+- `aptu auth logout` - Revoke token and remove from keychain
 
 ### 6.2 Repository Discovery (`aptu repos`)
 
@@ -520,10 +581,12 @@ where
 ## 8. Security Considerations
 
 ### Authentication
-- Use OAuth device flow (no secrets in CLI binary)
-- Store tokens in system keychain, not plaintext
-- Support token refresh before expiry
-- Allow `aptu logout` to revoke and delete
+- **OAuth credentials in source:** Client ID and Client Secret are embedded in source code
+  (safe for native/CLI apps per [OAuth 2.0 for Native Apps RFC 8252](https://tools.ietf.org/html/rfc8252))
+- **Token storage:** System keychain via `keyring` crate (never plaintext files)
+- **Token refresh:** OAuth tokens from device flow are long-lived; refresh before expiry
+- **Logout:** `aptu auth logout` revokes token via GitHub API and removes from keychain
+- **Fallback chain:** Check env vars and `gh` CLI before prompting for new auth
 
 ### Prompt Injection
 - Treat all issue content as untrusted
@@ -672,8 +735,12 @@ where
 
 - [Mistral Conversation](https://chat.mistral.ai/chat/b8fe356e-725e-4a57-b5fb-1204c91fded3) - Initial brainstorm
 - [Grok Conversation](https://grok.com/share/c2hhcmQtMw_71925307-d251-4afe-aae1-73c1bc76181a) - Market analysis
-- [GitHub OAuth Device Flow](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow)
+- [GitHub OAuth Device Flow](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow) - Device flow documentation
 - [GitHub REST API](https://docs.github.com/en/rest) - API documentation
+- [GitHub Apps vs OAuth Apps](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps) - When to use which
+- [OAuth 2.0 for Native Apps (RFC 8252)](https://tools.ietf.org/html/rfc8252) - Why client secrets in source are OK
+- [gh CLI authflow source](https://github.com/cli/cli/blob/trunk/internal/authflow/flow.go) - Reference implementation
+- [cli/oauth Go library](https://github.com/cli/oauth) - OAuth device/web flow library used by gh
 - [OpenRouter](https://openrouter.ai/) - Unified AI API provider
 - [Octocrab](https://github.com/xampprocky/octocrab) - Rust GitHub API client
 - [CodeTriage](https://www.codetriage.com/) - Competitor reference
@@ -681,5 +748,5 @@ where
 
 ---
 
-*Last updated: 2025-12-13*
+*Last updated: 2025-12-14*
 *Author: Hugues Clouatre*
