@@ -7,17 +7,26 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
+use serde::Serialize;
 use tracing::{debug, info, instrument};
 
+use crate::cli::{OutputContext, OutputFormat};
 use crate::github::{auth, graphql};
 use crate::repos;
+
+/// Issues output for JSON/YAML serialization.
+#[derive(Serialize)]
+struct RepoIssuesOutput {
+    repo: String,
+    issues: Vec<graphql::IssueNode>,
+}
 
 /// List open issues suitable for contribution.
 ///
 /// Fetches issues with "good first issue" label from all curated repositories
 /// (or a specific one if `--repo` is provided).
 #[instrument(skip_all, fields(repo_filter = ?repo))]
-pub async fn run(repo: Option<String>) -> Result<()> {
+pub async fn run(repo: Option<String>, ctx: OutputContext) -> Result<()> {
     // Check authentication
     if !auth::is_authenticated() {
         anyhow::bail!("Authentication required - run `aptu auth` first");
@@ -42,11 +51,17 @@ pub async fn run(repo: Option<String>) -> Result<()> {
 
     if repos_to_query.is_empty() {
         if let Some(filter) = &repo {
-            println!(
-                "{}",
-                style(format!("No curated repository matches '{}'", filter)).yellow()
-            );
-            println!("Run `aptu repos` to see available repositories.");
+            match ctx.format {
+                OutputFormat::Json => println!("[]"),
+                OutputFormat::Yaml => println!("[]"),
+                OutputFormat::Text => {
+                    println!(
+                        "{}",
+                        style(format!("No curated repository matches '{}'", filter)).yellow()
+                    );
+                    println!("Run `aptu repos` to see available repositories.");
+                }
+            }
         }
         return Ok(());
     }
@@ -54,70 +69,97 @@ pub async fn run(repo: Option<String>) -> Result<()> {
     // Create authenticated client
     let client = auth::create_client().context("Failed to create GitHub client")?;
 
-    // Show spinner while fetching
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.cyan} {msg}")
-            .expect("Invalid spinner template"),
-    );
-    spinner.set_message("Fetching issues...");
-    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+    // Show spinner while fetching (only in interactive mode)
+    let spinner = if ctx.is_interactive() {
+        let s = ProgressBar::new_spinner();
+        s.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.cyan} {msg}")
+                .expect("Invalid spinner template"),
+        );
+        s.set_message("Fetching issues...");
+        s.enable_steady_tick(std::time::Duration::from_millis(100));
+        Some(s)
+    } else {
+        None
+    };
 
     // Fetch issues via GraphQL
     let results = graphql::fetch_issues(&client, &repos_to_query).await?;
 
-    spinner.finish_and_clear();
+    if let Some(s) = spinner {
+        s.finish_and_clear();
+    }
 
     // Count total issues
     let total_issues: usize = results.iter().map(|(_, issues)| issues.len()).sum();
 
-    if total_issues == 0 {
-        println!(
-            "{}",
-            style("No open 'good first issue' issues found.").yellow()
-        );
-        return Ok(());
-    }
-
-    info!(total_issues, repos = results.len(), "Found issues");
-
-    // Display results
-    println!();
-    println!(
-        "{}",
-        style(format!(
-            "Found {} issues across {} repositories:",
-            total_issues,
-            results.len()
-        ))
-        .bold()
-    );
-    println!();
-
-    for (repo_name, issues) in &results {
-        println!("{}", style(repo_name).cyan().bold());
-
-        for issue in issues {
-            let labels: Vec<&str> = issue.labels.nodes.iter().map(|l| l.name.as_str()).collect();
-            let label_str = if labels.is_empty() {
-                String::new()
-            } else {
-                format!("[{}]", labels.join(", "))
-            };
-
-            // Parse and format relative time
-            let age = format_relative_time(&issue.created_at);
-
-            println!(
-                "  {} {} {} {}",
-                style(format!("#{}", issue.number)).green(),
-                truncate_title(&issue.title, 50),
-                style(label_str).dim(),
-                style(age).dim()
-            );
+    // Handle output format
+    match ctx.format {
+        OutputFormat::Json => {
+            let output: Vec<RepoIssuesOutput> = results
+                .into_iter()
+                .map(|(repo, issues)| RepoIssuesOutput { repo, issues })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&output)?);
         }
-        println!();
+        OutputFormat::Yaml => {
+            let output: Vec<RepoIssuesOutput> = results
+                .into_iter()
+                .map(|(repo, issues)| RepoIssuesOutput { repo, issues })
+                .collect();
+            println!("{}", serde_yml::to_string(&output)?);
+        }
+        OutputFormat::Text => {
+            if total_issues == 0 {
+                println!(
+                    "{}",
+                    style("No open 'good first issue' issues found.").yellow()
+                );
+                return Ok(());
+            }
+
+            info!(total_issues, repos = results.len(), "Found issues");
+
+            // Display results
+            println!();
+            println!(
+                "{}",
+                style(format!(
+                    "Found {} issues across {} repositories:",
+                    total_issues,
+                    results.len()
+                ))
+                .bold()
+            );
+            println!();
+
+            for (repo_name, issues) in &results {
+                println!("{}", style(repo_name).cyan().bold());
+
+                for issue in issues {
+                    let labels: Vec<&str> =
+                        issue.labels.nodes.iter().map(|l| l.name.as_str()).collect();
+                    let label_str = if labels.is_empty() {
+                        String::new()
+                    } else {
+                        format!("[{}]", labels.join(", "))
+                    };
+
+                    // Parse and format relative time
+                    let age = format_relative_time(&issue.created_at);
+
+                    println!(
+                        "  {} {} {} {}",
+                        style(format!("#{}", issue.number)).green(),
+                        truncate_title(&issue.title, 50),
+                        style(label_str).dim(),
+                        style(age).dim()
+                    );
+                }
+                println!();
+            }
+        }
     }
 
     debug!("Issues listing complete");
