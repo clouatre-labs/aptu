@@ -120,6 +120,28 @@ Build a command-line tool that:
 └──────────────────┘  └──────────────────┘
 ```
 
+### Global CLI Flags
+
+All commands support these flags for LLM-friendly and scripted usage:
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--output <format>` | `-o` | Output format: `text` (default), `json`, `markdown` |
+| `--quiet` | `-q` | Suppress non-essential output (spinners, progress) |
+| `--yes` | `-y` | Skip confirmation prompts (auto-confirm) |
+
+**Examples:**
+```bash
+# JSON output for LLM parsing
+aptu issues block/goose --output json
+
+# Quiet mode for scripts
+aptu auth status --quiet
+
+# Auto-confirm for automation
+aptu triage https://github.com/org/repo/issues/123 --yes
+```
+
 ### Rust Crates
 
 #### Core Dependencies
@@ -288,6 +310,7 @@ default_repo = "block/goose"  # Optional: skip repo selection
 [ai]
 provider = "openrouter"  # openrouter | ollama
 model = "mistralai/devstral-2512:free"
+allow_paid_models = false  # Safety: require explicit opt-in for paid models
 timeout_seconds = 30
 
 # GitHub settings
@@ -412,11 +435,17 @@ Available repositories:
 
 ### 6.3 Issue Listing (`aptu issues [repo]`)
 
-**Filters:**
-- Label: "good first issue" OR "help wanted"
+**Implementation:** Uses GitHub GraphQL API for efficient label filtering.
+
+**Current Filters (MVP):**
+- Label: `good first issue` (exact match, case-insensitive)
 - State: Open
-- No assignee
-- Created in last 90 days
+- Limit: 20 issues per request
+
+**Future Filters:**
+- Additional labels: "help wanted"
+- No assignee filter
+- Date range filter (e.g., created in last 90 days)
 
 **Output Example:**
 ```
@@ -496,6 +525,8 @@ Respond in JSON format:
 
 ### GitHub API Endpoints
 
+**REST API:**
+
 | Action | Endpoint | Method |
 |--------|----------|--------|
 | Device auth start | `/login/device/code` | POST |
@@ -505,6 +536,14 @@ Respond in JSON format:
 | Get issue | `/repos/{owner}/{repo}/issues/{number}` | GET |
 | Search issues | `/search/issues` | GET |
 | Create comment | `/repos/{owner}/{repo}/issues/{number}/comments` | POST |
+
+**GraphQL API:**
+
+| Action | Endpoint | Notes |
+|--------|----------|-------|
+| List issues with labels | `https://api.github.com/graphql` | Used by `aptu issues` for efficient label filtering |
+
+GraphQL is preferred for issue listing because it allows filtering by label in a single request, avoiding the need to fetch all issues and filter client-side.
 
 ### Rate Limits
 - Authenticated: 5,000 requests/hour
@@ -690,10 +729,10 @@ where
 ## 11. Roadmap
 
 ### Phase 1: Rust CLI (Weeks 1-4)
-- [ ] Project setup (Cargo, CI, README)
-- [ ] GitHub OAuth device flow
-- [ ] Fetch issues from hardcoded repos
-- [ ] AI integration (OpenRouter API with Devstral 2)
+- [x] Project setup (Cargo, CI, README)
+- [x] GitHub OAuth device flow
+- [x] Fetch issues from hardcoded repos
+- [x] AI integration (OpenRouter API with Devstral 2)
 - [ ] Triage command with user confirmation
 - [ ] Local history tracking
 - [ ] Test with 1-2 real repos
