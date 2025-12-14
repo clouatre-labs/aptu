@@ -42,6 +42,14 @@ pub enum Commands {
     Triage {
         /// GitHub issue URL to triage
         issue_url: String,
+
+        /// Preview triage without posting to GitHub
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip confirmation prompt (post immediately)
+        #[arg(short = 'y', long)]
+        yes: bool,
     },
 
     /// Show your contribution history
