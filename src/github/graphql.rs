@@ -5,14 +5,14 @@
 
 use anyhow::{Context, Result};
 use octocrab::Octocrab;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{debug, instrument};
 
 use crate::repos::CuratedRepo;
 
 /// A GitHub issue from the GraphQL response.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IssueNode {
     /// Issue number.
     pub number: u64,
@@ -29,14 +29,14 @@ pub struct IssueNode {
 }
 
 /// Labels container from GraphQL response.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Labels {
     /// List of label nodes.
     pub nodes: Vec<LabelNode>,
 }
 
 /// A single label.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LabelNode {
     /// Label name.
     pub name: String,

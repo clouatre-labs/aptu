@@ -5,10 +5,11 @@
 //! - Welcoming (good first issue labels exist)
 //! - Responsive (maintainers reply within 1 week)
 
+use serde::Serialize;
 use tracing::debug;
 
 /// A curated repository for contribution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CuratedRepo {
     /// Repository owner (user or organization).
     pub owner: &'static str,
