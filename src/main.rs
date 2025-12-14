@@ -9,6 +9,7 @@ mod config;
 mod error;
 mod github;
 mod logging;
+mod repos;
 
 use anyhow::{Context, Result};
 use clap::Parser;
