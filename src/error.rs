@@ -39,4 +39,8 @@ pub enum AptuError {
     /// Network/HTTP error from reqwest.
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
+
+    /// Keyring/credential storage error.
+    #[error("Keyring error: {0}")]
+    Keyring(#[from] keyring::Error),
 }
