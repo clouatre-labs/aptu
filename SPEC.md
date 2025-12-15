@@ -1,6 +1,10 @@
 # Aptu - Project Specification
 
-> **Aptu** (Mi'kmaq) - "Paddle" - Navigate forward through open source contribution
+> **APTU** - AI-Powered Triage Utility
+> 
+> Also: (Mi'kmaq) "Paddle" - Navigate forward through open source contribution
+
+**Domains:** [aptu.dev](https://aptu.dev) | [aptu.app](https://aptu.app)
 
 ## 1. Project Overview
 
@@ -783,9 +787,29 @@ where
 ### Phase 3: Gamification (Weeks 11-16)
 - [ ] Points system design
 - [ ] Backend for user profiles
-- [ ] Leaderboards
+- [ ] Leaderboards (global, per-repo, weekly/monthly/all-time)
 - [ ] Badges and achievements
 - [ ] Skill progression (unlock complex repos)
+
+#### Leaderboard Design (Phase 3)
+
+**Leaderboard Types:**
+- **Global** - All-time top contributors across all repos
+- **Per-Repo** - Top contributors to specific repositories
+- **Time-based** - Weekly, monthly, and all-time rankings
+- **Skill-tier** - Separate boards for beginner/intermediate/advanced
+
+**Ranking Criteria:**
+- Quality-weighted triages (accepted > pending > rejected)
+- Maintainer approval rate
+- Consistency (streak bonuses)
+- Difficulty multiplier (complex repos = more points)
+
+**Anti-Gaming Measures:**
+- Minimum quality threshold to appear on leaderboard
+- Rate limiting (max triages per day that count)
+- Maintainer rejection penalty
+- Manual review for suspicious patterns
 
 ### Phase 4: Monetization (Weeks 17+)
 - [ ] Premium AI tier integration
@@ -801,7 +825,6 @@ where
 2. **Maintainer opt-in:** Should repos explicitly opt-in to Aptu contributions?
 3. **Quality scoring:** How do we measure if a triage was "good" beyond maintainer approval?
 4. **Offline mode:** Cache issues for offline viewing on mobile?
-5. **Name collision:** Is "Aptu" unique enough? (Quick search shows no major conflicts)
 
 ---
 
@@ -819,6 +842,7 @@ where
 - [Octocrab](https://github.com/xampprocky/octocrab) - Rust GitHub API client
 - [CodeTriage](https://www.codetriage.com/) - Competitor reference
 - [Mistral API](https://docs.mistral.ai/) - AI provider docs
+- [cc-sdd/OpenSpec](https://github.com/cc-sdd/OpenSpec) - Specification format inspiration
 
 ---
 
