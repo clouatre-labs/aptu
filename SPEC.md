@@ -419,8 +419,8 @@ let auth = codes.poll_until_available(&crab, &client_id).await?;
 
 #### Additional Commands
 
-- `aptu auth status` - Show current auth state and token source
-- `aptu auth logout` - Revoke token and remove from keychain
+- `aptu auth status` - Show current auth state and token source (planned)
+- `aptu auth --logout` - Remove stored credentials from keychain
 
 ### 6.2 Repository Discovery (`aptu repos`)
 
@@ -440,7 +440,7 @@ Available repositories:
   3. tauri-apps/tauri     Rust     89 open issues   Last active: 3 days ago
 ```
 
-### 6.3 Issue Listing (`aptu issues [repo]`)
+### 6.3 Issue Listing (`aptu issues --repo <repo>`)
 
 **Implementation:** Uses GitHub GraphQL API for efficient label filtering.
 
