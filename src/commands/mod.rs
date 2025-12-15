@@ -13,6 +13,7 @@ use anyhow::{Context, Result};
 use console::style;
 use dialoguer::Confirm;
 use indicatif::{ProgressBar, ProgressStyle};
+use tracing::debug;
 
 use crate::cli::{Commands, OutputContext, OutputFormat};
 use crate::output;
@@ -121,6 +122,19 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
                 s.finish_and_clear();
             }
 
+            // Record to history
+            let contribution = crate::history::Contribution {
+                id: uuid::Uuid::new_v4(),
+                repo: format!("{}/{}", analyze_result.owner, analyze_result.repo),
+                issue: analyze_result.issue_number,
+                action: "triage".to_string(),
+                timestamp: chrono::Utc::now(),
+                comment_url: comment_url.clone(),
+                status: crate::history::ContributionStatus::Pending,
+            };
+            crate::history::add_contribution(contribution)?;
+            debug!("Contribution recorded to history");
+
             // Show success
             if matches!(ctx.format, OutputFormat::Text) {
                 println!();
@@ -131,6 +145,10 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
             Ok(())
         }
 
-        Commands::History => history::run().await,
+        Commands::History => {
+            let result = history::run().await?;
+            output::render_history(&result, &ctx);
+            Ok(())
+        }
     }
 }
