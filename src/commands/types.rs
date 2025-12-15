@@ -5,6 +5,7 @@
 
 use crate::ai::types::TriageResponse;
 use crate::github::graphql::IssueNode;
+use crate::history::Contribution;
 use crate::repos::CuratedRepo;
 
 /// Result from the repos command.
@@ -39,4 +40,10 @@ pub struct TriageResult {
     pub dry_run: bool,
     /// Whether the user declined to post.
     pub user_declined: bool,
+}
+
+/// Result from the history command.
+pub struct HistoryResult {
+    /// List of contributions.
+    pub contributions: Vec<Contribution>,
 }

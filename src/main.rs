@@ -9,6 +9,7 @@ mod commands;
 mod config;
 mod error;
 mod github;
+mod history;
 mod logging;
 mod output;
 mod repos;
