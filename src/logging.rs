@@ -27,11 +27,16 @@ use tracing_subscriber::{fmt, EnvFilter};
 /// - `reqwest=warn` - Warn level for HTTP client
 ///
 /// These defaults can be overridden via the `RUST_LOG` environment variable.
-pub fn init_logging() {
-    let fmt_layer = fmt::layer().with_target(false);
+pub fn init_logging(quiet: bool) {
+    let fmt_layer = fmt::layer().with_target(false).with_writer(std::io::stderr);
 
+    let default_filter = if quiet {
+        "aptu=warn,octocrab=warn,reqwest=warn"
+    } else {
+        "aptu=info,octocrab=warn,reqwest=warn"
+    };
     let filter_layer = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("aptu=info,octocrab=warn,reqwest=warn"))
+        .or_else(|_| EnvFilter::try_new(default_filter))
         .expect("valid default filter directives");
 
     tracing_subscriber::registry()

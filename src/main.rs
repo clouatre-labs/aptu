@@ -22,9 +22,9 @@ use crate::cli::{Cli, OutputContext};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    logging::init_logging();
-
     let cli = Cli::parse();
+    logging::init_logging(cli.quiet);
+
     let output_ctx = OutputContext::from_cli(cli.output, cli.quiet);
 
     // Load config early to validate it works (Option A from plan)
