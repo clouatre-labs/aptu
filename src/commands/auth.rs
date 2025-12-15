@@ -7,15 +7,8 @@ use tracing::info;
 
 use crate::github::{auth, OAUTH_CLIENT_ID};
 
-/// Run the authentication command.
-///
-/// If `logout` is true, removes stored credentials.
-/// Otherwise, initiates the OAuth device flow.
-pub async fn run(logout: bool) -> Result<()> {
-    if logout {
-        return run_logout();
-    }
-
+/// Run the login command - authenticate with GitHub.
+pub async fn run_login() -> Result<()> {
     // Check if already authenticated via any source
     if let Some((_, source)) = auth::resolve_token() {
         println!(
@@ -25,7 +18,7 @@ pub async fn run(logout: bool) -> Result<()> {
         );
         println!(
             "Run {} to remove keyring token and re-authenticate.",
-            style("aptu auth --logout").cyan()
+            style("aptu auth logout").cyan()
         );
         return Ok(());
     }
@@ -48,8 +41,8 @@ pub async fn run(logout: bool) -> Result<()> {
     Ok(())
 }
 
-/// Remove stored credentials.
-fn run_logout() -> Result<()> {
+/// Run the logout command - remove stored credentials.
+pub fn run_logout() -> Result<()> {
     if !auth::has_keyring_token() {
         println!("{} No token stored in keyring.", style("!").yellow().bold());
         return Ok(());
@@ -62,6 +55,28 @@ fn run_logout() -> Result<()> {
         "{} Logged out from GitHub. Token removed from keychain.",
         style("*").green().bold()
     );
+
+    Ok(())
+}
+
+/// Run the status command - show current authentication state.
+pub fn run_status() -> Result<()> {
+    match auth::resolve_token() {
+        Some((_, source)) => {
+            println!(
+                "{} Authenticated with GitHub (via {}).",
+                style("*").green().bold(),
+                source
+            );
+        }
+        None => {
+            println!(
+                "{} Not authenticated. Run {} to authenticate.",
+                style("!").yellow().bold(),
+                style("aptu auth login").cyan()
+            );
+        }
+    }
 
     Ok(())
 }

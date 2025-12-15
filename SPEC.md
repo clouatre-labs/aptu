@@ -110,11 +110,12 @@ Build a command-line tool that:
 │                      Aptu CLI                           │
 ├─────────────────────────────────────────────────────────┤
 │  Commands:                                              │
-│  - aptu auth        (GitHub OAuth device flow)         │
-│  - aptu repos       (list curated repos)               │
-│  - aptu issues      (fetch good-first-issues)          │
-│  - aptu triage <id> (AI summary + submit comment)      │
-│  - aptu history     (local contribution log)           │
+│  - aptu auth login/logout/status  (GitHub OAuth)        │
+│  - aptu repo list                 (curated repos)       │
+│  - aptu issue list [REPO]         (good-first-issues)   │
+│  - aptu issue triage <URL>        (AI triage + comment) │
+│  - aptu history                   (contribution log)    │
+│  - aptu completion <SHELL>        (shell completions)   │
 └─────────────────────────────────────────────────────────┘
            │                    │
            ▼                    ▼
@@ -122,6 +123,23 @@ Build a command-line tool that:
 │   GitHub API     │  │    AI Provider   │
 │  (REST/GraphQL)  │  │ (Mistral/Claude) │
 └──────────────────┘  └──────────────────┘
+```
+
+### Command Structure
+
+```
+aptu
+├── auth
+│   ├── login              # Authenticate with GitHub
+│   ├── logout             # Remove stored credentials
+│   └── status             # Show current auth state
+├── repo
+│   └── list               # List curated repositories
+├── issue
+│   ├── list [REPO]        # List issues (optional positional)
+│   └── triage <URL>       # Triage an issue with AI
+├── history                 # Show contribution history
+└── completion <SHELL>      # Generate shell completions
 ```
 
 ### Global CLI Flags
@@ -132,18 +150,26 @@ All commands support these flags for LLM-friendly and scripted usage:
 |------|-------|-------------|
 | `--output <format>` | `-o` | Output format: `text` (default), `json`, `yaml`, `markdown` |
 | `--quiet` | `-q` | Suppress non-essential output (spinners, progress) |
-| `--yes` | `-y` | Skip confirmation prompts (auto-confirm) |
+
+**Command-specific flags:**
+| Flag | Command | Description |
+|------|---------|-------------|
+| `--dry-run` | `issue triage` | Preview triage without posting |
+| `--yes` / `-y` | `issue triage` | Skip confirmation prompt |
 
 **Examples:**
 ```bash
 # JSON output for LLM parsing
-aptu issues block/goose --output json
+aptu issue list block/goose --output json
 
-# Quiet mode for scripts
+# Check auth status quietly
 aptu auth status --quiet
 
-# Auto-confirm for automation
-aptu triage https://github.com/org/repo/issues/123 --yes
+# Auto-confirm triage for automation
+aptu issue triage https://github.com/org/repo/issues/123 --yes
+
+# Generate shell completions
+aptu completion zsh > ~/.zsh/completions/_aptu
 ```
 
 ### Rust Crates
@@ -346,13 +372,21 @@ repo_ttl_hours = 24
 
 ### 6.1 Authentication (`aptu auth`)
 
+#### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `aptu auth login` | Authenticate with GitHub via OAuth device flow |
+| `aptu auth logout` | Remove stored credentials from keychain |
+| `aptu auth status` | Show current authentication state and token source |
+
 #### Authentication Priority Chain
 
 Aptu checks for GitHub credentials in this order:
 
 1. **Environment variable** - `GH_TOKEN` or `GITHUB_TOKEN` (for CI/scripting)
 2. **GitHub CLI** - `gh auth token` if `gh` is installed (piggyback on existing auth)
-3. **Native OAuth** - `aptu auth` device flow (primary interactive method)
+3. **Native OAuth** - `aptu auth login` device flow (primary interactive method)
 
 This means users with `gh` CLI already installed don't need to authenticate again.
 
@@ -379,11 +413,11 @@ hardcoded in the source code (safe for public/native clients per OAuth 2.0 spec)
 
 **Reference:** See `gh` CLI source: [internal/authflow/flow.go](https://github.com/cli/cli/blob/trunk/internal/authflow/flow.go)
 
-#### Native OAuth Device Flow (`aptu auth`)
+#### Native OAuth Device Flow (`aptu auth login`)
 
 When no existing token is found:
 
-1. User runs `aptu auth`
+1. User runs `aptu auth login`
 2. CLI requests device code from GitHub using embedded Client ID
 3. CLI displays: "Visit https://github.com/login/device and enter code: XXXX-XXXX"
 4. User authorizes in browser
@@ -417,12 +451,7 @@ let auth = codes.poll_until_available(&crab, &client_id).await?;
 - **Fallback:** `~/.config/aptu/token` with `600` permissions (if keychain unavailable)
 - **Never:** Environment variables for persistent storage (only for CI override)
 
-#### Additional Commands
-
-- `aptu auth status` - Show current auth state and token source (planned)
-- `aptu auth --logout` - Remove stored credentials from keychain
-
-### 6.2 Repository Discovery (`aptu repos`)
+### 6.2 Repository Discovery (`aptu repo list`)
 
 **MVP:** Hardcoded list of 10-20 curated repos known to be:
 - Active (commits in last 30 days)
@@ -440,7 +469,7 @@ Available repositories:
   3. tauri-apps/tauri     Rust     89 open issues   Last active: 3 days ago
 ```
 
-### 6.3 Issue Listing (`aptu issues --repo <repo>`)
+### 6.3 Issue Listing (`aptu issue list [REPO]`)
 
 **Implementation:** Uses GitHub GraphQL API for efficient label filtering.
 
@@ -463,7 +492,7 @@ Issues in block/goose:
   #1156  [docs]        "README missing install steps"    2 weeks ago
 ```
 
-### 6.4 Issue Triage (`aptu triage <issue-url>`)
+### 6.4 Issue Triage (`aptu issue triage <URL>`)
 
 **Workflow:**
 1. Fetch issue details (title, body, comments, labels)

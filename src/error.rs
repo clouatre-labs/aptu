@@ -20,8 +20,8 @@ pub enum AptuError {
         status: Option<u16>,
     },
 
-    /// User is not authenticated - needs to run `aptu auth`.
-    #[error("Authentication required - run `aptu auth` first")]
+    /// User is not authenticated - needs to run `aptu auth login`.
+    #[error("Authentication required - run `aptu auth login` first")]
     NotAuthenticated,
 
     /// GitHub rate limit exceeded.
