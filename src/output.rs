@@ -8,7 +8,7 @@ use console::style;
 
 use crate::ai::types::TriageResponse;
 use crate::cli::{OutputContext, OutputFormat};
-use crate::commands::types::{IssuesResult, ReposResult, TriageResult};
+use crate::commands::types::{HistoryResult, IssuesResult, ReposResult, TriageResult};
 
 /// Render repos result.
 pub fn render_repos(result: &ReposResult, ctx: &OutputContext) {
@@ -325,6 +325,116 @@ pub fn render_triage(result: &TriageResult, ctx: &OutputContext) {
 /// Generates markdown content for posting to GitHub.
 pub fn render_triage_markdown(triage: &TriageResponse) -> String {
     render_triage_content(triage, &OutputMode::Markdown, None)
+}
+
+/// Render history result.
+pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
+    match ctx.format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result.contributions)
+                    .expect("Failed to serialize history to JSON")
+            );
+        }
+        OutputFormat::Yaml => {
+            println!(
+                "{}",
+                serde_yml::to_string(&result.contributions)
+                    .expect("Failed to serialize history to YAML")
+            );
+        }
+        OutputFormat::Text => {
+            if result.contributions.is_empty() {
+                println!();
+                println!("{}", style("No contributions yet.").yellow());
+                println!("Run `aptu triage <url>` to get started!");
+                println!();
+                return;
+            }
+
+            println!();
+            println!(
+                "{}",
+                style(format!(
+                    "Contribution history ({} total):",
+                    result.contributions.len()
+                ))
+                .bold()
+            );
+            println!();
+
+            // Table header
+            println!(
+                "  {:<25} {:<8} {:<10} {:<15} {}",
+                style("Repository").cyan(),
+                style("Issue").cyan(),
+                style("Action").cyan(),
+                style("When").cyan(),
+                style("Status").cyan()
+            );
+            println!("  {}", style("-".repeat(75)).dim());
+
+            for contribution in &result.contributions {
+                let repo = truncate_title(&contribution.repo, 25);
+                let issue = format!("#{}", contribution.issue);
+                let when = format_relative_time_dt(&contribution.timestamp);
+                let status = match contribution.status {
+                    crate::history::ContributionStatus::Pending => {
+                        style("pending").yellow().to_string()
+                    }
+                    crate::history::ContributionStatus::Accepted => {
+                        style("accepted").green().to_string()
+                    }
+                    crate::history::ContributionStatus::Rejected => {
+                        style("rejected").red().to_string()
+                    }
+                };
+
+                println!(
+                    "  {:<25} {:<8} {:<10} {:<15} {}",
+                    repo,
+                    style(issue).green(),
+                    contribution.action,
+                    style(when).dim(),
+                    status
+                );
+            }
+
+            println!();
+        }
+    }
+}
+
+/// Formats a DateTime<Utc> as relative time (e.g., "3 days ago").
+fn format_relative_time_dt(dt: &DateTime<Utc>) -> String {
+    let now = Utc::now();
+    let duration = now.signed_duration_since(*dt);
+
+    if duration.num_days() > 30 {
+        let months = duration.num_days() / 30;
+        if months == 1 {
+            "1 month ago".to_string()
+        } else {
+            format!("{} months ago", months)
+        }
+    } else if duration.num_days() > 0 {
+        let days = duration.num_days();
+        if days == 1 {
+            "1 day ago".to_string()
+        } else {
+            format!("{} days ago", days)
+        }
+    } else if duration.num_hours() > 0 {
+        let hours = duration.num_hours();
+        if hours == 1 {
+            "1 hour ago".to_string()
+        } else {
+            format!("{} hours ago", hours)
+        }
+    } else {
+        "just now".to_string()
+    }
 }
 
 /// Truncates a title to a maximum length, adding ellipsis if needed.
