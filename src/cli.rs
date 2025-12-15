@@ -16,6 +16,8 @@ pub enum OutputFormat {
     Json,
     /// YAML output for programmatic consumption
     Yaml,
+    /// Markdown output for GitHub comments
+    Markdown,
 }
 
 /// Global output configuration passed to commands.

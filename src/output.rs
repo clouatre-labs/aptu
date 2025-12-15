@@ -26,6 +26,17 @@ pub fn render_repos(result: &ReposResult, ctx: &OutputContext) {
                 serde_yml::to_string(result.repos).expect("Failed to serialize repos to YAML")
             );
         }
+        OutputFormat::Markdown => {
+            println!("## Available Repositories\n");
+            for repo in result.repos.iter() {
+                println!(
+                    "- **{}** ({}) - {}",
+                    repo.full_name(),
+                    repo.language,
+                    repo.description
+                );
+            }
+        }
         OutputFormat::Text => {
             println!();
             println!("{}", style("Available repositories:").bold());
@@ -64,6 +75,9 @@ pub fn render_issues(result: &IssuesResult, ctx: &OutputContext) {
         if let Some(ref filter) = result.repo_filter {
             match ctx.format {
                 OutputFormat::Json | OutputFormat::Yaml => println!("[]"),
+                OutputFormat::Markdown => {
+                    println!("No curated repository matches '{}'", filter);
+                }
                 OutputFormat::Text => {
                     println!(
                         "{}",
@@ -104,6 +118,39 @@ pub fn render_issues(result: &IssuesResult, ctx: &OutputContext) {
                 "{}",
                 serde_yml::to_string(&output).expect("Failed to serialize issues to YAML")
             );
+        }
+        OutputFormat::Markdown => {
+            if result.total_count == 0 {
+                println!("No open 'good first issue' issues found.");
+                return;
+            }
+
+            println!(
+                "## Issues ({} across {} repositories)\n",
+                result.total_count,
+                result.issues_by_repo.len()
+            );
+
+            for (repo_name, issues) in &result.issues_by_repo {
+                println!("### {}\n", repo_name);
+
+                for issue in issues {
+                    let labels: Vec<String> = issue
+                        .labels
+                        .nodes
+                        .iter()
+                        .map(|l| format!("`{}`", l.name))
+                        .collect();
+                    let label_str = if labels.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {}", labels.join(" "))
+                    };
+
+                    println!("- **#{}** {}{}", issue.number, issue.title, label_str);
+                }
+                println!();
+            }
         }
         OutputFormat::Text => {
             if result.total_count == 0 {
@@ -297,6 +344,17 @@ pub fn render_triage(result: &TriageResult, ctx: &OutputContext) {
                 serde_yml::to_string(&result.triage).expect("Failed to serialize triage to YAML")
             );
         }
+        OutputFormat::Markdown => {
+            // Include issue title/number in header for CLI markdown output
+            println!(
+                "## Triage for #{}: {}\n",
+                result.issue_number, result.issue_title
+            );
+            print!(
+                "{}",
+                render_triage_content(&result.triage, &OutputMode::Markdown, None)
+            );
+        }
         OutputFormat::Text => {
             println!();
             print!(
@@ -343,6 +401,35 @@ pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
                 serde_yml::to_string(&result.contributions)
                     .expect("Failed to serialize history to YAML")
             );
+        }
+        OutputFormat::Markdown => {
+            if result.contributions.is_empty() {
+                println!("No contributions yet.");
+                return;
+            }
+
+            println!(
+                "## Contribution History ({} total)\n",
+                result.contributions.len()
+            );
+            println!("| Repository | Issue | Action | When | Status |");
+            println!("|------------|-------|--------|------|--------|");
+
+            for contribution in &result.contributions {
+                let repo = truncate_title(&contribution.repo, 25);
+                let issue = format!("#{}", contribution.issue);
+                let when = format_relative_time_dt(&contribution.timestamp);
+                let status = match contribution.status {
+                    crate::history::ContributionStatus::Pending => "pending",
+                    crate::history::ContributionStatus::Accepted => "accepted",
+                    crate::history::ContributionStatus::Rejected => "rejected",
+                };
+
+                println!(
+                    "| {} | {} | {} | {} | {} |",
+                    repo, issue, contribution.action, when, status
+                );
+            }
         }
         OutputFormat::Text => {
             if result.contributions.is_empty() {
