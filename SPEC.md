@@ -130,7 +130,7 @@ All commands support these flags for LLM-friendly and scripted usage:
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--output <format>` | `-o` | Output format: `text` (default), `json`, `markdown` |
+| `--output <format>` | `-o` | Output format: `text` (default), `json`, `yaml`, `markdown` |
 | `--quiet` | `-q` | Suppress non-essential output (spinners, progress) |
 | `--yes` | `-y` | Skip confirmation prompts (auto-confirm) |
 
