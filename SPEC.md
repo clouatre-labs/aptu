@@ -772,8 +772,8 @@ where
 - [x] GitHub OAuth device flow
 - [x] Fetch issues from hardcoded repos
 - [x] AI integration (OpenRouter API with Devstral 2)
-- [ ] Triage command with user confirmation
-- [ ] Local history tracking
+- [x] Triage command with user confirmation
+- [x] Local history tracking
 - [ ] Test with 1-2 real repos
 
 ### Phase 2: iOS App (Weeks 5-10)
@@ -846,5 +846,5 @@ where
 
 ---
 
-*Last updated: 2025-12-14*
+*Last updated: 2025-12-15*
 *Author: Hugues Clouatre*

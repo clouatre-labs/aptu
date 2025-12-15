@@ -1,11 +1,11 @@
 //! GitHub OAuth authentication command.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use console::style;
 use secrecy::SecretString;
 use tracing::info;
 
-use crate::github::auth;
+use crate::github::{auth, OAUTH_CLIENT_ID};
 
 /// Run the authentication command.
 ///
@@ -16,32 +16,21 @@ pub async fn run(logout: bool) -> Result<()> {
         return run_logout();
     }
 
-    // Check if already authenticated
-    if auth::is_authenticated() {
+    // Check if already authenticated via any source
+    if let Some((_, source)) = auth::resolve_token() {
         println!(
-            "{} Already authenticated with GitHub.",
-            style("!").yellow().bold()
+            "{} Already authenticated with GitHub (via {}).",
+            style("!").yellow().bold(),
+            source
         );
         println!(
-            "Run {} to re-authenticate.",
+            "Run {} to remove keyring token and re-authenticate.",
             style("aptu auth --logout").cyan()
         );
         return Ok(());
     }
 
-    // Get client ID from environment
-    let client_id = std::env::var("APTU_GH_CLIENT_ID").context(
-        "APTU_GH_CLIENT_ID environment variable not set.\n\n\
-         To use Aptu, you need to create a GitHub OAuth App:\n\
-         1. Go to https://github.com/settings/developers\n\
-         2. Click 'New OAuth App'\n\
-         3. Set Application name: Aptu\n\
-         4. Set Homepage URL: https://github.com/clouatre-labs/aptu\n\
-         5. Set Authorization callback URL: http://localhost (not used)\n\
-         6. Copy the Client ID and set: export APTU_GH_CLIENT_ID=<your-client-id>",
-    )?;
-
-    let client_id = SecretString::from(client_id);
+    let client_id = SecretString::from(OAUTH_CLIENT_ID);
 
     println!(
         "{} Starting GitHub authentication...",
@@ -61,11 +50,8 @@ pub async fn run(logout: bool) -> Result<()> {
 
 /// Remove stored credentials.
 fn run_logout() -> Result<()> {
-    if !auth::is_authenticated() {
-        println!(
-            "{} Not currently authenticated.",
-            style("!").yellow().bold()
-        );
+    if !auth::has_keyring_token() {
+        println!("{} No token stored in keyring.", style("!").yellow().bold());
         return Ok(());
     }
 
