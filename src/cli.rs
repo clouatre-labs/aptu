@@ -1,10 +1,12 @@
 //! Command-line interface definition for Aptu.
 //!
-//! Uses clap's derive API for declarative CLI parsing.
+//! Uses clap's derive API for declarative CLI parsing with hierarchical
+//! noun-verb subcommands for autocomplete-optimal design.
 
 use std::io::IsTerminal;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
 
 /// Output format for CLI results.
 #[derive(Clone, Copy, Default, ValueEnum)]
@@ -71,27 +73,62 @@ pub struct Cli {
 /// Available commands
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Authenticate with GitHub via OAuth device flow
-    Auth {
-        /// Log out and remove stored credentials
-        #[arg(long)]
-        logout: bool,
+    /// Manage GitHub authentication
+    #[command(subcommand)]
+    Auth(AuthCommand),
+
+    /// Manage curated repositories
+    #[command(subcommand)]
+    Repo(RepoCommand),
+
+    /// Work with GitHub issues
+    #[command(subcommand)]
+    Issue(IssueCommand),
+
+    /// Show your contribution history
+    History,
+
+    /// Generate shell completion scripts
+    Completion {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
     },
+}
 
+/// Authentication subcommands
+#[derive(Subcommand)]
+pub enum AuthCommand {
+    /// Authenticate with GitHub via OAuth device flow
+    Login,
+
+    /// Remove stored credentials
+    Logout,
+
+    /// Show current authentication status
+    Status,
+}
+
+/// Repository subcommands
+#[derive(Subcommand)]
+pub enum RepoCommand {
     /// List curated repositories available for contribution
-    Repos,
+    List,
+}
 
+/// Issue subcommands
+#[derive(Subcommand)]
+pub enum IssueCommand {
     /// List open issues suitable for contribution
-    Issues {
+    List {
         /// Repository to filter issues (e.g., "block/goose")
-        #[arg(short, long)]
         repo: Option<String>,
     },
 
     /// Triage an issue with AI assistance
     Triage {
         /// GitHub issue URL to triage
-        issue_url: String,
+        url: String,
 
         /// Preview triage without posting to GitHub
         #[arg(long)]
@@ -101,7 +138,4 @@ pub enum Commands {
         #[arg(short = 'y', long)]
         yes: bool,
     },
-
-    /// Show your contribution history
-    History,
 }

@@ -18,7 +18,7 @@ use crate::repos;
 pub async fn run(repo: Option<String>) -> Result<IssuesResult> {
     // Check authentication
     if !auth::is_authenticated() {
-        anyhow::bail!("Authentication required - run `aptu auth` first");
+        anyhow::bail!("Authentication required - run `aptu auth login` first");
     }
 
     // Get curated repos, optionally filtered

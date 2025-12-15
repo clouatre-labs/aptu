@@ -248,7 +248,8 @@ pub async fn authenticate(client_id: &SecretString) -> Result<()> {
 /// Returns an error if no token is found from any source.
 #[instrument]
 pub fn create_client() -> Result<Octocrab> {
-    let (token, source) = resolve_token().context("Not authenticated - run `aptu auth` first")?;
+    let (token, source) =
+        resolve_token().context("Not authenticated - run `aptu auth login` first")?;
 
     info!(source = %source, "Creating GitHub client");
 
