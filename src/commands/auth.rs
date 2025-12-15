@@ -5,7 +5,7 @@ use console::style;
 use secrecy::SecretString;
 use tracing::info;
 
-use crate::github::{auth, OAUTH_CLIENT_ID};
+use crate::github::{OAUTH_CLIENT_ID, auth};
 
 /// Run the login command - authenticate with GitHub.
 pub async fn run_login() -> Result<()> {
