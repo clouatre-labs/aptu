@@ -17,7 +17,7 @@
 //! ```
 
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt};
 
 /// Initialize the logging subsystem.
 ///
