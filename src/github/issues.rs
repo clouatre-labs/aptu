@@ -203,10 +203,12 @@ mod tests {
         let url = "https://github.com/owner/repo";
         let result = parse_issue_url(url);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid GitHub issue URL"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid GitHub issue URL")
+        );
     }
 
     #[test]
@@ -214,10 +216,12 @@ mod tests {
         let url = "https://gitlab.com/owner/repo/issues/1";
         let result = parse_issue_url(url);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("must be a GitHub issue URL"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must be a GitHub issue URL")
+        );
     }
 
     #[test]
@@ -225,10 +229,12 @@ mod tests {
         let url = "https://github.com/owner/repo/pull/1";
         let result = parse_issue_url(url);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("must point to a GitHub issue"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must point to a GitHub issue")
+        );
     }
 
     #[test]
@@ -236,9 +242,11 @@ mod tests {
         let url = "https://github.com/owner/repo/issues/abc";
         let result = parse_issue_url(url);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid issue number"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid issue number")
+        );
     }
 }

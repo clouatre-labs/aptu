@@ -55,8 +55,10 @@ fn keyring_entry() -> Result<Entry> {
 ///
 /// Uses the token resolution priority chain to check for authentication.
 #[instrument]
+#[allow(clippy::let_and_return)] // Intentional: Rust 2024 drop order compliance
 pub fn is_authenticated() -> bool {
-    resolve_token().is_some()
+    let result = resolve_token().is_some();
+    result
 }
 
 /// Checks if a GitHub token is stored in the keyring specifically.
@@ -64,11 +66,13 @@ pub fn is_authenticated() -> bool {
 /// Returns `true` only if a token exists in the system keyring,
 /// ignoring environment variables and `gh` CLI.
 #[instrument]
+#[allow(clippy::let_and_return)] // Intentional: Rust 2024 drop order compliance
 pub fn has_keyring_token() -> bool {
-    match keyring_entry() {
+    let result = match keyring_entry() {
         Ok(entry) => entry.get_password().is_ok(),
         Err(_) => false,
-    }
+    };
+    result
 }
 
 /// Retrieves the stored GitHub token from the keyring.
@@ -108,9 +112,10 @@ fn get_token_from_gh_cli() -> Option<SecretString> {
             }
         }
         Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
             debug!(
                 status = ?output.status,
-                stderr = %String::from_utf8_lossy(&output.stderr).trim(),
+                stderr = %stderr.trim(),
                 "gh auth token failed"
             );
             None
@@ -134,19 +139,19 @@ fn get_token_from_gh_cli() -> Option<SecretString> {
 #[instrument]
 pub fn resolve_token() -> Option<(SecretString, TokenSource)> {
     // Priority 1: GH_TOKEN environment variable
-    if let Ok(token) = std::env::var("GH_TOKEN") {
-        if !token.is_empty() {
-            debug!("Using token from GH_TOKEN environment variable");
-            return Some((SecretString::from(token), TokenSource::Environment));
-        }
+    if let Ok(token) = std::env::var("GH_TOKEN")
+        && !token.is_empty()
+    {
+        debug!("Using token from GH_TOKEN environment variable");
+        return Some((SecretString::from(token), TokenSource::Environment));
     }
 
     // Priority 2: GITHUB_TOKEN environment variable
-    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
-        if !token.is_empty() {
-            debug!("Using token from GITHUB_TOKEN environment variable");
-            return Some((SecretString::from(token), TokenSource::Environment));
-        }
+    if let Ok(token) = std::env::var("GITHUB_TOKEN")
+        && !token.is_empty()
+    {
+        debug!("Using token from GITHUB_TOKEN environment variable");
+        return Some((SecretString::from(token), TokenSource::Environment));
     }
 
     // Priority 3: GitHub CLI

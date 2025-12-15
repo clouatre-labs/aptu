@@ -6,7 +6,7 @@
 use anyhow::{Context, Result};
 use octocrab::Octocrab;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tracing::{debug, instrument};
 
 use crate::repos::CuratedRepo;
