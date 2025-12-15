@@ -57,6 +57,39 @@ aptu history
 aptu completion zsh > ~/.zsh/completions/_aptu
 ```
 
+## Shell Completions
+
+Enable tab completion for your shell:
+
+**Bash** - Add to `~/.bashrc` or `~/.bash_profile`:
+```bash
+eval "$(aptu completion bash)"
+```
+
+**Zsh** - Generate completion file:
+```zsh
+mkdir -p ~/.zsh/completions
+aptu completion zsh > ~/.zsh/completions/_aptu
+```
+
+Add to `~/.zshrc` (before compinit):
+```zsh
+fpath=(~/.zsh/completions $fpath)
+autoload -U compinit && compinit -i
+```
+
+**Fish** - Generate completion file:
+```fish
+aptu completion fish > ~/.config/fish/completions/aptu.fish
+```
+
+**PowerShell** - Add to `$PROFILE`:
+```powershell
+aptu completion powershell | Out-String | Invoke-Expression
+```
+
+Run `aptu completion --help` for more options.
+
 ## Configuration
 
 Config file: `~/.config/aptu/config.toml`
