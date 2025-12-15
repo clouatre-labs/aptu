@@ -33,16 +33,28 @@ cargo build --release
 
 ```bash
 # Authenticate with GitHub
-aptu auth
+aptu auth login
+
+# Check authentication status
+aptu auth status
 
 # List curated repositories
-aptu repos
+aptu repo list
 
 # Browse issues in a repo
-aptu issues block/goose
+aptu issue list block/goose
 
 # Triage an issue with AI assistance
-aptu triage https://github.com/block/goose/issues/123
+aptu issue triage https://github.com/block/goose/issues/123
+
+# Preview triage without posting
+aptu issue triage https://github.com/block/goose/issues/123 --dry-run
+
+# View your contribution history
+aptu history
+
+# Generate shell completions
+aptu completion zsh > ~/.zsh/completions/_aptu
 ```
 
 ## Configuration

@@ -37,7 +37,7 @@ pub async fn analyze(issue_url: &str) -> Result<AnalyzeResult> {
 
     // Check authentication
     if !auth::is_authenticated() {
-        anyhow::bail!("Authentication required - run `aptu auth` first");
+        anyhow::bail!("Authentication required - run `aptu auth login` first");
     }
 
     // Parse the issue URL
