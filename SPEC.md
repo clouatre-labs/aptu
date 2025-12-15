@@ -649,6 +649,34 @@ where
 - `x-ai/grok-4.1-fast` - 2M context, $0.20/$0.50 per 1M tokens
 - `anthropic/claude-sonnet-4.5` - 1M context, $3/$15 per 1M tokens
 
+### 7.2 AI Provider Authentication
+
+Unlike GitHub (which supports OAuth device flow), AI providers require manual API key setup.
+
+**Current Approach:** Manual API key creation and copy-paste.
+
+1. CLI directs user to `https://openrouter.ai/settings/keys`
+2. User creates key and copies it
+3. User provides key via:
+   - Interactive prompt (stored in system keychain)
+   - Environment variable `OPENROUTER_API_KEY`
+
+**Why Not OAuth/Device Flow?**
+
+We investigated OAuth device flow for AI providers to match the GitHub auth experience.
+None currently support it. We've submitted feature requests:
+
+| Provider | Feature Request | Status |
+|----------|-----------------|--------|
+| OpenRouter | [openrouter-examples#61](https://github.com/OpenRouterTeam/openrouter-examples/issues/61) | Open |
+| Hugging Face | [huggingface_hub#3628](https://github.com/huggingface/huggingface_hub/issues/3628) | Open |
+| Mistral | [client-python#295](https://github.com/mistralai/client-python/issues/295) | Open |
+
+**Alternative Considered:** Localhost HTTPS callback server (like `gh auth login --web`).
+Rejected for MVP due to complexity (self-signed certs, browser warnings, port conflicts).
+
+**Future:** If providers implement device flow, we'll adopt it for consistent UX.
+
 ---
 
 ## 8. Security Considerations
