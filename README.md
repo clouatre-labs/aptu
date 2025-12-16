@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml/badge.svg)](https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/)
 
 **AI-Powered Triage Utility** - A gamified CLI for OSS issue triage with AI assistance.
 
