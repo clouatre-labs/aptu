@@ -302,10 +302,10 @@ mod tests {
 
     #[test]
     fn test_triage_response_optional_fields() {
-        let json = r##"{
+        let json = r#"{
             "summary": "Summary only.",
             "suggested_labels": ["bug"]
-        }"##;
+        }"#;
 
         let triage: TriageResponse = serde_json::from_str(json).unwrap();
         assert_eq!(triage.summary, "Summary only.");
