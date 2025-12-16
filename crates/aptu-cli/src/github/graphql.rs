@@ -100,7 +100,7 @@ fn build_issues_query(repos: &[CuratedRepo]) -> Value {
 
 /// Fetches open "good first issue" issues from all curated repositories.
 ///
-/// Returns a vector of (repo_name, issues) tuples.
+/// Returns a vector of (`repo_name`, issues) tuples.
 #[instrument(skip(client, repos), fields(repo_count = repos.len()))]
 pub async fn fetch_issues(
     client: &Octocrab,
@@ -122,7 +122,7 @@ pub async fn fetch_issues(
     // Check for GraphQL errors
     if let Some(errors) = response.get("errors") {
         let error_msg = serde_json::to_string_pretty(errors).unwrap_or_default();
-        anyhow::bail!("GraphQL error: {}", error_msg);
+        anyhow::bail!("GraphQL error: {error_msg}");
     }
 
     // Parse the response
@@ -133,7 +133,7 @@ pub async fn fetch_issues(
     let mut results = Vec::with_capacity(repos.len());
 
     for i in 0..repos.len() {
-        let key = format!("repo{}", i);
+        let key = format!("repo{i}");
         if let Some(repo_data) = data.get(&key) {
             // Repository might not exist or be private
             if repo_data.is_null() {
@@ -142,7 +142,7 @@ pub async fn fetch_issues(
             }
 
             let repo_issues: RepoIssues = serde_json::from_value(repo_data.clone())
-                .with_context(|| format!("Failed to parse repository data for {}", key))?;
+                .with_context(|| format!("Failed to parse repository data for {key}"))?;
 
             let issue_count = repo_issues.issues.nodes.len();
             if issue_count > 0 {

@@ -1,11 +1,11 @@
-//! AI request/response types for OpenRouter API.
+//! AI request/response types for `OpenRouter` API.
 //!
-//! Defines the structures used for communicating with the OpenRouter API
+//! Defines the structures used for communicating with the `OpenRouter` API
 //! and parsing triage responses.
 
 use serde::{Deserialize, Serialize};
 
-/// A chat message for the OpenRouter API.
+/// A chat message for the `OpenRouter` API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     /// Role: "system", "user", or "assistant".
@@ -14,7 +14,7 @@ pub struct ChatMessage {
     pub content: String,
 }
 
-/// Request body for OpenRouter chat completions API.
+/// Request body for `OpenRouter` chat completions API.
 #[derive(Debug, Serialize)]
 pub struct ChatCompletionRequest {
     /// Model identifier (e.g., "mistralai/devstral-2512:free").
@@ -35,12 +35,12 @@ pub struct ChatCompletionRequest {
 /// Response format specification for structured output.
 #[derive(Debug, Serialize)]
 pub struct ResponseFormat {
-    /// Type of response format ("json_object" for structured output).
+    /// Type of response format ("`json_object`" for structured output).
     #[serde(rename = "type")]
     pub format_type: String,
 }
 
-/// Response from OpenRouter chat completions API.
+/// Response from `OpenRouter` chat completions API.
 #[derive(Debug, Deserialize)]
 pub struct ChatCompletionResponse {
     /// List of choices (usually just one).
