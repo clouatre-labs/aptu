@@ -1,0 +1,25 @@
+[package]
+name = "aptu-ffi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aptu-core = { path = "../aptu-core" }
+uniffi = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+lazy_static = "1.4"
+
+[build-dependencies]
+uniffi = { version = "0.30", features = ["build"] }
+
+[lib]
+crate-type = ["staticlib", "cdylib", "lib"]
+name = "aptu_ffi"

@@ -33,6 +33,17 @@ opencode.json
 *.swo
 *~
 
+# Generated Swift bindings and iOS build artifacts
+AptuApp/AptuApp/AptuCore/*.swift
+AptuApp/AptuApp/AptuCore/*.h
+AptuApp/AptuApp/AptuCore/*.modulemap
+AptuApp/build/
+AptuApp/.build/
+AptuApp/DerivedData/
+AptuApp/*.xcworkspace/xcuserdata/
+AptuApp/*.xcodeproj/xcuserdata/
+AptuApp/*.xcodeproj/project.xcworkspace/xcuserdata/
+
 # OS
 .DS_Store
 Thumbs.db
