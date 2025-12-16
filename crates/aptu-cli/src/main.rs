@@ -3,18 +3,13 @@
 //! A CLI tool that helps developers contribute meaningfully to open source
 //! projects through AI-assisted issue triage and PR review.
 
-mod ai;
 mod cli;
 mod commands;
-mod config;
-mod error;
-mod github;
-mod history;
 mod logging;
 mod output;
-mod repos;
 
 use anyhow::{Context, Result};
+use aptu_core::config;
 use clap::Parser;
 use tracing::debug;
 

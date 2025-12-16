@@ -54,6 +54,7 @@ pub struct HistoryData {
 }
 
 /// Returns the path to the history file.
+#[must_use]
 pub fn history_file_path() -> PathBuf {
     data_dir().join("history.json")
 }

@@ -8,7 +8,30 @@ license = "MIT"
 repository = "https://github.com/clouatre-labs/aptu"
 
 [dependencies]
-# Minimal dependencies for now - will be populated in PR 2
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# HTTP/API
+reqwest = { workspace = true }
+octocrab = { workspace = true }
+secrecy = { workspace = true }
+
+# Configuration
+config = { workspace = true }
+dirs = { workspace = true }
+keyring = { workspace = true }
+
+# History
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
 
 [lints]
 workspace = true
