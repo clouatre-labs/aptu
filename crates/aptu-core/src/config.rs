@@ -137,6 +137,7 @@ impl Default for CacheConfig {
 /// - Linux: `~/.config/aptu`
 /// - macOS: `~/Library/Application Support/aptu`
 /// - Windows: `C:\Users\<User>\AppData\Roaming\aptu`
+#[must_use]
 pub fn config_dir() -> PathBuf {
     dirs::config_dir()
         .expect("Could not determine config directory - is HOME set?")
@@ -148,6 +149,7 @@ pub fn config_dir() -> PathBuf {
 /// - Linux: `~/.local/share/aptu`
 /// - macOS: `~/Library/Application Support/aptu`
 /// - Windows: `C:\Users\<User>\AppData\Local\aptu`
+#[must_use]
 pub fn data_dir() -> PathBuf {
     dirs::data_dir()
         .expect("Could not determine data directory - is HOME set?")
@@ -155,6 +157,7 @@ pub fn data_dir() -> PathBuf {
 }
 
 /// Returns the path to the configuration file.
+#[must_use]
 pub fn config_file_path() -> PathBuf {
     config_dir().join("config.toml")
 }

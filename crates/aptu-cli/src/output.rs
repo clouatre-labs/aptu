@@ -3,10 +3,12 @@
 //! Centralizes all output formatting logic, supporting text, JSON, and YAML formats.
 //! Command handlers return data; this module handles presentation.
 
+use aptu_core::ai::types::TriageResponse;
+use aptu_core::github::graphql::IssueNode;
+use aptu_core::history::ContributionStatus;
 use chrono::{DateTime, Utc};
 use console::style;
 
-use crate::ai::types::TriageResponse;
 use crate::cli::{OutputContext, OutputFormat};
 use crate::commands::types::{HistoryResult, IssuesResult, ReposResult, TriageResult};
 
@@ -65,7 +67,7 @@ pub fn render_repos(result: &ReposResult, ctx: &OutputContext) {
 #[derive(serde::Serialize)]
 struct RepoIssuesOutput {
     repo: String,
-    issues: Vec<crate::github::graphql::IssueNode>,
+    issues: Vec<IssueNode>,
 }
 
 /// Render issues result.
@@ -426,9 +428,9 @@ pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
                 let issue = format!("#{}", contribution.issue);
                 let when = format_relative_time_dt(&contribution.timestamp);
                 let status = match contribution.status {
-                    crate::history::ContributionStatus::Pending => "pending",
-                    crate::history::ContributionStatus::Accepted => "accepted",
-                    crate::history::ContributionStatus::Rejected => "rejected",
+                    ContributionStatus::Pending => "pending",
+                    ContributionStatus::Accepted => "accepted",
+                    ContributionStatus::Rejected => "rejected",
                 };
 
                 println!(
@@ -473,15 +475,9 @@ pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
                 let issue = format!("#{}", contribution.issue);
                 let when = format_relative_time_dt(&contribution.timestamp);
                 let status = match contribution.status {
-                    crate::history::ContributionStatus::Pending => {
-                        style("pending").yellow().to_string()
-                    }
-                    crate::history::ContributionStatus::Accepted => {
-                        style("accepted").green().to_string()
-                    }
-                    crate::history::ContributionStatus::Rejected => {
-                        style("rejected").red().to_string()
-                    }
+                    ContributionStatus::Pending => style("pending").yellow().to_string(),
+                    ContributionStatus::Accepted => style("accepted").green().to_string(),
+                    ContributionStatus::Rejected => style("rejected").red().to_string(),
                 };
 
                 println!(
@@ -582,7 +578,7 @@ pub fn format_relative_time(timestamp: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::types::TriageResponse;
+    use aptu_core::ai::types::TriageResponse;
 
     #[test]
     fn truncate_short_title() {
