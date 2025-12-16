@@ -13,7 +13,7 @@ pub enum AptuError {
     #[error("GitHub API error: {0}")]
     GitHub(#[from] octocrab::Error),
 
-    /// AI provider error (OpenRouter, Ollama, etc.).
+    /// AI provider error (`OpenRouter`, Ollama, etc.).
     #[error("AI provider error: {message}")]
     AI {
         message: String,

@@ -14,16 +14,17 @@ target/
 **/mutants.out*/
 
 # Coding agents (critical - prevents accidental commit of AI instructions)
-CLAUDE.md
-.claude/
 .amazonq/
-opencode.json
+.claude/
 .codex/
 .cursor/
-.windsurf/
-.kiro/
 .goosehints
+.goose/
+.kiro/
+.windsurf/
 AGENTS.md
+CLAUDE.md
+opencode.json
 
 # Editor/IDE
 .idea/

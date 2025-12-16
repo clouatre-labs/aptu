@@ -1,7 +1,7 @@
 //! Triage an issue with AI assistance command.
 //!
 //! Fetches a GitHub issue, analyzes it with AI, and optionally posts
-//! a comment to GitHub. Split into analyze() and post() for proper
+//! a comment to GitHub. Split into `analyze()` and `post()` for proper
 //! confirmation flow (render before asking).
 
 use anyhow::{Context, Result};

@@ -31,8 +31,7 @@ pub fn parse_issue_url(url: &str) -> Result<(String, String, u64)> {
         anyhow::bail!(
             "Invalid GitHub issue URL format.\n\
              Expected: https://github.com/owner/repo/issues/123\n\
-             Got: {}",
-            url
+             Got: {url}"
         );
     }
 
@@ -41,8 +40,7 @@ pub fn parse_issue_url(url: &str) -> Result<(String, String, u64)> {
         anyhow::bail!(
             "URL must be a GitHub issue URL.\n\
              Expected: https://github.com/owner/repo/issues/123\n\
-             Got: {}",
-            url
+             Got: {url}"
         );
     }
 
@@ -51,8 +49,7 @@ pub fn parse_issue_url(url: &str) -> Result<(String, String, u64)> {
         anyhow::bail!(
             "URL must point to a GitHub issue.\n\
              Expected: https://github.com/owner/repo/issues/123\n\
-             Got: {}",
-            url
+             Got: {url}"
         );
     }
 
@@ -90,7 +87,7 @@ pub async fn fetch_issue_with_comments(
         .issues(owner, repo)
         .get(number)
         .await
-        .with_context(|| format!("Failed to fetch issue #{} from {}/{}", number, owner, repo))?;
+        .with_context(|| format!("Failed to fetch issue #{number} from {owner}/{repo}"))?;
 
     // Fetch comments (limited to first page)
     let comments_page = client
@@ -99,7 +96,7 @@ pub async fn fetch_issue_with_comments(
         .per_page(5)
         .send()
         .await
-        .with_context(|| format!("Failed to fetch comments for issue #{}", number))?;
+        .with_context(|| format!("Failed to fetch comments for issue #{number}"))?;
 
     // Convert to our types
     let labels: Vec<String> = issue.labels.iter().map(|l| l.name.clone()).collect();
@@ -158,7 +155,7 @@ pub async fn post_comment(
         .issues(owner, repo)
         .create_comment(number, body)
         .await
-        .with_context(|| format!("Failed to post comment to issue #{}", number))?;
+        .with_context(|| format!("Failed to post comment to issue #{number}"))?;
 
     let comment_url = comment.html_url.to_string();
 

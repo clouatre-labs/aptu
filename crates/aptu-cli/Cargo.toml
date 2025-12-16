@@ -1,0 +1,55 @@
+[package]
+name = "aptu-cli"
+version = "0.1.0"
+edition = "2024"
+description = "CLI for Aptu - Gamified OSS issue triage with AI assistance"
+authors = ["Hugues Clouâtre"]
+license = "MIT"
+repository = "https://github.com/clouatre-labs/aptu"
+
+[[bin]]
+name = "aptu"
+path = "src/main.rs"
+
+[dependencies]
+# Core
+clap = { workspace = true }
+clap_complete = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yml = { workspace = true }
+
+# GitHub
+octocrab = { workspace = true }
+secrecy = { workspace = true }
+
+# Error handling and logging
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Configuration and storage
+config = { workspace = true }
+keyring = { workspace = true }
+dirs = { workspace = true }
+
+# User experience
+indicatif = { workspace = true }
+dialoguer = { workspace = true }
+console = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Future: aptu-core dependency (PR 2)
+# aptu-core = { path = "../aptu-core" }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+wiremock = { workspace = true }
+assert_cmd = { workspace = true }
+
+[lints]
+workspace = true
