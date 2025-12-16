@@ -60,7 +60,7 @@ pub fn run_logout() -> Result<()> {
 }
 
 /// Run the status command - show current authentication state.
-pub fn run_status() -> Result<()> {
+pub fn run_status() {
     match auth::resolve_token() {
         Some((_, source)) => {
             println!(
@@ -77,6 +77,4 @@ pub fn run_status() -> Result<()> {
             );
         }
     }
-
-    Ok(())
 }

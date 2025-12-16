@@ -28,7 +28,7 @@ pub fn render_repos(result: &ReposResult, ctx: &OutputContext) {
         }
         OutputFormat::Markdown => {
             println!("## Available Repositories\n");
-            for repo in result.repos.iter() {
+            for repo in result.repos {
                 println!(
                     "- **{}** ({}) - {}",
                     repo.full_name(),
@@ -69,6 +69,7 @@ struct RepoIssuesOutput {
 }
 
 /// Render issues result.
+#[allow(clippy::too_many_lines)]
 pub fn render_issues(result: &IssuesResult, ctx: &OutputContext) {
     // Handle "no repos matched filter" case
     if result.no_repos_matched {
@@ -76,12 +77,12 @@ pub fn render_issues(result: &IssuesResult, ctx: &OutputContext) {
             match ctx.format {
                 OutputFormat::Json | OutputFormat::Yaml => println!("[]"),
                 OutputFormat::Markdown => {
-                    println!("No curated repository matches '{}'", filter);
+                    println!("No curated repository matches '{filter}'");
                 }
                 OutputFormat::Text => {
                     println!(
                         "{}",
-                        style(format!("No curated repository matches '{}'", filter)).yellow()
+                        style(format!("No curated repository matches '{filter}'")).yellow()
                     );
                     println!("Run `aptu repos` to see available repositories.");
                 }
@@ -132,7 +133,7 @@ pub fn render_issues(result: &IssuesResult, ctx: &OutputContext) {
             );
 
             for (repo_name, issues) in &result.issues_by_repo {
-                println!("### {}\n", repo_name);
+                println!("### {repo_name}\n");
 
                 for issue in issues {
                     let labels: Vec<String> = issue
@@ -217,34 +218,36 @@ fn render_list_section(
     mode: &OutputMode,
     numbered: bool,
 ) -> String {
+    use std::fmt::Write;
+
     let mut output = String::new();
 
     match mode {
         OutputMode::Terminal => {
-            output.push_str(&format!("{}\n", style(title).cyan().bold()));
+            let _ = writeln!(output, "{}", style(title).cyan().bold());
             if items.is_empty() {
-                output.push_str(&format!("  {}\n", style(empty_msg).dim()));
+                let _ = writeln!(output, "  {}", style(empty_msg).dim());
             } else if numbered {
                 for (i, item) in items.iter().enumerate() {
-                    output.push_str(&format!("  {}. {}\n", i + 1, item));
+                    let _ = writeln!(output, "  {}. {}", i + 1, item);
                 }
             } else {
                 for item in items {
-                    output.push_str(&format!("  {} {}\n", style("-").dim(), item));
+                    let _ = writeln!(output, "  {} {}", style("-").dim(), item);
                 }
             }
         }
         OutputMode::Markdown => {
-            output.push_str(&format!("### {}\n\n", title));
+            let _ = writeln!(output, "### {title}\n");
             if items.is_empty() {
-                output.push_str(&format!("{}\n", empty_msg));
+                let _ = writeln!(output, "{empty_msg}");
             } else if numbered {
                 for (i, item) in items.iter().enumerate() {
-                    output.push_str(&format!("{}. {}\n", i + 1, item));
+                    let _ = writeln!(output, "{}. {}", i + 1, item);
                 }
             } else {
                 for item in items {
-                    output.push_str(&format!("- {}\n", item));
+                    let _ = writeln!(output, "- {item}");
                 }
             }
         }
@@ -259,21 +262,24 @@ fn render_triage_content(
     mode: &OutputMode,
     title: Option<(&str, u64)>,
 ) -> String {
+    use std::fmt::Write;
+
     let mut output = String::new();
 
     // Header
     match mode {
         OutputMode::Terminal => {
             if let Some((issue_title, number)) = title {
-                output.push_str(&format!(
-                    "{}\n\n",
-                    style(format!("Triage for #{}: {}", number, issue_title))
+                let _ = writeln!(
+                    output,
+                    "{}\n",
+                    style(format!("Triage for #{number}: {issue_title}"))
                         .bold()
                         .underlined()
-                ));
+                );
             }
-            output.push_str(&format!("{}\n", style("Summary").cyan().bold()));
-            output.push_str(&format!("  {}\n\n", triage.summary));
+            let _ = writeln!(output, "{}", style("Summary").cyan().bold());
+            let _ = writeln!(output, "  {}\n", triage.summary);
         }
         OutputMode::Markdown => {
             output.push_str("## Triage Summary\n\n");
@@ -288,7 +294,7 @@ fn render_triage_content(
         OutputMode::Markdown => triage
             .suggested_labels
             .iter()
-            .map(|l| format!("`{}`", l))
+            .map(|l| format!("`{l}`"))
             .collect(),
     };
     output.push_str(&render_list_section(
@@ -493,7 +499,7 @@ pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
     }
 }
 
-/// Formats a DateTime<Utc> as relative time (e.g., "3 days ago").
+/// Formats a `DateTime`<Utc> as relative time (e.g., "3 days ago").
 fn format_relative_time_dt(dt: &DateTime<Utc>) -> String {
     let now = Utc::now();
     let duration = now.signed_duration_since(*dt);
@@ -503,21 +509,21 @@ fn format_relative_time_dt(dt: &DateTime<Utc>) -> String {
         if months == 1 {
             "1 month ago".to_string()
         } else {
-            format!("{} months ago", months)
+            format!("{months} months ago")
         }
     } else if duration.num_days() > 0 {
         let days = duration.num_days();
         if days == 1 {
             "1 day ago".to_string()
         } else {
-            format!("{} days ago", days)
+            format!("{days} days ago")
         }
     } else if duration.num_hours() > 0 {
         let hours = duration.num_hours();
         if hours == 1 {
             "1 hour ago".to_string()
         } else {
-            format!("{} hours ago", hours)
+            format!("{hours} hours ago")
         }
     } else {
         "just now".to_string()
@@ -532,7 +538,7 @@ pub fn truncate_title(title: &str, max_len: usize) -> String {
         title.to_string()
     } else {
         let truncated: String = title.chars().take(max_len - 3).collect();
-        format!("{}...", truncated)
+        format!("{truncated}...")
     }
 }
 
@@ -549,21 +555,21 @@ pub fn format_relative_time(timestamp: &str) -> String {
                 if months == 1 {
                     "1 month ago".to_string()
                 } else {
-                    format!("{} months ago", months)
+                    format!("{months} months ago")
                 }
             } else if duration.num_days() > 0 {
                 let days = duration.num_days();
                 if days == 1 {
                     "1 day ago".to_string()
                 } else {
-                    format!("{} days ago", days)
+                    format!("{days} days ago")
                 }
             } else if duration.num_hours() > 0 {
                 let hours = duration.num_hours();
                 if hours == 1 {
                     "1 hour ago".to_string()
                 } else {
-                    format!("{} hours ago", hours)
+                    format!("{hours} hours ago")
                 }
             } else {
                 "just now".to_string()

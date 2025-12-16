@@ -41,17 +41,21 @@ fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
 }
 
 /// Dispatch to the appropriate command handler.
+#[allow(clippy::too_many_lines)]
 pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
     match command {
         Commands::Auth(auth_cmd) => match auth_cmd {
             AuthCommand::Login => auth::run_login().await,
             AuthCommand::Logout => auth::run_logout(),
-            AuthCommand::Status => auth::run_status(),
+            AuthCommand::Status => {
+                auth::run_status();
+                Ok(())
+            }
         },
 
         Commands::Repo(repo_cmd) => match repo_cmd {
             RepoCommand::List => {
-                let result = repo::run().await?;
+                let result = repo::run();
                 output::render_repos(&result, &ctx);
                 Ok(())
             }
@@ -154,7 +158,7 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
         },
 
         Commands::History => {
-            let result = history::run().await?;
+            let result = history::run()?;
             output::render_history(&result, &ctx);
             Ok(())
         }

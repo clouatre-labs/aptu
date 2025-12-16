@@ -1,6 +1,6 @@
-//! OpenRouter API client for AI-assisted issue triage.
+//! `OpenRouter` API client for AI-assisted issue triage.
 //!
-//! Provides functionality to analyze GitHub issues using the OpenRouter API
+//! Provides functionality to analyze GitHub issues using the `OpenRouter` API
 //! with structured JSON output.
 
 use std::env;
@@ -46,10 +46,12 @@ Be helpful, concise, and actionable. Focus on what a maintainer needs to know."#
 
 /// Builds the user prompt containing the issue details.
 fn build_user_prompt(issue: &IssueDetails) -> String {
+    use std::fmt::Write;
+
     let mut prompt = String::new();
 
     prompt.push_str("<issue_content>\n");
-    prompt.push_str(&format!("Title: {}\n\n", issue.title));
+    let _ = writeln!(prompt, "Title: {}\n", issue.title);
 
     // Truncate body if too long
     let body = if issue.body.len() > MAX_BODY_LENGTH {
@@ -63,11 +65,11 @@ fn build_user_prompt(issue: &IssueDetails) -> String {
     } else {
         issue.body.clone()
     };
-    prompt.push_str(&format!("Body:\n{}\n\n", body));
+    let _ = writeln!(prompt, "Body:\n{body}\n");
 
     // Include existing labels
     if !issue.labels.is_empty() {
-        prompt.push_str(&format!("Existing Labels: {}\n\n", issue.labels.join(", ")));
+        let _ = writeln!(prompt, "Existing Labels: {}\n", issue.labels.join(", "));
     }
 
     // Include recent comments (limited)
@@ -79,7 +81,7 @@ fn build_user_prompt(issue: &IssueDetails) -> String {
             } else {
                 comment.body.clone()
             };
-            prompt.push_str(&format!("- @{}: {}\n", comment.author, comment_body));
+            let _ = writeln!(prompt, "- @{}: {}", comment.author, comment_body);
         }
         prompt.push('\n');
     }
@@ -89,7 +91,7 @@ fn build_user_prompt(issue: &IssueDetails) -> String {
     prompt
 }
 
-/// Analyzes a GitHub issue using the OpenRouter API.
+/// Analyzes a GitHub issue using the `OpenRouter` API.
 ///
 /// Returns a structured triage response with summary, labels, questions, and duplicates.
 ///
@@ -117,10 +119,9 @@ pub async fn analyze_issue(config: &AiConfig, issue: &IssueDetails) -> Result<Tr
     // Get API key from environment
     let api_key = env::var(OPENROUTER_API_KEY_ENV).with_context(|| {
         format!(
-            "Missing {} environment variable.\n\
-             Set it with: export {}=your_api_key\n\
-             Get a free key at: https://openrouter.ai/keys",
-            OPENROUTER_API_KEY_ENV, OPENROUTER_API_KEY_ENV
+            "Missing {OPENROUTER_API_KEY_ENV} environment variable.\n\
+             Set it with: export {OPENROUTER_API_KEY_ENV}=your_api_key\n\
+             Get a free key at: https://openrouter.ai/keys"
         )
     })?;
 
@@ -155,7 +156,7 @@ pub async fn analyze_issue(config: &AiConfig, issue: &IssueDetails) -> Result<Tr
     // Make API request
     let response = client
         .post(OPENROUTER_API_URL)
-        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Authorization", format!("Bearer {api_key}"))
         .header("Content-Type", "application/json")
         .header(
             "HTTP-Referer",
@@ -174,8 +175,7 @@ pub async fn analyze_issue(config: &AiConfig, issue: &IssueDetails) -> Result<Tr
 
         if status.as_u16() == 401 {
             anyhow::bail!(
-                "Invalid OpenRouter API key. Check your {} environment variable.",
-                OPENROUTER_API_KEY_ENV
+                "Invalid OpenRouter API key. Check your {OPENROUTER_API_KEY_ENV} environment variable."
             );
         } else if status.as_u16() == 429 {
             warn!("Rate limited by OpenRouter API");
@@ -183,13 +183,12 @@ pub async fn analyze_issue(config: &AiConfig, issue: &IssueDetails) -> Result<Tr
                 "OpenRouter rate limit exceeded. Please wait and try again.\n\
                  Consider upgrading your plan at: https://openrouter.ai/credits"
             );
-        } else {
-            anyhow::bail!(
-                "OpenRouter API error (HTTP {}): {}",
-                status.as_u16(),
-                error_body
-            );
         }
+        anyhow::bail!(
+            "OpenRouter API error (HTTP {}): {}",
+            status.as_u16(),
+            error_body
+        );
     }
 
     // Parse response
@@ -209,10 +208,7 @@ pub async fn analyze_issue(config: &AiConfig, issue: &IssueDetails) -> Result<Tr
 
     // Parse JSON response
     let triage: TriageResponse = serde_json::from_str(&content).with_context(|| {
-        format!(
-            "Failed to parse AI response as JSON. Raw response:\n{}",
-            content
-        )
+        format!("Failed to parse AI response as JSON. Raw response:\n{content}")
     })?;
 
     Ok(triage)
