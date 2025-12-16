@@ -1,6 +1,11 @@
 //! Aptu Core Library
 //!
 //! Reusable components for OSS issue triage with AI assistance.
-//! This crate will be populated in PR 2.
+//! Provides GitHub API integration, AI client, configuration, and history tracking.
 
-// Placeholder - will be populated in PR 2
+pub mod ai;
+pub mod config;
+pub mod error;
+pub mod github;
+pub mod history;
+pub mod repos;

@@ -1,9 +1,9 @@
 //! Contribution history command.
 
 use anyhow::Result;
+use aptu_core::history;
 
 use super::types::HistoryResult;
-use crate::history;
 
 /// Show contribution history.
 pub fn run() -> Result<HistoryResult> {

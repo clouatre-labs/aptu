@@ -12,39 +12,37 @@ name = "aptu"
 path = "src/main.rs"
 
 [dependencies]
-# Core
+# Core library
+aptu-core = { path = "../aptu-core" }
+
+# CLI framework
 clap = { workspace = true }
 clap_complete = { workspace = true }
+
+# Async runtime
 tokio = { workspace = true }
-reqwest = { workspace = true }
+
+# Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yml = { workspace = true }
 
-# GitHub
-octocrab = { workspace = true }
-secrecy = { workspace = true }
-
 # Error handling and logging
-thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-
-# Configuration and storage
-config = { workspace = true }
-keyring = { workspace = true }
-dirs = { workspace = true }
 
 # User experience
 indicatif = { workspace = true }
 dialoguer = { workspace = true }
 console = { workspace = true }
+
+# Time and IDs
 chrono = { workspace = true }
 uuid = { workspace = true }
 
-# Future: aptu-core dependency (PR 2)
-# aptu-core = { path = "../aptu-core" }
+# Security
+secrecy = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

@@ -5,12 +5,12 @@
 //! confirmation flow (render before asking).
 
 use anyhow::{Context, Result};
+use aptu_core::ai::openrouter::analyze_issue;
+use aptu_core::ai::types::TriageResponse;
+use aptu_core::config::load_config;
+use aptu_core::github::{auth, issues};
 use tracing::{debug, info, instrument};
 
-use crate::ai::openrouter::analyze_issue;
-use crate::ai::types::TriageResponse;
-use crate::config::load_config;
-use crate::github::{auth, issues};
 use crate::output::render_triage_markdown;
 
 /// Intermediate result from analysis (before posting decision).

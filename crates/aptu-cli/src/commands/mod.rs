@@ -134,16 +134,16 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
                 }
 
                 // Record to history
-                let contribution = crate::history::Contribution {
+                let contribution = aptu_core::history::Contribution {
                     id: uuid::Uuid::new_v4(),
                     repo: format!("{}/{}", analyze_result.owner, analyze_result.repo),
                     issue: analyze_result.issue_number,
                     action: "triage".to_string(),
                     timestamp: chrono::Utc::now(),
                     comment_url: comment_url.clone(),
-                    status: crate::history::ContributionStatus::Pending,
+                    status: aptu_core::history::ContributionStatus::Pending,
                 };
-                crate::history::add_contribution(contribution)?;
+                aptu_core::history::add_contribution(contribution)?;
                 debug!("Contribution recorded to history");
 
                 // Show success

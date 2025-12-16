@@ -23,6 +23,7 @@ pub struct CuratedRepo {
 
 impl CuratedRepo {
     /// Returns the full repository name in "owner/name" format.
+    #[must_use]
     pub fn full_name(&self) -> String {
         format!("{}/{}", self.owner, self.name)
     }

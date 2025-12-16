@@ -3,10 +3,10 @@
 //! These types allow command handlers to return data instead of printing
 //! directly, improving testability and separation of concerns.
 
-use crate::ai::types::TriageResponse;
-use crate::github::graphql::IssueNode;
-use crate::history::Contribution;
-use crate::repos::CuratedRepo;
+use aptu_core::ai::types::TriageResponse;
+use aptu_core::github::graphql::IssueNode;
+use aptu_core::history::Contribution;
+use aptu_core::repos::CuratedRepo;
 
 /// Result from the repos command.
 pub struct ReposResult {

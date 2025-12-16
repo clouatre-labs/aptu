@@ -99,23 +99,18 @@ name = "aptu-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aptu-core",
  "assert_cmd",
  "chrono",
  "clap",
  "clap_complete",
- "config",
  "console",
  "dialoguer",
- "dirs",
  "indicatif",
- "keyring",
- "octocrab",
- "reqwest",
  "secrecy",
  "serde",
  "serde_json",
  "serde_yml",
- "thiserror 2.0.17",
  "tokio",
  "tokio-test",
  "tracing",
@@ -127,6 +122,21 @@ dependencies = [
 [[package]]
 name = "aptu-core"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "config",
+ "dirs",
+ "keyring",
+ "octocrab",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "arc-swap"

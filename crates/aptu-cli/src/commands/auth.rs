@@ -1,11 +1,10 @@
 //! GitHub OAuth authentication command.
 
 use anyhow::Result;
+use aptu_core::github::{OAUTH_CLIENT_ID, auth};
 use console::style;
 use secrecy::SecretString;
 use tracing::info;
-
-use crate::github::{OAUTH_CLIENT_ID, auth};
 
 /// Run the login command - authenticate with GitHub.
 pub async fn run_login() -> Result<()> {

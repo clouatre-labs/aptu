@@ -1,7 +1,8 @@
 //! List curated repositories command.
 
+use aptu_core::repos;
+
 use super::types::ReposResult;
-use crate::repos;
 
 /// List curated repositories available for contribution.
 pub fn run() -> ReposResult {

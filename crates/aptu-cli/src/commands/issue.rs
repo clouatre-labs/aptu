@@ -4,11 +4,11 @@
 //! a single GraphQL query for optimal performance.
 
 use anyhow::{Context, Result};
+use aptu_core::github::{auth, graphql};
+use aptu_core::repos;
 use tracing::{debug, info, instrument};
 
 use super::types::IssuesResult;
-use crate::github::{auth, graphql};
-use crate::repos;
 
 /// List open issues suitable for contribution.
 ///
