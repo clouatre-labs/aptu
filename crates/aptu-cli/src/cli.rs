@@ -167,5 +167,9 @@ pub enum IssueCommand {
         /// Skip confirmation prompt (post immediately)
         #[arg(short = 'y', long)]
         yes: bool,
+
+        /// Display fetched issue content before AI triage analysis
+        #[arg(long)]
+        show_issue: bool,
     },
 }

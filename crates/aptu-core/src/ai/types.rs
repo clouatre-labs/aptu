@@ -72,7 +72,7 @@ pub struct TriageResponse {
 }
 
 /// Details about an issue for triage.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IssueDetails {
     /// Repository owner.
     pub owner: String,
@@ -94,7 +94,7 @@ pub struct IssueDetails {
 }
 
 /// A comment on an issue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IssueComment {
     /// Comment author username.
     pub author: String,
