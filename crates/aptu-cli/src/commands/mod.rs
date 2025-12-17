@@ -22,6 +22,7 @@ use crate::cli::{
     AuthCommand, Cli, Commands, IssueCommand, OutputContext, OutputFormat, RepoCommand,
 };
 use crate::output;
+use aptu_core::AppConfig;
 
 /// Creates a styled spinner (only if interactive).
 fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
@@ -42,7 +43,7 @@ fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
 
 /// Dispatch to the appropriate command handler.
 #[allow(clippy::too_many_lines)]
-pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
+pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> Result<()> {
     match command {
         Commands::Auth(auth_cmd) => match auth_cmd {
             AuthCommand::Login => auth::run_login().await,
@@ -78,9 +79,6 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
                 yes,
                 show_issue,
             } => {
-                // Load config to get default_repo
-                let config = crate::config::load_config()?;
-
                 // Determine repo context: --repo flag > default_repo config
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
 
@@ -98,7 +96,7 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
 
                 // Phase 1b: Analyze with AI
                 let spinner = maybe_spinner(&ctx, "Analyzing with AI...");
-                let triage_response = triage::analyze(&issue_details).await?;
+                let triage_response = triage::analyze(&issue_details, &config.ai).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
@@ -129,18 +127,15 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
                 // Handle confirmation (now AFTER user has seen the triage)
                 let should_post = if yes {
                     true
+                } else if config.ui.confirm_before_post {
+                    println!();
+                    Confirm::new()
+                        .with_prompt("Post this triage as a comment to the issue?")
+                        .default(false)
+                        .interact()
+                        .context("Failed to get user confirmation")?
                 } else {
-                    let config = crate::config::load_config()?;
-                    if config.ui.confirm_before_post {
-                        println!();
-                        Confirm::new()
-                            .with_prompt("Post this triage as a comment to the issue?")
-                            .default(false)
-                            .interact()
-                            .context("Failed to get user confirmation")?
-                    } else {
-                        true
-                    }
+                    true
                 };
 
                 if !should_post {

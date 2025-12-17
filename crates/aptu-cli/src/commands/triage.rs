@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use aptu_core::ai::openrouter::analyze_issue;
 use aptu_core::ai::types::{IssueDetails, TriageResponse};
-use aptu_core::config::load_config;
+use aptu_core::config::AiConfig;
 use aptu_core::github::{auth, issues};
 use tracing::{debug, info, instrument};
 
@@ -57,13 +57,11 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
 /// # Arguments
 ///
 /// * `issue_details` - Fetched issue details from `fetch()`
+/// * `ai_config` - AI configuration (provider, model, etc.)
 #[instrument(skip_all, fields(issue_number = issue_details.number))]
-pub async fn analyze(issue_details: &IssueDetails) -> Result<TriageResponse> {
-    // Load configuration
-    let config = load_config().context("Failed to load configuration")?;
-
+pub async fn analyze(issue_details: &IssueDetails, ai_config: &AiConfig) -> Result<TriageResponse> {
     // Call AI for analysis
-    let triage = analyze_issue(&config.ai, issue_details).await?;
+    let triage = analyze_issue(ai_config, issue_details).await?;
 
     debug!("Issue analyzed successfully");
     Ok(triage)
