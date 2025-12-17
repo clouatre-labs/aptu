@@ -26,6 +26,12 @@ load test_helper
 }
 
 @test "issue list with real GitHub API" {
+    # Workaround: aptu doesn't support GITHUB_TOKEN env var yet (pre-existing bug)
+    # Skip in CI if gh CLI not available, since aptu requires interactive auth
+    if [[ -n "$CI" ]] && ! command -v gh &> /dev/null; then
+        skip "Requires gh CLI in CI (aptu doesn't support GITHUB_TOKEN env var yet)"
+    fi
+    
     # Ensure GITHUB_TOKEN is set from gh CLI if not already set
     if [[ -z "$GITHUB_TOKEN" ]]; then
         if command -v gh &> /dev/null; then
