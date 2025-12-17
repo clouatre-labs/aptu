@@ -103,25 +103,39 @@ Build a command-line tool that:
 
 ## 5. Technical Architecture
 
-### Phase 1: CLI Architecture
+### Phase 1-2: Workspace Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      Aptu CLI                           │
-├─────────────────────────────────────────────────────────┤
-│  Commands:                                              │
-│  - aptu auth login/logout/status  (GitHub OAuth)        │
-│  - aptu repo list                 (curated repos)       │
-│  - aptu issue list [REPO]         (good-first-issues)   │
-│  - aptu issue triage <URL>        (AI triage + comment) │
-│  - aptu history                   (contribution log)    │
-│  - aptu completion <SHELL>        (shell completions)   │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    Aptu Workspace                            │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│  │   aptu-cli      │  │  aptu-core   │  │  aptu-ffi    │   │
+│  │  (CLI binary)   │  │  (lib crate) │  │  (UniFFI)    │   │
+│  │                 │  │              │  │              │   │
+│  │ Commands:       │  │ - Auth       │  │ - Swift      │   │
+│  │ - auth          │  │ - Repos      │  │   bindings   │   │
+│  │ - repo          │  │ - Issues     │  │ - iOS bridge │   │
+│  │ - issue         │  │ - Triage     │  │              │   │
+│  │ - history       │  │ - History    │  │              │   │
+│  │ - completion    │  │ - Config     │  │              │   │
+│  └────────┬────────┘  └──────┬───────┘  └──────┬───────┘   │
+│           │                  │                 │            │
+│           └──────────────────┼─────────────────┘            │
+│                              │                              │
+│                              ▼                              │
+│                    ┌──────────────────┐                     │
+│                    │   AptuApp        │                     │
+│                    │  (SwiftUI iOS)   │                     │
+│                    └──────────────────┘                     │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
            │                    │
            ▼                    ▼
 ┌──────────────────┐  ┌──────────────────┐
 │   GitHub API     │  │    AI Provider   │
-│  (REST/GraphQL)  │  │ (Mistral/Claude) │
+│  (REST/GraphQL)  │  │ (OpenRouter)     │
 └──────────────────┘  └──────────────────┘
 ```
 
@@ -154,6 +168,8 @@ All commands support these flags for LLM-friendly and scripted usage:
 **Command-specific flags:**
 | Flag | Command | Description |
 |------|---------|-------------|
+| `--show-issue` | `issue list` | Display full issue body (default: title only) |
+| `-r` / `--repo` | `issue list` | Filter by repository (shorthand for positional arg) |
 | `--dry-run` | `issue triage` | Preview triage without posting |
 | `--yes` / `-y` | `issue triage` | Skip confirmation prompt |
 
@@ -223,6 +239,17 @@ aptu completion zsh > ~/.zsh/completions/_aptu
 | `tokio-test` | 0.4.x | Async test utilities |
 | `wiremock` | 0.6.x | HTTP mocking for API tests |
 | `assert_cmd` | 2.x | CLI integration testing |
+
+#### Workspace & FFI (Phase 2+)
+
+| Crate | Version | Purpose |
+|-------|---------|---------|
+| `uniffi` | 0.28.x | Rust-to-Swift FFI bindings (iOS bridge) |
+| `chrono` | 0.4.x | Date/time handling for history timestamps |
+| `uuid` | 1.x | Unique IDs for contribution tracking |
+| `lazy_static` | 1.x | Lazy initialization of static config |
+| `clap_complete` | 4.x | Shell completion generation |
+| `serde_yml` | 0.0.x | YAML serialization (config alternative) |
 
 ### Data Storage (Local)
 
@@ -365,6 +392,132 @@ repo_ttl_hours = 24
 - `APTU_AI_MODEL` → `ai.model`
 - `OPENROUTER_API_KEY` → AI API key (stored in keychain after first use)
 - `GITHUB_TOKEN` → Override OAuth token (for CI/testing)
+
+### 5.4 Workspace & Crate Architecture
+
+**Workspace Structure:**
+
+```
+project-aptu/
+├── Cargo.toml                 # Workspace root
+├── aptu-cli/                  # Binary crate (CLI entry point)
+│   ├── Cargo.toml
+│   ├── src/
+│   │   ├── main.rs            # CLI command routing
+│   │   ├── commands/          # Command implementations
+│   │   │   ├── auth.rs
+│   │   │   ├── repo.rs
+│   │   │   ├── issue.rs
+│   │   │   └── history.rs
+│   │   └── ui/                # Terminal UI helpers
+│   │       ├── spinner.rs
+│   │       └── formatter.rs
+│   └── tests/                 # Integration tests
+├── aptu-core/                 # Library crate (shared logic)
+│   ├── Cargo.toml
+│   ├── src/
+│   │   ├── lib.rs
+│   │   ├── auth/              # GitHub OAuth
+│   │   ├── github/            # GitHub API client
+│   │   ├── ai/                # AI provider integration
+│   │   ├── config/            # Configuration management
+│   │   ├── history/           # Contribution tracking
+│   │   ├── models/            # Data structures
+│   │   └── error.rs           # Error types
+│   └── tests/                 # Unit tests
+├── aptu-ffi/                  # FFI crate (Phase 2+, iOS bridge)
+│   ├── Cargo.toml
+│   ├── src/
+│   │   ├── lib.rs
+│   │   └── ios.rs             # UniFFI bindings for Swift
+│   └── uniffi.toml            # UniFFI configuration
+├── AptuApp/                   # SwiftUI iOS app (Phase 2+)
+│   ├── AptuApp.xcodeproj
+│   ├── AptuApp/
+│   │   ├── ContentView.swift
+│   │   ├── Models/
+│   │   ├── Views/
+│   │   └── Services/
+│   └── AptuAppTests/
+├── tests/                     # Integration tests (Bats)
+│   ├── auth.bats
+│   ├── repo.bats
+│   ├── issue.bats
+│   └── triage.bats
+├── .github/
+│   └── workflows/
+│       ├── ci.yml             # Rust tests + linting
+│       └── integration.yml    # Bats integration tests
+├── SPEC.md
+├── README.md
+└── Cargo.lock
+```
+
+**Crate Responsibilities:**
+
+| Crate | Purpose | Dependencies |
+|-------|---------|--------------|
+| `aptu-core` | Business logic, API clients, config | octocrab, reqwest, serde, tracing |
+| `aptu-cli` | CLI interface, command routing | aptu-core, clap, indicatif, dialoguer |
+| `aptu-ffi` | Rust-to-Swift bridge (Phase 2+) | aptu-core, uniffi |
+| `AptuApp` | iOS native UI (Phase 2+) | aptu-ffi (via UniFFI) |
+
+**Dependency Flow:**
+
+```
+AptuApp (Swift)
+    |
+    v
+aptu-ffi (UniFFI bindings)
+    |
+    v
+aptu-core (Rust library)
+    |
+    +-- octocrab (GitHub API)
+    +-- reqwest (HTTP client)
+    +-- serde (Serialization)
+    +-- tracing (Logging)
+    +-- keyring (Secure storage)
+    +-- config (Configuration)
+    +-- chrono (Date/time)
+    +-- uuid (ID generation)
+    +-- thiserror (Error handling)
+    +-- anyhow (Error context)
+
+aptu-cli (CLI binary)
+    |
+    +-- aptu-core
+    +-- clap (CLI parsing)
+    +-- indicatif (Progress bars)
+    +-- dialoguer (Prompts)
+    +-- console (Terminal styling)
+    +-- clap_complete (Shell completions)
+```
+
+**Testing Strategy:**
+
+- **Unit tests** - In `aptu-core/tests/` using `#[cfg(test)]` modules
+- **Integration tests** - In `tests/` using Bats shell testing framework
+- **CLI tests** - Using `assert_cmd` crate for command-line assertions
+- **Mock APIs** - Using `wiremock` for HTTP mocking in tests
+
+**Build & Release:**
+
+```bash
+# Development
+cargo build                    # Debug build
+cargo test                     # Run all tests
+cargo fmt                      # Format code
+cargo clippy                   # Lint
+
+# Release
+cargo build --release          # Optimized binary
+cargo install --path aptu-cli  # Install locally
+
+# iOS (Phase 2+)
+cargo build --target aarch64-apple-ios --release  # Build for iOS
+uniffi-bindgen generate aptu-ffi/src/lib.rs       # Generate Swift bindings
+```
 
 ---
 
@@ -903,5 +1056,5 @@ Rejected for MVP due to complexity (self-signed certs, browser warnings, port co
 
 ---
 
-*Last updated: 2025-12-15*
+*Last updated: 2025-12-17*
 *Author: Hugues Clouatre*

@@ -29,6 +29,24 @@ cd aptu
 cargo build --release
 ```
 
+## Project Structure
+
+Aptu is organized as a Rust workspace with multiple crates:
+
+```
+aptu/
+├── aptu-cli/          # CLI binary (user-facing commands)
+├── aptu-core/         # Shared library (GitHub API, AI, config)
+├── aptu-ffi/          # FFI bindings for iOS (Phase 2+)
+├── AptuApp/           # SwiftUI iOS app (Phase 2+)
+└── tests/             # Integration tests (Bats)
+```
+
+**Key Crates:**
+- **aptu-core** - Business logic, API clients, configuration management
+- **aptu-cli** - Command-line interface and user interactions
+- **aptu-ffi** - Rust-to-Swift bridge via UniFFI (iOS support)
+
 ## Quick Start
 
 ```bash
