@@ -23,9 +23,8 @@ async fn main() -> Result<()> {
     let output_ctx = OutputContext::from_cli(cli.output, cli.quiet);
 
     // Load config early to validate it works (Option A from plan)
-    #[allow(unused_variables)]
     let config = config::load_config().context("Failed to load configuration")?;
     debug!("Configuration loaded successfully");
 
-    commands::run(cli.command, output_ctx).await
+    commands::run(cli.command, output_ctx, &config).await
 }
