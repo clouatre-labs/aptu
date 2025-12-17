@@ -71,10 +71,21 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
                 output::render_issues(&result, &ctx);
                 Ok(())
             }
-            IssueCommand::Triage { url, dry_run, yes } => {
+            IssueCommand::Triage {
+                reference,
+                repo,
+                dry_run,
+                yes,
+            } => {
+                // Load config to get default_repo
+                let config = crate::config::load_config()?;
+
+                // Determine repo context: --repo flag > default_repo config
+                let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
+
                 // Phase 1: Fetch and analyze
                 let spinner = maybe_spinner(&ctx, "Fetching issue and analyzing...");
-                let analyze_result = triage::analyze(&url).await?;
+                let analyze_result = triage::analyze(&reference, repo_context).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }

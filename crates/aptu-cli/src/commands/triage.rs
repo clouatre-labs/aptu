@@ -30,8 +30,13 @@ pub struct AnalyzeResult {
 /// Analyze an issue with AI assistance.
 ///
 /// Fetches issue details and runs AI analysis. Does not post anything.
-#[instrument(skip_all, fields(issue_url = %issue_url))]
-pub async fn analyze(issue_url: &str) -> Result<AnalyzeResult> {
+///
+/// # Arguments
+///
+/// * `reference` - Issue reference (URL, owner/repo#number, or bare number)
+/// * `repo_context` - Optional repository context for bare numbers
+#[instrument(skip_all, fields(reference = %reference))]
+pub async fn analyze(reference: &str, repo_context: Option<&str>) -> Result<AnalyzeResult> {
     // Load configuration
     let config = load_config().context("Failed to load configuration")?;
 
@@ -40,8 +45,8 @@ pub async fn analyze(issue_url: &str) -> Result<AnalyzeResult> {
         anyhow::bail!("Authentication required - run `aptu auth login` first");
     }
 
-    // Parse the issue URL
-    let (owner, repo, number) = issues::parse_issue_url(issue_url)?;
+    // Parse the issue reference
+    let (owner, repo, number) = issues::parse_issue_reference(reference, repo_context)?;
 
     // Create authenticated client
     let client = auth::create_client().context("Failed to create GitHub client")?;
