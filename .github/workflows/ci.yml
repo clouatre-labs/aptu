@@ -64,11 +64,12 @@ jobs:
         run: cargo build --release
       - uses: bats-core/bats-action@e412797c46257a2dbf3775f6f6010b33ee6cb99f # v3.0.1
         with:
-          support-path: /tmp/bats-support
-          assert-path: /tmp/bats-assert
-          file-path: /tmp/bats-file
+          support-path: ${{ github.workspace }}/.bats-libs/bats-support
+          assert-path: ${{ github.workspace }}/.bats-libs/bats-assert
+          file-path: ${{ github.workspace }}/.bats-libs/bats-file
       - name: Run integration tests
         env:
           APTU_BIN: ${{ github.workspace }}/target/release/aptu
+          BATS_LIB_PATH: ${{ github.workspace }}/.bats-libs
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: bats tests/integration.bats

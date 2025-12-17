@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
-# Load bats libraries
-load /tmp/bats-support/load.bash
-load /tmp/bats-assert/load.bash
-load /tmp/bats-file/load.bash
+# Load bats libraries (use CI paths if available, fallback to /tmp for local)
+BATS_LIB_PATH="${BATS_LIB_PATH:-/tmp}"
+load "${BATS_LIB_PATH}/bats-support/load.bash"
+load "${BATS_LIB_PATH}/bats-assert/load.bash"
+load "${BATS_LIB_PATH}/bats-file/load.bash"
 
 # Set APTU_BIN path to release binary
 export APTU_BIN="${APTU_BIN:-$(pwd)/target/release/aptu}"
