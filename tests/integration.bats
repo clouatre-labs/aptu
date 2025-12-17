@@ -29,7 +29,8 @@ load test_helper
     # Ensure GITHUB_TOKEN is set from gh CLI if not already set
     if [[ -z "$GITHUB_TOKEN" ]]; then
         if command -v gh &> /dev/null; then
-            export GITHUB_TOKEN=$(gh auth token)
+            token=$(gh auth token 2>/dev/null) || skip "GitHub token not available (gh CLI not authenticated)"
+            export GITHUB_TOKEN="$token"
         else
             skip "GitHub token not available (set GITHUB_TOKEN or install gh CLI)"
         fi
