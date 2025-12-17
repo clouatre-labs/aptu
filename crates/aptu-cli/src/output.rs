@@ -325,6 +325,19 @@ fn render_triage_content(
         false,
     ));
 
+    // Status note (if present)
+    if let Some(status_note) = &triage.status_note
+        && !status_note.is_empty()
+    {
+        output.push_str(&render_list_section(
+            "Status",
+            std::slice::from_ref(status_note),
+            "",
+            mode,
+            false,
+        ));
+    }
+
     // Attribution (markdown only)
     if matches!(mode, OutputMode::Markdown) {
         output.push_str("---\n");
@@ -761,6 +774,7 @@ mod tests {
             suggested_labels: vec!["bug".to_string(), "crash".to_string()],
             clarifying_questions: vec!["What version are you using?".to_string()],
             potential_duplicates: vec!["#123".to_string()],
+            status_note: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -781,12 +795,31 @@ mod tests {
             suggested_labels: vec!["enhancement".to_string()],
             clarifying_questions: vec![],
             potential_duplicates: vec![],
+            status_note: None,
         };
 
         let comment = render_triage_markdown(&triage);
 
         assert!(comment.contains("None needed"));
         assert!(comment.contains("None found"));
+    }
+
+    #[test]
+    fn test_render_triage_markdown_with_status_note() {
+        let triage = TriageResponse {
+            summary: "Issue with a claimed status.".to_string(),
+            suggested_labels: vec!["bug".to_string()],
+            clarifying_questions: vec![],
+            potential_duplicates: vec![],
+            status_note: Some("Issue claimed by @user".to_string()),
+        };
+
+        let comment = render_triage_markdown(&triage);
+
+        assert!(comment.contains("## Triage Summary"));
+        assert!(comment.contains("Issue with a claimed status."));
+        assert!(comment.contains("Status"));
+        assert!(comment.contains("Issue claimed by @user"));
     }
 
     #[test]

@@ -32,14 +32,16 @@ Your response MUST be valid JSON with this exact schema:
   "summary": "A 2-3 sentence summary of what the issue is about and its impact",
   "suggested_labels": ["label1", "label2"],
   "clarifying_questions": ["question1", "question2"],
-  "potential_duplicates": ["#123", "#456"]
+  "potential_duplicates": ["#123", "#456"],
+  "status_note": "Optional note about issue status (e.g., claimed, in-progress)"
 }
 
 Guidelines:
 - summary: Concise explanation of the problem/request and why it matters
 - suggested_labels: Choose from: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix
-- clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear.
+- clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear. Skip questions already answered in comments.
 - potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none.
+- status_note: Detect if someone has claimed the issue or is working on it. Look for patterns like "I'd like to work on this", "I'll submit a PR", "working on this", or "@user I've assigned you". If claimed, set status_note to a brief description (e.g., "Issue claimed by @username"). If not claimed, leave as null or empty string. IMPORTANT: If issue is claimed, do NOT suggest 'help wanted' label.
 
 Be helpful, concise, and actionable. Focus on what a maintainer needs to know."##.to_string()
 }
@@ -225,6 +227,40 @@ mod tests {
         assert!(prompt.contains("suggested_labels"));
         assert!(prompt.contains("clarifying_questions"));
         assert!(prompt.contains("potential_duplicates"));
+        assert!(prompt.contains("status_note"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_contains_claim_detection_keywords() {
+        let prompt = build_system_prompt();
+        assert!(prompt.contains("claimed") || prompt.contains("working on"));
+        assert!(prompt.contains("help wanted"));
+    }
+
+    #[test]
+    fn test_triage_response_with_status_note() {
+        let json = r#"{
+            "summary": "Test summary",
+            "suggested_labels": ["bug"],
+            "status_note": "Issue claimed by @user"
+        }"#;
+
+        let triage: TriageResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            triage.status_note,
+            Some("Issue claimed by @user".to_string())
+        );
+    }
+
+    #[test]
+    fn test_triage_response_without_status_note() {
+        let json = r#"{
+            "summary": "Test summary",
+            "suggested_labels": ["bug"]
+        }"#;
+
+        let triage: TriageResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(triage.status_note, None);
     }
 
     #[test]
