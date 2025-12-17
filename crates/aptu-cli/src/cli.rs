@@ -153,8 +153,12 @@ pub enum IssueCommand {
 
     /// Triage an issue with AI assistance
     Triage {
-        /// GitHub issue URL to triage
-        url: String,
+        /// Issue reference (URL, owner/repo#number, or number)
+        reference: String,
+
+        /// Repository for bare issue numbers (e.g., "block/goose")
+        #[arg(long, short = 'r')]
+        repo: Option<String>,
 
         /// Preview triage without posting to GitHub
         #[arg(long)]
