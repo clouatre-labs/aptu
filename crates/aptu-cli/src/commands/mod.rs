@@ -76,6 +76,7 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
                 repo,
                 dry_run,
                 yes,
+                show_issue,
             } => {
                 // Load config to get default_repo
                 let config = crate::config::load_config()?;
@@ -83,18 +84,30 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
                 // Determine repo context: --repo flag > default_repo config
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
 
-                // Phase 1: Fetch and analyze
-                let spinner = maybe_spinner(&ctx, "Fetching issue and analyzing...");
-                let analyze_result = triage::analyze(&reference, repo_context).await?;
+                // Phase 1a: Fetch issue
+                let spinner = maybe_spinner(&ctx, "Fetching issue...");
+                let issue_details = triage::fetch(&reference, repo_context).await?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
+
+                // Render issue if requested
+                if show_issue {
+                    output::render_issue(&issue_details, &ctx);
+                }
+
+                // Phase 1b: Analyze with AI
+                let spinner = maybe_spinner(&ctx, "Analyzing with AI...");
+                let triage_response = triage::analyze(&issue_details).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
 
                 // Build result for rendering (before posting decision)
                 let result = types::TriageResult {
-                    issue_title: analyze_result.issue_title.clone(),
-                    issue_number: analyze_result.issue_number,
-                    triage: analyze_result.triage.clone(),
+                    issue_title: issue_details.title.clone(),
+                    issue_number: issue_details.number,
+                    triage: triage_response.clone(),
                     comment_url: None,
                     dry_run,
                     user_declined: false,
@@ -139,6 +152,10 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
 
                 // Phase 2: Post the comment
                 let spinner = maybe_spinner(&ctx, "Posting comment...");
+                let analyze_result = triage::AnalyzeResult {
+                    issue_details,
+                    triage: triage_response,
+                };
                 let comment_url = triage::post(&analyze_result).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
@@ -147,8 +164,11 @@ pub async fn run(command: Commands, ctx: OutputContext) -> Result<()> {
                 // Record to history
                 let contribution = aptu_core::history::Contribution {
                     id: uuid::Uuid::new_v4(),
-                    repo: format!("{}/{}", analyze_result.owner, analyze_result.repo),
-                    issue: analyze_result.issue_number,
+                    repo: format!(
+                        "{}/{}",
+                        analyze_result.issue_details.owner, analyze_result.issue_details.repo
+                    ),
+                    issue: analyze_result.issue_details.number,
                     action: "triage".to_string(),
                     timestamp: chrono::Utc::now(),
                     comment_url: comment_url.clone(),

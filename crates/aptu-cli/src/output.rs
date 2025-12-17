@@ -3,7 +3,7 @@
 //! Centralizes all output formatting logic, supporting text, JSON, and YAML formats.
 //! Command handlers return data; this module handles presentation.
 
-use aptu_core::ai::types::TriageResponse;
+use aptu_core::ai::types::{IssueDetails, TriageResponse};
 use aptu_core::github::graphql::IssueNode;
 use aptu_core::history::ContributionStatus;
 use chrono::{DateTime, Utc};
@@ -393,6 +393,124 @@ pub fn render_triage_markdown(triage: &TriageResponse) -> String {
     render_triage_content(triage, &OutputMode::Markdown, None)
 }
 
+/// Render fetched issue details.
+pub fn render_issue(issue: &IssueDetails, ctx: &OutputContext) {
+    match ctx.format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(issue).expect("Failed to serialize issue to JSON")
+            );
+        }
+        OutputFormat::Yaml => {
+            println!(
+                "{}",
+                serde_yml::to_string(issue).expect("Failed to serialize issue to YAML")
+            );
+        }
+        OutputFormat::Markdown => {
+            println!("## Issue #{}: {}\n", issue.number, issue.title);
+            println!("**Repository:** {}/{}\n", issue.owner, issue.repo);
+
+            println!("### Description\n");
+            if issue.body.is_empty() {
+                println!("[No description provided]\n");
+            } else {
+                let body = truncate_body(&issue.body, 1000);
+                println!("{body}\n");
+            }
+
+            if !issue.labels.is_empty() {
+                println!("### Labels\n");
+                for label in &issue.labels {
+                    println!("- `{label}`");
+                }
+                println!();
+            }
+
+            if !issue.comments.is_empty() {
+                println!("### Comments ({})\n", issue.comments.len());
+                for (i, comment) in issue.comments.iter().take(5).enumerate() {
+                    println!("**{}. @{}**\n", i + 1, comment.author);
+                    let body = truncate_body(&comment.body, 500);
+                    println!("{body}\n");
+                }
+                if issue.comments.len() > 5 {
+                    println!("... and {} more comments\n", issue.comments.len() - 5);
+                }
+            }
+        }
+        OutputFormat::Text => {
+            println!();
+            println!(
+                "{}",
+                style(format!("Issue #{}: {}", issue.number, issue.title))
+                    .bold()
+                    .underlined()
+            );
+            println!("{}", style(format!("{}/{}", issue.owner, issue.repo)).dim());
+            println!();
+
+            println!("{}", style("Description").cyan().bold());
+            if issue.body.is_empty() {
+                println!("  {}\n", style("[No description provided]").dim());
+            } else {
+                let body = truncate_body(&issue.body, 1000);
+                println!("  {body}\n");
+            }
+
+            if !issue.labels.is_empty() {
+                println!("{}", style("Labels").cyan().bold());
+                for label in &issue.labels {
+                    println!("  {} {}", style("-").dim(), label);
+                }
+                println!();
+            }
+
+            if !issue.comments.is_empty() {
+                println!(
+                    "{}",
+                    style(format!("Comments ({})", issue.comments.len()))
+                        .cyan()
+                        .bold()
+                );
+                for (i, comment) in issue.comments.iter().take(5).enumerate() {
+                    println!(
+                        "  {}. {}",
+                        i + 1,
+                        style(format!("@{}", comment.author)).yellow()
+                    );
+                    let body = truncate_body(&comment.body, 500);
+                    println!("     {body}");
+                }
+                if issue.comments.len() > 5 {
+                    println!(
+                        "  {}",
+                        style(format!(
+                            "... and {} more comments",
+                            issue.comments.len() - 5
+                        ))
+                        .dim()
+                    );
+                }
+                println!();
+            }
+        }
+    }
+}
+
+/// Truncates body text to a maximum length, adding indicator if truncated.
+///
+/// Uses character count (not byte count) to safely handle multi-byte UTF-8.
+fn truncate_body(body: &str, max_len: usize) -> String {
+    if body.chars().count() <= max_len {
+        body.to_string()
+    } else {
+        let truncated: String = body.chars().take(max_len).collect();
+        format!("{truncated}... [truncated]")
+    }
+}
+
 /// Render history result.
 pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
     match ctx.format {
@@ -702,5 +820,26 @@ mod tests {
         );
 
         assert!(output.contains("None found"));
+    }
+
+    #[test]
+    fn test_truncate_body_short() {
+        let body = "Short body";
+        assert_eq!(truncate_body(body, 100), "Short body");
+    }
+
+    #[test]
+    fn test_truncate_body_long() {
+        let body = "This is a very long body that should be truncated because it exceeds the maximum length";
+        let result = truncate_body(body, 50);
+        assert!(result.ends_with("... [truncated]"));
+        assert!(result.contains("This is a very long"));
+    }
+
+    #[test]
+    fn test_truncate_body_exact_length() {
+        let body = "Exactly fifty characters long text here now ok";
+        let result = truncate_body(body, 50);
+        assert_eq!(result, body);
     }
 }
