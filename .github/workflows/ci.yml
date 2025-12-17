@@ -71,5 +71,6 @@ jobs:
         env:
           APTU_BIN: ${{ github.workspace }}/target/release/aptu
           BATS_LIB_PATH: ${{ github.workspace }}/.bats-libs
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: bats tests/integration.bats
