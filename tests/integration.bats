@@ -26,7 +26,14 @@ load test_helper
 }
 
 @test "issue list with real GitHub API" {
-    skip_if_no_gh_token
+    # Ensure GITHUB_TOKEN is set from gh CLI if not already set
+    if [[ -z "$GITHUB_TOKEN" ]]; then
+        if command -v gh &> /dev/null; then
+            export GITHUB_TOKEN=$(gh auth token)
+        else
+            skip "GitHub token not available (set GITHUB_TOKEN or install gh CLI)"
+        fi
+    fi
     run "$APTU_BIN" issue list block/goose
     assert_success
 }
