@@ -69,6 +69,9 @@ pub struct TriageResponse {
     /// Potential duplicate issue numbers/references.
     #[serde(default)]
     pub potential_duplicates: Vec<String>,
+    /// Status note about the issue (e.g., if it's already claimed or in-progress).
+    #[serde(default)]
+    pub status_note: Option<String>,
 }
 
 /// Details about an issue for triage.
