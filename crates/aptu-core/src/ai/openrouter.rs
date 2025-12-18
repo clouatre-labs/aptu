@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use reqwest::Client;
+use secrecy::{ExposeSecret, SecretString};
 use tracing::{debug, instrument, warn};
 
 use super::types::{
@@ -22,6 +23,173 @@ const MAX_BODY_LENGTH: usize = 4000;
 
 /// Maximum number of comments to include in the prompt.
 const MAX_COMMENTS: usize = 5;
+
+/// `OpenRouter` API client for issue triage.
+///
+/// Holds HTTP client, API key, and model configuration for reuse across multiple requests.
+/// Enables connection pooling and cleaner API.
+pub struct OpenRouterClient {
+    /// HTTP client with configured timeout.
+    http: Client,
+    /// API key for `OpenRouter` authentication.
+    api_key: SecretString,
+    /// Model name (e.g., "mistralai/devstral-2512:free").
+    model: String,
+}
+
+impl OpenRouterClient {
+    /// Creates a new `OpenRouter` client from configuration.
+    ///
+    /// Validates the model against cost control settings and fetches the API key
+    /// from the environment.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - AI configuration with model, timeout, and cost control settings
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Model is not in free tier and `allow_paid_models` is false
+    /// - `OPENROUTER_API_KEY` environment variable is not set
+    /// - HTTP client creation fails
+    pub fn new(config: &AiConfig) -> Result<Self> {
+        // Validate model against cost control
+        if !config.allow_paid_models && !super::is_free_model(&config.model) {
+            anyhow::bail!(
+                "Model '{}' is not in the free tier.\n\
+                 To use paid models, set `allow_paid_models = true` in your config file:\n\
+                 {}\n\n\
+                 Or use a free model like: mistralai/devstral-2512:free",
+                config.model,
+                crate::config::config_file_path().display()
+            );
+        }
+
+        // Get API key from environment
+        let api_key = env::var(OPENROUTER_API_KEY_ENV).with_context(|| {
+            format!(
+                "Missing {OPENROUTER_API_KEY_ENV} environment variable.\n\
+                 Set it with: export {OPENROUTER_API_KEY_ENV}=your_api_key\n\
+                 Get a free key at: https://openrouter.ai/keys"
+            )
+        })?;
+
+        // Create HTTP client with timeout
+        let http = Client::builder()
+            .timeout(Duration::from_secs(config.timeout_seconds))
+            .build()
+            .context("Failed to create HTTP client")?;
+
+        Ok(Self {
+            http,
+            api_key: SecretString::new(api_key.into()),
+            model: config.model.clone(),
+        })
+    }
+
+    /// Analyzes a GitHub issue using the `OpenRouter` API.
+    ///
+    /// Returns a structured triage response with summary, labels, questions, and duplicates.
+    ///
+    /// # Arguments
+    ///
+    /// * `issue` - Issue details to analyze
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - API request fails (network, timeout, rate limit)
+    /// - Response cannot be parsed as valid JSON
+    #[instrument(skip(self, issue), fields(issue_number = issue.number, repo = %format!("{}/{}", issue.owner, issue.repo)))]
+    pub async fn analyze_issue(&self, issue: &IssueDetails) -> Result<TriageResponse> {
+        debug!(model = %self.model, "Calling OpenRouter API");
+
+        // Build request
+        let request = ChatCompletionRequest {
+            model: self.model.clone(),
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: build_system_prompt(),
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: build_user_prompt(issue),
+                },
+            ],
+            response_format: Some(ResponseFormat {
+                format_type: "json_object".to_string(),
+            }),
+            max_tokens: Some(1024),
+            temperature: Some(0.3),
+        };
+
+        // Make API request
+        let response = self
+            .http
+            .post(OPENROUTER_API_URL)
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.api_key.expose_secret()),
+            )
+            .header("Content-Type", "application/json")
+            .header(
+                "HTTP-Referer",
+                "https://github.com/clouatre-labs/project-aptu",
+            )
+            .header("X-Title", "Aptu CLI")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send request to OpenRouter API")?;
+
+        // Check for HTTP errors
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+
+            if status.as_u16() == 401 {
+                anyhow::bail!(
+                    "Invalid OpenRouter API key. Check your {OPENROUTER_API_KEY_ENV} environment variable."
+                );
+            } else if status.as_u16() == 429 {
+                warn!("Rate limited by OpenRouter API");
+                anyhow::bail!(
+                    "OpenRouter rate limit exceeded. Please wait and try again.\n\
+                     Consider upgrading your plan at: https://openrouter.ai/credits"
+                );
+            }
+            anyhow::bail!(
+                "OpenRouter API error (HTTP {}): {}",
+                status.as_u16(),
+                error_body
+            );
+        }
+
+        // Parse response
+        let completion: ChatCompletionResponse = response
+            .json()
+            .await
+            .context("Failed to parse OpenRouter API response")?;
+
+        // Extract message content
+        let content = completion
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .context("No response from AI model")?;
+
+        debug!(response_length = content.len(), "Received AI response");
+
+        // Parse JSON response
+        let triage: TriageResponse = serde_json::from_str(&content).with_context(|| {
+            format!("Failed to parse AI response as JSON. Raw response:\n{content}")
+        })?;
+
+        Ok(triage)
+    }
+}
 
 /// Builds the system prompt for issue triage.
 fn build_system_prompt() -> String {
@@ -91,129 +259,6 @@ fn build_user_prompt(issue: &IssueDetails) -> String {
     prompt.push_str("</issue_content>");
 
     prompt
-}
-
-/// Analyzes a GitHub issue using the `OpenRouter` API.
-///
-/// Returns a structured triage response with summary, labels, questions, and duplicates.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - `OPENROUTER_API_KEY` environment variable is not set
-/// - Model is not in free tier and `allow_paid_models` is false
-/// - API request fails (network, timeout, rate limit)
-/// - Response cannot be parsed as valid JSON
-#[instrument(skip(config, issue), fields(issue_number = issue.number, repo = %format!("{}/{}", issue.owner, issue.repo)))]
-pub async fn analyze_issue(config: &AiConfig, issue: &IssueDetails) -> Result<TriageResponse> {
-    // Validate model against cost control
-    if !config.allow_paid_models && !super::is_free_model(&config.model) {
-        anyhow::bail!(
-            "Model '{}' is not in the free tier.\n\
-             To use paid models, set `allow_paid_models = true` in your config file:\n\
-             {}\n\n\
-             Or use a free model like: mistralai/devstral-2512:free",
-            config.model,
-            crate::config::config_file_path().display()
-        );
-    }
-
-    // Get API key from environment
-    let api_key = env::var(OPENROUTER_API_KEY_ENV).with_context(|| {
-        format!(
-            "Missing {OPENROUTER_API_KEY_ENV} environment variable.\n\
-             Set it with: export {OPENROUTER_API_KEY_ENV}=your_api_key\n\
-             Get a free key at: https://openrouter.ai/keys"
-        )
-    })?;
-
-    debug!(model = %config.model, "Calling OpenRouter API");
-
-    // Build request
-    let request = ChatCompletionRequest {
-        model: config.model.clone(),
-        messages: vec![
-            ChatMessage {
-                role: "system".to_string(),
-                content: build_system_prompt(),
-            },
-            ChatMessage {
-                role: "user".to_string(),
-                content: build_user_prompt(issue),
-            },
-        ],
-        response_format: Some(ResponseFormat {
-            format_type: "json_object".to_string(),
-        }),
-        max_tokens: Some(1024),
-        temperature: Some(0.3),
-    };
-
-    // Create HTTP client with timeout
-    let client = Client::builder()
-        .timeout(Duration::from_secs(config.timeout_seconds))
-        .build()
-        .context("Failed to create HTTP client")?;
-
-    // Make API request
-    let response = client
-        .post(OPENROUTER_API_URL)
-        .header("Authorization", format!("Bearer {api_key}"))
-        .header("Content-Type", "application/json")
-        .header(
-            "HTTP-Referer",
-            "https://github.com/clouatre-labs/project-aptu",
-        )
-        .header("X-Title", "Aptu CLI")
-        .json(&request)
-        .send()
-        .await
-        .context("Failed to send request to OpenRouter API")?;
-
-    // Check for HTTP errors
-    let status = response.status();
-    if !status.is_success() {
-        let error_body = response.text().await.unwrap_or_default();
-
-        if status.as_u16() == 401 {
-            anyhow::bail!(
-                "Invalid OpenRouter API key. Check your {OPENROUTER_API_KEY_ENV} environment variable."
-            );
-        } else if status.as_u16() == 429 {
-            warn!("Rate limited by OpenRouter API");
-            anyhow::bail!(
-                "OpenRouter rate limit exceeded. Please wait and try again.\n\
-                 Consider upgrading your plan at: https://openrouter.ai/credits"
-            );
-        }
-        anyhow::bail!(
-            "OpenRouter API error (HTTP {}): {}",
-            status.as_u16(),
-            error_body
-        );
-    }
-
-    // Parse response
-    let completion: ChatCompletionResponse = response
-        .json()
-        .await
-        .context("Failed to parse OpenRouter API response")?;
-
-    // Extract message content
-    let content = completion
-        .choices
-        .first()
-        .map(|c| c.message.content.clone())
-        .context("No response from AI model")?;
-
-    debug!(response_length = content.len(), "Received AI response");
-
-    // Parse JSON response
-    let triage: TriageResponse = serde_json::from_str(&content).with_context(|| {
-        format!("Failed to parse AI response as JSON. Raw response:\n{content}")
-    })?;
-
-    Ok(triage)
 }
 
 #[cfg(test)]
