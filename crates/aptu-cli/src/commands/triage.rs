@@ -5,10 +5,8 @@
 //! confirmation flow (render issue before asking).
 
 use anyhow::{Context, Result};
-use aptu_core::ai::openrouter::analyze_issue;
-use aptu_core::ai::types::{IssueDetails, TriageResponse};
-use aptu_core::config::AiConfig;
 use aptu_core::github::{auth, issues};
+use aptu_core::{IssueDetails, OpenRouterClient, TriageResponse};
 use tracing::{debug, info, instrument};
 
 use crate::output::render_triage_markdown;
@@ -59,9 +57,15 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
 /// * `issue_details` - Fetched issue details from `fetch()`
 /// * `ai_config` - AI configuration (provider, model, etc.)
 #[instrument(skip_all, fields(issue_number = issue_details.number))]
-pub async fn analyze(issue_details: &IssueDetails, ai_config: &AiConfig) -> Result<TriageResponse> {
+pub async fn analyze(
+    issue_details: &IssueDetails,
+    ai_config: &aptu_core::AiConfig,
+) -> Result<TriageResponse> {
+    // Create OpenRouter client
+    let client = OpenRouterClient::new(ai_config)?;
+
     // Call AI for analysis
-    let triage = analyze_issue(ai_config, issue_details).await?;
+    let triage = client.analyze_issue(issue_details).await?;
 
     debug!("Issue analyzed successfully");
     Ok(triage)

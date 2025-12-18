@@ -5,6 +5,8 @@
 pub mod openrouter;
 pub mod types;
 
+pub use openrouter::OpenRouterClient;
+
 /// `OpenRouter` API base URL.
 pub const OPENROUTER_API_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
