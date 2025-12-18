@@ -1,9 +1,9 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 
 #[test]
 fn test_version() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("--version")
         .assert()
         .success()
@@ -12,7 +12,7 @@ fn test_version() {
 
 #[test]
 fn test_help_contains_all_commands() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("--help")
         .assert()
         .success()
@@ -25,7 +25,7 @@ fn test_help_contains_all_commands() {
 
 #[test]
 fn test_repo_list_json_output() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("repo")
         .arg("list")
         .arg("--output")
@@ -33,8 +33,7 @@ fn test_repo_list_json_output() {
         .assert()
         .success();
 
-    let output = Command::cargo_bin("aptu")
-        .unwrap()
+    let output = cargo_bin_cmd!("aptu")
         .arg("repo")
         .arg("list")
         .arg("--output")
@@ -55,7 +54,7 @@ fn test_repo_list_json_output() {
 
 #[test]
 fn test_repo_list_yaml_output() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("repo")
         .arg("list")
         .arg("--output")
@@ -67,7 +66,7 @@ fn test_repo_list_yaml_output() {
 
 #[test]
 fn test_repo_list_markdown_output() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("repo")
         .arg("list")
         .arg("--output")
@@ -79,7 +78,7 @@ fn test_repo_list_markdown_output() {
 
 #[test]
 fn test_completion_bash() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("completion")
         .arg("bash")
         .assert()
@@ -89,7 +88,7 @@ fn test_completion_bash() {
 
 #[test]
 fn test_completion_zsh() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("completion")
         .arg("zsh")
         .assert()
@@ -99,15 +98,14 @@ fn test_completion_zsh() {
 
 #[test]
 fn test_history_empty_state() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("history")
         .arg("--output")
         .arg("json")
         .assert()
         .success();
 
-    let output = Command::cargo_bin("aptu")
-        .unwrap()
+    let output = cargo_bin_cmd!("aptu")
         .arg("history")
         .arg("--output")
         .arg("json")
@@ -130,13 +128,13 @@ fn test_history_empty_state() {
 
 #[test]
 fn test_auth_status() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("auth").arg("status").assert().success();
 }
 
 #[test]
 fn test_invalid_command() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("invalidcmd")
         .assert()
         .failure()
@@ -145,7 +143,7 @@ fn test_invalid_command() {
 
 #[test]
 fn test_repo_list_invalid_format() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("repo")
         .arg("list")
         .arg("--output")
@@ -158,7 +156,7 @@ fn test_repo_list_invalid_format() {
 
 #[test]
 fn test_repo_invalid_subcommand() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("repo")
         .arg("invalid")
         .assert()
@@ -168,7 +166,7 @@ fn test_repo_invalid_subcommand() {
 
 #[test]
 fn test_quiet_flag_suppresses_output() {
-    let mut cmd = Command::cargo_bin("aptu").unwrap();
+    let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("repo")
         .arg("list")
         .arg("--quiet")
