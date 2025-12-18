@@ -17,6 +17,7 @@ use super::types::{
 };
 use super::{OPENROUTER_API_KEY_ENV, OPENROUTER_API_URL};
 use crate::config::AiConfig;
+use crate::error::AptuError;
 
 /// Maximum length for issue body to stay within token limits.
 const MAX_BODY_LENGTH: usize = 4000;
@@ -155,10 +156,7 @@ impl OpenRouterClient {
                 );
             } else if status.as_u16() == 429 {
                 warn!("Rate limited by OpenRouter API");
-                anyhow::bail!(
-                    "OpenRouter rate limit exceeded. Please wait and try again.\n\
-                     Consider upgrading your plan at: https://openrouter.ai/credits"
-                );
+                return Err(AptuError::RateLimited { retry_after: 0 }.into());
             }
             anyhow::bail!(
                 "OpenRouter API error (HTTP {}): {}",

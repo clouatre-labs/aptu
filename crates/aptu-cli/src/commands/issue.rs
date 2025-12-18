@@ -4,6 +4,7 @@
 //! a single GraphQL query for optimal performance.
 
 use anyhow::{Context, Result};
+use aptu_core::error::AptuError;
 use aptu_core::github::{auth, graphql};
 use aptu_core::repos;
 use tracing::{debug, info, instrument};
@@ -18,7 +19,7 @@ use super::types::IssuesResult;
 pub async fn run(repo: Option<String>) -> Result<IssuesResult> {
     // Check authentication
     if !auth::is_authenticated() {
-        anyhow::bail!("Authentication required - run `aptu auth login` first");
+        return Err(AptuError::NotAuthenticated.into());
     }
 
     // Get curated repos, optionally filtered
