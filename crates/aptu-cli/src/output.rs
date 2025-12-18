@@ -6,7 +6,9 @@
 use aptu_core::ai::types::{IssueDetails, TriageResponse};
 use aptu_core::github::graphql::IssueNode;
 use aptu_core::history::ContributionStatus;
-use chrono::{DateTime, Utc};
+use aptu_core::utils::{
+    format_relative_time, parse_and_format_relative_time, truncate, truncate_with_suffix,
+};
 use console::style;
 
 use crate::cli::{OutputContext, OutputFormat};
@@ -188,12 +190,12 @@ pub fn render_issues(result: &IssuesResult, ctx: &OutputContext) {
                         format!("[{}]", labels.join(", "))
                     };
 
-                    let age = format_relative_time(&issue.created_at);
+                    let age = parse_and_format_relative_time(&issue.created_at);
 
                     println!(
                         "  {} {} {} {}",
                         style(format!("#{}", issue.number)).green(),
-                        truncate_title(&issue.title, 50),
+                        truncate(&issue.title, 50),
                         style(label_str).dim(),
                         style(age).dim()
                     );
@@ -514,14 +516,9 @@ pub fn render_issue(issue: &IssueDetails, ctx: &OutputContext) {
 
 /// Truncates body text to a maximum length, adding indicator if truncated.
 ///
-/// Uses character count (not byte count) to safely handle multi-byte UTF-8.
+/// Uses the core `truncate_with_suffix` function.
 fn truncate_body(body: &str, max_len: usize) -> String {
-    if body.chars().count() <= max_len {
-        body.to_string()
-    } else {
-        let truncated: String = body.chars().take(max_len).collect();
-        format!("{truncated}... [truncated]")
-    }
+    truncate_with_suffix(body, max_len, "... [truncated]")
 }
 
 /// Render history result.
@@ -555,9 +552,9 @@ pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
             println!("|------------|-------|--------|------|--------|");
 
             for contribution in &result.contributions {
-                let repo = truncate_title(&contribution.repo, 25);
+                let repo = truncate(&contribution.repo, 25);
                 let issue = format!("#{}", contribution.issue);
-                let when = format_relative_time_dt(&contribution.timestamp);
+                let when = format_relative_time(&contribution.timestamp);
                 let status = match contribution.status {
                     ContributionStatus::Pending => "pending",
                     ContributionStatus::Accepted => "accepted",
@@ -602,9 +599,9 @@ pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
             println!("  {}", style("-".repeat(75)).dim());
 
             for contribution in &result.contributions {
-                let repo = truncate_title(&contribution.repo, 25);
+                let repo = truncate(&contribution.repo, 25);
                 let issue = format!("#{}", contribution.issue);
-                let when = format_relative_time_dt(&contribution.timestamp);
+                let when = format_relative_time(&contribution.timestamp);
                 let status = match contribution.status {
                     ContributionStatus::Pending => style("pending").yellow().to_string(),
                     ContributionStatus::Accepted => style("accepted").green().to_string(),
@@ -626,146 +623,10 @@ pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
     }
 }
 
-/// Formats a `DateTime`<Utc> as relative time (e.g., "3 days ago").
-fn format_relative_time_dt(dt: &DateTime<Utc>) -> String {
-    let now = Utc::now();
-    let duration = now.signed_duration_since(*dt);
-
-    if duration.num_days() > 30 {
-        let months = duration.num_days() / 30;
-        if months == 1 {
-            "1 month ago".to_string()
-        } else {
-            format!("{months} months ago")
-        }
-    } else if duration.num_days() > 0 {
-        let days = duration.num_days();
-        if days == 1 {
-            "1 day ago".to_string()
-        } else {
-            format!("{days} days ago")
-        }
-    } else if duration.num_hours() > 0 {
-        let hours = duration.num_hours();
-        if hours == 1 {
-            "1 hour ago".to_string()
-        } else {
-            format!("{hours} hours ago")
-        }
-    } else {
-        "just now".to_string()
-    }
-}
-
-/// Truncates a title to a maximum length, adding ellipsis if needed.
-///
-/// Uses character count (not byte count) to safely handle multi-byte UTF-8.
-pub fn truncate_title(title: &str, max_len: usize) -> String {
-    if title.chars().count() <= max_len {
-        title.to_string()
-    } else {
-        let truncated: String = title.chars().take(max_len - 3).collect();
-        format!("{truncated}...")
-    }
-}
-
-/// Formats an ISO 8601 timestamp as relative time (e.g., "3 days ago").
-pub fn format_relative_time(timestamp: &str) -> String {
-    let parsed: Result<DateTime<Utc>, _> = timestamp.parse();
-    match parsed {
-        Ok(dt) => {
-            let now = Utc::now();
-            let duration = now.signed_duration_since(dt);
-
-            if duration.num_days() > 30 {
-                let months = duration.num_days() / 30;
-                if months == 1 {
-                    "1 month ago".to_string()
-                } else {
-                    format!("{months} months ago")
-                }
-            } else if duration.num_days() > 0 {
-                let days = duration.num_days();
-                if days == 1 {
-                    "1 day ago".to_string()
-                } else {
-                    format!("{days} days ago")
-                }
-            } else if duration.num_hours() > 0 {
-                let hours = duration.num_hours();
-                if hours == 1 {
-                    "1 hour ago".to_string()
-                } else {
-                    format!("{hours} hours ago")
-                }
-            } else {
-                "just now".to_string()
-            }
-        }
-        Err(_) => timestamp.to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use aptu_core::ai::types::TriageResponse;
-
-    #[test]
-    fn truncate_short_title() {
-        assert_eq!(truncate_title("Short title", 50), "Short title");
-    }
-
-    #[test]
-    fn truncate_long_title() {
-        let long =
-            "This is a very long title that should be truncated because it exceeds the limit";
-        let result = truncate_title(long, 30);
-        assert_eq!(result.chars().count(), 30);
-        assert!(result.ends_with("..."));
-    }
-
-    #[test]
-    fn truncate_utf8_multibyte() {
-        let title = "Fix emoji handling in parser";
-        let result = truncate_title(title, 20);
-        assert_eq!(result.chars().count(), 20);
-        assert!(result.ends_with("..."));
-    }
-
-    #[test]
-    fn relative_time_days() {
-        use chrono::Duration;
-        let three_days_ago = (Utc::now() - Duration::days(3)).to_rfc3339();
-        assert_eq!(format_relative_time(&three_days_ago), "3 days ago");
-    }
-
-    #[test]
-    fn relative_time_one_day() {
-        use chrono::Duration;
-        let one_day_ago = (Utc::now() - Duration::days(1)).to_rfc3339();
-        assert_eq!(format_relative_time(&one_day_ago), "1 day ago");
-    }
-
-    #[test]
-    fn relative_time_hours() {
-        use chrono::Duration;
-        let five_hours_ago = (Utc::now() - Duration::hours(5)).to_rfc3339();
-        assert_eq!(format_relative_time(&five_hours_ago), "5 hours ago");
-    }
-
-    #[test]
-    fn relative_time_just_now() {
-        let now = Utc::now().to_rfc3339();
-        assert_eq!(format_relative_time(&now), "just now");
-    }
-
-    #[test]
-    fn relative_time_months() {
-        use chrono::Duration;
-        let two_months_ago = (Utc::now() - Duration::days(65)).to_rfc3339();
-        assert_eq!(format_relative_time(&two_months_ago), "2 months ago");
-    }
 
     #[test]
     fn test_render_triage_markdown_with_all_fields() {
