@@ -97,6 +97,14 @@ pub use history::{Contribution, ContributionStatus, HistoryData};
 pub use repos::CuratedRepo;
 
 // ============================================================================
+// Utilities
+// ============================================================================
+
+pub use utils::{
+    format_relative_time, parse_and_format_relative_time, truncate, truncate_with_suffix,
+};
+
+// ============================================================================
 // Modules
 // ============================================================================
 
@@ -106,3 +114,4 @@ pub mod error;
 pub mod github;
 pub mod history;
 pub mod repos;
+pub mod utils;
