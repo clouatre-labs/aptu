@@ -13,28 +13,19 @@ lazy_static::lazy_static! {
 
 #[uniffi::export]
 pub fn list_curated_repos() -> Vec<FfiCuratedRepo> {
-    RUNTIME.block_on(async {
-        vec![
-            FfiCuratedRepo {
-                owner: "block".to_string(),
-                name: "goose".to_string(),
-                description: "AI-powered developer assistant".to_string(),
-                language: "Rust".to_string(),
-                open_issues_count: 42,
-                last_activity: "2 days ago".to_string(),
-            },
-            FfiCuratedRepo {
-                owner: "astral-sh".to_string(),
-                name: "ruff".to_string(),
-                description: "Fast Python linter and formatter".to_string(),
-                language: "Rust".to_string(),
-                open_issues_count: 128,
-                last_activity: "1 day ago".to_string(),
-            },
-        ]
-    })
+    let repos = aptu_core::repos::list();
+    repos.iter().map(FfiCuratedRepo::from).collect()
 }
 
+/// Fetch issues from a GitHub repository.
+///
+/// TODO: This function currently returns hardcoded stub data. To wire it to the core:
+/// 1. Design authentication bridge (see issue #48) to pass GitHub token from iOS keychain
+/// 2. Call `aptu_core::github::graphql::fetch_issues(owner, repo, token)` with authenticated client
+/// 3. Implement `From<IssueNode> for FfiIssueNode` in types.rs
+/// 4. Map results using the From trait
+///
+/// Blocked by: feat(ffi): design authentication bridge for iOS
 #[uniffi::export]
 pub fn fetch_issues(owner: String, repo: String) -> Result<Vec<FfiIssueNode>, AptuFfiError> {
     RUNTIME.block_on(async {
@@ -67,6 +58,16 @@ pub fn fetch_issues(owner: String, repo: String) -> Result<Vec<FfiIssueNode>, Ap
     })
 }
 
+/// Analyze a GitHub issue and generate triage suggestions.
+///
+/// TODO: This function currently returns hardcoded stub data. To wire it to the core:
+/// 1. Design authentication bridge (see issue #48) to pass GitHub token and AI API key from iOS
+/// 2. Fetch issue details using `aptu_core::github::rest::get_issue(owner, repo, number, token)`
+/// 3. Call `aptu_core::ai::openrouter::analyze_issue(issue_details, ai_config)` with authenticated client
+/// 4. Implement `From<TriageResponse> for FfiTriageResponse` in types.rs
+/// 5. Map results using the From trait
+///
+/// Blocked by: feat(ffi): design authentication bridge for iOS
 #[uniffi::export]
 pub fn analyze_issue(issue_url: String) -> Result<FfiTriageResponse, AptuFfiError> {
     RUNTIME.block_on(async {
