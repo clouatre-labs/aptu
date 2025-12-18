@@ -10,6 +10,19 @@ pub struct FfiCuratedRepo {
     pub last_activity: String,
 }
 
+impl From<&aptu_core::repos::CuratedRepo> for FfiCuratedRepo {
+    fn from(repo: &aptu_core::repos::CuratedRepo) -> Self {
+        FfiCuratedRepo {
+            owner: repo.owner.to_string(),
+            name: repo.name.to_string(),
+            description: repo.description.to_string(),
+            language: repo.language.to_string(),
+            open_issues_count: 0, // TODO: fetch from GitHub API in Phase 2
+            last_activity: "unknown".to_string(), // TODO: fetch from GitHub API in Phase 2
+        }
+    }
+}
+
 #[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
 pub struct FfiIssueNode {
     pub number: u64,
