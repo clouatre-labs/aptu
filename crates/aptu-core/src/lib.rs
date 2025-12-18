@@ -12,12 +12,15 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use aptu_core::{load_config, analyze_issue, IssueDetails};
+//! use aptu_core::{load_config, OpenRouterClient, IssueDetails};
 //! use anyhow::Result;
 //!
 //! # async fn example() -> Result<()> {
 //! // Load configuration
 //! let config = load_config()?;
+//!
+//! // Create AI client (reuse for multiple requests)
+//! let client = OpenRouterClient::new(&config.ai)?;
 //!
 //! // Create issue details
 //! let issue = IssueDetails {
@@ -32,7 +35,7 @@
 //! };
 //!
 //! // Analyze with AI
-//! let triage = analyze_issue(&config.ai, &issue).await?;
+//! let triage = client.analyze_issue(&issue).await?;
 //! println!("Summary: {}", triage.summary);
 //! # Ok(())
 //! # }
@@ -71,7 +74,7 @@ pub use config::{
 // AI Triage
 // ============================================================================
 
-pub use ai::openrouter::analyze_issue;
+pub use ai::OpenRouterClient;
 pub use ai::types::{IssueComment, IssueDetails, TriageResponse};
 
 // ============================================================================
