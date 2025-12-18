@@ -7,7 +7,6 @@ use thiserror::Error;
 
 /// Errors that can occur during Aptu operations.
 #[derive(Error, Debug)]
-#[allow(dead_code)] // Will be used in subsequent PRs (auth, triage commands)
 pub enum AptuError {
     /// GitHub API error from octocrab.
     #[error("GitHub API error: {0}")]

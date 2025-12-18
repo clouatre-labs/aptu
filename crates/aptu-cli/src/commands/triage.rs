@@ -5,6 +5,7 @@
 //! confirmation flow (render issue before asking).
 
 use anyhow::{Context, Result};
+use aptu_core::error::AptuError;
 use aptu_core::github::{auth, issues};
 use aptu_core::{IssueDetails, OpenRouterClient, TriageResponse};
 use tracing::{debug, info, instrument};
@@ -32,7 +33,7 @@ pub struct AnalyzeResult {
 pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueDetails> {
     // Check authentication
     if !auth::is_authenticated() {
-        anyhow::bail!("Authentication required - run `aptu auth login` first");
+        return Err(AptuError::NotAuthenticated.into());
     }
 
     // Parse the issue reference
