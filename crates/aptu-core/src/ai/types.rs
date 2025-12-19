@@ -98,6 +98,9 @@ pub struct TriageResponse {
     /// Guidance for contributors on beginner-friendliness.
     #[serde(default)]
     pub contributor_guidance: Option<ContributorGuidance>,
+    /// Implementation approach suggestions based on repository structure.
+    #[serde(default)]
+    pub implementation_approach: Option<String>,
 }
 
 /// Context about a related issue from repository search.
@@ -136,6 +139,9 @@ pub struct IssueDetails {
     /// Related issues from repository search (for AI context).
     #[serde(default)]
     pub repo_context: Vec<RepoIssueContext>,
+    /// Repository file tree (source files for implementation context).
+    #[serde(default)]
+    pub repo_tree: Vec<String>,
 }
 
 /// A comment on an issue.

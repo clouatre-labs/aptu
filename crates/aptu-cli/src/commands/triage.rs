@@ -62,6 +62,35 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         }
     }
 
+    // Fetch repository tree for implementation context
+    // First, get the repository metadata to find the primary language
+    match client.repos(&owner, &repo).get().await {
+        Ok(repo_info) => {
+            let language = repo_info
+                .language
+                .as_ref()
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            match issues::fetch_repo_tree(&client, &owner, &repo, language).await {
+                Ok(tree) => {
+                    issue_details.repo_tree = tree;
+                    debug!(
+                        tree_count = issue_details.repo_tree.len(),
+                        "Fetched repository tree"
+                    );
+                }
+                Err(e) => {
+                    // Log but don't fail - repo tree is optional context
+                    debug!(error = %e, "Failed to fetch repository tree, continuing without context");
+                }
+            }
+        }
+        Err(e) => {
+            // Log but don't fail - repo tree is optional context
+            debug!(error = %e, "Failed to fetch repository metadata, continuing without tree context");
+        }
+    }
+
     debug!(issue_number = number, "Issue fetched successfully");
     Ok(issue_details)
 }
