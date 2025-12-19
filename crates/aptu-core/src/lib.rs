@@ -97,6 +97,12 @@ pub use history::{Contribution, ContributionStatus, HistoryData};
 pub use repos::CuratedRepo;
 
 // ============================================================================
+// Triage Detection
+// ============================================================================
+
+pub use triage::{APTU_SIGNATURE, TriageStatus, check_already_triaged};
+
+// ============================================================================
 // Utilities
 // ============================================================================
 
@@ -114,4 +120,5 @@ pub mod error;
 pub mod github;
 pub mod history;
 pub mod repos;
+pub mod triage;
 pub mod utils;

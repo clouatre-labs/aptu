@@ -171,5 +171,9 @@ pub enum IssueCommand {
         /// Display fetched issue content before AI triage analysis
         #[arg(long)]
         show_issue: bool,
+
+        /// Force triage even if issue appears already triaged
+        #[arg(long)]
+        force: bool,
     },
 }

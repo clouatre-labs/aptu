@@ -22,7 +22,8 @@ use crate::cli::{
     AuthCommand, Cli, Commands, IssueCommand, OutputContext, OutputFormat, RepoCommand,
 };
 use crate::output;
-use aptu_core::AppConfig;
+use aptu_core::{AppConfig, check_already_triaged};
+use tracing::info;
 
 /// Creates a styled spinner (only if interactive).
 fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
@@ -78,6 +79,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 dry_run,
                 yes,
                 show_issue,
+                force,
             } => {
                 // Determine repo context: --repo flag > default_repo config
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
@@ -89,12 +91,37 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     s.finish_and_clear();
                 }
 
+                // Phase 1b: Check if already triaged (unless --force)
+                if force {
+                    info!("Forcing triage despite detection");
+                } else {
+                    let triage_status = check_already_triaged(&issue_details);
+                    if triage_status.is_triaged() {
+                        if matches!(ctx.format, OutputFormat::Text) {
+                            println!();
+                            println!(
+                                "{}",
+                                style("This issue appears to have been triaged already.").yellow()
+                            );
+                            if triage_status.has_labels {
+                                println!("  Labels: {}", triage_status.label_names.join(", "));
+                            }
+                            if triage_status.has_aptu_comment {
+                                println!("  Aptu comment found in issue thread");
+                            }
+                            println!();
+                            println!("{}", style("Use --force to triage anyway.").dim());
+                        }
+                        return Ok(());
+                    }
+                }
+
                 // Render issue if requested
                 if show_issue {
                     output::render_issue(&issue_details, &ctx);
                 }
 
-                // Phase 1b: Analyze with AI
+                // Phase 1c: Analyze with AI
                 let spinner = maybe_spinner(&ctx, "Analyzing with AI...");
                 let triage_response = triage::analyze(&issue_details, &config.ai).await?;
                 if let Some(s) = spinner {
