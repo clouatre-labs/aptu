@@ -389,6 +389,22 @@ fn render_triage_content(
         }
     }
 
+    // Implementation approach (if present)
+    if let Some(approach) = &triage.implementation_approach
+        && !approach.is_empty()
+    {
+        match mode {
+            OutputMode::Terminal => {
+                let _ = writeln!(output, "{}", style("Implementation Approach").cyan().bold());
+                let _ = writeln!(output, "  {approach}\n");
+            }
+            OutputMode::Markdown => {
+                output.push_str("### Implementation Approach\n\n");
+                let _ = writeln!(output, "{approach}\n");
+            }
+        }
+    }
+
     // Attribution (markdown only)
     if matches!(mode, OutputMode::Markdown) {
         output.push_str("---\n");
@@ -687,6 +703,7 @@ mod tests {
             status_note: None,
             related_issues: Vec::new(),
             contributor_guidance: None,
+            implementation_approach: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -710,6 +727,7 @@ mod tests {
             status_note: None,
             related_issues: Vec::new(),
             contributor_guidance: None,
+            implementation_approach: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -728,6 +746,7 @@ mod tests {
             related_issues: Vec::new(),
             status_note: Some("Issue claimed by @user".to_string()),
             contributor_guidance: None,
+            implementation_approach: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -807,6 +826,7 @@ mod tests {
                 beginner_friendly: true,
                 reasoning: "Small scope, well-defined problem statement.".to_string(),
             }),
+            implementation_approach: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -831,6 +851,7 @@ mod tests {
                 beginner_friendly: false,
                 reasoning: "Requires deep knowledge of the compiler internals.".to_string(),
             }),
+            implementation_approach: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -850,6 +871,7 @@ mod tests {
             status_note: None,
             related_issues: Vec::new(),
             contributor_guidance: None,
+            implementation_approach: None,
         };
 
         let comment = render_triage_markdown(&triage);

@@ -99,6 +99,7 @@ mod tests {
             comments,
             url: "https://github.com/test/repo/issues/1".to_string(),
             repo_context: Vec::new(),
+            repo_tree: Vec::new(),
         }
     }
 
