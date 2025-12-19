@@ -984,7 +984,7 @@ Rejected for MVP due to complexity (self-signed certs, browser warnings, port co
 - [x] AI integration (OpenRouter API with Devstral 2)
 - [x] Triage command with user confirmation
 - [x] Local history tracking
-- [ ] Test with 1-2 real repos
+- [x] Test with 1-2 real repos
 
 ### Phase 2: iOS App (Weeks 5-10)
 - [ ] SwiftUI project setup
