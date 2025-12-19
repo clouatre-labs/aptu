@@ -5,6 +5,7 @@
 
 mod cli;
 mod commands;
+mod errors;
 mod logging;
 mod output;
 
@@ -26,5 +27,12 @@ async fn main() -> Result<()> {
     let config = config::load_config().context("Failed to load configuration")?;
     debug!("Configuration loaded successfully");
 
-    commands::run(cli.command, output_ctx, &config).await
+    match commands::run(cli.command, output_ctx, &config).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let formatted = errors::format_error(&e);
+            eprintln!("Error: {formatted}");
+            Err(e)
+        }
+    }
 }
