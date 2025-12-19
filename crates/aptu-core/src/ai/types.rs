@@ -63,6 +63,17 @@ pub struct ContributorGuidance {
     pub reasoning: String,
 }
 
+/// A related issue found via search.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RelatedIssue {
+    /// Issue number.
+    pub number: u64,
+    /// Issue title.
+    pub title: String,
+    /// Reason why this issue is related.
+    pub reason: String,
+}
+
 /// Structured triage response from AI.
 ///
 /// This is the expected JSON structure in the AI's response content.
@@ -78,12 +89,28 @@ pub struct TriageResponse {
     /// Potential duplicate issue numbers/references.
     #[serde(default)]
     pub potential_duplicates: Vec<String>,
+    /// Related issues (not duplicates, but contextually relevant).
+    #[serde(default)]
+    pub related_issues: Vec<RelatedIssue>,
     /// Status note about the issue (e.g., if it's already claimed or in-progress).
     #[serde(default)]
     pub status_note: Option<String>,
     /// Guidance for contributors on beginner-friendliness.
     #[serde(default)]
     pub contributor_guidance: Option<ContributorGuidance>,
+}
+
+/// Context about a related issue from repository search.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepoIssueContext {
+    /// Issue number.
+    pub number: u64,
+    /// Issue title.
+    pub title: String,
+    /// Issue labels.
+    pub labels: Vec<String>,
+    /// Issue state (open or closed).
+    pub state: String,
 }
 
 /// Details about an issue for triage.
@@ -106,6 +133,9 @@ pub struct IssueDetails {
     /// Issue URL.
     #[allow(dead_code)] // Used for future features (history tracking)
     pub url: String,
+    /// Related issues from repository search (for AI context).
+    #[serde(default)]
+    pub repo_context: Vec<RepoIssueContext>,
 }
 
 /// A comment on an issue.

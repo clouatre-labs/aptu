@@ -32,6 +32,7 @@
 //!     labels: vec![],
 //!     comments: vec![],
 //!     url: "https://github.com/block/goose/issues/123".to_string(),
+//!     repo_context: vec![],
 //! };
 //!
 //! // Analyze with AI

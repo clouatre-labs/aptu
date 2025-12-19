@@ -251,6 +251,13 @@ Your response MUST be valid JSON with this exact schema:
   "suggested_labels": ["label1", "label2"],
   "clarifying_questions": ["question1", "question2"],
   "potential_duplicates": ["#123", "#456"],
+  "related_issues": [
+    {
+      "number": 789,
+      "title": "Related issue title",
+      "reason": "Brief explanation of why this is related"
+    }
+  ],
   "status_note": "Optional note about issue status (e.g., claimed, in-progress)",
   "contributor_guidance": {
     "beginner_friendly": true,
@@ -262,7 +269,8 @@ Guidelines:
 - summary: Concise explanation of the problem/request and why it matters
 - suggested_labels: Choose from: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix
 - clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear. Skip questions already answered in comments.
-- potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none.
+- potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none. A duplicate is an issue that describes the exact same problem.
+- related_issues: Include issues from the search results that are contextually related but NOT duplicates. Provide brief reasoning for each. Leave empty array if none are relevant.
 - status_note: Detect if someone has claimed the issue or is working on it. Look for patterns like "I'd like to work on this", "I'll submit a PR", "working on this", or "@user I've assigned you". If claimed, set status_note to a brief description (e.g., "Issue claimed by @username"). If not claimed, leave as null or empty string. IMPORTANT: If issue is claimed, do NOT suggest 'help wanted' label.
 - contributor_guidance: Assess whether the issue is suitable for beginners. Consider: scope (small, well-defined), file count (few files to modify), required knowledge (no deep expertise needed), clarity (clear problem statement). Set beginner_friendly to true if all factors are favorable. Provide 1-2 sentence reasoning explaining the assessment.
 
@@ -307,6 +315,19 @@ fn build_user_prompt(issue: &IssueDetails) -> String {
                 comment.body.clone()
             };
             let _ = writeln!(prompt, "- @{}: {}", comment.author, comment_body);
+        }
+        prompt.push('\n');
+    }
+
+    // Include related issues from search (for context)
+    if !issue.repo_context.is_empty() {
+        prompt.push_str("Related Issues in Repository (for context):\n");
+        for related in issue.repo_context.iter().take(10) {
+            let _ = writeln!(
+                prompt,
+                "- #{} [{}] {}",
+                related.number, related.state, related.title
+            );
         }
         prompt.push('\n');
     }
@@ -374,6 +395,7 @@ mod tests {
             labels: vec!["bug".to_string()],
             comments: vec![],
             url: "https://github.com/test/repo/issues/1".to_string(),
+            repo_context: Vec::new(),
         };
 
         let prompt = build_user_prompt(&issue);
@@ -396,6 +418,7 @@ mod tests {
             labels: vec![],
             comments: vec![],
             url: "https://github.com/test/repo/issues/1".to_string(),
+            repo_context: Vec::new(),
         };
 
         let prompt = build_user_prompt(&issue);
@@ -414,6 +437,7 @@ mod tests {
             labels: vec![],
             comments: vec![],
             url: "https://github.com/test/repo/issues/1".to_string(),
+            repo_context: Vec::new(),
         };
 
         let prompt = build_user_prompt(&issue);
