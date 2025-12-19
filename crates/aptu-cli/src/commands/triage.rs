@@ -23,6 +23,7 @@ pub struct AnalyzeResult {
 /// Fetch an issue from GitHub.
 ///
 /// Parses the issue reference, checks authentication, and fetches issue details.
+/// Also searches for related issues to provide context to the AI.
 /// Does not perform AI analysis.
 ///
 /// # Arguments
@@ -43,7 +44,23 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
     let client = auth::create_client().context("Failed to create GitHub client")?;
 
     // Fetch issue details
-    let issue_details = issues::fetch_issue_with_comments(&client, &owner, &repo, number).await?;
+    let mut issue_details =
+        issues::fetch_issue_with_comments(&client, &owner, &repo, number).await?;
+
+    // Search for related issues to provide context to AI
+    match issues::search_related_issues(&client, &owner, &repo, &issue_details.title).await {
+        Ok(related) => {
+            issue_details.repo_context = related;
+            debug!(
+                related_count = issue_details.repo_context.len(),
+                "Found related issues"
+            );
+        }
+        Err(e) => {
+            // Log but don't fail - related issues are optional context
+            debug!(error = %e, "Failed to search for related issues, continuing without context");
+        }
+    }
 
     debug!(issue_number = number, "Issue fetched successfully");
     Ok(issue_details)

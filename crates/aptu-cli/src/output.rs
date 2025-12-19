@@ -262,6 +262,7 @@ fn render_list_section(
 }
 
 /// Renders the full triage output as a string.
+#[allow(clippy::too_many_lines)]
 fn render_triage_content(
     triage: &TriageResponse,
     mode: &OutputMode,
@@ -327,6 +328,27 @@ fn render_triage_content(
         mode,
         false,
     ));
+
+    // Related issues
+    if !triage.related_issues.is_empty() {
+        match mode {
+            OutputMode::Terminal => {
+                let _ = writeln!(output, "{}", style("Related Issues").cyan().bold());
+                for issue in &triage.related_issues {
+                    let _ = writeln!(output, "  #{} - {}", issue.number, issue.title);
+                    let _ = writeln!(output, "    {}", style(&issue.reason).dim());
+                }
+                output.push('\n');
+            }
+            OutputMode::Markdown => {
+                output.push_str("### Related Issues\n\n");
+                for issue in &triage.related_issues {
+                    let _ = writeln!(output, "- **#{}** - {}", issue.number, issue.title);
+                    let _ = writeln!(output, "  > {}\n", issue.reason);
+                }
+            }
+        }
+    }
 
     // Status note (if present)
     if let Some(status_note) = &triage.status_note
@@ -663,6 +685,7 @@ mod tests {
             clarifying_questions: vec!["What version are you using?".to_string()],
             potential_duplicates: vec!["#123".to_string()],
             status_note: None,
+            related_issues: Vec::new(),
             contributor_guidance: None,
         };
 
@@ -685,6 +708,7 @@ mod tests {
             clarifying_questions: vec![],
             potential_duplicates: vec![],
             status_note: None,
+            related_issues: Vec::new(),
             contributor_guidance: None,
         };
 
@@ -701,6 +725,7 @@ mod tests {
             suggested_labels: vec!["bug".to_string()],
             clarifying_questions: vec![],
             potential_duplicates: vec![],
+            related_issues: Vec::new(),
             status_note: Some("Issue claimed by @user".to_string()),
             contributor_guidance: None,
         };
@@ -777,6 +802,7 @@ mod tests {
             clarifying_questions: vec![],
             potential_duplicates: vec![],
             status_note: None,
+            related_issues: Vec::new(),
             contributor_guidance: Some(ContributorGuidance {
                 beginner_friendly: true,
                 reasoning: "Small scope, well-defined problem statement.".to_string(),
@@ -800,6 +826,7 @@ mod tests {
             clarifying_questions: vec![],
             potential_duplicates: vec![],
             status_note: None,
+            related_issues: Vec::new(),
             contributor_guidance: Some(ContributorGuidance {
                 beginner_friendly: false,
                 reasoning: "Requires deep knowledge of the compiler internals.".to_string(),
@@ -821,6 +848,7 @@ mod tests {
             clarifying_questions: vec![],
             potential_duplicates: vec![],
             status_note: None,
+            related_issues: Vec::new(),
             contributor_guidance: None,
         };
 
