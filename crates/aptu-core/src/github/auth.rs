@@ -267,6 +267,31 @@ pub fn create_client() -> Result<Octocrab> {
     Ok(client)
 }
 
+/// Creates an authenticated Octocrab client using a provided token.
+///
+/// This function allows callers to provide a token directly, enabling
+/// multi-platform credential resolution (e.g., from iOS keychain via FFI).
+///
+/// # Arguments
+///
+/// * `token` - GitHub API token as a `SecretString`
+///
+/// # Errors
+///
+/// Returns an error if the Octocrab client cannot be built.
+#[instrument(skip(token))]
+pub fn create_client_with_token(token: &SecretString) -> Result<Octocrab> {
+    info!("Creating GitHub client with provided token");
+
+    let client = Octocrab::builder()
+        .personal_token(token.expose_secret().to_string())
+        .build()
+        .context("Failed to build GitHub client")?;
+
+    debug!("Created authenticated GitHub client");
+    Ok(client)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

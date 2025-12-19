@@ -1,0 +1,71 @@
+//! Token provider abstraction for multi-platform credential resolution.
+//!
+//! This module defines the `TokenProvider` trait, which abstracts credential
+//! resolution across different platforms (CLI, iOS, etc.). Each platform
+//! implements this trait to provide GitHub and `OpenRouter` tokens from their
+//! respective credential sources.
+
+use secrecy::SecretString;
+
+/// Provides GitHub and `OpenRouter` credentials for API calls.
+///
+/// This trait abstracts credential resolution across platforms:
+/// - **CLI:** Resolves from environment variables, GitHub CLI, or system keyring
+/// - **iOS:** Resolves from iOS keychain via FFI
+///
+/// Implementations should handle credential lookup and return `None` if
+/// credentials are not available.
+pub trait TokenProvider: Send + Sync {
+    /// Retrieves the GitHub API token.
+    ///
+    /// Returns `None` if no token is available from any source.
+    fn github_token(&self) -> Option<SecretString>;
+
+    /// Retrieves the `OpenRouter` API key.
+    ///
+    /// Returns `None` if no API key is available from any source.
+    fn openrouter_key(&self) -> Option<SecretString>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mock implementation for testing.
+    struct MockTokenProvider {
+        github_token: Option<SecretString>,
+        openrouter_key: Option<SecretString>,
+    }
+
+    impl TokenProvider for MockTokenProvider {
+        fn github_token(&self) -> Option<SecretString> {
+            self.github_token.clone()
+        }
+
+        fn openrouter_key(&self) -> Option<SecretString> {
+            self.openrouter_key.clone()
+        }
+    }
+
+    #[test]
+    fn test_mock_provider_with_tokens() {
+        let provider = MockTokenProvider {
+            github_token: Some(SecretString::new("gh_token".to_string().into())),
+            openrouter_key: Some(SecretString::new("or_key".to_string().into())),
+        };
+
+        assert!(provider.github_token().is_some());
+        assert!(provider.openrouter_key().is_some());
+    }
+
+    #[test]
+    fn test_mock_provider_without_tokens() {
+        let provider = MockTokenProvider {
+            github_token: None,
+            openrouter_key: None,
+        };
+
+        assert!(provider.github_token().is_none());
+        assert!(provider.openrouter_key().is_none());
+    }
+}
