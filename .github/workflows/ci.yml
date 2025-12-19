@@ -18,6 +18,10 @@ on:
       - 'tests/**'
   merge_group:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -41,6 +45,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
+        with:
+          shared-key: "aptu"
       - run: cargo clippy -- -D warnings
 
   test:
@@ -50,16 +56,19 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
       - uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
+        with:
+          shared-key: "aptu"
       - run: cargo test
 
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: test
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
       - uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
+        with:
+          shared-key: "aptu"
       - name: Build release binary
         run: cargo build --release
       - uses: bats-core/bats-action@e412797c46257a2dbf3775f6f6010b33ee6cb99f # v3.0.1
@@ -67,6 +76,7 @@ jobs:
           support-path: ${{ github.workspace }}/.bats-libs/bats-support
           assert-path: ${{ github.workspace }}/.bats-libs/bats-assert
           file-path: ${{ github.workspace }}/.bats-libs/bats-file
+          detik-install: false
       - name: Run integration tests
         env:
           APTU_BIN: ${{ github.workspace }}/target/release/aptu
