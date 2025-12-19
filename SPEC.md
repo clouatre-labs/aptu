@@ -169,8 +169,9 @@ All commands support these flags for LLM-friendly and scripted usage:
 | Flag | Command | Description |
 |------|---------|-------------|
 | `--show-issue` | `issue list` | Display full issue body (default: title only) |
-| `-r` / `--repo` | `issue list` | Filter by repository (shorthand for positional arg) |
+| `-r` / `--repo` | `issue triage` | Filter by repository (shorthand for positional arg) |
 | `--dry-run` | `issue triage` | Preview triage without posting |
+| `--force` | `-f` | `issue triage` | Skip already-triaged detection and post anyway |
 | `--yes` / `-y` | `issue triage` | Skip confirmation prompt |
 
 **Examples:**
@@ -631,6 +632,11 @@ Available repositories:
 - State: Open
 - Limit: 20 issues per request
 
+**Issue Reference Formats:**
+- Full URL: `https://github.com/block/goose/issues/123`
+- Short form: `block/goose#123`
+- Bare number: `123` (requires `--repo` flag or default repo in config)
+
 **Future Filters:**
 - Additional labels: "help wanted"
 - No assignee filter
@@ -669,7 +675,9 @@ Your response MUST be valid JSON with this exact schema:
   "summary": "A 2-3 sentence summary of what the issue is about and its impact",
   "suggested_labels": ["label1", "label2"],
   "clarifying_questions": ["question1", "question2"],
-  "potential_duplicates": ["#123", "#456"]
+  "potential_duplicates": ["#123", "#456"],
+  "status_note": "Optional note about issue status (e.g., 'Already has PR in progress')",
+  "contributor_guidance": "Actionable guidance for contributors wanting to work on this issue"
 }
 
 Guidelines:
@@ -677,6 +685,8 @@ Guidelines:
 - suggested_labels: Choose from: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix
 - clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear.
 - potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none.
+- status_note: Brief note about issue status or blockers. Leave empty string if none.
+- contributor_guidance: Practical steps a contributor should take to work on this issue (e.g., "Start by reviewing X file", "This requires Y knowledge").
 
 Be helpful, concise, and actionable. Focus on what a maintainer needs to know.
 ```
@@ -713,6 +723,23 @@ Recent Comments:
 - Validate JSON schema of AI response via `serde_json`
 - Never execute code from AI output
 - Show AI output to user before posting (interactive confirmation)
+
+**Already-Triaged Detection:**
+Before posting a triage comment, Aptu checks the issue's comment history to detect if the current user has already triaged it. This prevents duplicate triages and respects contributor effort.
+
+- Check: Search issue comments for author match + "Triage:" prefix
+- If found: Display warning "You've already triaged this issue on [date]"
+- User can override with `--force` flag to post anyway
+- Useful for: Updating triages, testing, or intentional re-triages
+
+Example:
+```bash
+# Attempt to re-triage (will warn)
+aptu issue triage https://github.com/block/goose/issues/123
+
+# Force re-triage despite warning
+aptu issue triage https://github.com/block/goose/issues/123 --force
+```
 
 ### 6.5 Contribution History (`aptu history`)
 
