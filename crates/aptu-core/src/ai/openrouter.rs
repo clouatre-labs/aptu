@@ -148,16 +148,27 @@ impl OpenRouterClient {
         // Check for HTTP errors
         let status = response.status();
         if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
-
             if status.as_u16() == 401 {
                 anyhow::bail!(
                     "Invalid OpenRouter API key. Check your {OPENROUTER_API_KEY_ENV} environment variable."
                 );
             } else if status.as_u16() == 429 {
                 warn!("Rate limited by OpenRouter API");
-                return Err(AptuError::RateLimited { retry_after: 0 }.into());
+                // Parse Retry-After header (seconds), default to 0 if not present
+                let retry_after = response
+                    .headers()
+                    .get("Retry-After")
+                    .and_then(|h| h.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(0);
+                debug!(retry_after, "Parsed Retry-After header");
+                return Err(AptuError::RateLimited {
+                    provider: "openrouter".to_string(),
+                    retry_after,
+                }
+                .into());
             }
+            let error_body = response.text().await.unwrap_or_default();
             anyhow::bail!(
                 "OpenRouter API error (HTTP {}): {}",
                 status.as_u16(),
