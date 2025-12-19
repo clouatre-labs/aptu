@@ -119,6 +119,12 @@ pub use utils::{
 };
 
 // ============================================================================
+// Platform-Agnostic Facade
+// ============================================================================
+
+pub use facade::{analyze_issue, fetch_issues};
+
+// ============================================================================
 // Modules
 // ============================================================================
 
@@ -126,6 +132,7 @@ pub mod ai;
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod facade;
 pub mod github;
 pub mod history;
 pub mod repos;

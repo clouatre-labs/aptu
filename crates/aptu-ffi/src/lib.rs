@@ -6,10 +6,45 @@ pub mod types;
 use crate::error::AptuFfiError;
 use crate::keychain::KeychainProviderRef;
 use crate::types::{FfiCuratedRepo, FfiIssueNode, FfiTokenStatus, FfiTriageResponse};
+use aptu_core::auth::TokenProvider;
+use secrecy::SecretString;
 use tokio::runtime::Runtime;
 
 lazy_static::lazy_static! {
     static ref RUNTIME: Runtime = Runtime::new().expect("Failed to create Tokio runtime");
+}
+
+/// FFI TokenProvider implementation that bridges iOS keychain to core TokenProvider trait.
+struct FfiTokenProvider {
+    keychain: KeychainProviderRef,
+}
+
+impl FfiTokenProvider {
+    fn new(keychain: KeychainProviderRef) -> Self {
+        Self { keychain }
+    }
+}
+
+impl TokenProvider for FfiTokenProvider {
+    fn github_token(&self) -> Option<SecretString> {
+        match self
+            .keychain
+            .get_token("aptu".to_string(), "github".to_string())
+        {
+            Ok(Some(token)) => Some(SecretString::new(token.into())),
+            _ => None,
+        }
+    }
+
+    fn openrouter_key(&self) -> Option<SecretString> {
+        match self
+            .keychain
+            .get_token("aptu".to_string(), "openrouter".to_string())
+        {
+            Ok(Some(key)) => Some(SecretString::new(key.into())),
+            _ => None,
+        }
+    }
 }
 
 #[uniffi::export]
@@ -18,78 +53,98 @@ pub fn list_curated_repos() -> Vec<FfiCuratedRepo> {
     repos.iter().map(FfiCuratedRepo::from).collect()
 }
 
-/// Fetch issues from a GitHub repository.
+/// Fetch "good first issue" issues from all curated repositories.
 ///
-/// TODO: This function currently returns hardcoded stub data. To wire it to the core:
-/// 1. Design authentication bridge (see issue #48) to pass GitHub token from iOS keychain
-/// 2. Call `aptu_core::github::graphql::fetch_issues(owner, repo, token)` with authenticated client
-/// 3. Implement `From<IssueNode> for FfiIssueNode` in types.rs
-/// 4. Map results using the From trait
+/// This function wires the FFI layer to the core facade by:
+/// 1. Creating an FfiTokenProvider from the iOS keychain
+/// 2. Calling the core facade fetch_issues() function
+/// 3. Converting IssueNode results to FfiIssueNode using From trait
 ///
-/// Blocked by: feat(ffi): design authentication bridge for iOS
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+///
+/// # Returns
+///
+/// A vector of FfiIssueNode structs representing issues from curated repos.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available in keychain
+/// - GitHub API call fails
+/// - Response parsing fails
 #[uniffi::export]
-pub fn fetch_issues(owner: String, repo: String) -> Result<Vec<FfiIssueNode>, AptuFfiError> {
+pub fn fetch_issues(keychain: KeychainProviderRef) -> Result<Vec<FfiIssueNode>, AptuFfiError> {
     RUNTIME.block_on(async {
-        if owner.is_empty() || repo.is_empty() {
-            return Err(AptuFfiError::InvalidInput {
-                message: "owner and repo cannot be empty".to_string(),
-            });
-        }
+        let provider = FfiTokenProvider::new(keychain);
 
-        Ok(vec![
-            FfiIssueNode {
-                number: 1234,
-                title: "CLI crashes on empty config".to_string(),
-                body: "When running aptu without a config file, it crashes".to_string(),
-                labels: vec!["bug".to_string()],
-                created_at: "2024-12-13T10:00:00Z".to_string(),
-                updated_at: "2024-12-13T10:00:00Z".to_string(),
-                url: format!("https://github.com/{}/{}/issues/1234", owner, repo),
-            },
-            FfiIssueNode {
-                number: 1189,
-                title: "Add --verbose flag".to_string(),
-                body: "Would be helpful for debugging".to_string(),
-                labels: vec!["enhancement".to_string()],
-                created_at: "2024-12-12T10:00:00Z".to_string(),
-                updated_at: "2024-12-12T10:00:00Z".to_string(),
-                url: format!("https://github.com/{}/{}/issues/1189", owner, repo),
-            },
-        ])
+        match aptu_core::fetch_issues(&provider).await {
+            Ok(results) => {
+                let mut ffi_issues = Vec::new();
+                for (_repo_name, issues) in results {
+                    for issue in issues {
+                        ffi_issues.push(FfiIssueNode::from(issue));
+                    }
+                }
+                Ok(ffi_issues)
+            }
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
     })
 }
 
 /// Analyze a GitHub issue and generate triage suggestions.
 ///
-/// TODO: This function currently returns hardcoded stub data. To wire it to the core:
-/// 1. Design authentication bridge (see issue #48) to pass GitHub token and AI API key from iOS
-/// 2. Fetch issue details using `aptu_core::github::rest::get_issue(owner, repo, number, token)`
-/// 3. Call `aptu_core::ai::openrouter::analyze_issue(issue_details, ai_config)` with authenticated client
-/// 4. Implement `From<TriageResponse> for FfiTriageResponse` in types.rs
-/// 5. Map results using the From trait
+/// This function wires the FFI layer to the core facade by:
+/// 1. Creating an FfiTokenProvider from the iOS keychain
+/// 2. Calling the core facade analyze_issue() function
+/// 3. Converting TriageResponse to FfiTriageResponse using From trait
 ///
-/// Blocked by: feat(ffi): design authentication bridge for iOS
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `issue` - Issue details to analyze
+///
+/// # Returns
+///
+/// Structured triage response with summary, labels, questions, and duplicates.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub or OpenRouter token is not available in keychain
+/// - AI API call fails
+/// - Response parsing fails
 #[uniffi::export]
-pub fn analyze_issue(issue_url: String) -> Result<FfiTriageResponse, AptuFfiError> {
+pub fn analyze_issue(
+    keychain: KeychainProviderRef,
+    issue: crate::types::FfiIssueDetails,
+) -> Result<FfiTriageResponse, AptuFfiError> {
     RUNTIME.block_on(async {
-        if issue_url.is_empty() {
-            return Err(AptuFfiError::InvalidInput {
-                message: "issue_url cannot be empty".to_string(),
-            });
-        }
+        let provider = FfiTokenProvider::new(keychain);
 
-        Ok(FfiTriageResponse {
-            summary: "This issue describes a crash when the config file is missing. The error handling should be improved to provide a helpful message.".to_string(),
-            suggested_labels: vec![
-                "bug".to_string(),
-                "good first issue".to_string(),
-            ],
-            clarifying_questions: vec![
-                "What is the exact error message?".to_string(),
-                "Does this happen on all platforms?".to_string(),
-            ],
-            potential_duplicates: vec![],
-        })
+        let core_issue = aptu_core::ai::types::IssueDetails {
+            owner: String::new(),
+            repo: String::new(),
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+            labels: issue.labels,
+            comments: vec![],
+            url: issue.url,
+            repo_context: vec![],
+            repo_tree: vec![],
+        };
+
+        match aptu_core::analyze_issue(&provider, &core_issue).await {
+            Ok(triage) => Ok(FfiTriageResponse::from(triage)),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
     })
 }
 

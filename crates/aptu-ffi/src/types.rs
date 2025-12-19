@@ -34,6 +34,27 @@ pub struct FfiIssueNode {
     pub url: String,
 }
 
+impl From<aptu_core::github::graphql::IssueNode> for FfiIssueNode {
+    fn from(issue: aptu_core::github::graphql::IssueNode) -> Self {
+        let labels = issue
+            .labels
+            .nodes
+            .iter()
+            .map(|label| label.name.clone())
+            .collect();
+
+        FfiIssueNode {
+            number: issue.number,
+            title: issue.title,
+            body: String::new(),
+            labels,
+            created_at: issue.created_at,
+            updated_at: String::new(),
+            url: issue.url,
+        }
+    }
+}
+
 #[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
 pub struct FfiIssueDetails {
     pub number: u64,
@@ -53,6 +74,17 @@ pub struct FfiTriageResponse {
     pub suggested_labels: Vec<String>,
     pub clarifying_questions: Vec<String>,
     pub potential_duplicates: Vec<String>,
+}
+
+impl From<aptu_core::ai::types::TriageResponse> for FfiTriageResponse {
+    fn from(triage: aptu_core::ai::types::TriageResponse) -> Self {
+        FfiTriageResponse {
+            summary: triage.summary,
+            suggested_labels: triage.suggested_labels,
+            clarifying_questions: triage.clarifying_questions,
+            potential_duplicates: triage.potential_duplicates,
+        }
+    }
 }
 
 #[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
