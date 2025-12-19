@@ -585,10 +585,10 @@ mod tree_tests {
     fn filter_tree_limits_to_50() {
         let entries: Vec<GitTreeEntry> = (0..100)
             .map(|i| GitTreeEntry {
-                path: format!("file{}.rs", i),
+                path: format!("file{i}.rs"),
                 type_: "blob".to_string(),
                 mode: "100644".to_string(),
-                sha: format!("sha{}", i),
+                sha: format!("sha{i}"),
             })
             .collect();
 
@@ -803,6 +803,6 @@ mod tests {
     fn extract_keywords_lowercase_conversion() {
         let title = "CLI Bug FIX";
         let keywords = extract_keywords(title);
-        assert!(keywords.iter().all(|k| k.chars().all(|c| c.is_lowercase())));
+        assert!(keywords.iter().all(|k| k.chars().all(char::is_lowercase)));
     }
 }
