@@ -3,6 +3,7 @@
 //! A CLI tool that helps developers contribute meaningfully to open source
 //! projects through AI-assisted issue triage and PR review.
 
+mod auth;
 mod cli;
 mod commands;
 mod errors;

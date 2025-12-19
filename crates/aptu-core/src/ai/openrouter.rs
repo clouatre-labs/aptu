@@ -89,6 +89,47 @@ impl OpenRouterClient {
         })
     }
 
+    /// Creates a new `OpenRouter` client with a provided API key.
+    ///
+    /// This constructor allows callers to provide an API key directly,
+    /// enabling multi-platform credential resolution (e.g., from iOS keychain via FFI).
+    ///
+    /// # Arguments
+    ///
+    /// * `api_key` - `OpenRouter` API key as a `SecretString`
+    /// * `config` - AI configuration with model, timeout, and cost control settings
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Model is not in free tier and `allow_paid_models` is false
+    /// - HTTP client creation fails
+    pub fn with_api_key(api_key: SecretString, config: &AiConfig) -> Result<Self> {
+        // Validate model against cost control
+        if !config.allow_paid_models && !super::is_free_model(&config.model) {
+            anyhow::bail!(
+                "Model '{}' is not in the free tier.\n\
+                 To use paid models, set `allow_paid_models = true` in your config file:\n\
+                 {}\n\n\
+                 Or use a free model like: mistralai/devstral-2512:free",
+                config.model,
+                crate::config::config_file_path().display()
+            );
+        }
+
+        // Create HTTP client with timeout
+        let http = Client::builder()
+            .timeout(Duration::from_secs(config.timeout_seconds))
+            .build()
+            .context("Failed to create HTTP client")?;
+
+        Ok(Self {
+            http,
+            api_key,
+            model: config.model.clone(),
+        })
+    }
+
     /// Analyzes a GitHub issue using the `OpenRouter` API.
     ///
     /// Returns a structured triage response with summary, labels, questions, and duplicates.
