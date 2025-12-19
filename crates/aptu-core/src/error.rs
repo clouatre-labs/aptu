@@ -23,9 +23,9 @@ pub enum AptuError {
     #[error("Authentication required - run `aptu auth login` first")]
     NotAuthenticated,
 
-    /// GitHub rate limit exceeded.
-    #[error("Rate limit exceeded, retry after {retry_after}s")]
-    RateLimited { retry_after: u64 },
+    /// Rate limit exceeded from an AI provider.
+    #[error("Rate limit exceeded on {provider}, retry after {retry_after}s")]
+    RateLimited { provider: String, retry_after: u64 },
 
     /// Configuration file error.
     #[error("Configuration error: {0}")]
