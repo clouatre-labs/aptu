@@ -63,6 +63,7 @@ jobs:
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
