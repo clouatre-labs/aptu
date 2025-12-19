@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use octocrab::Octocrab;
 use tracing::{debug, instrument};
 
-use crate::ai::types::{IssueComment, IssueDetails};
+use crate::ai::types::{IssueComment, IssueDetails, RepoIssueContext};
 
 /// Parses an owner/repo string to extract owner and repo.
 ///
@@ -199,6 +199,7 @@ pub async fn fetch_issue_with_comments(
         labels,
         comments,
         url: issue_url,
+        repo_context: Vec::new(),
     };
 
     debug!(
@@ -208,6 +209,91 @@ pub async fn fetch_issue_with_comments(
     );
 
     Ok(details)
+}
+
+/// Extracts significant keywords from an issue title for search.
+///
+/// Filters out common stop words and returns lowercase keywords.
+fn extract_keywords(title: &str) -> Vec<String> {
+    let stop_words = [
+        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "he", "in", "is",
+        "it", "its", "of", "on", "or", "that", "the", "to", "was", "will", "with",
+    ];
+
+    title
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty() && !stop_words.contains(word))
+        .take(5) // Limit to first 5 keywords
+        .map(std::string::ToString::to_string)
+        .collect()
+}
+
+/// Searches for related issues in a repository based on title keywords.
+///
+/// Extracts keywords from the issue title and searches the repository
+/// for matching issues. Returns up to 20 results.
+///
+/// # Arguments
+///
+/// * `client` - Authenticated Octocrab client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `title` - Issue title to extract keywords from
+///
+/// # Errors
+///
+/// Returns an error if the search API request fails.
+#[instrument(skip(client), fields(owner = %owner, repo = %repo))]
+pub async fn search_related_issues(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    title: &str,
+) -> Result<Vec<RepoIssueContext>> {
+    let keywords = extract_keywords(title);
+
+    if keywords.is_empty() {
+        debug!("No keywords extracted from title");
+        return Ok(Vec::new());
+    }
+
+    // Build search query: keyword1 keyword2 ... repo:owner/repo is:issue
+    let query = format!("{} repo:{}/{} is:issue", keywords.join(" "), owner, repo);
+
+    debug!(query = %query, "Searching for related issues");
+
+    // Search for issues
+    let search_result = client
+        .search()
+        .issues_and_pull_requests(&query)
+        .per_page(20)
+        .send()
+        .await
+        .with_context(|| format!("Failed to search for related issues in {owner}/{repo}"))?;
+
+    // Convert to our context type
+    let related: Vec<RepoIssueContext> = search_result
+        .items
+        .iter()
+        .filter_map(|item| {
+            // Only include issues (not PRs)
+            if item.pull_request.is_some() {
+                return None;
+            }
+
+            Some(RepoIssueContext {
+                number: item.number,
+                title: item.title.clone(),
+                labels: item.labels.iter().map(|l| l.name.clone()).collect(),
+                state: format!("{:?}", item.state).to_lowercase(),
+            })
+        })
+        .collect();
+
+    debug!(count = related.len(), "Found related issues");
+
+    Ok(related)
 }
 
 /// Posts a triage comment to a GitHub issue.
@@ -351,5 +437,38 @@ mod tests {
         assert_eq!(owner, "block");
         assert_eq!(repo, "goose");
         assert_eq!(number, 5836);
+    }
+
+    #[test]
+    fn extract_keywords_filters_stop_words() {
+        let title = "The issue is about a bug in the CLI";
+        let keywords = extract_keywords(title);
+        assert!(!keywords.contains(&"the".to_string()));
+        assert!(!keywords.contains(&"is".to_string()));
+        assert!(!keywords.contains(&"a".to_string()));
+        assert!(keywords.contains(&"issue".to_string()));
+        assert!(keywords.contains(&"bug".to_string()));
+        assert!(keywords.contains(&"cli".to_string()));
+    }
+
+    #[test]
+    fn extract_keywords_limits_to_five() {
+        let title = "one two three four five six seven eight nine ten";
+        let keywords = extract_keywords(title);
+        assert_eq!(keywords.len(), 5);
+    }
+
+    #[test]
+    fn extract_keywords_empty_title() {
+        let title = "the a an and or";
+        let keywords = extract_keywords(title);
+        assert!(keywords.is_empty());
+    }
+
+    #[test]
+    fn extract_keywords_lowercase_conversion() {
+        let title = "CLI Bug FIX";
+        let keywords = extract_keywords(title);
+        assert!(keywords.iter().all(|k| k.chars().all(|c| c.is_lowercase())));
     }
 }
