@@ -5,9 +5,33 @@
 
 use anyhow::{Context, Result};
 use octocrab::Octocrab;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
 use crate::ai::types::{IssueComment, IssueDetails, RepoIssueContext};
+
+/// A single entry in a Git tree response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitTreeEntry {
+    /// File path relative to repository root.
+    pub path: String,
+    /// Type of entry: "blob" (file) or "tree" (directory).
+    #[serde(rename = "type")]
+    pub type_: String,
+    /// File mode (e.g., "100644" for regular files).
+    pub mode: String,
+    /// SHA-1 hash of the entry.
+    pub sha: String,
+}
+
+/// Response from GitHub Git Trees API.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitTreeResponse {
+    /// List of entries in the tree.
+    pub tree: Vec<GitTreeEntry>,
+    /// Whether the tree is truncated (too many entries).
+    pub truncated: bool,
+}
 
 /// Parses an owner/repo string to extract owner and repo.
 ///
@@ -200,6 +224,7 @@ pub async fn fetch_issue_with_comments(
         comments,
         url: issue_url,
         repo_context: Vec::new(),
+        repo_tree: Vec::new(),
     };
 
     debug!(
@@ -326,6 +351,315 @@ pub async fn post_comment(
     debug!(url = %comment_url, "Comment posted successfully");
 
     Ok(comment_url)
+}
+
+/// Maps programming languages to their common file extensions.
+fn get_extensions_for_language(language: &str) -> Vec<&'static str> {
+    match language.to_lowercase().as_str() {
+        "rust" => vec!["rs"],
+        "python" => vec!["py"],
+        "javascript" | "typescript" => vec!["js", "ts", "jsx", "tsx"],
+        "java" => vec!["java"],
+        "c" => vec!["c", "h"],
+        "c++" | "cpp" => vec!["cpp", "cc", "cxx", "h", "hpp"],
+        "c#" | "csharp" => vec!["cs"],
+        "go" => vec!["go"],
+        "ruby" => vec!["rb"],
+        "php" => vec!["php"],
+        "swift" => vec!["swift"],
+        "kotlin" => vec!["kt"],
+        "scala" => vec!["scala"],
+        "r" => vec!["r"],
+        "shell" | "bash" => vec!["sh", "bash"],
+        "html" => vec!["html", "htm"],
+        "css" => vec!["css", "scss", "sass"],
+        "json" => vec!["json"],
+        "yaml" | "yml" => vec!["yaml", "yml"],
+        "toml" => vec!["toml"],
+        "xml" => vec!["xml"],
+        "markdown" => vec!["md"],
+        _ => vec![],
+    }
+}
+
+/// Filters repository tree entries by language-specific extensions.
+///
+/// Removes common non-source directories and limits results to 50 paths.
+/// Prioritizes shallow paths (fewer `/` characters).
+///
+/// # Arguments
+///
+/// * `entries` - Raw tree entries from GitHub API
+/// * `language` - Repository primary language for extension filtering
+///
+/// # Returns
+///
+/// Filtered and sorted list of file paths (max 50).
+fn filter_tree_by_language(entries: &[GitTreeEntry], language: &str) -> Vec<String> {
+    let extensions = get_extensions_for_language(language);
+    let exclude_dirs = [
+        "node_modules/",
+        "target/",
+        "dist/",
+        "build/",
+        ".git/",
+        "vendor/",
+        "test",
+        "spec",
+        "mock",
+        "fixture",
+    ];
+
+    let mut filtered: Vec<String> = entries
+        .iter()
+        .filter(|entry| {
+            // Only include files (blobs), not directories
+            if entry.type_ != "blob" {
+                return false;
+            }
+
+            // Exclude paths containing excluded directories
+            if exclude_dirs.iter().any(|dir| entry.path.contains(dir)) {
+                return false;
+            }
+
+            // Filter by extension if language is recognized
+            if extensions.is_empty() {
+                // If language not recognized, include all files
+                true
+            } else {
+                extensions.iter().any(|ext| entry.path.ends_with(ext))
+            }
+        })
+        .map(|e| e.path.clone())
+        .collect();
+
+    // Sort by path depth (fewer slashes first), then alphabetically
+    filtered.sort_by(|a, b| {
+        let depth_a = a.matches('/').count();
+        let depth_b = b.matches('/').count();
+        if depth_a == depth_b {
+            a.cmp(b)
+        } else {
+            depth_a.cmp(&depth_b)
+        }
+    });
+
+    // Limit to 50 paths
+    filtered.truncate(50);
+    filtered
+}
+
+/// Fetches the repository file tree from GitHub.
+///
+/// Attempts to fetch from the default branch (main, then master).
+/// Returns filtered list of source file paths based on repository language.
+///
+/// # Arguments
+///
+/// * `client` - Authenticated Octocrab client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `language` - Repository primary language for filtering
+///
+/// # Errors
+///
+/// Returns an error if the API request fails (but not if tree is unavailable).
+#[instrument(skip(client), fields(owner = %owner, repo = %repo))]
+pub async fn fetch_repo_tree(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    language: &str,
+) -> Result<Vec<String>> {
+    debug!("Fetching repository tree");
+
+    // Try main branch first, then master
+    let branches = ["main", "master"];
+    let mut tree_response: Option<GitTreeResponse> = None;
+
+    for branch in &branches {
+        let route = format!("/repos/{owner}/{repo}/git/trees/{branch}?recursive=1");
+        match client
+            .get::<GitTreeResponse, _, _>(&route, None::<&()>)
+            .await
+        {
+            Ok(response) => {
+                tree_response = Some(response);
+                debug!(branch = %branch, "Fetched tree from branch");
+                break;
+            }
+            Err(e) => {
+                debug!(branch = %branch, error = %e, "Failed to fetch tree from branch");
+            }
+        }
+    }
+
+    let response =
+        tree_response.context("Failed to fetch repository tree from main or master branch")?;
+
+    let filtered = filter_tree_by_language(&response.tree, language);
+    debug!(count = filtered.len(), "Filtered tree entries");
+
+    Ok(filtered)
+}
+
+#[cfg(test)]
+mod tree_tests {
+    use super::*;
+
+    #[test]
+    fn filter_tree_excludes_node_modules() {
+        let entries = vec![
+            GitTreeEntry {
+                path: "src/main.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "abc123".to_string(),
+            },
+            GitTreeEntry {
+                path: "node_modules/package/index.js".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "def456".to_string(),
+            },
+        ];
+
+        let filtered = filter_tree_by_language(&entries, "rust");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0], "src/main.rs");
+    }
+
+    #[test]
+    fn filter_tree_excludes_directories() {
+        let entries = vec![
+            GitTreeEntry {
+                path: "src/main.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "abc123".to_string(),
+            },
+            GitTreeEntry {
+                path: "src/lib".to_string(),
+                type_: "tree".to_string(),
+                mode: "040000".to_string(),
+                sha: "def456".to_string(),
+            },
+        ];
+
+        let filtered = filter_tree_by_language(&entries, "rust");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0], "src/main.rs");
+    }
+
+    #[test]
+    fn filter_tree_sorts_by_depth() {
+        let entries = vec![
+            GitTreeEntry {
+                path: "a/b/c/d.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "abc123".to_string(),
+            },
+            GitTreeEntry {
+                path: "a/b.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "def456".to_string(),
+            },
+            GitTreeEntry {
+                path: "main.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "ghi789".to_string(),
+            },
+        ];
+
+        let filtered = filter_tree_by_language(&entries, "rust");
+        assert_eq!(filtered[0], "main.rs");
+        assert_eq!(filtered[1], "a/b.rs");
+        assert_eq!(filtered[2], "a/b/c/d.rs");
+    }
+
+    #[test]
+    fn filter_tree_limits_to_50() {
+        let entries: Vec<GitTreeEntry> = (0..100)
+            .map(|i| GitTreeEntry {
+                path: format!("file{}.rs", i),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: format!("sha{}", i),
+            })
+            .collect();
+
+        let filtered = filter_tree_by_language(&entries, "rust");
+        assert_eq!(filtered.len(), 50);
+    }
+
+    #[test]
+    fn filter_tree_by_language_rust() {
+        let entries = vec![
+            GitTreeEntry {
+                path: "src/main.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "abc123".to_string(),
+            },
+            GitTreeEntry {
+                path: "src/lib.py".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "def456".to_string(),
+            },
+        ];
+
+        let filtered = filter_tree_by_language(&entries, "rust");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0], "src/main.rs");
+    }
+
+    #[test]
+    fn filter_tree_by_language_python() {
+        let entries = vec![
+            GitTreeEntry {
+                path: "main.py".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "abc123".to_string(),
+            },
+            GitTreeEntry {
+                path: "lib.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "def456".to_string(),
+            },
+        ];
+
+        let filtered = filter_tree_by_language(&entries, "python");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0], "main.py");
+    }
+
+    #[test]
+    fn get_extensions_for_language_rust() {
+        let exts = get_extensions_for_language("rust");
+        assert_eq!(exts, vec!["rs"]);
+    }
+
+    #[test]
+    fn get_extensions_for_language_javascript() {
+        let exts = get_extensions_for_language("javascript");
+        assert!(exts.contains(&"js"));
+        assert!(exts.contains(&"ts"));
+        assert!(exts.contains(&"jsx"));
+        assert!(exts.contains(&"tsx"));
+    }
+
+    #[test]
+    fn get_extensions_for_language_unknown() {
+        let exts = get_extensions_for_language("unknown_language");
+        assert!(exts.is_empty());
+    }
 }
 
 #[cfg(test)]

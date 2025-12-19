@@ -262,7 +262,8 @@ Your response MUST be valid JSON with this exact schema:
   "contributor_guidance": {
     "beginner_friendly": true,
     "reasoning": "1-2 sentence explanation of beginner-friendliness assessment"
-  }
+  },
+  "implementation_approach": "Optional suggestions for implementation based on repository structure"
 }
 
 Guidelines:
@@ -273,6 +274,7 @@ Guidelines:
 - related_issues: Include issues from the search results that are contextually related but NOT duplicates. Provide brief reasoning for each. Leave empty array if none are relevant.
 - status_note: Detect if someone has claimed the issue or is working on it. Look for patterns like "I'd like to work on this", "I'll submit a PR", "working on this", or "@user I've assigned you". If claimed, set status_note to a brief description (e.g., "Issue claimed by @username"). If not claimed, leave as null or empty string. IMPORTANT: If issue is claimed, do NOT suggest 'help wanted' label.
 - contributor_guidance: Assess whether the issue is suitable for beginners. Consider: scope (small, well-defined), file count (few files to modify), required knowledge (no deep expertise needed), clarity (clear problem statement). Set beginner_friendly to true if all factors are favorable. Provide 1-2 sentence reasoning explaining the assessment.
+- implementation_approach: Based on the repository structure provided, suggest specific files or modules to modify. Reference the file paths from the repository structure. Be concrete and actionable. Leave as null or empty string if no specific guidance can be provided.
 
 Be helpful, concise, and actionable. Focus on what a maintainer needs to know."##.to_string()
 }
@@ -328,6 +330,15 @@ fn build_user_prompt(issue: &IssueDetails) -> String {
                 "- #{} [{}] {}",
                 related.number, related.state, related.title
             );
+        }
+        prompt.push('\n');
+    }
+
+    // Include repository structure (source files)
+    if !issue.repo_tree.is_empty() {
+        prompt.push_str("Repository Structure (source files):\n");
+        for path in issue.repo_tree.iter().take(20) {
+            let _ = writeln!(prompt, "- {path}");
         }
         prompt.push('\n');
     }
@@ -396,6 +407,7 @@ mod tests {
             comments: vec![],
             url: "https://github.com/test/repo/issues/1".to_string(),
             repo_context: Vec::new(),
+            repo_tree: Vec::new(),
         };
 
         let prompt = build_user_prompt(&issue);
@@ -419,6 +431,7 @@ mod tests {
             comments: vec![],
             url: "https://github.com/test/repo/issues/1".to_string(),
             repo_context: Vec::new(),
+            repo_tree: Vec::new(),
         };
 
         let prompt = build_user_prompt(&issue);
@@ -438,6 +451,7 @@ mod tests {
             comments: vec![],
             url: "https://github.com/test/repo/issues/1".to_string(),
             repo_context: Vec::new(),
+            repo_tree: Vec::new(),
         };
 
         let prompt = build_user_prompt(&issue);
