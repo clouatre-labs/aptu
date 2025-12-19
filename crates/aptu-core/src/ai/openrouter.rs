@@ -210,7 +210,11 @@ Your response MUST be valid JSON with this exact schema:
   "suggested_labels": ["label1", "label2"],
   "clarifying_questions": ["question1", "question2"],
   "potential_duplicates": ["#123", "#456"],
-  "status_note": "Optional note about issue status (e.g., claimed, in-progress)"
+  "status_note": "Optional note about issue status (e.g., claimed, in-progress)",
+  "contributor_guidance": {
+    "beginner_friendly": true,
+    "reasoning": "1-2 sentence explanation of beginner-friendliness assessment"
+  }
 }
 
 Guidelines:
@@ -219,6 +223,7 @@ Guidelines:
 - clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear. Skip questions already answered in comments.
 - potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none.
 - status_note: Detect if someone has claimed the issue or is working on it. Look for patterns like "I'd like to work on this", "I'll submit a PR", "working on this", or "@user I've assigned you". If claimed, set status_note to a brief description (e.g., "Issue claimed by @username"). If not claimed, leave as null or empty string. IMPORTANT: If issue is claimed, do NOT suggest 'help wanted' label.
+- contributor_guidance: Assess whether the issue is suitable for beginners. Consider: scope (small, well-defined), file count (few files to modify), required knowledge (no deep expertise needed), clarity (clear problem statement). Set beginner_friendly to true if all factors are favorable. Provide 1-2 sentence reasoning explaining the assessment.
 
 Be helpful, concise, and actionable. Focus on what a maintainer needs to know."##.to_string()
 }
@@ -410,5 +415,71 @@ mod tests {
         assert!(is_free_model("google/gemini-2.0-flash-exp:free"));
         assert!(!is_free_model("openai/gpt-4"));
         assert!(!is_free_model("anthropic/claude-sonnet-4"));
+    }
+
+    #[test]
+    fn test_triage_response_with_contributor_guidance() {
+        let json = r#"{
+            "summary": "Test summary",
+            "suggested_labels": ["bug"],
+            "contributor_guidance": {
+                "beginner_friendly": true,
+                "reasoning": "Small scope, well-defined problem statement."
+            }
+        }"#;
+
+        let triage: TriageResponse = serde_json::from_str(json).unwrap();
+        assert!(triage.contributor_guidance.is_some());
+
+        let guidance = triage.contributor_guidance.unwrap();
+        assert!(guidance.beginner_friendly);
+        assert_eq!(
+            guidance.reasoning,
+            "Small scope, well-defined problem statement."
+        );
+    }
+
+    #[test]
+    fn test_triage_response_without_contributor_guidance() {
+        let json = r#"{
+            "summary": "Test summary",
+            "suggested_labels": ["bug"]
+        }"#;
+
+        let triage: TriageResponse = serde_json::from_str(json).unwrap();
+        assert!(triage.contributor_guidance.is_none());
+    }
+
+    #[test]
+    fn test_triage_response_with_not_beginner_friendly() {
+        let json = r#"{
+            "summary": "Test summary",
+            "suggested_labels": ["enhancement"],
+            "contributor_guidance": {
+                "beginner_friendly": false,
+                "reasoning": "Requires deep knowledge of the compiler internals."
+            }
+        }"#;
+
+        let triage: TriageResponse = serde_json::from_str(json).unwrap();
+        assert!(triage.contributor_guidance.is_some());
+
+        let guidance = triage.contributor_guidance.unwrap();
+        assert!(!guidance.beginner_friendly);
+        assert_eq!(
+            guidance.reasoning,
+            "Requires deep knowledge of the compiler internals."
+        );
+    }
+
+    #[test]
+    fn test_build_system_prompt_contains_contributor_guidance() {
+        let prompt = build_system_prompt();
+        assert!(prompt.contains("contributor_guidance"));
+        assert!(prompt.contains("beginner_friendly"));
+        assert!(prompt.contains("reasoning"));
+        assert!(prompt.contains("scope"));
+        assert!(prompt.contains("file count"));
+        assert!(prompt.contains("required knowledge"));
     }
 }

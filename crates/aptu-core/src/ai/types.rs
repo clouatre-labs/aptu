@@ -54,6 +54,15 @@ pub struct Choice {
     pub message: ChatMessage,
 }
 
+/// Guidance for contributors on whether an issue is beginner-friendly.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ContributorGuidance {
+    /// Whether the issue is suitable for beginners.
+    pub beginner_friendly: bool,
+    /// Reasoning for the beginner-friendly assessment (1-2 sentences).
+    pub reasoning: String,
+}
+
 /// Structured triage response from AI.
 ///
 /// This is the expected JSON structure in the AI's response content.
@@ -72,6 +81,9 @@ pub struct TriageResponse {
     /// Status note about the issue (e.g., if it's already claimed or in-progress).
     #[serde(default)]
     pub status_note: Option<String>,
+    /// Guidance for contributors on beginner-friendliness.
+    #[serde(default)]
+    pub contributor_guidance: Option<ContributorGuidance>,
 }
 
 /// Details about an issue for triage.

@@ -341,6 +341,32 @@ fn render_triage_content(
         ));
     }
 
+    // Contributor guidance (if present)
+    if let Some(guidance) = &triage.contributor_guidance {
+        match mode {
+            OutputMode::Terminal => {
+                let _ = writeln!(output, "{}", style("Contributor Guidance").cyan().bold());
+                let beginner_label = if guidance.beginner_friendly {
+                    style("Beginner-friendly").green()
+                } else {
+                    style("Advanced").yellow()
+                };
+                let _ = writeln!(output, "  {beginner_label}");
+                let _ = writeln!(output, "  {}\n", guidance.reasoning);
+            }
+            OutputMode::Markdown => {
+                output.push_str("### Contributor Guidance\n\n");
+                let beginner_label = if guidance.beginner_friendly {
+                    "**Beginner-friendly**"
+                } else {
+                    "**Advanced**"
+                };
+                let _ = writeln!(output, "{beginner_label}\n");
+                let _ = writeln!(output, "{}\n", guidance.reasoning);
+            }
+        }
+    }
+
     // Attribution (markdown only)
     if matches!(mode, OutputMode::Markdown) {
         output.push_str("---\n");
@@ -637,6 +663,7 @@ mod tests {
             clarifying_questions: vec!["What version are you using?".to_string()],
             potential_duplicates: vec!["#123".to_string()],
             status_note: None,
+            contributor_guidance: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -658,6 +685,7 @@ mod tests {
             clarifying_questions: vec![],
             potential_duplicates: vec![],
             status_note: None,
+            contributor_guidance: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -674,6 +702,7 @@ mod tests {
             clarifying_questions: vec![],
             potential_duplicates: vec![],
             status_note: Some("Issue claimed by @user".to_string()),
+            contributor_guidance: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -736,5 +765,68 @@ mod tests {
         let body = "Exactly fifty characters long text here now ok";
         let result = truncate_body(body, 50);
         assert_eq!(result, body);
+    }
+
+    #[test]
+    fn test_render_triage_markdown_with_contributor_guidance_beginner() {
+        use aptu_core::ai::types::ContributorGuidance;
+
+        let triage = TriageResponse {
+            summary: "Simple bug fix.".to_string(),
+            suggested_labels: vec!["bug".to_string()],
+            clarifying_questions: vec![],
+            potential_duplicates: vec![],
+            status_note: None,
+            contributor_guidance: Some(ContributorGuidance {
+                beginner_friendly: true,
+                reasoning: "Small scope, well-defined problem statement.".to_string(),
+            }),
+        };
+
+        let comment = render_triage_markdown(&triage);
+
+        assert!(comment.contains("### Contributor Guidance"));
+        assert!(comment.contains("**Beginner-friendly**"));
+        assert!(comment.contains("Small scope, well-defined problem statement."));
+    }
+
+    #[test]
+    fn test_render_triage_markdown_with_contributor_guidance_advanced() {
+        use aptu_core::ai::types::ContributorGuidance;
+
+        let triage = TriageResponse {
+            summary: "Complex refactoring.".to_string(),
+            suggested_labels: vec!["enhancement".to_string()],
+            clarifying_questions: vec![],
+            potential_duplicates: vec![],
+            status_note: None,
+            contributor_guidance: Some(ContributorGuidance {
+                beginner_friendly: false,
+                reasoning: "Requires deep knowledge of the compiler internals.".to_string(),
+            }),
+        };
+
+        let comment = render_triage_markdown(&triage);
+
+        assert!(comment.contains("### Contributor Guidance"));
+        assert!(comment.contains("**Advanced**"));
+        assert!(comment.contains("Requires deep knowledge of the compiler internals."));
+    }
+
+    #[test]
+    fn test_render_triage_markdown_without_contributor_guidance() {
+        let triage = TriageResponse {
+            summary: "Standard issue.".to_string(),
+            suggested_labels: vec!["bug".to_string()],
+            clarifying_questions: vec![],
+            potential_duplicates: vec![],
+            status_note: None,
+            contributor_guidance: None,
+        };
+
+        let comment = render_triage_markdown(&triage);
+
+        // Should not contain contributor guidance section
+        assert!(!comment.contains("### Contributor Guidance"));
     }
 }
