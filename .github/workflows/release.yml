@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ env.VERSION }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - name: Extract version from tag
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Validate version matches Cargo.toml
+        run: |
+          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if [ "$VERSION" != "$CARGO_VERSION" ]; then
+            echo "Tag version $VERSION does not match Cargo.toml version $CARGO_VERSION"
+            exit 1
+          fi
+        shell: bash
+      - uses: taiki-e/create-gh-release-action@v1.8.0
+        id: create_release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          generate-release-notes: true
+
+  upload-assets:
+    name: Upload Assets
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: false
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-13
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            cross: false
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            cross: false
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: taiki-e/setup-cross-toolchain-action@v1.23.0
+        if: matrix.cross
+        with:
+          target: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
+        with:
+          shared-key: "aptu"
+          key: ${{ matrix.target }}
+      - uses: taiki-e/upload-rust-binary-action@v1.22.0
+        with:
+          bin: aptu
+          target: ${{ matrix.target }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checksum: sha256
