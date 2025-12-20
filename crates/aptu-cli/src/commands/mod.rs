@@ -1,25 +1,24 @@
 //! Command handlers for Aptu CLI.
 
 pub mod auth;
+pub mod completion;
 pub mod history;
 pub mod issue;
 pub mod repo;
 pub mod triage;
 pub mod types;
 
-use std::io::Write;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use clap::CommandFactory;
-use clap_complete::generate;
 use console::style;
 use dialoguer::Confirm;
 use indicatif::{ProgressBar, ProgressStyle};
 use tracing::debug;
 
 use crate::cli::{
-    AuthCommand, Cli, Commands, IssueCommand, OutputContext, OutputFormat, RepoCommand,
+    AuthCommand, Commands, CompletionCommand, IssueCommand, OutputContext, OutputFormat,
+    RepoCommand,
 };
 use crate::output;
 use aptu_core::{AppConfig, check_already_triaged};
@@ -216,12 +215,11 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             Ok(())
         }
 
-        Commands::Completion { shell } => {
-            let mut cmd = Cli::command();
-            let name = cmd.get_name().to_string();
-            generate(shell, &mut cmd, name, &mut std::io::stdout());
-            std::io::stdout().flush()?;
-            Ok(())
-        }
+        Commands::Completion(completion_cmd) => match completion_cmd {
+            CompletionCommand::Generate { shell } => completion::run_generate(shell),
+            CompletionCommand::Install { shell, dry_run } => {
+                completion::run_install(shell, dry_run)
+            }
+        },
     }
 }
