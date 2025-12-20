@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Core library for Aptu - OSS issue triage with AI assistance"
 authors = ["Hugues Clouâtre"]
-license = "MIT"
+license = "Apache-2.0"
 repository = "https://github.com/clouatre-labs/aptu"
 
 [dependencies]
