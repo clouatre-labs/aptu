@@ -2,9 +2,11 @@
 //!
 //! Provides AI-assisted issue triage using `OpenRouter` API.
 
+pub mod models;
 pub mod openrouter;
 pub mod types;
 
+pub use models::{AiModel, ModelProvider};
 pub use openrouter::OpenRouterClient;
 
 /// `OpenRouter` API base URL.

@@ -93,3 +93,41 @@ pub struct FfiTokenStatus {
     pub token_source: String,
     pub expires_at: Option<String>,
 }
+
+#[derive(Clone, Copy, Debug, uniffi::Enum, Serialize, Deserialize)]
+pub enum FfiModelProvider {
+    OpenRouter,
+    Ollama,
+    Mlx,
+}
+
+impl From<aptu_core::ai::models::ModelProvider> for FfiModelProvider {
+    fn from(provider: aptu_core::ai::models::ModelProvider) -> Self {
+        match provider {
+            aptu_core::ai::models::ModelProvider::OpenRouter => FfiModelProvider::OpenRouter,
+            aptu_core::ai::models::ModelProvider::Ollama => FfiModelProvider::Ollama,
+            aptu_core::ai::models::ModelProvider::Mlx => FfiModelProvider::Mlx,
+        }
+    }
+}
+
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiAiModel {
+    pub display_name: String,
+    pub identifier: String,
+    pub provider: FfiModelProvider,
+    pub is_free: bool,
+    pub context_window: u32,
+}
+
+impl From<aptu_core::ai::models::AiModel> for FfiAiModel {
+    fn from(model: aptu_core::ai::models::AiModel) -> Self {
+        FfiAiModel {
+            display_name: model.display_name,
+            identifier: model.identifier,
+            provider: FfiModelProvider::from(model.provider),
+            is_free: model.is_free,
+            context_window: model.context_window,
+        }
+    }
+}

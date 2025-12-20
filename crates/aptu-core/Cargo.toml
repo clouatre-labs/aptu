@@ -33,5 +33,10 @@ uuid = { workspace = true }
 # Logging
 tracing = { workspace = true }
 
+[features]
+default = []
+# Enable UniFFI derive macros for FFI bindings (used by aptu-ffi)
+uniffi = []
+
 [lints]
 workspace = true
