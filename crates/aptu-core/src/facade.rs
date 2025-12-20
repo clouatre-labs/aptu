@@ -23,6 +23,7 @@ use crate::repos;
 /// # Arguments
 ///
 /// * `provider` - Token provider for GitHub credentials
+/// * `repo_filter` - Optional repository filter (case-insensitive substring match on full name or short name)
 ///
 /// # Returns
 ///
@@ -34,9 +35,10 @@ use crate::repos;
 /// - GitHub token is not available from the provider
 /// - GitHub API call fails
 /// - Response parsing fails
-#[instrument(skip(provider))]
+#[instrument(skip(provider), fields(repo_filter = ?repo_filter))]
 pub async fn fetch_issues(
     provider: &dyn TokenProvider,
+    repo_filter: Option<&str>,
 ) -> crate::Result<Vec<(String, Vec<IssueNode>)>> {
     // Get GitHub token from provider
     let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
@@ -47,11 +49,25 @@ pub async fn fetch_issues(
         .build()
         .map_err(AptuError::GitHub)?;
 
-    // Get curated repos
-    let curated_repos = repos::list();
+    // Get curated repos, optionally filtered
+    let all_repos = repos::list();
+    let repos_to_query: Vec<_> = match repo_filter {
+        Some(filter) => {
+            let filter_lower = filter.to_lowercase();
+            all_repos
+                .iter()
+                .filter(|r| {
+                    r.full_name().to_lowercase().contains(&filter_lower)
+                        || r.name.to_lowercase().contains(&filter_lower)
+                })
+                .cloned()
+                .collect()
+        }
+        None => all_repos.to_vec(),
+    };
 
-    // Fetch issues from all curated repos
-    gh_fetch_issues(&client, curated_repos)
+    // Fetch issues from filtered repos
+    gh_fetch_issues(&client, &repos_to_query)
         .await
         .map_err(|e| AptuError::AI {
             message: format!("Failed to fetch issues: {e}"),
