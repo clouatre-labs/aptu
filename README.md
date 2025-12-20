@@ -148,12 +148,53 @@ Set your OpenRouter API key:
 export OPENROUTER_API_KEY="sk-or-..."
 ```
 
-## Development
+## Local Development
+
+### Prerequisites
+
+- **Rust 1.92.0** - Automatically managed via `rust-toolchain.toml`
+- **Just** - Task runner for common commands
+
+Install Just:
+```bash
+# macOS
+brew install just
+
+# Linux
+cargo install just
+
+# Or see https://github.com/casey/just#installation
+```
+
+### Development Commands
+
+Use `just` to run common development tasks:
+
+```bash
+just              # List all available commands
+just check        # Run format, lint, and test (recommended before commits)
+just fmt          # Check code formatting
+just fmt-fix      # Auto-fix formatting
+just lint         # Run clippy linter
+just lint-fix     # Auto-fix clippy issues
+just test         # Run unit tests
+just integration  # Run integration tests
+just build        # Build debug binary
+just build-release # Build optimized release binary
+just ci           # Run full CI pipeline locally
+just install      # Install binary to ~/.cargo/bin/
+just clean        # Remove build artifacts
+```
+
+### Manual Commands
+
+If you prefer not to use Just:
 
 ```bash
 cargo test       # Run tests
 cargo fmt        # Format code
 cargo clippy     # Lint
+cargo build      # Build binary
 ```
 
 ## Contributing
