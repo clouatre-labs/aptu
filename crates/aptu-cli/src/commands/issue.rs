@@ -1,15 +1,14 @@
 //! List open issues command.
 //!
 //! Fetches "good first issue" issues from curated repositories using
-//! a single GraphQL query for optimal performance.
+//! the facade layer with `CliTokenProvider` for credential resolution.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use aptu_core::error::AptuError;
-use aptu_core::github::{auth, graphql};
-use aptu_core::repos;
 use tracing::{debug, info, instrument};
 
 use super::types::IssuesResult;
+use crate::provider::CliTokenProvider;
 
 /// List open issues suitable for contribution.
 ///
@@ -17,45 +16,20 @@ use super::types::IssuesResult;
 /// (or a specific one if `--repo` is provided).
 #[instrument(skip_all, fields(repo_filter = ?repo))]
 pub async fn run(repo: Option<String>) -> Result<IssuesResult> {
-    // Check authentication
-    if !auth::is_authenticated() {
-        return Err(AptuError::NotAuthenticated.into());
-    }
+    // Create CLI token provider
+    let provider = CliTokenProvider;
 
-    // Get curated repos, optionally filtered
-    let all_repos = repos::list();
-    let repos_to_query: Vec<_> = match &repo {
-        Some(filter) => {
-            let filter_lower = filter.to_lowercase();
-            all_repos
-                .iter()
-                .filter(|r| {
-                    r.full_name().to_lowercase().contains(&filter_lower)
-                        || r.name.to_lowercase().contains(&filter_lower)
-                })
-                .cloned()
-                .collect()
-        }
-        None => all_repos.to_vec(),
-    };
-
-    if repos_to_query.is_empty() {
-        return Ok(IssuesResult {
-            issues_by_repo: vec![],
-            total_count: 0,
-            repo_filter: repo,
-            no_repos_matched: true,
-        });
-    }
-
-    // Create authenticated client
-    let client = auth::create_client().context("Failed to create GitHub client")?;
-
-    // Fetch issues via GraphQL
-    let results = graphql::fetch_issues(&client, &repos_to_query).await?;
+    // Fetch issues via facade with optional repo filter
+    let results = aptu_core::fetch_issues(&provider, repo.as_deref())
+        .await
+        .map_err(|e| match e {
+            AptuError::NotAuthenticated => AptuError::NotAuthenticated,
+            other => other,
+        })?;
 
     // Count total issues
     let total_count: usize = results.iter().map(|(_, issues)| issues.len()).sum();
+    let no_repos_matched = results.is_empty();
 
     info!(
         total_issues = total_count,
@@ -68,6 +42,6 @@ pub async fn run(repo: Option<String>) -> Result<IssuesResult> {
         issues_by_repo: results,
         total_count,
         repo_filter: repo,
-        no_repos_matched: false,
+        no_repos_matched,
     })
 }

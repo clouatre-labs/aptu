@@ -79,7 +79,7 @@ pub fn fetch_issues(keychain: KeychainProviderRef) -> Result<Vec<FfiIssueNode>, 
     RUNTIME.block_on(async {
         let provider = FfiTokenProvider::new(keychain);
 
-        match aptu_core::fetch_issues(&provider).await {
+        match aptu_core::fetch_issues(&provider, None).await {
             Ok(results) => {
                 let mut ffi_issues = Vec::new();
                 for (_repo_name, issues) in results {

@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use aptu_core::error::AptuError;
 use aptu_core::github::{auth, issues};
-use aptu_core::{IssueDetails, OpenRouterClient, TriageResponse};
+use aptu_core::{IssueDetails, TriageResponse};
 use tracing::{debug, info, instrument};
 
 use crate::output::render_triage_markdown;
@@ -97,22 +97,19 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
 
 /// Analyze an issue with AI assistance.
 ///
-/// Takes fetched issue details and runs AI analysis. Does not post anything.
+/// Takes fetched issue details and runs AI analysis via the facade layer.
+/// Does not post anything.
 ///
 /// # Arguments
 ///
 /// * `issue_details` - Fetched issue details from `fetch()`
-/// * `ai_config` - AI configuration (provider, model, etc.)
 #[instrument(skip_all, fields(issue_number = issue_details.number))]
-pub async fn analyze(
-    issue_details: &IssueDetails,
-    ai_config: &aptu_core::AiConfig,
-) -> Result<TriageResponse> {
-    // Create OpenRouter client
-    let client = OpenRouterClient::new(ai_config)?;
+pub async fn analyze(issue_details: &IssueDetails) -> Result<TriageResponse> {
+    // Create CLI token provider
+    let provider = crate::provider::CliTokenProvider;
 
-    // Call AI for analysis
-    let triage = client.analyze_issue(issue_details).await?;
+    // Call facade for analysis
+    let triage = aptu_core::analyze_issue(&provider, issue_details).await?;
 
     debug!("Issue analyzed successfully");
     Ok(triage)
