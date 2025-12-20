@@ -1,0 +1,35 @@
+name: 📚 Documentation
+description: Report missing, unclear, or incorrect documentation
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us improve the Aptu documentation!
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs improvement?
+      description: Which docs are missing, unclear, or incorrect?
+      placeholder: |
+        The README doesn't explain how to configure the AI provider...
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: Link to the docs page or file path, if applicable.
+      placeholder: "README.md, SPEC.md §6.4, etc."
+    validations:
+      required: false
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Changes
+      description: How would you improve it?
+    validations:
+      required: false
