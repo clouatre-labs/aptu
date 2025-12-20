@@ -75,23 +75,40 @@ aptu issue triage https://github.com/block/goose/issues/123 --dry-run
 # View your contribution history
 aptu history
 
-# Generate shell completions
-aptu completion zsh > ~/.zsh/completions/_aptu
+# Install shell completions (auto-detects your shell)
+aptu completion install
 ```
 
 ## Shell Completions
 
-Enable tab completion for your shell:
+Enable tab completion for your shell using the automated installer:
+
+```bash
+# Auto-detect shell and install
+aptu completion install
+
+# Preview without writing files
+aptu completion install --dry-run
+
+# Explicit shell selection
+aptu completion install --shell zsh
+```
+
+The installer writes completions to standard locations and prints configuration instructions.
+
+### Manual Setup
+
+If you prefer manual setup, use `aptu completion generate <shell>`:
 
 **Bash** - Add to `~/.bashrc` or `~/.bash_profile`:
 ```bash
-eval "$(aptu completion bash)"
+eval "$(aptu completion generate bash)"
 ```
 
 **Zsh** - Generate completion file:
 ```zsh
 mkdir -p ~/.zsh/completions
-aptu completion zsh > ~/.zsh/completions/_aptu
+aptu completion generate zsh > ~/.zsh/completions/_aptu
 ```
 
 Add to `~/.zshrc` (before compinit):
@@ -102,12 +119,12 @@ autoload -U compinit && compinit -i
 
 **Fish** - Generate completion file:
 ```fish
-aptu completion fish > ~/.config/fish/completions/aptu.fish
+aptu completion generate fish > ~/.config/fish/completions/aptu.fish
 ```
 
 **PowerShell** - Add to `$PROFILE`:
 ```powershell
-aptu completion powershell | Out-String | Invoke-Expression
+aptu completion generate powershell | Out-String | Invoke-Expression
 ```
 
 Run `aptu completion --help` for more options.
