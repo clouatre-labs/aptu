@@ -8,17 +8,17 @@ use std::io::IsTerminal;
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 
-/// Extended help text for the completion command with shell-specific examples.
-const COMPLETION_HELP: &str = r#"EXAMPLES
+/// Extended help text for the generate subcommand with shell-specific examples.
+const COMPLETION_GENERATE_HELP: &str = r#"EXAMPLES
 
   bash
     Add to ~/.bashrc or ~/.bash_profile:
-      eval "$(aptu completion bash)"
+      eval "$(aptu completion generate bash)"
 
   zsh
     Generate completion file:
       mkdir -p ~/.zsh/completions
-      aptu completion zsh > ~/.zsh/completions/_aptu
+      aptu completion generate zsh > ~/.zsh/completions/_aptu
 
     Add to ~/.zshrc (before compinit):
       fpath=(~/.zsh/completions $fpath)
@@ -26,11 +26,11 @@ const COMPLETION_HELP: &str = r#"EXAMPLES
 
   fish
     Generate completion file:
-      aptu completion fish > ~/.config/fish/completions/aptu.fish
+      aptu completion generate fish > ~/.config/fish/completions/aptu.fish
 
   PowerShell
     Add to $PROFILE:
-      aptu completion powershell | Out-String | Invoke-Expression
+      aptu completion generate powershell | Out-String | Invoke-Expression
 "#;
 
 /// Output format for CLI results.
@@ -113,13 +113,9 @@ pub enum Commands {
     /// Show your contribution history
     History,
 
-    /// Generate shell completion scripts
-    #[command(after_long_help = COMPLETION_HELP)]
-    Completion {
-        /// Shell to generate completions for
-        #[arg(value_enum)]
-        shell: Shell,
-    },
+    /// Generate or install shell completion scripts
+    #[command(subcommand)]
+    Completion(CompletionCommand),
 }
 
 /// Authentication subcommands
@@ -175,5 +171,28 @@ pub enum IssueCommand {
         /// Force triage even if issue appears already triaged
         #[arg(long)]
         force: bool,
+    },
+}
+
+/// Completion subcommands
+#[derive(Subcommand)]
+pub enum CompletionCommand {
+    /// Generate completion script for a shell (output to stdout)
+    #[command(after_long_help = COMPLETION_GENERATE_HELP)]
+    Generate {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+
+    /// Install completion script to standard location
+    Install {
+        /// Shell to install completions for (auto-detected from $SHELL if not provided)
+        #[arg(long, value_enum)]
+        shell: Option<Shell>,
+
+        /// Preview installation without writing files
+        #[arg(long)]
+        dry_run: bool,
     },
 }

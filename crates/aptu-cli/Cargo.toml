@@ -44,6 +44,9 @@ uuid = { workspace = true }
 # Security
 secrecy = { workspace = true }
 
+# Paths
+dirs = { workspace = true }
+
 [dev-dependencies]
 tokio-test = { workspace = true }
 wiremock = { workspace = true }

@@ -77,9 +77,10 @@ fn test_repo_list_markdown_output() {
 }
 
 #[test]
-fn test_completion_bash() {
+fn test_completion_generate_bash() {
     let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("completion")
+        .arg("generate")
         .arg("bash")
         .assert()
         .success()
@@ -87,13 +88,28 @@ fn test_completion_bash() {
 }
 
 #[test]
-fn test_completion_zsh() {
+fn test_completion_generate_zsh() {
     let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("completion")
+        .arg("generate")
         .arg("zsh")
         .assert()
         .success()
         .stdout(predicate::str::contains("zsh").or(predicate::str::contains("compdef")));
+}
+
+#[test]
+fn test_completion_install_dry_run() {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.arg("completion")
+        .arg("install")
+        .arg("--shell")
+        .arg("zsh")
+        .arg("--dry-run")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("DRY RUN"))
+        .stdout(predicate::str::contains("Completion path"));
 }
 
 #[test]
