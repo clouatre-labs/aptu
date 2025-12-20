@@ -8,6 +8,9 @@ mod commands;
 mod errors;
 mod logging;
 mod output;
+mod provider;
+
+pub use provider::CliTokenProvider;
 
 use anyhow::{Context, Result};
 use aptu_core::config;

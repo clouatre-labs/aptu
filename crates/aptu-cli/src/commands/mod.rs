@@ -123,7 +123,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
 
                 // Phase 1c: Analyze with AI
                 let spinner = maybe_spinner(&ctx, "Analyzing with AI...");
-                let triage_response = triage::analyze(&issue_details, &config.ai).await?;
+                let triage_response = triage::analyze(&issue_details).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
