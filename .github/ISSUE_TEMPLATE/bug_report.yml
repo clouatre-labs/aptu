@@ -1,0 +1,75 @@
+name: 🐛 Bug Report
+description: Report an error or unexpected behavior
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+        
+        **Before reporting**, please search [existing issues](https://github.com/clouatre-labs/aptu/issues?q=is%3Aissue+label%3Abug) to avoid duplicates.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear description of the bug, including the command you ran.
+      placeholder: |
+        When I run `aptu issue triage https://github.com/org/repo/issues/123`, I get...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Run `aptu auth login`
+        2. Run `aptu issue triage <url>`
+        3. See error...
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Aptu Version
+      description: Run `aptu --version` to get this.
+      placeholder: "aptu 0.1.0"
+    validations:
+      required: false
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "macOS 15.2, Ubuntu 24.04, Windows 11"
+    validations:
+      required: false
+
+  - type: input
+    id: ai-provider
+    attributes:
+      label: AI Provider & Model
+      description: If relevant to the bug.
+      placeholder: "OpenRouter / mistralai/devstral-2512:free"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      description: Paste any relevant error messages. This will be formatted as code.
+      render: shell
+    validations:
+      required: false
