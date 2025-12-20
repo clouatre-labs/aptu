@@ -82,8 +82,8 @@ pub use config::{
 // AI Triage
 // ============================================================================
 
-pub use ai::OpenRouterClient;
 pub use ai::types::{IssueComment, IssueDetails, TriageResponse};
+pub use ai::{AiModel, ModelProvider, OpenRouterClient};
 
 // ============================================================================
 // GitHub Integration

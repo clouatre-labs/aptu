@@ -52,6 +52,8 @@ assert_cmd = "2"
 [workspace.lints.rust]
 unsafe_code = "warn"
 unused_must_use = "deny"
+# Allow cfg(feature = "uniffi") even when the feature is not enabled
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(feature, values(\"uniffi\"))"] }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
