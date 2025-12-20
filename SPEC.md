@@ -754,11 +754,23 @@ aptu issue triage https://github.com/block/goose/issues/123 --force
       "action": "triage",
       "timestamp": "2024-12-13T23:00:00Z",
       "comment_url": "https://github.com/...",
-      "status": "pending"  // pending | accepted | rejected
+      "status": "pending",
+      "ai_stats": {
+        "model": "mistralai/devstral-2512:free",
+        "input_tokens": 1523,
+        "output_tokens": 487,
+        "duration_ms": 2340,
+        "cost_usd": 0.0
+      }
     }
   ]
 }
 ```
+
+The `ai_stats` field tracks token usage and cost per triage for:
+- User visibility into AI consumption
+- Phase 3 gamification (cost-aware scoring)
+- Debugging and optimization
 
 **Future:** Sync with server for cross-device, leaderboards
 
@@ -858,7 +870,144 @@ where
 - `x-ai/grok-4.1-fast` - 2M context, $0.20/$0.50 per 1M tokens
 - `anthropic/claude-sonnet-4.5` - 1M context, $3/$15 per 1M tokens
 
-### 7.2 AI Provider Authentication
+### 7.3 AI Provider Abstraction
+
+**Pattern:** Trait-based provider abstraction for multi-provider support.
+
+Inspired by [goose-mobile](https://github.com/block/goose-mobile)'s `LLMProviderHandler` pattern,
+Aptu uses a trait to abstract AI provider differences. This enables:
+- Easy addition of new providers (Ollama, direct Mistral, etc.)
+- Consistent error handling across providers
+- Provider-specific request/response formatting
+
+```rust
+/// Trait for AI provider implementations
+#[async_trait]
+pub trait AiProvider: Send + Sync {
+    /// Provider identifier (e.g., "openrouter", "ollama")
+    fn name(&self) -> &'static str;
+    
+    /// Create provider-specific request body
+    fn create_request(&self, model: &str, messages: &[Message]) -> Result<String>;
+    
+    /// Get API endpoint URL
+    fn api_url(&self) -> &str;
+    
+    /// Get provider-specific HTTP headers
+    fn headers(&self, api_key: &str) -> HeaderMap;
+    
+    /// Parse provider-specific response
+    fn parse_response(&self, body: &str) -> Result<AiResponse>;
+    
+    /// Check if model supports structured JSON output
+    fn supports_json_mode(&self, model: &str) -> bool;
+}
+
+// Implementations
+pub struct OpenRouterProvider;
+pub struct OllamaProvider;  // Phase 2+
+```
+
+**OpenRouter-specific headers** (for analytics dashboard):
+
+```rust
+impl AiProvider for OpenRouterProvider {
+    fn headers(&self, api_key: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, format!("Bearer {}", api_key).parse().unwrap());
+        headers.insert("HTTP-Referer", "https://aptu.dev".parse().unwrap());
+        headers.insert("X-Title", "Aptu".parse().unwrap());
+        headers
+    }
+}
+```
+
+### 7.4 Model Registry
+
+**Pattern:** Static model registry with metadata for UI and validation.
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct AiModel {
+    pub display_name: String,
+    pub identifier: String,
+    pub provider: ModelProvider,
+    pub is_free: bool,
+    pub context_window: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum ModelProvider {
+    OpenRouter,
+    Ollama,
+}
+
+impl AiModel {
+    /// Returns all available models
+    pub fn available_models() -> Vec<AiModel> {
+        vec![
+            // Free tier (OpenRouter)
+            AiModel {
+                display_name: "Devstral 2".into(),
+                identifier: "mistralai/devstral-2512:free".into(),
+                provider: ModelProvider::OpenRouter,
+                is_free: true,
+                context_window: 262_000,
+            },
+            AiModel {
+                display_name: "Mistral Small 3.1".into(),
+                identifier: "mistralai/mistral-small-3.1-24b-instruct:free".into(),
+                provider: ModelProvider::OpenRouter,
+                is_free: true,
+                context_window: 128_000,
+            },
+            // Paid tier (OpenRouter)
+            AiModel {
+                display_name: "Grok Code Fast".into(),
+                identifier: "x-ai/grok-code-fast-1".into(),
+                provider: ModelProvider::OpenRouter,
+                is_free: false,
+                context_window: 256_000,
+            },
+            AiModel {
+                display_name: "Claude Sonnet 4.5".into(),
+                identifier: "anthropic/claude-sonnet-4.5".into(),
+                provider: ModelProvider::OpenRouter,
+                is_free: false,
+                context_window: 1_000_000,
+            },
+            // Local (Ollama) - Phase 2+
+            AiModel {
+                display_name: "Mistral 7B (Local)".into(),
+                identifier: "mistral:7b".into(),
+                provider: ModelProvider::Ollama,
+                is_free: true,  // No API cost, runs locally
+                context_window: 32_000,
+            },
+        ]
+    }
+    
+    /// Get default model for free tier
+    pub fn default_free() -> AiModel {
+        Self::available_models()
+            .into_iter()
+            .find(|m| m.is_free && matches!(m.provider, ModelProvider::OpenRouter))
+            .unwrap()
+    }
+    
+    /// Filter models by provider
+    pub fn for_provider(provider: ModelProvider) -> Vec<AiModel> {
+        Self::available_models()
+            .into_iter()
+            .filter(|m| m.provider == provider)
+            .collect()
+    }
+}
+```
+
+### 7.5 AI Provider Authentication
 
 Unlike GitHub (which supports OAuth device flow), AI providers require manual API key setup.
 
@@ -1080,8 +1229,10 @@ Rejected for MVP due to complexity (self-signed certs, browser warnings, port co
 - [CodeTriage](https://www.codetriage.com/) - Competitor reference
 - [Mistral API](https://docs.mistral.ai/) - AI provider docs
 - [cc-sdd/OpenSpec](https://github.com/cc-sdd/OpenSpec) - Specification format inspiration
+- [goose-mobile](https://github.com/block/goose-mobile) - Reference for AI provider abstraction patterns (LLMProviderHandler, model registry)
+- [goose iOS blog post](https://block.github.io/goose/blog/2025/12/19/goose-mobile-terminal) - Mobile architecture research
 
 ---
 
-*Last updated: 2025-12-17*
+*Last updated: 2025-12-19*
 *Author: Hugues Clouatre*
