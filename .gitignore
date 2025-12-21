@@ -47,3 +47,4 @@ AptuApp/*.xcodeproj/project.xcworkspace/xcuserdata/
 # OS
 .DS_Store
 Thumbs.db
+SPEC.md

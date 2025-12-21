@@ -9,7 +9,7 @@
 
 | Component | Status |
 |-----------|--------|
-| Binary Location | `/Users/hugues.clouatre/.local/bin/aptu` |
+| Binary Location | `~/.local/bin/aptu` |
 | GitHub Auth | gh CLI (fallback working) |
 | OpenRouter API Key | Set |
 | OS | macOS |
@@ -44,7 +44,7 @@
 
 | Test | Result | Output |
 |------|--------|--------|
-| 1.1 Binary exists | PASS | `/Users/hugues.clouatre/.local/bin/aptu` |
+| 1.1 Binary exists | PASS | `~/.local/bin/aptu` |
 | 1.2 Version check | PASS | `aptu 0.1.0` |
 | 1.3 Help output | PASS | Lists 5 commands: auth, repos, issues, triage, history |
 
