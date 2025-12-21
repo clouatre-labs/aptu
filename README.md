@@ -6,8 +6,9 @@
 
 <p align="center">
   <a href="https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml"><img src="https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache-2.0"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-2024-orange.svg" alt="Rust"></a>
+  <a href="https://github.com/clouatre-labs/aptu/releases/latest"><img src="https://img.shields.io/github/v/release/clouatre-labs/aptu" alt="Release"></a>
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/MSRV-1.92.0-orange.svg" alt="MSRV"></a>
 </p>
 
 <p align="center"><strong>AI-Powered Triage Utility</strong> - A gamified CLI for OSS issue triage with AI assistance.</p>
@@ -207,12 +208,15 @@ cargo build      # Build binary
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute, including our Developer Certificate of Origin (DCO) requirement.
 
+## Supply Chain Security
+
+Aptu follows supply chain security best practices:
+
+- **GitHub Attestations** - Release artifacts are signed with [artifact attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds) for build provenance
+- **SPDX Headers** - All source files include SPDX license identifiers
+- **Signed Commits** - All commits are GPG-signed with DCO sign-off
+- **Optimized Binaries** - Release builds use LTO and size optimizations (~3MB binary)
+
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
-
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-
-## Links
-
-- [aptu.dev](https://aptu.dev) | [aptu.app](https://aptu.app)
