@@ -29,6 +29,13 @@
 ## Installation
 
 ```bash
+brew tap clouatre-labs/tap
+brew install aptu
+```
+
+Or install via cargo:
+
+```bash
 cargo install aptu
 ```
 

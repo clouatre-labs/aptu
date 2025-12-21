@@ -68,3 +68,58 @@ jobs:
       os: ${{ matrix.os }}
       cross: ${{ matrix.cross }}
     secrets: inherit
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: build-and-attest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew-tap repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          repository: clouatre-labs/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Download SHA256 checksums
+        run: |
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_URL="https://api.github.com/repos/clouatre-labs/aptu/releases/tags/${RELEASE_TAG}"
+          
+          # Get release assets
+          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$RELEASE_URL" | jq '.assets[] | select(.name | endswith(".tar.gz")) | {name: .name, url: .browser_download_url}')
+          
+          # Download each asset and compute SHA256
+          echo "$ASSETS" | jq -r '.url' | while read -r url; do
+            filename=$(basename "$url")
+            curl -sL "$url" -o "/tmp/$filename"
+            sha256=$(sha256sum "/tmp/$filename" | cut -d' ' -f1)
+            echo "$filename:$sha256" >> /tmp/checksums.txt
+          done
+
+      - name: Update formula with SHA256 values
+        run: |
+          cd homebrew-tap
+          
+          # Read checksums
+          declare -A shas
+          while IFS=':' read -r filename sha; do
+            shas["$filename"]="$sha"
+          done < /tmp/checksums.txt
+          
+          # Update formula
+          FORMULA="Formula/aptu.rb"
+          
+          # Replace SHA256 values for each architecture
+          sed -i 's/sha256 "0000000000000000000000000000000000000000000000000000000000000000"/sha256 "'"${shas["aptu-aarch64-apple-darwin.tar.gz"]}"'"/1' "$FORMULA"
+          sed -i 's/sha256 "0000000000000000000000000000000000000000000000000000000000000000"/sha256 "'"${shas["aptu-aarch64-unknown-linux-musl.tar.gz"]}"'"/1' "$FORMULA"
+          sed -i 's/sha256 "0000000000000000000000000000000000000000000000000000000000000000"/sha256 "'"${shas["aptu-x86_64-unknown-linux-musl.tar.gz"]}"'"/1' "$FORMULA"
+
+      - name: Commit and push formula update
+        run: |
+          cd homebrew-tap
+          git config user.email "hugues@linux.com"
+          git config user.name "Hugues Clouatre"
+          git add Formula/aptu.rb
+          git commit --signoff -m "Update aptu formula for ${GITHUB_REF#refs/tags/}"
+          git push
