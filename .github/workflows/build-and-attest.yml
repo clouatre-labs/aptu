@@ -1,0 +1,60 @@
+name: Build and Attest
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
+        description: Rust target triple (e.g., x86_64-unknown-linux-musl)
+      os:
+        required: true
+        type: string
+        description: Runner OS (e.g., ubuntu-latest, macos-latest, windows-latest)
+      cross:
+        required: true
+        type: boolean
+        description: Whether to use cross-compilation tools
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-attest:
+    name: Build ${{ inputs.target }}
+    runs-on: ${{ inputs.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561 # stable
+        with:
+          toolchain: stable
+          targets: ${{ inputs.target }}
+      - name: Install cross-compilation tools
+        if: ${{ inputs.cross }}
+        uses: taiki-e/setup-cross-toolchain-action@84e58a47fc2bcd3821a2aa8c153595bbffb0e10f # v1
+        with:
+          target: ${{ inputs.target }}
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2
+        with:
+          shared-key: aptu
+          key: ${{ inputs.target }}
+      - name: Build and upload binary
+        id: upload
+        uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c # v1
+        with:
+          bin: aptu
+          target: ${{ inputs.target }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checksum: sha256
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@46a583fd92dfbf46b772907a9740f888f4324bb9 # v3
+        with:
+          subject-path: ${{ runner.os == 'Windows' && steps.upload.outputs.zip || steps.upload.outputs.tar }}
