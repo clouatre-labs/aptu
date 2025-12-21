@@ -30,7 +30,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Configuration and storage
-config = "0.14"
+config = { version = "0.14", default-features = false, features = ["toml"] }
 keyring = "3"
 dirs = "5"
 
