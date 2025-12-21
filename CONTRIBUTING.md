@@ -43,6 +43,20 @@ This adds `Signed-off-by: Your Name <email>` to your commit, certifying you agre
 - Address clippy warnings
 - Write tests for new features
 
+## Branch Protection
+
+The `main` branch is protected by the following rules:
+
+- **Required Status Checks**: All CI checks must pass before merging
+  - `Check Labels`: Validates PR labels
+  - `Lint`: Code formatting and linting checks
+  - `Test`: All tests must pass
+- **Signed Commits**: All commits must be signed (GPG or S/MIME)
+- **No Force Push**: History cannot be rewritten on main
+- **No Deletion**: The main branch cannot be deleted
+
+These protections ensure code quality and maintain a clean history. Make sure your commits are signed and all CI checks pass before opening a pull request.
+
 ## License
 
 By contributing, you agree your contributions are licensed under [Apache-2.0](LICENSE).
