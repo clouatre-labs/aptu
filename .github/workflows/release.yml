@@ -26,7 +26,7 @@ jobs:
       version: ${{ env.VERSION }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - name: Extract version from tag
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
@@ -41,15 +41,14 @@ jobs:
           fi
       - name: Create GitHub release
         id: create_release
-        uses: taiki-e/create-gh-release-action@26b80501670402f1999aff4b934e1574ef2d3705 # v1.9.1
+        uses: taiki-e/create-gh-release-action@26b80501670402f1999aff4b934e1574ef2d3705 # v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
 
-  upload-assets:
-    name: Upload ${{ matrix.target }}
+  build-and-attest:
+    name: Build ${{ matrix.target }}
     needs: create-release
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -66,33 +65,9 @@ jobs:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             cross: false
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561 # stable
-        with:
-          toolchain: stable
-          targets: ${{ matrix.target }}
-      - name: Install cross-compilation tools
-        if: matrix.cross
-        uses: taiki-e/setup-cross-toolchain-action@84e58a47fc2bcd3821a2aa8c153595bbffb0e10f # v1.32.1
-        with:
-          target: ${{ matrix.target }}
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
-        with:
-          shared-key: aptu
-          key: ${{ matrix.target }}
-      - name: Build and upload binary
-        id: upload
-        uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c # v1.27.0
-        with:
-          bin: aptu
-          target: ${{ matrix.target }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checksum: sha256
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@46a583fd92dfbf46b772907a9740f888f4324bb9 # v3.1.0
-        with:
-          subject-path: ${{ runner.os == 'Windows' && steps.upload.outputs.zip || steps.upload.outputs.tar }}
+    uses: ./.github/workflows/build-and-attest.yml
+    with:
+      target: ${{ matrix.target }}
+      os: ${{ matrix.os }}
+      cross: ${{ matrix.cross }}
+    secrets: inherit
