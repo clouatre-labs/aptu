@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Text utility functions for Aptu.
 //!
 //! Provides reusable text formatting utilities for truncation and relative time display.

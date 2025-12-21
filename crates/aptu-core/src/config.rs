@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Configuration management for the Aptu CLI.
 //!
 // Allow dead_code - module will be used in PR 6 (CLI scaffolding)

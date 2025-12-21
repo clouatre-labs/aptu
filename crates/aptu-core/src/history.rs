@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Local contribution history tracking.
 //!
 //! Stores contribution records in `~/.local/share/aptu/history.json`.

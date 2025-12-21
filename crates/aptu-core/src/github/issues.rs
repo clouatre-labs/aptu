@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! GitHub issue operations for the triage command.
 //!
 //! Provides functionality to parse issue URLs, fetch issue details,

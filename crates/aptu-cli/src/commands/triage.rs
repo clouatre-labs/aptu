@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Triage an issue with AI assistance command.
 //!
 //! Fetches a GitHub issue, analyzes it with AI, and optionally posts

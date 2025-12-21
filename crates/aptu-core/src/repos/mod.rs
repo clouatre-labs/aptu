@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Curated repository list for Aptu.
 //!
 //! This module provides a hardcoded list of repositories known to be:

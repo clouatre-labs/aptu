@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Command-line interface definition for Aptu.
 //!
 //! Uses clap's derive API for declarative CLI parsing with hierarchical

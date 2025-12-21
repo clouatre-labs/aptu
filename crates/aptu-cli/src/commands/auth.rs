@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! GitHub OAuth authentication command.
 
 use anyhow::Result;

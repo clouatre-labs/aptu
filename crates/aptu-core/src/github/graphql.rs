@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! GraphQL queries for GitHub API.
 //!
 //! Uses a single GraphQL query to fetch issues from multiple repositories

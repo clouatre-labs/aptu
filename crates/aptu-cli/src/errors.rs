@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! CLI-specific error formatting with user-friendly hints.
 //!
 //! This module provides a formatting layer that downcasts `anyhow::Error` to

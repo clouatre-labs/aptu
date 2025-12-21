@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! GitHub integration module.
 //!
 //! Provides authentication and API client functionality for GitHub.

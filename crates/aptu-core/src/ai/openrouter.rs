@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! `OpenRouter` API client for AI-assisted issue triage.
 //!
 //! Provides functionality to analyze GitHub issues using the `OpenRouter` API

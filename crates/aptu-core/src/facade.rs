@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Platform-agnostic facade functions for FFI and CLI integration.
 //!
 //! This module provides high-level functions that abstract away the complexity
