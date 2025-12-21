@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Shell completion generation and installation.
 
 use anyhow::{Context, Result, anyhow};

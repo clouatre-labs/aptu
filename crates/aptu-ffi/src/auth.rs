@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! FFI implementation of `TokenProvider` using iOS keychain.
 //!
 //! This module provides the FFI's credential resolution strategy,

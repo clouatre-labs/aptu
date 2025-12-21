@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! List curated repositories command.
 
 use aptu_core::repos;

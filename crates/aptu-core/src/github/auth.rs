@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! GitHub OAuth device flow authentication.
 //!
 //! Implements the OAuth device flow for CLI authentication:

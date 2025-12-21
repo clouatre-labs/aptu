@@ -63,6 +63,25 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
+  spdx:
+    name: Check SPDX Headers
+    runs-on: ubuntu-latest
+    needs: changes
+    timeout-minutes: 5
+    continue-on-error: true
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - name: Check SPDX headers on Rust files
+        run: |
+          missing=$(find crates -name "*.rs" -type f -exec grep -L "SPDX-License-Identifier" {} \;)
+          if [ -n "$missing" ]; then
+            echo "Files missing SPDX headers:"
+            echo "$missing"
+            exit 1
+          fi
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

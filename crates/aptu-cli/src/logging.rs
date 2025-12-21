@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Logging initialization for the Aptu CLI.
 //!
 //! Uses `tracing` with `tracing-subscriber` for structured logging.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! AI integration module.
 //!
 //! Provides AI-assisted issue triage using `OpenRouter` API.

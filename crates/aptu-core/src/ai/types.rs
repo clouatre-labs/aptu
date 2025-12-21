@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! AI request/response types for `OpenRouter` API.
 //!
 //! Defines the structures used for communicating with the `OpenRouter` API

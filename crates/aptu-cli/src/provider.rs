@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! CLI-specific `TokenProvider` implementation.
 //!
 //! Provides GitHub and `OpenRouter` credentials for CLI commands by resolving

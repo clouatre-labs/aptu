@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! List open issues command.
 //!
 //! Fetches "good first issue" issues from curated repositories using

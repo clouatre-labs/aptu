@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! AI model registry and provider abstraction.
 //!
 //! This module provides a static registry of available AI models across multiple providers

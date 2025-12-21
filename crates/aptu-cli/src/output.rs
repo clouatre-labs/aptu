@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Output rendering for CLI commands.
 //!
 //! Centralizes all output formatting logic, supporting text, JSON, and YAML formats.

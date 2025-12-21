@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Aptu - Gamified OSS issue triage with AI assistance.
 //!
 //! A CLI tool that helps developers contribute meaningfully to open source

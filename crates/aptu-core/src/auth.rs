@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Token provider abstraction for multi-platform credential resolution.
 //!
 //! This module defines the `TokenProvider` trait, which abstracts credential

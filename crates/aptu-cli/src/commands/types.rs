@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Result types returned by command handlers.
 //!
 //! These types allow command handlers to return data instead of printing
