@@ -107,19 +107,70 @@ jobs:
             shas["$filename"]="$sha"
           done < /tmp/checksums.txt
           
-          # Update formula
+          # Update formula with if/elsif syntax
           FORMULA="Formula/aptu.rb"
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           
-          # Replace SHA256 values for each architecture
-          sed -i 's/sha256 "0000000000000000000000000000000000000000000000000000000000000000"/sha256 "'"${shas["aptu-aarch64-apple-darwin.tar.gz"]}"'"/1' "$FORMULA"
-          sed -i 's/sha256 "0000000000000000000000000000000000000000000000000000000000000000"/sha256 "'"${shas["aptu-aarch64-unknown-linux-musl.tar.gz"]}"'"/1' "$FORMULA"
-          sed -i 's/sha256 "0000000000000000000000000000000000000000000000000000000000000000"/sha256 "'"${shas["aptu-x86_64-unknown-linux-musl.tar.gz"]}"'"/1' "$FORMULA"
+          # Generate formula content with if/elsif for architecture detection
+          cat > "$FORMULA" << 'FORMULA_EOF'
+          class Aptu < Formula
+            desc "Gamified OSS issue triage with AI assistance"
+            homepage "https://github.com/clouatre-labs/aptu"
+            version "VERSION_PLACEHOLDER"
+            license "Apache-2.0"
+            
+            if OS.mac? && Hardware::CPU.arm?
+              url "https://github.com/clouatre-labs/aptu/releases/download/VERSION_PLACEHOLDER/aptu-aarch64-apple-darwin.tar.gz"
+              sha256 "SHA256_MACOS_ARM_PLACEHOLDER"
+            elsif OS.linux? && Hardware::CPU.arm?
+              url "https://github.com/clouatre-labs/aptu/releases/download/VERSION_PLACEHOLDER/aptu-aarch64-unknown-linux-musl.tar.gz"
+              sha256 "SHA256_LINUX_ARM_PLACEHOLDER"
+            elsif OS.linux? && Hardware::CPU.intel?
+              url "https://github.com/clouatre-labs/aptu/releases/download/VERSION_PLACEHOLDER/aptu-x86_64-unknown-linux-musl.tar.gz"
+              sha256 "SHA256_LINUX_INTEL_PLACEHOLDER"
+            end
+            
+            def install
+              bin.install "aptu"
+            end
+            
+            test do
+              assert_match version.to_s, shell_output("#{bin}/aptu --version")
+            end
+          end
+          FORMULA_EOF
+          
+          # Replace placeholders with actual values
+          sed -i "s/VERSION_PLACEHOLDER/${RELEASE_TAG}/g" "$FORMULA"
+          sed -i "s/SHA256_MACOS_ARM_PLACEHOLDER/${shas["aptu-aarch64-apple-darwin.tar.gz"]}/g" "$FORMULA"
+          sed -i "s/SHA256_LINUX_ARM_PLACEHOLDER/${shas["aptu-aarch64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
+          sed -i "s/SHA256_LINUX_INTEL_PLACEHOLDER/${shas["aptu-x86_64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
 
-      - name: Commit and push formula update
+      - name: Create feature branch and commit formula update
         run: |
           cd homebrew-tap
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          BRANCH_NAME="update-aptu-${RELEASE_TAG}"
+          
           git config user.email "hugues@linux.com"
           git config user.name "Hugues Clouatre"
+          git checkout -b "$BRANCH_NAME"
           git add Formula/aptu.rb
-          git commit --signoff -m "Update aptu formula for ${GITHUB_REF#refs/tags/}"
-          git push
+          git commit --signoff -m "Update aptu formula for ${RELEASE_TAG}"
+          git push origin "$BRANCH_NAME"
+
+      - name: Create pull request with auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          cd homebrew-tap
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          BRANCH_NAME="update-aptu-${RELEASE_TAG}"
+          
+          gh pr create \
+            --title "Update aptu formula for ${RELEASE_TAG}" \
+            --body "Automated formula update with SHA256 checksums for release ${RELEASE_TAG}" \
+            --head "$BRANCH_NAME" \
+            --base main
+          
+          gh pr merge --auto --squash
