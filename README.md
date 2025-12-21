@@ -1,10 +1,16 @@
-# Aptu
+<p align="center">
+  <img src="assets/logo-light.png" alt="Aptu Logo" width="128">
+</p>
 
-[![CI](https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml/badge.svg)](https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/)
+<h1 align="center">Aptu</h1>
 
-**AI-Powered Triage Utility** - A gamified CLI for OSS issue triage with AI assistance.
+<p align="center">
+  <a href="https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml"><img src="https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache-2.0"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-2024-orange.svg" alt="Rust"></a>
+</p>
+
+<p align="center"><strong>AI-Powered Triage Utility</strong> - A gamified CLI for OSS issue triage with AI assistance.</p>
 
 > *Aptu* (Mi'kmaq): "Paddle" - Navigate forward through open source contribution
 
@@ -209,5 +215,4 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for detai
 
 ## Links
 
-- [Full Specification](SPEC.md)
 - [aptu.dev](https://aptu.dev) | [aptu.app](https://aptu.app)
