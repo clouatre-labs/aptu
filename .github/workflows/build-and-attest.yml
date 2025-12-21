@@ -46,6 +46,9 @@ jobs:
         with:
           shared-key: aptu
           key: ${{ inputs.target }}
+      - name: Install cargo-deb
+        if: ${{ startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux') }}
+        run: cargo install cargo-deb
       - name: Build and upload binary
         id: upload
         uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c # v1
@@ -54,7 +57,24 @@ jobs:
           target: ${{ inputs.target }}
           token: ${{ secrets.GITHUB_TOKEN }}
           checksum: sha256
-      - name: Attest build provenance
+      - name: Generate .deb package
+        if: ${{ startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux') }}
+        run: cargo deb --target ${{ inputs.target }} --no-build
+      - name: Upload .deb to release
+        if: ${{ startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DEB_FILE=$(find target/${{ inputs.target }}/debian -name "*.deb" -type f)
+          if [ -n "$DEB_FILE" ]; then
+            gh release upload ${{ github.ref_name }} "$DEB_FILE" --clobber
+          fi
+      - name: Attest build provenance (tarball)
         uses: actions/attest-build-provenance@46a583fd92dfbf46b772907a9740f888f4324bb9 # v3
         with:
-          subject-path: ${{ runner.os == 'Windows' && steps.upload.outputs.zip || steps.upload.outputs.tar }}
+          subject-path: ${{ steps.upload.outputs.tar }}
+      - name: Attest build provenance (.deb)
+        if: ${{ startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux') }}
+        uses: actions/attest-build-provenance@46a583fd92dfbf46b772907a9740f888f4324bb9 # v3
+        with:
+          subject-path: target/${{ inputs.target }}/debian/*.deb

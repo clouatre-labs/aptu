@@ -62,9 +62,6 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             cross: false
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            cross: false
     uses: ./.github/workflows/build-and-attest.yml
     with:
       target: ${{ matrix.target }}
