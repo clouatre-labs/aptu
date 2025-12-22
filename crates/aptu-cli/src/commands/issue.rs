@@ -16,13 +16,14 @@ use crate::provider::CliTokenProvider;
 ///
 /// Fetches issues with "good first issue" label from all curated repositories
 /// (or a specific one if `--repo` is provided).
-#[instrument(skip_all, fields(repo_filter = ?repo))]
-pub async fn run(repo: Option<String>) -> Result<IssuesResult> {
+#[instrument(skip_all, fields(repo_filter = ?repo, use_cache = !no_cache))]
+pub async fn run(repo: Option<String>, no_cache: bool) -> Result<IssuesResult> {
     // Create CLI token provider
     let provider = CliTokenProvider;
 
-    // Fetch issues via facade with optional repo filter
-    let results = aptu_core::fetch_issues(&provider, repo.as_deref())
+    // Fetch issues via facade with optional repo filter and cache flag
+    let use_cache = !no_cache;
+    let results = aptu_core::fetch_issues(&provider, repo.as_deref(), use_cache)
         .await
         .map_err(|e| match e {
             AptuError::NotAuthenticated => AptuError::NotAuthenticated,

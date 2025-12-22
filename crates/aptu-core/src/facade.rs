@@ -7,11 +7,13 @@
 //! Each platform (CLI, iOS, MCP) implements `TokenProvider` and calls these
 //! functions with their own credential source.
 
+use chrono::Duration;
 use tracing::instrument;
 
 use crate::ai::OpenRouterClient;
 use crate::ai::types::{IssueDetails, TriageResponse};
 use crate::auth::TokenProvider;
+use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
 use crate::error::AptuError;
 use crate::github::graphql::{IssueNode, fetch_issues as gh_fetch_issues};
@@ -26,6 +28,7 @@ use crate::repos;
 ///
 /// * `provider` - Token provider for GitHub credentials
 /// * `repo_filter` - Optional repository filter (case-insensitive substring match on full name or short name)
+/// * `use_cache` - Whether to use cached results (if available and valid)
 ///
 /// # Returns
 ///
@@ -37,10 +40,11 @@ use crate::repos;
 /// - GitHub token is not available from the provider
 /// - GitHub API call fails
 /// - Response parsing fails
-#[instrument(skip(provider), fields(repo_filter = ?repo_filter))]
+#[instrument(skip(provider), fields(repo_filter = ?repo_filter, use_cache))]
 pub async fn fetch_issues(
     provider: &dyn TokenProvider,
     repo_filter: Option<&str>,
+    use_cache: bool,
 ) -> crate::Result<Vec<(String, Vec<IssueNode>)>> {
     // Get GitHub token from provider
     let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
@@ -68,13 +72,61 @@ pub async fn fetch_issues(
         None => all_repos.to_vec(),
     };
 
-    // Fetch issues from filtered repos
-    gh_fetch_issues(&client, &repos_to_query)
-        .await
-        .map_err(|e| AptuError::AI {
-            message: format!("Failed to fetch issues: {e}"),
-            status: None,
-        })
+    // Load config for cache TTL
+    let config = load_config()?;
+    let ttl = Duration::minutes(config.cache.issue_ttl_minutes.try_into().unwrap_or(60));
+
+    // Try to read from cache if enabled
+    if use_cache {
+        let mut cached_results = Vec::new();
+        let mut repos_to_fetch = Vec::new();
+
+        for repo in &repos_to_query {
+            let cache_key = cache::cache_key_issues(repo.owner, repo.name);
+            match cache::read_cache::<Vec<IssueNode>>(&cache_key) {
+                Ok(Some(entry)) if entry.is_valid(ttl) => {
+                    cached_results.push((repo.full_name(), entry.data));
+                }
+                _ => {
+                    repos_to_fetch.push(repo.clone());
+                }
+            }
+        }
+
+        // If all repos are cached, return early
+        if repos_to_fetch.is_empty() {
+            return Ok(cached_results);
+        }
+
+        // Fetch missing repos from API
+        let api_results = gh_fetch_issues(&client, &repos_to_fetch)
+            .await
+            .map_err(|e| AptuError::AI {
+                message: format!("Failed to fetch issues: {e}"),
+                status: None,
+            })?;
+
+        // Write fetched results to cache
+        for (repo_name, issues) in &api_results {
+            if let Some(repo) = repos_to_fetch.iter().find(|r| r.full_name() == *repo_name) {
+                let cache_key = cache::cache_key_issues(repo.owner, repo.name);
+                let entry = CacheEntry::new(issues.clone());
+                let _ = cache::write_cache(&cache_key, &entry);
+            }
+        }
+
+        // Combine cached and fetched results
+        cached_results.extend(api_results);
+        Ok(cached_results)
+    } else {
+        // Cache disabled, fetch directly from API
+        gh_fetch_issues(&client, &repos_to_query)
+            .await
+            .map_err(|e| AptuError::AI {
+                message: format!("Failed to fetch issues: {e}"),
+                status: None,
+            })
+    }
 }
 
 /// Analyzes a GitHub issue and generates triage suggestions.
