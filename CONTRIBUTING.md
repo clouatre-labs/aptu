@@ -114,8 +114,56 @@ Releases are automated via GitHub Actions. Maintainers with push access:
 2. Commit: `git commit -S -s -m "chore: bump version to X.Y.Z"`
 3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 4. Push: `git push origin main --tags`
+5. Edit the release to add highlights (see below)
 
 The workflow builds binaries (macOS ARM64, Linux ARM64/x86_64), generates SLSA attestations, creates a GitHub release with auto-generated notes, publishes to crates.io, and updates the Homebrew formula.
+
+### Release Notes
+
+We use a hybrid approach: GitHub auto-generates a changelog from conventional commits, and maintainers add a curated "Highlights" section for user-facing communication.
+
+After the workflow completes, edit the release on GitHub to prepend:
+
+```markdown
+## [Theme or Summary]
+
+Brief description of what this release delivers.
+
+### Highlights
+
+- **Feature Name** - One-line description
+- **Another Feature** - One-line description
+
+---
+
+## Installation
+
+**Homebrew (macOS/Linux)**
+\`\`\`bash
+brew install clouatre-labs/tap/aptu
+\`\`\`
+
+**Cargo**
+\`\`\`bash
+cargo install aptu
+\`\`\`
+
+---
+
+[Auto-generated changelog follows]
+```
+
+### Dry Run
+
+Test the release workflow before tagging:
+
+```bash
+gh workflow run release.yml -f dry_run=true -f version=X.Y.Z
+```
+
+This builds all targets without publishing or creating a release.
+
+### Versioning
 
 We follow [SemVer](https://semver.org/): MAJOR (breaking), MINOR (features), PATCH (fixes).
 
