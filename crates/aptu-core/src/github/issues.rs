@@ -227,6 +227,8 @@ pub async fn fetch_issue_with_comments(
         url: issue_url,
         repo_context: Vec::new(),
         repo_tree: Vec::new(),
+        available_labels: Vec::new(),
+        available_milestones: Vec::new(),
     };
 
     debug!(

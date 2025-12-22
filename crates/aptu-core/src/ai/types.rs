@@ -138,6 +138,28 @@ pub struct RepoIssueContext {
     pub state: String,
 }
 
+/// A label available in the repository.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepoLabel {
+    /// Label name.
+    pub name: String,
+    /// Label description.
+    pub description: String,
+    /// Label color (hex code).
+    pub color: String,
+}
+
+/// A milestone available in the repository.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepoMilestone {
+    /// Milestone number.
+    pub number: u64,
+    /// Milestone title.
+    pub title: String,
+    /// Milestone description.
+    pub description: String,
+}
+
 /// Details about an issue for triage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IssueDetails {
@@ -164,6 +186,12 @@ pub struct IssueDetails {
     /// Repository file tree (source files for implementation context).
     #[serde(default)]
     pub repo_tree: Vec<String>,
+    /// Available labels in the repository.
+    #[serde(default)]
+    pub available_labels: Vec<RepoLabel>,
+    /// Available milestones in the repository.
+    #[serde(default)]
+    pub available_milestones: Vec<RepoMilestone>,
 }
 
 /// A comment on an issue.

@@ -83,6 +83,21 @@ pub fn cache_dir() -> PathBuf {
 /// # Returns
 ///
 /// Cache key in format: `issues/{owner}_{repo}.json`
+/// Generates a cache key for repository metadata (labels and milestones).
+///
+/// # Arguments
+///
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+///
+/// # Returns
+///
+/// A cache key string in the format `repo_metadata/{owner}_{repo}.json`
+#[must_use]
+pub fn cache_key_repo_metadata(owner: &str, repo: &str) -> String {
+    format!("repo_metadata/{owner}_{repo}.json")
+}
+
 #[must_use]
 pub fn cache_key_issues(owner: &str, repo: &str) -> String {
     format!("issues/{owner}_{repo}.json")

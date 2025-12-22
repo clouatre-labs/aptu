@@ -8,8 +8,9 @@
 
 use anyhow::{Context, Result};
 use aptu_core::ai::AiResponse;
+use aptu_core::ai::types::{IssueComment, RepoLabel, RepoMilestone};
 use aptu_core::error::AptuError;
-use aptu_core::github::{auth, issues};
+use aptu_core::github::{auth, graphql, issues};
 use aptu_core::{IssueDetails, TriageResponse, history::AiStats};
 use tracing::{debug, info, instrument};
 
@@ -49,9 +50,66 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
     // Create authenticated client
     let client = auth::create_client().context("Failed to create GitHub client")?;
 
-    // Fetch issue details
-    let mut issue_details =
-        issues::fetch_issue_with_comments(&client, &owner, &repo, number).await?;
+    // Fetch issue with repository context (labels, milestones) in a single GraphQL call
+    let (issue_node, repo_data) =
+        graphql::fetch_issue_with_repo_context(&client, &owner, &repo, number).await?;
+
+    // Convert GraphQL response to IssueDetails
+    let labels: Vec<String> = issue_node
+        .labels
+        .nodes
+        .iter()
+        .map(|l| l.name.clone())
+        .collect();
+
+    let comments: Vec<IssueComment> = issue_node
+        .comments
+        .nodes
+        .iter()
+        .map(|c| IssueComment {
+            author: c.author.login.clone(),
+            body: c.body.clone(),
+        })
+        .collect();
+
+    // Convert repository labels to our type
+    let available_labels: Vec<RepoLabel> = repo_data
+        .labels
+        .nodes
+        .iter()
+        .map(|l| RepoLabel {
+            name: l.name.clone(),
+            description: l.description.clone().unwrap_or_default(),
+            color: l.color.clone(),
+        })
+        .collect();
+
+    // Convert repository milestones to our type
+    let available_milestones: Vec<RepoMilestone> = repo_data
+        .milestones
+        .nodes
+        .iter()
+        .map(|m| RepoMilestone {
+            number: m.number,
+            title: m.title.clone(),
+            description: m.description.clone().unwrap_or_default(),
+        })
+        .collect();
+
+    let mut issue_details = IssueDetails {
+        owner: owner.clone(),
+        repo: repo.clone(),
+        number,
+        title: issue_node.title,
+        body: issue_node.body.unwrap_or_default(),
+        labels,
+        comments,
+        url: issue_node.url,
+        repo_context: Vec::new(),
+        repo_tree: Vec::new(),
+        available_labels,
+        available_milestones,
+    };
 
     // Search for related issues to provide context to AI
     match issues::search_related_issues(&client, &owner, &repo, &issue_details.title, number).await
@@ -70,31 +128,22 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
     }
 
     // Fetch repository tree for implementation context
-    // First, get the repository metadata to find the primary language
-    match client.repos(&owner, &repo).get().await {
-        Ok(repo_info) => {
-            let language = repo_info
-                .language
-                .as_ref()
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            match issues::fetch_repo_tree(&client, &owner, &repo, language).await {
-                Ok(tree) => {
-                    issue_details.repo_tree = tree;
-                    debug!(
-                        tree_count = issue_details.repo_tree.len(),
-                        "Fetched repository tree"
-                    );
-                }
-                Err(e) => {
-                    // Log but don't fail - repo tree is optional context
-                    debug!(error = %e, "Failed to fetch repository tree, continuing without context");
-                }
-            }
+    let language = repo_data
+        .primary_language
+        .as_ref()
+        .map_or("unknown", |l| l.name.as_str());
+
+    match issues::fetch_repo_tree(&client, &owner, &repo, language).await {
+        Ok(tree) => {
+            issue_details.repo_tree = tree;
+            debug!(
+                tree_count = issue_details.repo_tree.len(),
+                "Fetched repository tree"
+            );
         }
         Err(e) => {
             // Log but don't fail - repo tree is optional context
-            debug!(error = %e, "Failed to fetch repository metadata, continuing without tree context");
+            debug!(error = %e, "Failed to fetch repository tree, continuing without context");
         }
     }
 
