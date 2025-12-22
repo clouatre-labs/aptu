@@ -18,6 +18,55 @@ cargo clippy -- -D warnings
 cargo test
 ```
 
+## Commit Message Format
+
+We follow [Conventional Commits](https://www.conventionalcommits.org/) to enable automated semantic versioning and changelog generation. All commits must follow this format:
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+### Types
+
+- **feat**: A new feature
+- **fix**: A bug fix
+- **docs**: Documentation only changes
+- **style**: Changes that do not affect the meaning of the code (formatting, missing semicolons, etc.)
+- **refactor**: A code change that neither fixes a bug nor adds a feature
+- **perf**: A code change that improves performance
+- **test**: Adding missing tests or correcting existing tests
+- **chore**: Changes to build process, dependencies, or tooling
+
+### Examples
+
+```bash
+# Feature with scope
+git commit -s -m "feat(cli): add support for custom config paths"
+
+# Bug fix
+git commit -s -m "fix: resolve panic when parsing invalid labels"
+
+# Breaking change
+git commit -s -m "feat!: redesign API for issue filtering
+
+BREAKING CHANGE: The --filter flag has been replaced with --query"
+
+# Documentation
+git commit -s -m "docs: update installation instructions"
+```
+
+### Breaking Changes
+
+Mark breaking changes with `!` after the type/scope or use `BREAKING CHANGE:` in the footer:
+
+```bash
+git commit -s -m "feat!: change default behavior of triage command"
+```
+
 ## Developer Certificate of Origin (DCO)
 
 All commits must be signed off to certify you have the right to submit the code:
