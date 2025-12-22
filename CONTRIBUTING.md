@@ -106,6 +106,19 @@ The `main` branch is protected by the following rules:
 
 These protections ensure code quality and maintain a clean history. Make sure your commits are signed and all CI checks pass before opening a pull request.
 
+## Releasing
+
+Releases are automated via GitHub Actions. Maintainers with push access:
+
+1. Update version in `Cargo.toml`
+2. Commit: `git commit -S -s -m "chore: bump version to X.Y.Z"`
+3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
+4. Push: `git push origin main --tags`
+
+The workflow builds binaries (macOS ARM64, Linux ARM64/x86_64), generates SLSA attestations, creates a GitHub release with auto-generated notes, publishes to crates.io, and updates the Homebrew formula.
+
+We follow [SemVer](https://semver.org/): MAJOR (breaking), MINOR (features), PATCH (fixes).
+
 ## License
 
 By contributing, you agree your contributions are licensed under [Apache-2.0](LICENSE).
