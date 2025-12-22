@@ -259,7 +259,7 @@ fn extract_keywords(title: &str) -> Vec<String> {
 /// Searches for related issues in a repository based on title keywords.
 ///
 /// Extracts keywords from the issue title and searches the repository
-/// for matching issues. Returns up to 20 results.
+/// for matching issues. Returns up to 20 results, excluding the specified issue.
 ///
 /// # Arguments
 ///
@@ -267,16 +267,18 @@ fn extract_keywords(title: &str) -> Vec<String> {
 /// * `owner` - Repository owner
 /// * `repo` - Repository name
 /// * `title` - Issue title to extract keywords from
+/// * `exclude_number` - Issue number to exclude from results
 ///
 /// # Errors
 ///
 /// Returns an error if the search API request fails.
-#[instrument(skip(client), fields(owner = %owner, repo = %repo))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, exclude_number = %exclude_number))]
 pub async fn search_related_issues(
     client: &Octocrab,
     owner: &str,
     repo: &str,
     title: &str,
+    exclude_number: u64,
 ) -> Result<Vec<RepoIssueContext>> {
     let keywords = extract_keywords(title);
 
@@ -306,6 +308,11 @@ pub async fn search_related_issues(
         .filter_map(|item| {
             // Only include issues (not PRs)
             if item.pull_request.is_some() {
+                return None;
+            }
+
+            // Exclude the issue being triaged
+            if item.number == exclude_number {
                 return None;
             }
 
