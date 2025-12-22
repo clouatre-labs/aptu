@@ -147,6 +147,10 @@ pub enum IssueCommand {
     List {
         /// Repository to filter issues (e.g., "block/goose")
         repo: Option<String>,
+
+        /// Disable caching of issue data
+        #[arg(long)]
+        no_cache: bool,
     },
 
     /// Triage an issue with AI assistance

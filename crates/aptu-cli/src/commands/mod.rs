@@ -65,9 +65,9 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
         },
 
         Commands::Issue(issue_cmd) => match issue_cmd {
-            IssueCommand::List { repo } => {
+            IssueCommand::List { repo, no_cache } => {
                 let spinner = maybe_spinner(&ctx, "Fetching issues...");
-                let result = issue::run(repo).await?;
+                let result = issue::run(repo, no_cache).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
