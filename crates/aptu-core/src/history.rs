@@ -403,7 +403,7 @@ mod tests {
     #[test]
     fn test_avg_tokens_per_triage_empty() {
         let data = HistoryData::default();
-        assert_eq!(data.avg_tokens_per_triage(), 0.0);
+        assert!((data.avg_tokens_per_triage() - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]

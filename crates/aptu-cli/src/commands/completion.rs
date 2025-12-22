@@ -258,11 +258,7 @@ mod tests {
     fn test_config_instructions_not_empty() {
         for shell in [Shell::Bash, Shell::Zsh, Shell::Fish] {
             let instructions = get_config_instructions(shell);
-            assert!(
-                !instructions.is_empty(),
-                "Instructions empty for {:?}",
-                shell
-            );
+            assert!(!instructions.is_empty(), "Instructions empty for {shell:?}");
         }
     }
 }

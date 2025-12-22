@@ -178,24 +178,3 @@ pub async fn analyze_issue(
             status: None,
         })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use secrecy::SecretString;
-
-    struct MockTokenProvider {
-        github_token: Option<SecretString>,
-        openrouter_key: Option<SecretString>,
-    }
-
-    impl TokenProvider for MockTokenProvider {
-        fn github_token(&self) -> Option<SecretString> {
-            self.github_token.clone()
-        }
-
-        fn openrouter_key(&self) -> Option<SecretString> {
-            self.openrouter_key.clone()
-        }
-    }
-}
