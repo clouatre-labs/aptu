@@ -17,7 +17,7 @@ use super::types::{
     ChatCompletionRequest, ChatCompletionResponse, ChatMessage, IssueDetails, ResponseFormat,
     TriageResponse,
 };
-use super::{AiResponse, OPENROUTER_API_KEY_ENV, OPENROUTER_API_URL, calculate_cost};
+use super::{AiResponse, OPENROUTER_API_KEY_ENV, OPENROUTER_API_URL};
 use crate::config::AiConfig;
 use crate::error::AptuError;
 use crate::history::AiStats;
@@ -249,14 +249,13 @@ impl OpenRouterClient {
             format!("Failed to parse AI response as JSON. Raw response:\n{content}")
         })?;
 
-        // Build AI stats from usage info
+        // Build AI stats from usage info (trust API's cost field)
         let (input_tokens, output_tokens, cost_usd) = if let Some(usage) = completion.usage {
-            let cost = calculate_cost(&self.model, usage.prompt_tokens, usage.completion_tokens);
-            (usage.prompt_tokens, usage.completion_tokens, cost)
+            (usage.prompt_tokens, usage.completion_tokens, usage.cost)
         } else {
             // If no usage info, default to 0
             debug!("No usage information in API response");
-            (0, 0, 0.0)
+            (0, 0, None)
         };
 
         let ai_stats = AiStats {
@@ -269,7 +268,10 @@ impl OpenRouterClient {
 
         debug!(
             input_tokens,
-            output_tokens, duration_ms, cost_usd, "AI analysis complete"
+            output_tokens,
+            duration_ms,
+            ?cost_usd,
+            "AI analysis complete"
         );
 
         Ok(AiResponse {

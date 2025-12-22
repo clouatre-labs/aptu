@@ -26,8 +26,9 @@ pub struct AiStats {
     pub output_tokens: u64,
     /// Duration of the API call in milliseconds.
     pub duration_ms: u64,
-    /// Estimated cost in USD.
-    pub cost_usd: f64,
+    /// Cost in USD (from `OpenRouter` API, `None` if not reported).
+    #[serde(default)]
+    pub cost_usd: Option<f64>,
 }
 
 /// Status of a contribution.
@@ -90,7 +91,7 @@ impl HistoryData {
         self.contributions
             .iter()
             .filter_map(|c| c.ai_stats.as_ref())
-            .map(|stats| stats.cost_usd)
+            .filter_map(|stats| stats.cost_usd)
             .sum()
     }
 
@@ -122,8 +123,10 @@ impl HistoryData {
         let mut costs = std::collections::HashMap::new();
 
         for contribution in &self.contributions {
-            if let Some(stats) = &contribution.ai_stats {
-                *costs.entry(stats.model.clone()).or_insert(0.0) += stats.cost_usd;
+            if let Some(stats) = &contribution.ai_stats
+                && let Some(cost) = stats.cost_usd
+            {
+                *costs.entry(stats.model.clone()).or_insert(0.0) += cost;
             }
         }
 
@@ -266,7 +269,7 @@ mod tests {
             input_tokens: 1000,
             output_tokens: 500,
             duration_ms: 1500,
-            cost_usd: 0.0,
+            cost_usd: Some(0.0),
         };
 
         let json = serde_json::to_string(&stats).expect("serialize");
@@ -283,7 +286,7 @@ mod tests {
             input_tokens: 1000,
             output_tokens: 500,
             duration_ms: 1500,
-            cost_usd: 0.0,
+            cost_usd: Some(0.0),
         });
 
         let json = serde_json::to_string(&contribution).expect("serialize");
@@ -322,7 +325,7 @@ mod tests {
             input_tokens: 100,
             output_tokens: 50,
             duration_ms: 1000,
-            cost_usd: 0.01,
+            cost_usd: Some(0.01),
         });
 
         let mut c2 = test_contribution();
@@ -331,7 +334,7 @@ mod tests {
             input_tokens: 200,
             output_tokens: 100,
             duration_ms: 2000,
-            cost_usd: 0.02,
+            cost_usd: Some(0.02),
         });
 
         data.contributions.push(c1);
@@ -351,7 +354,7 @@ mod tests {
             input_tokens: 100,
             output_tokens: 50,
             duration_ms: 1000,
-            cost_usd: 0.01,
+            cost_usd: Some(0.01),
         });
 
         let mut c2 = test_contribution();
@@ -360,7 +363,7 @@ mod tests {
             input_tokens: 200,
             output_tokens: 100,
             duration_ms: 2000,
-            cost_usd: 0.02,
+            cost_usd: Some(0.02),
         });
 
         data.contributions.push(c1);
@@ -379,7 +382,7 @@ mod tests {
             input_tokens: 100,
             output_tokens: 50,
             duration_ms: 1000,
-            cost_usd: 0.01,
+            cost_usd: Some(0.01),
         });
 
         let mut c2 = test_contribution();
@@ -388,7 +391,7 @@ mod tests {
             input_tokens: 200,
             output_tokens: 100,
             duration_ms: 2000,
-            cost_usd: 0.02,
+            cost_usd: Some(0.02),
         });
 
         data.contributions.push(c1);
@@ -413,7 +416,7 @@ mod tests {
             input_tokens: 100,
             output_tokens: 50,
             duration_ms: 1000,
-            cost_usd: 0.01,
+            cost_usd: Some(0.01),
         });
 
         let mut c2 = test_contribution();
@@ -422,7 +425,7 @@ mod tests {
             input_tokens: 200,
             output_tokens: 100,
             duration_ms: 2000,
-            cost_usd: 0.02,
+            cost_usd: Some(0.02),
         });
 
         let mut c3 = test_contribution();
@@ -431,7 +434,7 @@ mod tests {
             input_tokens: 150,
             output_tokens: 75,
             duration_ms: 1500,
-            cost_usd: 0.015,
+            cost_usd: Some(0.015),
         });
 
         data.contributions.push(c1);
