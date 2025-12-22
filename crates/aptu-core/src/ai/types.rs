@@ -123,6 +123,9 @@ pub struct TriageResponse {
     /// Implementation approach suggestions based on repository structure.
     #[serde(default)]
     pub implementation_approach: Option<String>,
+    /// Suggested milestone for the issue.
+    #[serde(default)]
+    pub suggested_milestone: Option<String>,
 }
 
 /// Context about a related issue from repository search.

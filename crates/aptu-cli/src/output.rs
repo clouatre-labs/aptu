@@ -466,6 +466,27 @@ pub fn render_triage(result: &TriageResult, ctx: &OutputContext) {
                 println!("{}", style("Comment posted successfully!").green().bold());
                 println!("  {}", style(url).cyan().underlined());
             }
+
+            // Show applied labels and milestone
+            if !result.applied_labels.is_empty() || result.applied_milestone.is_some() {
+                println!();
+                println!("{}", style("Applied to issue:").green());
+                if !result.applied_labels.is_empty() {
+                    println!("  Labels: {}", result.applied_labels.join(", "));
+                }
+                if let Some(ref milestone) = result.applied_milestone {
+                    println!("  Milestone: {milestone}");
+                }
+            }
+
+            // Show warnings
+            if !result.apply_warnings.is_empty() {
+                println!();
+                println!("{}", style("Warnings:").yellow());
+                for warning in &result.apply_warnings {
+                    println!("  - {warning}");
+                }
+            }
         }
     }
 }
@@ -759,6 +780,7 @@ mod tests {
             related_issues: Vec::new(),
             contributor_guidance: None,
             implementation_approach: None,
+            suggested_milestone: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -783,6 +805,7 @@ mod tests {
             related_issues: Vec::new(),
             contributor_guidance: None,
             implementation_approach: None,
+            suggested_milestone: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -802,6 +825,7 @@ mod tests {
             status_note: Some("Issue claimed by @user".to_string()),
             contributor_guidance: None,
             implementation_approach: None,
+            suggested_milestone: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -861,6 +885,7 @@ mod tests {
                 reasoning: "Small scope, well-defined problem statement.".to_string(),
             }),
             implementation_approach: None,
+            suggested_milestone: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -886,6 +911,7 @@ mod tests {
                 reasoning: "Requires deep knowledge of the compiler internals.".to_string(),
             }),
             implementation_approach: None,
+            suggested_milestone: None,
         };
 
         let comment = render_triage_markdown(&triage);
@@ -906,6 +932,7 @@ mod tests {
             related_issues: Vec::new(),
             contributor_guidance: None,
             implementation_approach: None,
+            suggested_milestone: None,
         };
 
         let comment = render_triage_markdown(&triage);

@@ -81,6 +81,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 yes,
                 show_issue,
                 force,
+                apply,
             } => {
                 // Determine repo context: --repo flag > default_repo config
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
@@ -130,13 +131,16 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 }
 
                 // Build result for rendering (before posting decision)
-                let result = types::TriageResult {
+                let mut result = types::TriageResult {
                     issue_title: issue_details.title.clone(),
                     issue_number: issue_details.number,
                     triage: ai_response.triage.clone(),
                     comment_url: None,
                     dry_run,
                     user_declined: false,
+                    applied_labels: Vec::new(),
+                    applied_milestone: None,
+                    apply_warnings: Vec::new(),
                 };
 
                 // Render triage FIRST (before asking for confirmation)
@@ -176,13 +180,32 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 // Phase 2: Post the comment
                 let spinner = maybe_spinner(&ctx, "Posting comment...");
                 let analyze_result = triage::AnalyzeResult {
-                    issue_details,
-                    triage: ai_response.triage,
+                    issue_details: issue_details.clone(),
+                    triage: ai_response.triage.clone(),
                     ai_stats: ai_response.stats.clone(),
                 };
                 let comment_url = triage::post(&analyze_result).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
+                }
+
+                result.comment_url = Some(comment_url.clone());
+
+                // Phase 3: Apply labels and milestone if requested
+                if apply {
+                    let spinner = maybe_spinner(&ctx, "Applying labels and milestone...");
+                    let apply_result = triage::apply(&issue_details, &ai_response.triage).await?;
+                    if let Some(s) = spinner {
+                        s.finish_and_clear();
+                    }
+
+                    result
+                        .applied_labels
+                        .clone_from(&apply_result.applied_labels);
+                    result
+                        .applied_milestone
+                        .clone_from(&apply_result.applied_milestone);
+                    result.apply_warnings.clone_from(&apply_result.warnings);
                 }
 
                 // Record to history
@@ -207,6 +230,25 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     println!();
                     println!("{}", style("Comment posted successfully!").green().bold());
                     println!("  {}", style(&comment_url).cyan().underlined());
+                    if apply
+                        && (!result.applied_labels.is_empty() || result.applied_milestone.is_some())
+                    {
+                        println!();
+                        println!("{}", style("Applied to issue:").green());
+                        if !result.applied_labels.is_empty() {
+                            println!("  Labels: {}", result.applied_labels.join(", "));
+                        }
+                        if let Some(milestone) = &result.applied_milestone {
+                            println!("  Milestone: {milestone}");
+                        }
+                        if !result.apply_warnings.is_empty() {
+                            println!();
+                            println!("{}", style("Warnings:").yellow());
+                            for warning in &result.apply_warnings {
+                                println!("  - {warning}");
+                            }
+                        }
+                    }
                 }
 
                 Ok(())
