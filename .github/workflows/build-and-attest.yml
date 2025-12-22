@@ -63,11 +63,22 @@ jobs:
           target: ${{ inputs.target }}
           token: ${{ secrets.GITHUB_TOKEN }}
           checksum: sha256
+      - name: Install musl-tools (dry-run x86_64)
+        if: ${{ inputs.dry_run && inputs.target == 'x86_64-unknown-linux-musl' }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y musl-tools
+          # Ensure target is installed (cache may not include it)
+          rustup target add x86_64-unknown-linux-musl
       - name: Build binary (dry-run)
-        if: ${{ inputs.dry_run }}
+        if: ${{ inputs.dry_run && !inputs.cross }}
         run: cargo build --release --target ${{ inputs.target }}
+      - name: Build binary (dry-run cross)
+        if: ${{ inputs.dry_run && inputs.cross }}
+        run: |
+          # Cross-compilation in dry-run uses the same setup as real builds
+          cargo build --release --target ${{ inputs.target }}
       - name: Generate .deb package
-        if: ${{ startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux') }}
+        if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
         run: cargo deb --target ${{ inputs.target }} --no-build
       - name: Upload .deb to release
         if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
