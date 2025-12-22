@@ -317,7 +317,7 @@ Your response MUST be valid JSON with this exact schema:
 
 Guidelines:
 - summary: Concise explanation of the problem/request and why it matters
-- suggested_labels: Choose from: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix
+- suggested_labels: Prefer labels from the Available Labels list provided. Choose from: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix. If a more specific label exists in the repository, use it instead of generic ones.
 - clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear. Skip questions already answered in comments.
 - potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none. A duplicate is an issue that describes the exact same problem.
 - related_issues: Include issues from the search results that are contextually related but NOT duplicates. Provide brief reasoning for each. Leave empty array if none are relevant.
@@ -392,6 +392,42 @@ fn build_user_prompt(issue: &IssueDetails) -> String {
         prompt.push('\n');
     }
 
+    // Include available labels
+    if !issue.available_labels.is_empty() {
+        prompt.push_str("Available Labels:\n");
+        for label in issue.available_labels.iter().take(30) {
+            let description = if label.description.is_empty() {
+                String::new()
+            } else {
+                format!(" - {}", label.description)
+            };
+            let _ = writeln!(
+                prompt,
+                "- {} (color: #{}){}",
+                label.name, label.color, description
+            );
+        }
+        prompt.push('\n');
+    }
+
+    // Include available milestones
+    if !issue.available_milestones.is_empty() {
+        prompt.push_str("Available Milestones:\n");
+        for milestone in issue.available_milestones.iter().take(10) {
+            let description = if milestone.description.is_empty() {
+                String::new()
+            } else {
+                format!(" - {}", milestone.description)
+            };
+            let _ = writeln!(
+                prompt,
+                "- #{} {}{}",
+                milestone.number, milestone.title, description
+            );
+        }
+        prompt.push('\n');
+    }
+
     prompt.push_str("</issue_content>");
 
     prompt
@@ -457,6 +493,8 @@ mod tests {
             url: "https://github.com/test/repo/issues/1".to_string(),
             repo_context: Vec::new(),
             repo_tree: Vec::new(),
+            available_labels: Vec::new(),
+            available_milestones: Vec::new(),
         };
 
         let prompt = build_user_prompt(&issue);
@@ -481,6 +519,8 @@ mod tests {
             url: "https://github.com/test/repo/issues/1".to_string(),
             repo_context: Vec::new(),
             repo_tree: Vec::new(),
+            available_labels: Vec::new(),
+            available_milestones: Vec::new(),
         };
 
         let prompt = build_user_prompt(&issue);
@@ -501,6 +541,8 @@ mod tests {
             url: "https://github.com/test/repo/issues/1".to_string(),
             repo_context: Vec::new(),
             repo_tree: Vec::new(),
+            available_labels: Vec::new(),
+            available_milestones: Vec::new(),
         };
 
         let prompt = build_user_prompt(&issue);

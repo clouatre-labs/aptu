@@ -165,6 +165,222 @@ pub async fn fetch_issues(
     Ok(results)
 }
 
+/// Repository label from GraphQL response.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RepoLabelNode {
+    /// Label name.
+    pub name: String,
+    /// Label description.
+    pub description: Option<String>,
+    /// Label color (hex code without #).
+    pub color: String,
+}
+
+/// Repository labels connection from GraphQL.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RepoLabelsConnection {
+    /// List of label nodes.
+    pub nodes: Vec<RepoLabelNode>,
+}
+
+/// Repository milestone from GraphQL response.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RepoMilestoneNode {
+    /// Milestone number.
+    pub number: u64,
+    /// Milestone title.
+    pub title: String,
+    /// Milestone description.
+    pub description: Option<String>,
+}
+
+/// Repository milestones connection from GraphQL.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RepoMilestonesConnection {
+    /// List of milestone nodes.
+    pub nodes: Vec<RepoMilestoneNode>,
+}
+
+/// Issue comment from GraphQL response.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IssueCommentNode {
+    /// Comment author login.
+    pub author: Author,
+    /// Comment body.
+    pub body: String,
+}
+
+/// Author information from GraphQL response.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Author {
+    /// Author login.
+    pub login: String,
+}
+
+/// Comments connection from GraphQL.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CommentsConnection {
+    /// List of comment nodes.
+    pub nodes: Vec<IssueCommentNode>,
+}
+
+/// Issue from GraphQL response for triage.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IssueNodeDetailed {
+    /// Issue number.
+    pub number: u64,
+    /// Issue title.
+    pub title: String,
+    /// Issue body.
+    pub body: Option<String>,
+    /// Issue URL.
+    pub url: String,
+    /// Issue labels.
+    pub labels: Labels,
+    /// Issue comments.
+    pub comments: CommentsConnection,
+}
+
+/// Repository data from GraphQL response for triage.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RepositoryData {
+    /// Repository name with owner.
+    #[serde(rename = "nameWithOwner")]
+    pub name_with_owner: String,
+    /// Repository labels.
+    pub labels: RepoLabelsConnection,
+    /// Repository milestones.
+    pub milestones: RepoMilestonesConnection,
+    /// Repository primary language.
+    #[serde(rename = "primaryLanguage")]
+    pub primary_language: Option<LanguageNode>,
+}
+
+/// Language information from GraphQL response.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LanguageNode {
+    /// Language name.
+    pub name: String,
+}
+
+/// Full response for issue with repo context.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IssueWithRepoContextResponse {
+    /// The issue.
+    pub issue: IssueNodeDetailed,
+    /// The repository.
+    pub repository: RepositoryData,
+}
+
+/// Builds a GraphQL query to fetch an issue with repository context.
+fn build_issue_with_repo_context_query(owner: &str, repo: &str, number: u64) -> Value {
+    let query = format!(
+        r#"query {{
+            issue: repository(owner: "{owner}", name: "{repo}") {{
+                issue(number: {number}) {{
+                    number
+                    title
+                    body
+                    url
+                    labels(first: 10) {{
+                        nodes {{
+                            name
+                        }}
+                    }}
+                    comments(first: 5) {{
+                        nodes {{
+                            author {{
+                                login
+                            }}
+                            body
+                        }}
+                    }}
+                }}
+            }}
+            repository(owner: "{owner}", name: "{repo}") {{
+                nameWithOwner
+                labels(first: 100) {{
+                    nodes {{
+                        name
+                        description
+                        color
+                    }}
+                }}
+                milestones(first: 50, states: OPEN) {{
+                    nodes {{
+                        number
+                        title
+                        description
+                    }}
+                }}
+                primaryLanguage {{
+                    name
+                }}
+            }}
+        }}"#
+    );
+
+    json!({ "query": query })
+}
+
+/// Fetches an issue with repository context (labels, milestones) in a single GraphQL call.
+///
+/// # Errors
+///
+/// Returns an error if the GraphQL query fails or the issue is not found.
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
+pub async fn fetch_issue_with_repo_context(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+) -> Result<(IssueNodeDetailed, RepositoryData)> {
+    debug!("Fetching issue with repository context");
+
+    let query = build_issue_with_repo_context_query(owner, repo, number);
+    debug!("Executing GraphQL query for issue with repo context");
+
+    let response: Value = client
+        .graphql(&query)
+        .await
+        .context("Failed to execute GraphQL query")?;
+
+    // Check for GraphQL errors
+    if let Some(errors) = response.get("errors") {
+        let error_msg = serde_json::to_string_pretty(errors).unwrap_or_default();
+        anyhow::bail!("GraphQL error: {error_msg}");
+    }
+
+    let data = response
+        .get("data")
+        .context("Missing 'data' field in GraphQL response")?;
+
+    // Extract issue from nested structure
+    let issue_data = data
+        .get("issue")
+        .and_then(|v| v.get("issue"))
+        .context("Issue not found in GraphQL response")?;
+
+    let issue: IssueNodeDetailed =
+        serde_json::from_value(issue_data.clone()).context("Failed to parse issue data")?;
+
+    let repo_data = data
+        .get("repository")
+        .context("Repository not found in GraphQL response")?;
+
+    let repository: RepositoryData =
+        serde_json::from_value(repo_data.clone()).context("Failed to parse repository data")?;
+
+    debug!(
+        issue_number = issue.number,
+        labels_count = repository.labels.nodes.len(),
+        milestones_count = repository.milestones.nodes.len(),
+        "Fetched issue with repository context"
+    );
+
+    Ok((issue, repository))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

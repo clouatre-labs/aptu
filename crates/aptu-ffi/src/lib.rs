@@ -139,6 +139,8 @@ pub fn analyze_issue(
             url: issue.url,
             repo_context: vec![],
             repo_tree: vec![],
+            available_labels: vec![],
+            available_milestones: vec![],
         };
 
         match aptu_core::analyze_issue(&provider, &core_issue).await {
