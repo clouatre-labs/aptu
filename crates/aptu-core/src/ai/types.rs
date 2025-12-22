@@ -47,6 +47,20 @@ pub struct ResponseFormat {
 pub struct ChatCompletionResponse {
     /// List of choices (usually just one).
     pub choices: Vec<Choice>,
+    /// Usage information from the API.
+    #[serde(default)]
+    pub usage: Option<UsageInfo>,
+}
+
+/// Token usage information from the API.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UsageInfo {
+    /// Number of tokens in the prompt.
+    pub prompt_tokens: u64,
+    /// Number of tokens in the completion.
+    pub completion_tokens: u64,
+    /// Total tokens used.
+    pub total_tokens: u64,
 }
 
 /// A single choice in the chat completion response.

@@ -124,7 +124,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
 
                 // Phase 1c: Analyze with AI
                 let spinner = maybe_spinner(&ctx, "Analyzing with AI...");
-                let triage_response = triage::analyze(&issue_details).await?;
+                let ai_response = triage::analyze(&issue_details).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
@@ -133,7 +133,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 let result = types::TriageResult {
                     issue_title: issue_details.title.clone(),
                     issue_number: issue_details.number,
-                    triage: triage_response.clone(),
+                    triage: ai_response.triage.clone(),
                     comment_url: None,
                     dry_run,
                     user_declined: false,
@@ -177,7 +177,8 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 let spinner = maybe_spinner(&ctx, "Posting comment...");
                 let analyze_result = triage::AnalyzeResult {
                     issue_details,
-                    triage: triage_response,
+                    triage: ai_response.triage,
+                    ai_stats: ai_response.stats.clone(),
                 };
                 let comment_url = triage::post(&analyze_result).await?;
                 if let Some(s) = spinner {
@@ -196,6 +197,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     timestamp: chrono::Utc::now(),
                     comment_url: comment_url.clone(),
                     status: aptu_core::history::ContributionStatus::Pending,
+                    ai_stats: Some(ai_response.stats),
                 };
                 aptu_core::history::add_contribution(contribution)?;
                 debug!("Contribution recorded to history");

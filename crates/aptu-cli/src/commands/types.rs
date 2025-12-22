@@ -7,7 +7,7 @@
 
 use aptu_core::ai::types::TriageResponse;
 use aptu_core::github::graphql::IssueNode;
-use aptu_core::history::Contribution;
+use aptu_core::history::{Contribution, HistoryData};
 use aptu_core::repos::CuratedRepo;
 
 /// Result from the repos command.
@@ -48,4 +48,6 @@ pub struct TriageResult {
 pub struct HistoryResult {
     /// List of contributions.
     pub contributions: Vec<Contribution>,
+    /// Full history data for stats calculation.
+    pub history_data: HistoryData,
 }

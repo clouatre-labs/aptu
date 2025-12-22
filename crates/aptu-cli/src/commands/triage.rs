@@ -7,9 +7,10 @@
 //! confirmation flow (render issue before asking).
 
 use anyhow::{Context, Result};
+use aptu_core::ai::AiResponse;
 use aptu_core::error::AptuError;
 use aptu_core::github::{auth, issues};
-use aptu_core::{IssueDetails, TriageResponse};
+use aptu_core::{IssueDetails, TriageResponse, history::AiStats};
 use tracing::{debug, info, instrument};
 
 use crate::output::render_triage_markdown;
@@ -20,6 +21,9 @@ pub struct AnalyzeResult {
     pub issue_details: IssueDetails,
     /// AI triage analysis.
     pub triage: TriageResponse,
+    /// AI usage statistics.
+    #[allow(dead_code)] // Used for future features (history tracking)
+    pub ai_stats: AiStats,
 }
 
 /// Fetch an issue from GitHub.
@@ -100,21 +104,22 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
 /// Analyze an issue with AI assistance.
 ///
 /// Takes fetched issue details and runs AI analysis via the facade layer.
+/// Returns both triage response and AI usage statistics.
 /// Does not post anything.
 ///
 /// # Arguments
 ///
 /// * `issue_details` - Fetched issue details from `fetch()`
 #[instrument(skip_all, fields(issue_number = issue_details.number))]
-pub async fn analyze(issue_details: &IssueDetails) -> Result<TriageResponse> {
+pub async fn analyze(issue_details: &IssueDetails) -> Result<AiResponse> {
     // Create CLI token provider
     let provider = crate::provider::CliTokenProvider;
 
     // Call facade for analysis
-    let triage = aptu_core::analyze_issue(&provider, issue_details).await?;
+    let ai_response = aptu_core::analyze_issue(&provider, issue_details).await?;
 
     debug!("Issue analyzed successfully");
-    Ok(triage)
+    Ok(ai_response)
 }
 
 /// Post a triage comment to GitHub.

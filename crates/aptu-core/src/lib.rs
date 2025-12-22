@@ -39,8 +39,8 @@
 //! };
 //!
 //! // Analyze with AI
-//! let triage = client.analyze_issue(&issue).await?;
-//! println!("Summary: {}", triage.summary);
+//! let ai_response = client.analyze_issue(&issue).await?;
+//! println!("Summary: {}", ai_response.triage.summary);
 //! # Ok(())
 //! # }
 //! ```
