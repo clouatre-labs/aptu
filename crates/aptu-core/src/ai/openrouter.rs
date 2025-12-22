@@ -17,9 +17,10 @@ use super::types::{
     ChatCompletionRequest, ChatCompletionResponse, ChatMessage, IssueDetails, ResponseFormat,
     TriageResponse,
 };
-use super::{OPENROUTER_API_KEY_ENV, OPENROUTER_API_URL};
+use super::{AiResponse, OPENROUTER_API_KEY_ENV, OPENROUTER_API_URL};
 use crate::config::AiConfig;
 use crate::error::AptuError;
+use crate::history::AiStats;
 
 /// Maximum length for issue body to stay within token limits.
 const MAX_BODY_LENGTH: usize = 4000;
@@ -134,7 +135,7 @@ impl OpenRouterClient {
 
     /// Analyzes a GitHub issue using the `OpenRouter` API.
     ///
-    /// Returns a structured triage response with summary, labels, questions, and duplicates.
+    /// Returns a structured triage response with summary, labels, questions, duplicates, and usage stats.
     ///
     /// # Arguments
     ///
@@ -146,8 +147,12 @@ impl OpenRouterClient {
     /// - API request fails (network, timeout, rate limit)
     /// - Response cannot be parsed as valid JSON
     #[instrument(skip(self, issue), fields(issue_number = issue.number, repo = %format!("{}/{}", issue.owner, issue.repo)))]
-    pub async fn analyze_issue(&self, issue: &IssueDetails) -> Result<TriageResponse> {
+    #[allow(clippy::too_many_lines)]
+    pub async fn analyze_issue(&self, issue: &IssueDetails) -> Result<AiResponse> {
         debug!(model = %self.model, "Calling OpenRouter API");
+
+        // Start timing
+        let start = std::time::Instant::now();
 
         // Build request
         let request = ChatCompletionRequest {
@@ -188,14 +193,19 @@ impl OpenRouterClient {
             .await
             .context("Failed to send request to OpenRouter API")?;
 
+        // Calculate duration
+        #[allow(clippy::cast_possible_truncation)]
+        let duration_ms = start.elapsed().as_millis() as u64;
+
         // Check for HTTP errors
-        let status = response.status();
-        if !status.is_success() {
-            if status.as_u16() == 401 {
+        #[allow(clippy::similar_names)]
+        let http_status = response.status();
+        if !http_status.is_success() {
+            if http_status.as_u16() == 401 {
                 anyhow::bail!(
                     "Invalid OpenRouter API key. Check your {OPENROUTER_API_KEY_ENV} environment variable."
                 );
-            } else if status.as_u16() == 429 {
+            } else if http_status.as_u16() == 429 {
                 warn!("Rate limited by OpenRouter API");
                 // Parse Retry-After header (seconds), default to 0 if not present
                 let retry_after = response
@@ -214,7 +224,7 @@ impl OpenRouterClient {
             let error_body = response.text().await.unwrap_or_default();
             anyhow::bail!(
                 "OpenRouter API error (HTTP {}): {}",
-                status.as_u16(),
+                http_status.as_u16(),
                 error_body
             );
         }
@@ -239,7 +249,35 @@ impl OpenRouterClient {
             format!("Failed to parse AI response as JSON. Raw response:\n{content}")
         })?;
 
-        Ok(triage)
+        // Build AI stats from usage info (trust API's cost field)
+        let (input_tokens, output_tokens, cost_usd) = if let Some(usage) = completion.usage {
+            (usage.prompt_tokens, usage.completion_tokens, usage.cost)
+        } else {
+            // If no usage info, default to 0
+            debug!("No usage information in API response");
+            (0, 0, None)
+        };
+
+        let ai_stats = AiStats {
+            model: self.model.clone(),
+            input_tokens,
+            output_tokens,
+            duration_ms,
+            cost_usd,
+        };
+
+        debug!(
+            input_tokens,
+            output_tokens,
+            duration_ms,
+            ?cost_usd,
+            "AI analysis complete"
+        );
+
+        Ok(AiResponse {
+            triage,
+            stats: ai_stats,
+        })
     }
 }
 

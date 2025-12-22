@@ -11,7 +11,7 @@ use chrono::Duration;
 use tracing::instrument;
 
 use crate::ai::OpenRouterClient;
-use crate::ai::types::{IssueDetails, TriageResponse};
+use crate::ai::{AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
@@ -141,7 +141,7 @@ pub async fn fetch_issues(
 ///
 /// # Returns
 ///
-/// Structured triage response with summary, labels, questions, and duplicates.
+/// AI response with triage data and usage statistics.
 ///
 /// # Errors
 ///
@@ -153,7 +153,7 @@ pub async fn fetch_issues(
 pub async fn analyze_issue(
     provider: &dyn TokenProvider,
     issue: &IssueDetails,
-) -> crate::Result<TriageResponse> {
+) -> crate::Result<AiResponse> {
     // Get OpenRouter API key from provider
     let api_key = provider
         .openrouter_key()

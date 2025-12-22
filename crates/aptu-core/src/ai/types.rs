@@ -47,6 +47,26 @@ pub struct ResponseFormat {
 pub struct ChatCompletionResponse {
     /// List of choices (usually just one).
     pub choices: Vec<Choice>,
+    /// Usage information from the API.
+    #[serde(default)]
+    pub usage: Option<UsageInfo>,
+}
+
+/// Token usage information from the API.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UsageInfo {
+    /// Number of tokens in the prompt.
+    #[serde(default)]
+    pub prompt_tokens: u64,
+    /// Number of tokens in the completion.
+    #[serde(default)]
+    pub completion_tokens: u64,
+    /// Total tokens used.
+    #[serde(default)]
+    pub total_tokens: u64,
+    /// Cost in USD (from `OpenRouter` API).
+    #[serde(default)]
+    pub cost: Option<f64>,
 }
 
 /// A single choice in the chat completion response.

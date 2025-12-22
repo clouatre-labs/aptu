@@ -142,7 +142,7 @@ pub fn analyze_issue(
         };
 
         match aptu_core::analyze_issue(&provider, &core_issue).await {
-            Ok(triage) => Ok(FfiTriageResponse::from(triage)),
+            Ok(ai_response) => Ok(FfiTriageResponse::from(ai_response.triage)),
             Err(e) => Err(AptuFfiError::InternalError {
                 message: e.to_string(),
             }),

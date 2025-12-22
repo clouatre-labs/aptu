@@ -589,6 +589,48 @@ fn truncate_body(body: &str, max_len: usize) -> String {
 }
 
 /// Render history result.
+/// Render AI usage summary for markdown format.
+fn render_ai_stats_markdown(history_data: &aptu_core::history::HistoryData) {
+    let total_tokens = history_data.total_tokens();
+    let total_cost = history_data.total_cost();
+    let avg_tokens = history_data.avg_tokens_per_triage();
+
+    if total_tokens > 0 {
+        println!();
+        println!("### AI Usage Summary");
+        println!();
+        println!("- Total tokens: {total_tokens}");
+        println!("- Total cost: ${total_cost:.4}");
+        println!("- Average tokens per triage: {avg_tokens:.0}");
+    }
+}
+
+/// Render AI usage summary for text format.
+fn render_ai_stats_text(history_data: &aptu_core::history::HistoryData) {
+    let total_tokens = history_data.total_tokens();
+    let total_cost = history_data.total_cost();
+    let avg_tokens = history_data.avg_tokens_per_triage();
+
+    if total_tokens > 0 {
+        println!();
+        println!("  {}", style("AI Usage Summary").cyan().bold());
+        println!("  {}", style("-".repeat(75)).dim());
+        println!(
+            "  Total tokens: {}",
+            style(total_tokens.to_string()).green()
+        );
+        println!(
+            "  Total cost: {}",
+            style(format!("${total_cost:.4}")).green()
+        );
+        println!(
+            "  Average tokens per triage: {}",
+            style(format!("{avg_tokens:.0}")).green()
+        );
+    }
+}
+
+/// Render history result.
 pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
     match ctx.format {
         OutputFormat::Json => {
@@ -606,88 +648,99 @@ pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
             );
         }
         OutputFormat::Markdown => {
-            if result.contributions.is_empty() {
-                println!("No contributions yet.");
-                return;
-            }
-
-            println!(
-                "## Contribution History ({} total)\n",
-                result.contributions.len()
-            );
-            println!("| Repository | Issue | Action | When | Status |");
-            println!("|------------|-------|--------|------|--------|");
-
-            for contribution in &result.contributions {
-                let repo = truncate(&contribution.repo, 25);
-                let issue = format!("#{}", contribution.issue);
-                let when = format_relative_time(&contribution.timestamp);
-                let status = match contribution.status {
-                    ContributionStatus::Pending => "pending",
-                    ContributionStatus::Accepted => "accepted",
-                    ContributionStatus::Rejected => "rejected",
-                };
-
-                println!(
-                    "| {} | {} | {} | {} | {} |",
-                    repo, issue, contribution.action, when, status
-                );
-            }
+            render_history_markdown(result);
         }
         OutputFormat::Text => {
-            if result.contributions.is_empty() {
-                println!();
-                println!("{}", style("No contributions yet.").yellow());
-                println!("Run `aptu triage <url>` to get started!");
-                println!();
-                return;
-            }
-
-            println!();
-            println!(
-                "{}",
-                style(format!(
-                    "Contribution history ({} total):",
-                    result.contributions.len()
-                ))
-                .bold()
-            );
-            println!();
-
-            // Table header
-            println!(
-                "  {:<25} {:<8} {:<10} {:<15} {}",
-                style("Repository").cyan(),
-                style("Issue").cyan(),
-                style("Action").cyan(),
-                style("When").cyan(),
-                style("Status").cyan()
-            );
-            println!("  {}", style("-".repeat(75)).dim());
-
-            for contribution in &result.contributions {
-                let repo = truncate(&contribution.repo, 25);
-                let issue = format!("#{}", contribution.issue);
-                let when = format_relative_time(&contribution.timestamp);
-                let status = match contribution.status {
-                    ContributionStatus::Pending => style("pending").yellow().to_string(),
-                    ContributionStatus::Accepted => style("accepted").green().to_string(),
-                    ContributionStatus::Rejected => style("rejected").red().to_string(),
-                };
-
-                println!(
-                    "  {:<25} {:<8} {:<10} {:<15} {}",
-                    repo,
-                    style(issue).green(),
-                    contribution.action,
-                    style(when).dim(),
-                    status
-                );
-            }
-
-            println!();
+            render_history_text(result);
         }
     }
+}
+
+/// Render history in markdown format.
+fn render_history_markdown(result: &HistoryResult) {
+    if result.contributions.is_empty() {
+        println!("No contributions yet.");
+        return;
+    }
+
+    println!(
+        "## Contribution History ({} total)\n",
+        result.contributions.len()
+    );
+    println!("| Repository | Issue | Action | When | Status |");
+    println!("|------------|-------|--------|------|--------|");
+
+    for contribution in &result.contributions {
+        let repo = truncate(&contribution.repo, 25);
+        let issue = format!("#{}", contribution.issue);
+        let when = format_relative_time(&contribution.timestamp);
+        let status = match contribution.status {
+            ContributionStatus::Pending => "pending",
+            ContributionStatus::Accepted => "accepted",
+            ContributionStatus::Rejected => "rejected",
+        };
+        println!(
+            "| {repo} | {issue} | {} | {when} | {status} |",
+            contribution.action
+        );
+    }
+
+    render_ai_stats_markdown(&result.history_data);
+}
+
+/// Render history in text format.
+fn render_history_text(result: &HistoryResult) {
+    if result.contributions.is_empty() {
+        println!();
+        println!("{}", style("No contributions yet.").yellow());
+        println!("Run `aptu triage <url>` to get started!");
+        println!();
+        return;
+    }
+
+    println!();
+    println!(
+        "{}",
+        style(format!(
+            "Contribution history ({} total):",
+            result.contributions.len()
+        ))
+        .bold()
+    );
+    println!();
+
+    // Table header
+    println!(
+        "  {:<25} {:<8} {:<10} {:<15} {}",
+        style("Repository").cyan(),
+        style("Issue").cyan(),
+        style("Action").cyan(),
+        style("When").cyan(),
+        style("Status").cyan()
+    );
+    println!("  {}", style("-".repeat(75)).dim());
+
+    for contribution in &result.contributions {
+        let repo = truncate(&contribution.repo, 25);
+        let issue = format!("#{}", contribution.issue);
+        let when = format_relative_time(&contribution.timestamp);
+        let status = match contribution.status {
+            ContributionStatus::Pending => style("pending").yellow().to_string(),
+            ContributionStatus::Accepted => style("accepted").green().to_string(),
+            ContributionStatus::Rejected => style("rejected").red().to_string(),
+        };
+        println!(
+            "  {:<25} {:<8} {:<10} {:<15} {}",
+            repo,
+            style(issue).green(),
+            contribution.action,
+            style(when).dim(),
+            status
+        );
+    }
+
+    render_ai_stats_text(&result.history_data);
+    println!();
 }
 
 #[cfg(test)]

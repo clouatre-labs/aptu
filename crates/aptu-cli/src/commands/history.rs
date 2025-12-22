@@ -11,6 +11,7 @@ use super::types::HistoryResult;
 pub fn run() -> Result<HistoryResult> {
     let data = history::load()?;
     Ok(HistoryResult {
-        contributions: data.contributions,
+        contributions: data.contributions.clone(),
+        history_data: data,
     })
 }
