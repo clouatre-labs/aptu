@@ -54,7 +54,8 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         issues::fetch_issue_with_comments(&client, &owner, &repo, number).await?;
 
     // Search for related issues to provide context to AI
-    match issues::search_related_issues(&client, &owner, &repo, &issue_details.title).await {
+    match issues::search_related_issues(&client, &owner, &repo, &issue_details.title, number).await
+    {
         Ok(related) => {
             issue_details.repo_context = related;
             debug!(
