@@ -206,6 +206,7 @@ jobs:
   publish:
     name: Publish to crates.io
     needs: build-and-attest
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -217,24 +218,14 @@ jobs:
           toolchain: stable
 
       - name: Publish aptu-core
-        if: ${{ env.DRY_RUN != 'true' }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: cargo publish -p aptu-core
 
       - name: Wait for index propagation
-        if: ${{ env.DRY_RUN != 'true' }}
         run: sleep 30
 
       - name: Publish aptu-cli
-        if: ${{ env.DRY_RUN != 'true' }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: cargo publish -p aptu-cli
-
-      - name: Dry run - test publish
-        if: ${{ env.DRY_RUN == 'true' }}
-        run: |
-          echo "DRY RUN - Testing cargo publish"
-          cargo publish -p aptu-core --dry-run
-          cargo publish -p aptu-cli --dry-run
