@@ -9,6 +9,7 @@ use std::env;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use backon::Retryable;
 use reqwest::Client;
 use secrecy::{ExposeSecret, SecretString};
 use tracing::{debug, instrument, warn};
@@ -21,6 +22,7 @@ use super::{AiResponse, OPENROUTER_API_KEY_ENV, OPENROUTER_API_URL};
 use crate::config::AiConfig;
 use crate::error::AptuError;
 use crate::history::AiStats;
+use crate::retry::{is_retryable_anyhow, retry_backoff};
 
 /// Maximum length for issue body to stay within token limits.
 const MAX_BODY_LENGTH: usize = 4000;
@@ -151,7 +153,7 @@ impl OpenRouterClient {
     pub async fn analyze_issue(&self, issue: &IssueDetails) -> Result<AiResponse> {
         debug!(model = %self.model, "Calling OpenRouter API");
 
-        // Start timing
+        // Start timing (outside retry loop to measure total time including retries)
         let start = std::time::Instant::now();
 
         // Build request
@@ -174,66 +176,73 @@ impl OpenRouterClient {
             temperature: Some(0.3),
         };
 
-        // Make API request
-        let response = self
-            .http
-            .post(OPENROUTER_API_URL)
-            .header(
-                "Authorization",
-                format!("Bearer {}", self.api_key.expose_secret()),
-            )
-            .header("Content-Type", "application/json")
-            .header(
-                "HTTP-Referer",
-                "https://github.com/clouatre-labs/project-aptu",
-            )
-            .header("X-Title", "Aptu CLI")
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to send request to OpenRouter API")?;
+        // Make API request with retry logic
+        let completion: ChatCompletionResponse = (|| async {
+            let response = self
+                .http
+                .post(OPENROUTER_API_URL)
+                .header(
+                    "Authorization",
+                    format!("Bearer {}", self.api_key.expose_secret()),
+                )
+                .header("Content-Type", "application/json")
+                .header(
+                    "HTTP-Referer",
+                    "https://github.com/clouatre-labs/project-aptu",
+                )
+                .header("X-Title", "Aptu CLI")
+                .json(&request)
+                .send()
+                .await
+                .context("Failed to send request to OpenRouter API")?;
 
-        // Calculate duration
+            // Check for HTTP errors
+            let status = response.status();
+            if !status.is_success() {
+                if status.as_u16() == 401 {
+                    anyhow::bail!(
+                        "Invalid OpenRouter API key. Check your {OPENROUTER_API_KEY_ENV} environment variable."
+                    );
+                } else if status.as_u16() == 429 {
+                    warn!("Rate limited by OpenRouter API");
+                    // Parse Retry-After header (seconds), default to 0 if not present
+                    let retry_after = response
+                        .headers()
+                        .get("Retry-After")
+                        .and_then(|h| h.to_str().ok())
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .unwrap_or(0);
+                    debug!(retry_after, "Parsed Retry-After header");
+                    return Err(AptuError::RateLimited {
+                        provider: "openrouter".to_string(),
+                        retry_after,
+                    }
+                    .into());
+                }
+                let error_body = response.text().await.unwrap_or_default();
+                anyhow::bail!(
+                    "OpenRouter API error (HTTP {}): {}",
+                    status.as_u16(),
+                    error_body
+                );
+            }
+
+            // Parse response
+            let completion: ChatCompletionResponse = response
+                .json()
+                .await
+                .context("Failed to parse OpenRouter API response")?;
+
+            Ok(completion)
+        })
+        .retry(retry_backoff())
+        .when(is_retryable_anyhow)
+        .notify(|err, dur| warn!(error = %err, delay = ?dur, "Retrying after error"))
+        .await?;
+
+        // Calculate duration (total time including any retries)
         #[allow(clippy::cast_possible_truncation)]
         let duration_ms = start.elapsed().as_millis() as u64;
-
-        // Check for HTTP errors
-        #[allow(clippy::similar_names)]
-        let http_status = response.status();
-        if !http_status.is_success() {
-            if http_status.as_u16() == 401 {
-                anyhow::bail!(
-                    "Invalid OpenRouter API key. Check your {OPENROUTER_API_KEY_ENV} environment variable."
-                );
-            } else if http_status.as_u16() == 429 {
-                warn!("Rate limited by OpenRouter API");
-                // Parse Retry-After header (seconds), default to 0 if not present
-                let retry_after = response
-                    .headers()
-                    .get("Retry-After")
-                    .and_then(|h| h.to_str().ok())
-                    .and_then(|s| s.parse::<u64>().ok())
-                    .unwrap_or(0);
-                debug!(retry_after, "Parsed Retry-After header");
-                return Err(AptuError::RateLimited {
-                    provider: "openrouter".to_string(),
-                    retry_after,
-                }
-                .into());
-            }
-            let error_body = response.text().await.unwrap_or_default();
-            anyhow::bail!(
-                "OpenRouter API error (HTTP {}): {}",
-                http_status.as_u16(),
-                error_body
-            );
-        }
-
-        // Parse response
-        let completion: ChatCompletionResponse = response
-            .json()
-            .await
-            .context("Failed to parse OpenRouter API response")?;
 
         // Extract message content
         let content = completion

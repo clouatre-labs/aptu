@@ -119,6 +119,12 @@ pub use repos::CuratedRepo;
 pub use triage::{APTU_SIGNATURE, TriageStatus, check_already_triaged};
 
 // ============================================================================
+// Retry Logic
+// ============================================================================
+
+pub use retry::{is_retryable_anyhow, is_retryable_http, retry_backoff};
+
+// ============================================================================
 // Utilities
 // ============================================================================
 
@@ -145,5 +151,6 @@ pub mod facade;
 pub mod github;
 pub mod history;
 pub mod repos;
+pub mod retry;
 pub mod triage;
 pub mod utils;
