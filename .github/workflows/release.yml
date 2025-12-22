@@ -92,6 +92,7 @@ jobs:
       target: ${{ matrix.target }}
       os: ${{ matrix.os }}
       cross: ${{ matrix.cross }}
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
     secrets: inherit
 
   update-homebrew:
