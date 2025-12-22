@@ -1,11 +1,11 @@
 [package]
 name = "aptu-core"
-version = "0.1.1"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Core library for Aptu - OSS issue triage with AI assistance"
-authors = ["Hugues Clouâtre"]
-license = "Apache-2.0"
-repository = "https://github.com/clouatre-labs/aptu"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 # Error handling

@@ -1,11 +1,11 @@
 [package]
 name = "aptu-cli"
-version = "0.1.1"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "CLI for Aptu - Gamified OSS issue triage with AI assistance"
-authors = ["Hugues Clouâtre"]
-license = "Apache-2.0"
-repository = "https://github.com/clouatre-labs/aptu"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "aptu"
@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core library
-aptu-core = { path = "../aptu-core", version = "0.1.1" }
+aptu-core = { path = "../aptu-core", version = "0.1.2" }
 
 # CLI framework
 clap = { workspace = true }
