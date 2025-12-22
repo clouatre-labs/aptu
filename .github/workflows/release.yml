@@ -137,23 +137,24 @@ jobs:
           # Update formula with if/elsif syntax
           FORMULA="Formula/aptu.rb"
           RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          VERSION_NUMBER="${RELEASE_TAG#v}"
           
           # Generate formula content with if/elsif for architecture detection
           cat > "$FORMULA" << 'FORMULA_EOF'
           class Aptu < Formula
             desc "Gamified OSS issue triage with AI assistance"
             homepage "https://github.com/clouatre-labs/aptu"
-            version "VERSION_PLACEHOLDER"
+            version "VERSION_NUMBER_PLACEHOLDER"
             license "Apache-2.0"
             
             if OS.mac? && Hardware::CPU.arm?
-              url "https://github.com/clouatre-labs/aptu/releases/download/VERSION_PLACEHOLDER/aptu-aarch64-apple-darwin.tar.gz"
+              url "https://github.com/clouatre-labs/aptu/releases/download/TAG_PLACEHOLDER/aptu-aarch64-apple-darwin.tar.gz"
               sha256 "SHA256_MACOS_ARM_PLACEHOLDER"
             elsif OS.linux? && Hardware::CPU.arm?
-              url "https://github.com/clouatre-labs/aptu/releases/download/VERSION_PLACEHOLDER/aptu-aarch64-unknown-linux-musl.tar.gz"
+              url "https://github.com/clouatre-labs/aptu/releases/download/TAG_PLACEHOLDER/aptu-aarch64-unknown-linux-musl.tar.gz"
               sha256 "SHA256_LINUX_ARM_PLACEHOLDER"
             elsif OS.linux? && Hardware::CPU.intel?
-              url "https://github.com/clouatre-labs/aptu/releases/download/VERSION_PLACEHOLDER/aptu-x86_64-unknown-linux-musl.tar.gz"
+              url "https://github.com/clouatre-labs/aptu/releases/download/TAG_PLACEHOLDER/aptu-x86_64-unknown-linux-musl.tar.gz"
               sha256 "SHA256_LINUX_INTEL_PLACEHOLDER"
             end
             
@@ -168,7 +169,8 @@ jobs:
           FORMULA_EOF
           
           # Replace placeholders with actual values
-          sed -i "s/VERSION_PLACEHOLDER/${RELEASE_TAG}/g" "$FORMULA"
+          sed -i "s/VERSION_NUMBER_PLACEHOLDER/${VERSION_NUMBER}/g" "$FORMULA"
+          sed -i "s/TAG_PLACEHOLDER/${RELEASE_TAG}/g" "$FORMULA"
           sed -i "s/SHA256_MACOS_ARM_PLACEHOLDER/${shas["aptu-aarch64-apple-darwin.tar.gz"]}/g" "$FORMULA"
           sed -i "s/SHA256_LINUX_ARM_PLACEHOLDER/${shas["aptu-aarch64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
           sed -i "s/SHA256_LINUX_INTEL_PLACEHOLDER/${shas["aptu-x86_64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
