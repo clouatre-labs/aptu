@@ -227,21 +227,6 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_serialization_roundtrip() {
-        let data = TestData {
-            value: "test".to_string(),
-            count: 42,
-        };
-        let entry = CacheEntry::new(data.clone());
-
-        let json = serde_json::to_string(&entry).expect("serialize");
-        let parsed: CacheEntry<TestData> = serde_json::from_str(&json).expect("deserialize");
-
-        assert_eq!(parsed.data, data);
-        assert_eq!(parsed.etag, entry.etag);
-    }
-
-    #[test]
     fn test_cache_serialization_with_etag() {
         let data = TestData {
             value: "test".to_string(),

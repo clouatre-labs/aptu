@@ -461,12 +461,17 @@ mod tests {
     }
 
     #[test]
-    fn test_triage_response_parsing() {
+    fn test_triage_response_full() {
         let json = r##"{
             "summary": "This is a test summary.",
             "suggested_labels": ["bug", "enhancement"],
             "clarifying_questions": ["What version?"],
-            "potential_duplicates": ["#123"]
+            "potential_duplicates": ["#123"],
+            "status_note": "Issue claimed by @user",
+            "contributor_guidance": {
+                "beginner_friendly": true,
+                "reasoning": "Small scope, well-defined problem statement."
+            }
         }"##;
 
         let triage: TriageResponse = serde_json::from_str(json).unwrap();
@@ -474,44 +479,11 @@ mod tests {
         assert_eq!(triage.suggested_labels, vec!["bug", "enhancement"]);
         assert_eq!(triage.clarifying_questions, vec!["What version?"]);
         assert_eq!(triage.potential_duplicates, vec!["#123"]);
-    }
-
-    #[test]
-    fn test_triage_response_optional_fields() {
-        let json = r#"{
-            "summary": "Summary only.",
-            "suggested_labels": ["bug"]
-        }"#;
-
-        let triage: TriageResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(triage.summary, "Summary only.");
-        assert!(triage.clarifying_questions.is_empty());
-        assert!(triage.potential_duplicates.is_empty());
-    }
-
-    #[test]
-    fn test_is_free_model() {
-        use super::super::is_free_model;
-        assert!(is_free_model("mistralai/devstral-2512:free"));
-        assert!(is_free_model("google/gemini-2.0-flash-exp:free"));
-        assert!(!is_free_model("openai/gpt-4"));
-        assert!(!is_free_model("anthropic/claude-sonnet-4"));
-    }
-
-    #[test]
-    fn test_triage_response_with_contributor_guidance() {
-        let json = r#"{
-            "summary": "Test summary",
-            "suggested_labels": ["bug"],
-            "contributor_guidance": {
-                "beginner_friendly": true,
-                "reasoning": "Small scope, well-defined problem statement."
-            }
-        }"#;
-
-        let triage: TriageResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            triage.status_note,
+            Some("Issue claimed by @user".to_string())
+        );
         assert!(triage.contributor_guidance.is_some());
-
         let guidance = triage.contributor_guidance.unwrap();
         assert!(guidance.beginner_friendly);
         assert_eq!(
@@ -521,18 +493,23 @@ mod tests {
     }
 
     #[test]
-    fn test_triage_response_without_contributor_guidance() {
+    fn test_triage_response_minimal() {
         let json = r#"{
-            "summary": "Test summary",
+            "summary": "Summary only.",
             "suggested_labels": ["bug"]
         }"#;
 
         let triage: TriageResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(triage.summary, "Summary only.");
+        assert_eq!(triage.suggested_labels, vec!["bug"]);
+        assert!(triage.clarifying_questions.is_empty());
+        assert!(triage.potential_duplicates.is_empty());
+        assert_eq!(triage.status_note, None);
         assert!(triage.contributor_guidance.is_none());
     }
 
     #[test]
-    fn test_triage_response_with_not_beginner_friendly() {
+    fn test_triage_response_partial() {
         let json = r#"{
             "summary": "Test summary",
             "suggested_labels": ["enhancement"],
@@ -543,14 +520,27 @@ mod tests {
         }"#;
 
         let triage: TriageResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(triage.summary, "Test summary");
+        assert_eq!(triage.suggested_labels, vec!["enhancement"]);
+        assert!(triage.clarifying_questions.is_empty());
+        assert!(triage.potential_duplicates.is_empty());
+        assert_eq!(triage.status_note, None);
         assert!(triage.contributor_guidance.is_some());
-
         let guidance = triage.contributor_guidance.unwrap();
         assert!(!guidance.beginner_friendly);
         assert_eq!(
             guidance.reasoning,
             "Requires deep knowledge of the compiler internals."
         );
+    }
+
+    #[test]
+    fn test_is_free_model() {
+        use super::super::is_free_model;
+        assert!(is_free_model("mistralai/devstral-2512:free"));
+        assert!(is_free_model("google/gemini-2.0-flash-exp:free"));
+        assert!(!is_free_model("openai/gpt-4"));
+        assert!(!is_free_model("anthropic/claude-sonnet-4"));
     }
 
     #[test]
