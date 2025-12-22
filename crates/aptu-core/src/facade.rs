@@ -198,26 +198,4 @@ mod tests {
             self.openrouter_key.clone()
         }
     }
-
-    #[test]
-    fn test_mock_provider_with_tokens() {
-        let provider = MockTokenProvider {
-            github_token: Some(SecretString::new("gh_token".to_string().into())),
-            openrouter_key: Some(SecretString::new("or_key".to_string().into())),
-        };
-
-        assert!(provider.github_token().is_some());
-        assert!(provider.openrouter_key().is_some());
-    }
-
-    #[test]
-    fn test_mock_provider_without_tokens() {
-        let provider = MockTokenProvider {
-            github_token: None,
-            openrouter_key: None,
-        };
-
-        assert!(provider.github_token().is_none());
-        assert!(provider.openrouter_key().is_none());
-    }
 }

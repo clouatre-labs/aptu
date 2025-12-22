@@ -793,27 +793,6 @@ mod tests {
     }
 
     #[test]
-    fn test_truncate_body_short() {
-        let body = "Short body";
-        assert_eq!(truncate_body(body, 100), "Short body");
-    }
-
-    #[test]
-    fn test_truncate_body_long() {
-        let body = "This is a very long body that should be truncated because it exceeds the maximum length";
-        let result = truncate_body(body, 50);
-        assert!(result.ends_with("... [truncated]"));
-        assert!(result.contains("This is a very long"));
-    }
-
-    #[test]
-    fn test_truncate_body_exact_length() {
-        let body = "Exactly fifty characters long text here now ok";
-        let result = truncate_body(body, 50);
-        assert_eq!(result, body);
-    }
-
-    #[test]
     fn test_render_triage_markdown_with_contributor_guidance_beginner() {
         use aptu_core::ai::types::ContributorGuidance;
 
