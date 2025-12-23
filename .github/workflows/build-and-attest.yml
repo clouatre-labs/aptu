@@ -53,7 +53,9 @@ jobs:
           key: ${{ inputs.target }}
       - name: Install cargo-deb
         if: ${{ startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux') }}
-        run: cargo install cargo-deb
+        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f # v2
+        with:
+          tool: cargo-deb
       - name: Build and upload binary
         if: ${{ !inputs.dry_run }}
         id: upload
@@ -65,7 +67,7 @@ jobs:
           checksum: sha256
       - name: Build binary (dry-run)
         if: ${{ inputs.dry_run }}
-        run: cargo build --release --target ${{ inputs.target }}
+        run: cargo build --release --target ${{ inputs.target }} -p aptu-cli
       - name: Generate .deb package
         if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
         run: cargo deb --target ${{ inputs.target }} --no-build
