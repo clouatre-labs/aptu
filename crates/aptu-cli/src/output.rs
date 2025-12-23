@@ -313,6 +313,23 @@ fn render_triage_content(
         false,
     ));
 
+    // Suggested Milestone
+    if let Some(milestone) = &triage.suggested_milestone
+        && !milestone.is_empty()
+    {
+        match mode {
+            OutputMode::Terminal => {
+                let _ = writeln!(output, "{}", style("Suggested Milestone").cyan().bold());
+                let _ = writeln!(output, "  {milestone}\n");
+            }
+            OutputMode::Markdown => {
+                output.push_str("### Suggested Milestone\n\n");
+                output.push_str(milestone);
+                output.push_str("\n\n");
+            }
+        }
+    }
+
     // Questions
     output.push_str(&render_list_section(
         "Clarifying Questions",
@@ -780,7 +797,7 @@ mod tests {
             related_issues: Vec::new(),
             contributor_guidance: None,
             implementation_approach: None,
-            suggested_milestone: None,
+            suggested_milestone: Some("v1.0".to_string()),
         };
 
         let comment = render_triage_markdown(&triage);
@@ -791,6 +808,8 @@ mod tests {
         assert!(comment.contains("- `crash`"));
         assert!(comment.contains("1. What version are you using?"));
         assert!(comment.contains("- #123"));
+        assert!(comment.contains("### Suggested Milestone"));
+        assert!(comment.contains("v1.0"));
         assert!(comment.contains("Aptu"));
     }
 
@@ -939,6 +958,26 @@ mod tests {
 
         // Should not contain contributor guidance section
         assert!(!comment.contains("### Contributor Guidance"));
+    }
+
+    #[test]
+    fn test_render_triage_markdown_with_suggested_milestone() {
+        let triage = TriageResponse {
+            summary: "Feature request for v2.0.".to_string(),
+            suggested_labels: vec!["enhancement".to_string()],
+            clarifying_questions: vec![],
+            potential_duplicates: vec![],
+            status_note: None,
+            related_issues: Vec::new(),
+            contributor_guidance: None,
+            implementation_approach: None,
+            suggested_milestone: Some("v2.0".to_string()),
+        };
+
+        let comment = render_triage_markdown(&triage);
+
+        assert!(comment.contains("### Suggested Milestone"));
+        assert!(comment.contains("v2.0"));
     }
 }
 
