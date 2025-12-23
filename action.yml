@@ -1,0 +1,105 @@
+name: Aptu Issue Triage
+description: Automatically triage GitHub issues using AI-powered analysis with aptu
+author: Aptu Contributors
+
+branding:
+  icon: zap
+  color: blue
+
+inputs:
+  github-token:
+    description: GitHub token for API access
+    required: true
+  openrouter-api-key:
+    description: OpenRouter API key for AI analysis
+    required: true
+  model:
+    description: OpenRouter model to use for analysis
+    required: false
+    default: mistralai/devstral-2512:free
+  skip-labeled:
+    description: Skip triage if issue already has labels
+    required: false
+    default: 'true'
+  dry-run:
+    description: Run without making changes
+    required: false
+    default: 'false'
+  apply-labels:
+    description: Apply AI-suggested labels and milestone to the issue
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Check if issue should be skipped
+      id: check-skip
+      shell: bash
+      env:
+        SKIP_LABELED: ${{ inputs.skip-labeled }}
+        ISSUE_LABELS: ${{ toJson(github.event.issue.labels) }}
+      run: |
+        if [[ "$SKIP_LABELED" == "true" ]]; then
+          LABEL_COUNT=$(echo "$ISSUE_LABELS" | jq 'length')
+          if [[ $LABEL_COUNT -gt 0 ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Issue already has labels, skipping triage"
+            exit 0
+          fi
+        fi
+        echo "skip=false" >> $GITHUB_OUTPUT
+
+    - name: Download aptu binary
+      if: steps.check-skip.outputs.skip != 'true'
+      shell: bash
+      run: |
+        set -e
+        
+        # Get latest v0.x.x release from GitHub API
+        APTU_VERSION=$(curl -sL https://api.github.com/repos/clouatre-labs/aptu/releases | jq -r '[.[] | select(.tag_name | startswith("v0."))] | first | .tag_name' | sed 's/^v//')
+        echo "Latest aptu v0.x version: $APTU_VERSION"
+        
+        BINARY_URL="https://github.com/clouatre-labs/aptu/releases/download/v${APTU_VERSION}/aptu-x86_64-unknown-linux-musl.tar.gz"
+        TEMP_DIR=$(mktemp -d)
+        
+        echo "Downloading aptu from $BINARY_URL"
+        curl -sL "$BINARY_URL" -o "$TEMP_DIR/aptu.tar.gz"
+        tar -xzf "$TEMP_DIR/aptu.tar.gz" -C "$TEMP_DIR"
+        
+        # Make binary executable and move to PATH
+        chmod +x "$TEMP_DIR/aptu"
+        mkdir -p "$HOME/.local/bin"
+        mv "$TEMP_DIR/aptu" "$HOME/.local/bin/aptu"
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        
+        rm -rf "$TEMP_DIR"
+        echo "aptu v$APTU_VERSION installed successfully"
+
+    - name: Run aptu issue triage
+      if: steps.check-skip.outputs.skip != 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        APTU_MODEL: ${{ inputs.model }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        APPLY_LABELS: ${{ inputs.apply-labels }}
+        ISSUE_NUMBER: ${{ github.event.issue.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -e
+        
+        ISSUE_REF="${REPO}#${ISSUE_NUMBER}"
+        ARGS="--yes"
+        
+        if [[ "$DRY_RUN" == "true" ]]; then
+          ARGS="$ARGS --dry-run"
+        fi
+        
+        if [[ "$APPLY_LABELS" == "true" ]]; then
+          ARGS="$ARGS --apply"
+        fi
+        
+        echo "Running: aptu issue triage $ARGS $ISSUE_REF"
+        aptu issue triage $ARGS "$ISSUE_REF"
