@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! Triage status detection for GitHub issues.
+//!
+//! This module provides utilities to check whether an issue has already been triaged,
+//! either through labels or Aptu-generated comments.
+
 use crate::ai::types::IssueDetails;
 use tracing::debug;
 
