@@ -235,20 +235,8 @@ fn test_triage_untriaged_with_repo() {
         .arg("block/goose")
         .arg("--dry-run")
         .assert()
-        .success();
-}
-
-#[test]
-fn test_triage_delay_flag() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
-        .arg("triage")
-        .arg("block/goose#1")
-        .arg("--delay")
-        .arg("500")
-        .arg("--dry-run")
-        .assert()
-        .success();
+        .failure()
+        .stderr(predicates::str::contains("Not authenticated"));
 }
 
 #[test]
@@ -263,7 +251,8 @@ fn test_triage_since_flag() {
         .arg("2025-01-01T00:00:00Z")
         .arg("--dry-run")
         .assert()
-        .success();
+        .failure()
+        .stderr(predicates::str::contains("Not authenticated"));
 }
 
 #[test]

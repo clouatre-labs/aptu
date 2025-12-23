@@ -171,10 +171,6 @@ pub enum IssueCommand {
         #[arg(long)]
         since: Option<String>,
 
-        /// Delay between triage operations in milliseconds (default: 1000)
-        #[arg(long, default_value = "1000")]
-        delay: u64,
-
         /// Preview triage without posting to GitHub
         #[arg(long)]
         dry_run: bool,

@@ -251,7 +251,6 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 repo,
                 untriaged,
                 since,
-                delay,
                 dry_run,
                 yes,
                 show_issue,
@@ -284,6 +283,15 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     .await?;
                     if let Some(s) = spinner {
                         s.finish_and_clear();
+                    }
+
+                    // Warn if pagination limit hit
+                    if untriaged_issues.len() == 50 && matches!(ctx.format, OutputFormat::Text) {
+                        println!(
+                            "{}",
+                            style("Warning: Fetched 50 issues (pagination limit). There may be more untriaged issues.")
+                                .yellow()
+                        );
                     }
 
                     untriaged_issues
@@ -358,11 +366,6 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                                 println!("  {}", style(format!("Error: {e}")).red());
                             }
                         }
-                    }
-
-                    // Rate limiting between requests
-                    if idx < issue_refs.len() - 1 {
-                        tokio::time::sleep(Duration::from_millis(delay)).await;
                     }
                 }
 
