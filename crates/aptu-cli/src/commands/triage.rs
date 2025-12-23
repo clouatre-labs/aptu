@@ -109,6 +109,10 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         repo_tree: Vec::new(),
         available_labels,
         available_milestones,
+        viewer_permission: repo_data
+            .viewer_permission
+            .as_ref()
+            .map(|p| format!("{p:?}")),
     };
 
     // Search for related issues to provide context to AI

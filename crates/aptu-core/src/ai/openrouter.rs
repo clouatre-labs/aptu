@@ -626,6 +626,7 @@ mod tests {
             repo_tree: Vec::new(),
             available_labels: Vec::new(),
             available_milestones: Vec::new(),
+            viewer_permission: None,
         };
 
         let prompt = build_user_prompt(&issue);
@@ -652,6 +653,7 @@ mod tests {
             repo_tree: Vec::new(),
             available_labels: Vec::new(),
             available_milestones: Vec::new(),
+            viewer_permission: None,
         };
 
         let prompt = build_user_prompt(&issue);
@@ -674,6 +676,7 @@ mod tests {
             repo_tree: Vec::new(),
             available_labels: Vec::new(),
             available_milestones: Vec::new(),
+            viewer_permission: None,
         };
 
         let prompt = build_user_prompt(&issue);
