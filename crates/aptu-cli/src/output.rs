@@ -941,3 +941,47 @@ mod tests {
         assert!(!comment.contains("### Contributor Guidance"));
     }
 }
+
+/// Render bulk triage summary.
+pub fn render_bulk_triage_summary(
+    result: &crate::commands::types::BulkTriageResult,
+    ctx: &OutputContext,
+) {
+    match ctx.format {
+        OutputFormat::Json => {
+            let summary = serde_json::json!({
+                "succeeded": result.succeeded,
+                "failed": result.failed,
+                "skipped": result.skipped,
+                "total": result.succeeded + result.failed + result.skipped,
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&summary).expect("Failed to serialize summary")
+            );
+        }
+        OutputFormat::Yaml => {
+            let summary = serde_yml::to_string(&serde_json::json!({
+                "succeeded": result.succeeded,
+                "failed": result.failed,
+                "skipped": result.skipped,
+                "total": result.succeeded + result.failed + result.skipped,
+            }))
+            .expect("Failed to serialize summary");
+            println!("{summary}");
+        }
+        OutputFormat::Markdown | OutputFormat::Text => {
+            println!();
+            println!("{}", style("Bulk Triage Summary").bold().green());
+            println!("{}", style("=".repeat(20)).dim());
+            println!("  Succeeded: {}", style(result.succeeded).green());
+            println!("  Failed:    {}", style(result.failed).red());
+            println!("  Skipped:   {}", style(result.skipped).yellow());
+            println!(
+                "  Total:     {}",
+                result.succeeded + result.failed + result.skipped
+            );
+            println!();
+        }
+    }
+}

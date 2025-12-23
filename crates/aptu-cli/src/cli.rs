@@ -155,12 +155,21 @@ pub enum IssueCommand {
 
     /// Triage an issue with AI assistance
     Triage {
-        /// Issue reference (URL, owner/repo#number, or number)
-        reference: String,
+        /// Issue references (URL, owner/repo#number, or number)
+        #[arg(value_name = "REFERENCE")]
+        references: Vec<String>,
 
         /// Repository for bare issue numbers (e.g., "block/goose")
         #[arg(long, short = 'r')]
         repo: Option<String>,
+
+        /// Triage all open issues without labels
+        #[arg(long, conflicts_with = "references")]
+        untriaged: bool,
+
+        /// Only triage issues created since this date (RFC3339 format)
+        #[arg(long)]
+        since: Option<String>,
 
         /// Preview triage without posting to GitHub
         #[arg(long)]

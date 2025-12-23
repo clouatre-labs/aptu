@@ -381,6 +381,115 @@ pub async fn fetch_issue_with_repo_context(
     Ok((issue, repository))
 }
 
+/// Builds a GraphQL query to fetch untriaged issues (without labels) from a repository.
+fn build_untriaged_issues_query(owner: &str, repo: &str) -> Value {
+    let query = format!(
+        r#"query {{
+            repository(owner: "{owner}", name: "{repo}") {{
+                issues(
+                    first: 50
+                    states: OPEN
+                    filterBy: {{ assignee: null }}
+                    orderBy: {{ field: CREATED_AT, direction: DESC }}
+                ) {{
+                    nodes {{
+                        number
+                        title
+                        createdAt
+                        labels(first: 5) {{ nodes {{ name }} }}
+                        url
+                    }}
+                }}
+            }}
+        }}"#
+    );
+
+    json!({ "query": query })
+}
+
+/// Fetches untriaged issues (those without any labels) from a specific repository.
+///
+/// # Arguments
+///
+/// * `client` - The Octocrab GitHub client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `since` - Optional RFC3339 timestamp to filter issues created after this date (client-side filtering)
+///
+/// # Errors
+///
+/// Returns an error if the GraphQL query fails.
+#[instrument(skip(client), fields(owner = %owner, repo = %repo))]
+pub async fn fetch_untriaged_issues(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    since: Option<&str>,
+) -> Result<Vec<IssueNode>> {
+    debug!("Fetching untriaged issues");
+
+    let query = build_untriaged_issues_query(owner, repo);
+    debug!("Executing GraphQL query for untriaged issues");
+
+    let response: Value = client
+        .graphql(&query)
+        .await
+        .context("Failed to execute GraphQL query")?;
+
+    // Check for GraphQL errors
+    if let Some(errors) = response.get("errors") {
+        let error_msg = serde_json::to_string_pretty(errors).unwrap_or_default();
+        anyhow::bail!("GraphQL error: {error_msg}");
+    }
+
+    let data = response
+        .get("data")
+        .context("Missing 'data' field in GraphQL response")?;
+
+    let repo_data = data
+        .get("repository")
+        .context("Repository not found in GraphQL response")?;
+
+    if repo_data.is_null() {
+        debug!("Repository not found or inaccessible");
+        return Ok(vec![]);
+    }
+
+    let issues_connection: IssuesConnection =
+        serde_json::from_value(repo_data.get("issues").unwrap().clone())
+            .context("Failed to parse issues data")?;
+
+    let total_issues = issues_connection.nodes.len();
+
+    // Filter to only issues without any labels
+    let mut untriaged: Vec<IssueNode> = issues_connection
+        .nodes
+        .into_iter()
+        .filter(|issue| issue.labels.nodes.is_empty())
+        .collect();
+
+    // Apply client-side date filtering if requested
+    if let Some(since_date) = since
+        && let Ok(since_timestamp) = chrono::DateTime::parse_from_rfc3339(since_date)
+    {
+        untriaged.retain(|issue| {
+            if let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(&issue.created_at) {
+                created_at >= since_timestamp
+            } else {
+                true // Keep if we can't parse the date
+            }
+        });
+    }
+
+    debug!(
+        total_issues = total_issues,
+        untriaged_count = untriaged.len(),
+        "Fetched untriaged issues"
+    );
+
+    Ok(untriaged)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
