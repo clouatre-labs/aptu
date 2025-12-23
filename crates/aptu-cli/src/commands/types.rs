@@ -42,6 +42,12 @@ pub struct TriageResult {
     pub dry_run: bool,
     /// Whether the user declined to post.
     pub user_declined: bool,
+    /// Labels that were applied to the issue.
+    pub applied_labels: Vec<String>,
+    /// Milestone that was applied to the issue.
+    pub applied_milestone: Option<String>,
+    /// Warnings from applying labels/milestone.
+    pub apply_warnings: Vec<String>,
 }
 
 /// Result from the history command.

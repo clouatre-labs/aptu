@@ -177,6 +177,10 @@ pub enum IssueCommand {
         /// Force triage even if issue appears already triaged
         #[arg(long)]
         force: bool,
+
+        /// Apply AI-suggested labels and milestone to the issue
+        #[arg(long)]
+        apply: bool,
     },
 }
 

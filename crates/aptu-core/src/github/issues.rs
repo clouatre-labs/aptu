@@ -364,6 +364,106 @@ pub async fn post_comment(
     Ok(comment_url)
 }
 
+/// Result of applying labels and milestone to an issue.
+#[derive(Debug, Clone)]
+pub struct ApplyResult {
+    /// Labels that were successfully applied.
+    pub applied_labels: Vec<String>,
+    /// Milestone that was successfully applied, if any.
+    pub applied_milestone: Option<String>,
+    /// Warnings about labels or milestones that could not be applied.
+    pub warnings: Vec<String>,
+}
+
+/// Updates an issue with labels and milestone.
+///
+/// Validates suggested labels and milestone against available options before applying.
+/// Returns what was actually applied and any warnings.
+///
+/// # Errors
+///
+/// Returns an error if the GitHub API call fails.
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
+#[allow(clippy::too_many_arguments)]
+pub async fn update_issue_labels_and_milestone(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    suggested_labels: &[String],
+    suggested_milestone: Option<&str>,
+    available_labels: &[crate::ai::types::RepoLabel],
+    available_milestones: &[crate::ai::types::RepoMilestone],
+) -> Result<ApplyResult> {
+    debug!("Updating issue with labels and milestone");
+
+    let mut applied_labels = Vec::new();
+    let mut warnings = Vec::new();
+
+    // Validate and collect labels
+    let available_label_names: std::collections::HashSet<_> =
+        available_labels.iter().map(|l| l.name.as_str()).collect();
+
+    for label in suggested_labels {
+        if available_label_names.contains(label.as_str()) {
+            applied_labels.push(label.clone());
+        } else {
+            warnings.push(format!("Label '{label}' not found in repository"));
+        }
+    }
+
+    // Validate and find milestone
+    let mut applied_milestone = None;
+    if let Some(milestone_title) = suggested_milestone {
+        if let Some(milestone) = available_milestones
+            .iter()
+            .find(|m| m.title == milestone_title)
+        {
+            applied_milestone = Some(milestone.title.clone());
+        } else {
+            warnings.push(format!(
+                "Milestone '{milestone_title}' not found in repository"
+            ));
+        }
+    }
+
+    // Apply updates to the issue
+    let issues_handler = client.issues(owner, repo);
+    let mut update_builder = issues_handler.update(number);
+
+    if !applied_labels.is_empty() {
+        update_builder = update_builder.labels(&applied_labels);
+    }
+
+    #[allow(clippy::collapsible_if)]
+    if let Some(milestone_title) = &applied_milestone {
+        if let Some(milestone) = available_milestones
+            .iter()
+            .find(|m| &m.title == milestone_title)
+        {
+            update_builder = update_builder.milestone(milestone.number);
+        }
+    }
+
+    update_builder
+        .send()
+        .await
+        .with_context(|| format!("Failed to update issue #{number}"))?;
+
+    debug!(
+        labels = ?applied_labels,
+        milestone = ?applied_milestone,
+        warnings = ?warnings,
+        "Issue updated successfully"
+    );
+
+    Ok(ApplyResult {
+        applied_labels,
+        applied_milestone,
+        warnings,
+    })
+}
+
 /// Maps programming languages to their common file extensions.
 fn get_extensions_for_language(language: &str) -> Vec<&'static str> {
     match language.to_lowercase().as_str() {

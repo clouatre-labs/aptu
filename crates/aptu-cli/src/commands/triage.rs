@@ -197,3 +197,50 @@ pub async fn post(analyze_result: &AnalyzeResult) -> Result<String> {
 
     Ok(comment_url)
 }
+
+/// Apply AI-suggested labels and milestone to an issue.
+///
+/// Validates suggestions against available labels and milestones before applying.
+/// Returns what was applied and any warnings.
+///
+/// # Arguments
+///
+/// * `issue_details` - Issue details including available labels and milestones
+/// * `triage` - AI triage response with suggestions
+#[instrument(skip_all, fields(owner = %issue_details.owner, repo = %issue_details.repo, number = issue_details.number))]
+pub async fn apply(
+    issue_details: &IssueDetails,
+    triage: &TriageResponse,
+) -> Result<issues::ApplyResult> {
+    debug!("Applying labels and milestone to issue");
+
+    // Check authentication
+    if !auth::is_authenticated() {
+        return Err(AptuError::NotAuthenticated.into());
+    }
+
+    // Create authenticated client
+    let client = auth::create_client()?;
+
+    // Call the update function with validation
+    let result = issues::update_issue_labels_and_milestone(
+        &client,
+        &issue_details.owner,
+        &issue_details.repo,
+        issue_details.number,
+        &triage.suggested_labels,
+        triage.suggested_milestone.as_deref(),
+        &issue_details.available_labels,
+        &issue_details.available_milestones,
+    )
+    .await?;
+
+    info!(
+        labels = ?result.applied_labels,
+        milestone = ?result.applied_milestone,
+        warnings = ?result.warnings,
+        "Labels and milestone applied"
+    );
+
+    Ok(result)
+}
