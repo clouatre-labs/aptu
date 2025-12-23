@@ -61,21 +61,27 @@ pub fn run_logout() -> Result<()> {
 }
 
 /// Run the status command - show current authentication state.
-pub fn run_status() {
+pub async fn run_status() -> Result<crate::commands::types::AuthStatusResult> {
     match auth::resolve_token() {
-        Some((_, source)) => {
-            println!(
-                "{} Authenticated with GitHub (via {}).",
-                style("*").green().bold(),
-                source
-            );
+        Some((token, source)) => {
+            let username = match auth::create_client_with_token(&token) {
+                Ok(client) => match client.current().user().await {
+                    Ok(user) => Some(user.login),
+                    Err(_) => None,
+                },
+                Err(_) => None,
+            };
+
+            Ok(crate::commands::types::AuthStatusResult {
+                authenticated: true,
+                method: Some(source),
+                username,
+            })
         }
-        None => {
-            println!(
-                "{} Not authenticated. Run {} to authenticate.",
-                style("!").yellow().bold(),
-                style("aptu auth login").cyan()
-            );
-        }
+        None => Ok(crate::commands::types::AuthStatusResult {
+            authenticated: false,
+            method: None,
+            username: None,
+        }),
     }
 }
