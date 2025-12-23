@@ -2,6 +2,16 @@
 
 We welcome contributions! This document covers the essentials.
 
+## Non-Code Contributions
+
+Not a coder? You can still help Aptu grow:
+
+- **Write about Aptu** - Blog posts, tutorials, comparisons
+- **Share on social media** - Twitter/X, Mastodon, LinkedIn, Reddit
+- **Submit to newsletters** - This Week in Rust, Hacker News, dev.to
+- **Give talks** - Meetups, conferences, podcasts
+- **Create videos** - Demos, tutorials, reviews
+
 ## Quick Start
 
 ### Prerequisites
