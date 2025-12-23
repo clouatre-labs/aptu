@@ -274,7 +274,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     let spinner = maybe_spinner(&ctx, "Fetching untriaged issues...");
                     let client = aptu_core::github::auth::create_client()
                         .context("Failed to create GitHub client")?;
-                    let untriaged_issues = aptu_core::github::graphql::fetch_untriaged_issues(
+                    let untriaged_issues = aptu_core::github::issues::fetch_untriaged_issues(
                         &client,
                         owner,
                         repo_name,
@@ -286,10 +286,10 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     }
 
                     // Warn if pagination limit hit
-                    if untriaged_issues.len() == 50 && matches!(ctx.format, OutputFormat::Text) {
+                    if untriaged_issues.len() == 100 && matches!(ctx.format, OutputFormat::Text) {
                         println!(
                             "{}",
-                            style("Warning: Fetched 50 issues (pagination limit). There may be more untriaged issues.")
+                            style("Warning: Fetched 100 issues (pagination limit). There may be more untriaged issues.")
                                 .yellow()
                         );
                     }
