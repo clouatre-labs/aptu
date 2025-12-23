@@ -10,7 +10,7 @@ pub mod types;
 
 pub use models::{AiModel, ModelProvider};
 pub use openrouter::OpenRouterClient;
-pub use types::TriageResponse;
+pub use types::{CreateIssueResponse, TriageResponse};
 
 use crate::history::AiStats;
 
@@ -34,4 +34,28 @@ pub struct AiResponse {
 #[must_use]
 pub fn is_free_model(model: &str) -> bool {
     model.ends_with(":free")
+}
+
+/// Creates a formatted GitHub issue using AI assistance.
+///
+/// Takes raw issue title and body, formats them professionally using `OpenRouter` API.
+/// Returns formatted title, body, and suggested labels.
+///
+/// # Arguments
+///
+/// * `title` - Raw issue title from user
+/// * `body` - Raw issue body/description from user
+/// * `repo` - Repository name for context (owner/repo format)
+///
+/// # Errors
+///
+/// Returns an error if AI formatting fails or API is unavailable.
+pub async fn create_issue(
+    title: &str,
+    body: &str,
+    repo: &str,
+) -> anyhow::Result<CreateIssueResponse> {
+    let config = crate::config::load_config()?;
+    let client = OpenRouterClient::new(&config.ai)?;
+    client.create_issue(title, body, repo).await
 }

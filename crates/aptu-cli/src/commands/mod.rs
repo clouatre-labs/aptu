@@ -4,6 +4,7 @@
 
 pub mod auth;
 pub mod completion;
+pub mod create;
 pub mod history;
 pub mod issue;
 pub mod repo;
@@ -361,6 +362,21 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 // Render bulk summary
                 output::render_bulk_triage_summary(&bulk_result, &ctx);
 
+                Ok(())
+            }
+            IssueCommand::Create {
+                repo,
+                title,
+                body,
+                from,
+                dry_run,
+            } => {
+                let spinner = maybe_spinner(&ctx, "Creating issue...");
+                let result = create::run(repo, title, body, from, dry_run).await?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
+                output::render_create_result(&result, &ctx);
                 Ok(())
             }
         },

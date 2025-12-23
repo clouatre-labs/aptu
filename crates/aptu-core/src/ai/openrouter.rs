@@ -135,48 +135,25 @@ impl OpenRouterClient {
         })
     }
 
-    /// Analyzes a GitHub issue using the `OpenRouter` API.
+    /// Sends a chat completion request to the `OpenRouter` API with retry logic.
     ///
-    /// Returns a structured triage response with summary, labels, questions, duplicates, and usage stats.
+    /// Handles HTTP headers, error responses (401, 429), and automatic retries
+    /// with exponential backoff.
     ///
     /// # Arguments
     ///
-    /// * `issue` - Issue details to analyze
+    /// * `request` - The chat completion request to send
     ///
     /// # Errors
     ///
     /// Returns an error if:
-    /// - API request fails (network, timeout, rate limit)
-    /// - Response cannot be parsed as valid JSON
-    #[instrument(skip(self, issue), fields(issue_number = issue.number, repo = %format!("{}/{}", issue.owner, issue.repo)))]
-    #[allow(clippy::too_many_lines)]
-    pub async fn analyze_issue(&self, issue: &IssueDetails) -> Result<AiResponse> {
-        debug!(model = %self.model, "Calling OpenRouter API");
-
-        // Start timing (outside retry loop to measure total time including retries)
-        let start = std::time::Instant::now();
-
-        // Build request
-        let request = ChatCompletionRequest {
-            model: self.model.clone(),
-            messages: vec![
-                ChatMessage {
-                    role: "system".to_string(),
-                    content: build_system_prompt(),
-                },
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: build_user_prompt(issue),
-                },
-            ],
-            response_format: Some(ResponseFormat {
-                format_type: "json_object".to_string(),
-            }),
-            max_tokens: Some(1024),
-            temperature: Some(0.3),
-        };
-
-        // Make API request with retry logic
+    /// - Network request fails
+    /// - API returns an error status code
+    /// - Response cannot be parsed as JSON
+    async fn send_request(
+        &self,
+        request: &ChatCompletionRequest,
+    ) -> Result<ChatCompletionResponse> {
         let completion: ChatCompletionResponse = (|| async {
             let response = self
                 .http
@@ -191,7 +168,7 @@ impl OpenRouterClient {
                     "https://github.com/clouatre-labs/project-aptu",
                 )
                 .header("X-Title", "Aptu CLI")
-                .json(&request)
+                .json(request)
                 .send()
                 .await
                 .context("Failed to send request to OpenRouter API")?;
@@ -240,6 +217,53 @@ impl OpenRouterClient {
         .notify(|err, dur| warn!(error = %err, delay = ?dur, "Retrying after error"))
         .await?;
 
+        Ok(completion)
+    }
+
+    /// Analyzes a GitHub issue using the `OpenRouter` API.
+    ///
+    /// Returns a structured triage response with summary, labels, questions, duplicates, and usage stats.
+    ///
+    /// # Arguments
+    ///
+    /// * `issue` - Issue details to analyze
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - API request fails (network, timeout, rate limit)
+    /// - Response cannot be parsed as valid JSON
+    #[instrument(skip(self, issue), fields(issue_number = issue.number, repo = %format!("{}/{}", issue.owner, issue.repo)))]
+    #[allow(clippy::too_many_lines)]
+    pub async fn analyze_issue(&self, issue: &IssueDetails) -> Result<AiResponse> {
+        debug!(model = %self.model, "Calling OpenRouter API");
+
+        // Start timing (outside retry loop to measure total time including retries)
+        let start = std::time::Instant::now();
+
+        // Build request
+        let request = ChatCompletionRequest {
+            model: self.model.clone(),
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: build_system_prompt(),
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: build_user_prompt(issue),
+                },
+            ],
+            response_format: Some(ResponseFormat {
+                format_type: "json_object".to_string(),
+            }),
+            max_tokens: Some(1024),
+            temperature: Some(0.3),
+        };
+
+        // Make API request with retry logic
+        let completion = self.send_request(&request).await?;
+
         // Calculate duration (total time including any retries)
         #[allow(clippy::cast_possible_truncation)]
         let duration_ms = start.elapsed().as_millis() as u64;
@@ -287,6 +311,85 @@ impl OpenRouterClient {
             triage,
             stats: ai_stats,
         })
+    }
+
+    /// Creates a formatted GitHub issue using the `OpenRouter` API.
+    ///
+    /// Takes raw issue title and body, formats them using AI (conventional commit style,
+    /// structured body), and returns the formatted content with suggested labels.
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - Raw issue title from user
+    /// * `body` - Raw issue body/description from user
+    /// * `repo` - Repository name for context (owner/repo format)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - API request fails (network, timeout, rate limit)
+    /// - Response cannot be parsed as valid JSON
+    #[instrument(skip(self), fields(repo = %repo))]
+    pub async fn create_issue(
+        &self,
+        title: &str,
+        body: &str,
+        repo: &str,
+    ) -> Result<super::types::CreateIssueResponse> {
+        debug!(model = %self.model, "Calling OpenRouter API for issue creation");
+
+        // Start timing
+        let start = std::time::Instant::now();
+
+        // Build request
+        let request = ChatCompletionRequest {
+            model: self.model.clone(),
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: build_create_system_prompt(),
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: build_create_user_prompt(title, body, repo),
+                },
+            ],
+            response_format: Some(ResponseFormat {
+                format_type: "json_object".to_string(),
+            }),
+            max_tokens: Some(1024),
+            temperature: Some(0.3),
+        };
+
+        // Make API request with retry logic
+        let completion = self.send_request(&request).await?;
+
+        // Extract message content
+        let content = completion
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .context("No response from AI model")?;
+
+        debug!(response_length = content.len(), "Received AI response");
+
+        // Parse JSON response
+        let create_response: super::types::CreateIssueResponse = serde_json::from_str(&content)
+            .with_context(|| {
+                format!("Failed to parse AI response as JSON. Raw response:\n{content}")
+            })?;
+
+        #[allow(clippy::cast_possible_truncation)]
+        let _duration_ms = start.elapsed().as_millis() as u64;
+
+        debug!(
+            title_len = create_response.formatted_title.len(),
+            body_len = create_response.formatted_body.len(),
+            labels = create_response.suggested_labels.len(),
+            "Issue formatting complete"
+        );
+
+        Ok(create_response)
     }
 }
 
@@ -429,6 +532,36 @@ fn build_user_prompt(issue: &IssueDetails) -> String {
     prompt.push_str("</issue_content>");
 
     prompt
+}
+
+/// Builds the system prompt for issue creation/formatting.
+fn build_create_system_prompt() -> String {
+    r#"You are a GitHub issue formatting assistant. Your job is to take a raw issue title and body from a user and format them professionally for a GitHub repository.
+
+Your response MUST be valid JSON with this exact schema:
+{
+  "formatted_title": "Well-formatted issue title following conventional commit style",
+  "formatted_body": "Professionally formatted issue body with clear sections",
+  "suggested_labels": ["label1", "label2"]
+}
+
+Guidelines:
+- formatted_title: Use conventional commit style (e.g., "feat: add search functionality", "fix: resolve memory leak in parser"). Keep it concise (under 72 characters). No period at the end.
+- formatted_body: Structure the body with clear sections:
+  * Start with a brief 1-2 sentence summary if not already present
+  * Use markdown formatting with headers (## Summary, ## Details, ## Steps to Reproduce, ## Expected Behavior, ## Actual Behavior, ## Context, etc.)
+  * Keep sentences clear and concise
+  * Use bullet points for lists
+  * Improve grammar and clarity
+  * Add relevant context if missing
+- suggested_labels: Suggest up to 3 relevant GitHub labels. Common ones: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix. Choose based on the issue content.
+
+Be professional but friendly. Maintain the user's intent while improving clarity and structure."#.to_string()
+}
+
+/// Builds the user prompt for issue creation/formatting.
+fn build_create_user_prompt(title: &str, body: &str, _repo: &str) -> String {
+    format!("Please format this GitHub issue:\n\nTitle: {title}\n\nBody:\n{body}")
 }
 
 #[cfg(test)]

@@ -55,7 +55,7 @@ pub struct GitTreeResponse {
 /// # Errors
 ///
 /// Returns an error if the format is invalid.
-fn parse_owner_repo(s: &str) -> Result<(String, String)> {
+pub fn parse_owner_repo(s: &str) -> Result<(String, String)> {
     let parts: Vec<&str> = s.split('/').collect();
     if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
         anyhow::bail!(
@@ -375,6 +375,48 @@ pub async fn post_comment(
     debug!(url = %comment_url, "Comment posted successfully");
 
     Ok(comment_url)
+}
+
+/// Creates a new GitHub issue.
+///
+/// Posts a new issue with the given title and body to the repository.
+/// Returns the issue URL and issue number.
+///
+/// # Arguments
+///
+/// * `client` - Authenticated Octocrab client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `title` - Issue title
+/// * `body` - Issue body (markdown)
+///
+/// # Errors
+///
+/// Returns an error if the GitHub API call fails.
+#[instrument(skip(client), fields(owner = %owner, repo = %repo))]
+pub async fn create_issue(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    title: &str,
+    body: &str,
+) -> Result<(String, u64)> {
+    debug!("Creating GitHub issue");
+
+    let issue = client
+        .issues(owner, repo)
+        .create(title)
+        .body(body)
+        .send()
+        .await
+        .with_context(|| format!("Failed to create issue in {owner}/{repo}"))?;
+
+    let issue_url = issue.html_url.to_string();
+    let issue_number = issue.number;
+
+    debug!(number = issue_number, url = %issue_url, "Issue created successfully");
+
+    Ok((issue_url, issue_number))
 }
 
 /// Result of applying labels and milestone to an issue.
