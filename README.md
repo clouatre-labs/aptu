@@ -33,7 +33,13 @@ brew tap clouatre-labs/tap
 brew install aptu
 ```
 
-Or install via cargo:
+Or install via cargo-binstall (recommended, ~5 seconds):
+
+```bash
+cargo binstall aptu
+```
+
+Or compile from crates.io (~2-3 minutes):
 
 ```bash
 cargo install aptu
