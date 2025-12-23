@@ -137,7 +137,10 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         .as_ref()
         .map_or("unknown", |l| l.name.as_str());
 
-    match issues::fetch_repo_tree(&client, &owner, &repo, language).await {
+    // Extract keywords from issue title for relevance matching
+    let keywords = issues::extract_keywords(&issue_details.title);
+
+    match issues::fetch_repo_tree(&client, &owner, &repo, language, &keywords).await {
         Ok(tree) => {
             issue_details.repo_tree = tree;
             debug!(

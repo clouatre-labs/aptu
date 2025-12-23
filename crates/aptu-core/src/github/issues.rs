@@ -257,7 +257,19 @@ pub async fn fetch_issue_with_comments(
 /// Extracts significant keywords from an issue title for search.
 ///
 /// Filters out common stop words and returns lowercase keywords.
-fn extract_keywords(title: &str) -> Vec<String> {
+/// Extracts keywords from an issue title for relevance matching.
+///
+/// Filters out common stop words and limits to 5 keywords.
+/// Used for prioritizing relevant files in repository tree filtering.
+///
+/// # Arguments
+///
+/// * `title` - Issue title to extract keywords from
+///
+/// # Returns
+///
+/// Vector of lowercase keywords (max 5), excluding stop words.
+pub fn extract_keywords(title: &str) -> Vec<String> {
     let stop_words = [
         "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "he", "in", "is",
         "it", "its", "of", "on", "or", "that", "the", "to", "was", "will", "with",
@@ -520,6 +532,46 @@ pub async fn update_issue_labels_and_milestone(
     })
 }
 
+/// Patterns for directories/files to completely exclude from tree filtering.
+/// Based on GitHub Linguist vendor.yml and common build artifacts.
+const EXCLUDE_PATTERNS: &[&str] = &[
+    "node_modules/",
+    "vendor/",
+    "dist/",
+    "build/",
+    "target/",
+    ".git/",
+    "cache/",
+    "docs/",
+    "examples/",
+];
+
+/// Patterns for directories to deprioritize but not exclude.
+/// These contain test/benchmark code less relevant to issue triage.
+const DEPRIORITIZE_PATTERNS: &[&str] = &[
+    "test/",
+    "tests/",
+    "spec/",
+    "bench/",
+    "eval/",
+    "fixtures/",
+    "mocks/",
+];
+
+/// Returns language-specific entry point file patterns.
+/// These are prioritized as they often contain the main logic.
+fn entry_point_patterns(language: &str) -> Vec<&'static str> {
+    match language.to_lowercase().as_str() {
+        "rust" => vec!["lib.rs", "mod.rs", "main.rs"],
+        "python" => vec!["__init__.py"],
+        "javascript" | "typescript" => vec!["index.ts", "index.js"],
+        "java" => vec!["Main.java"],
+        "go" => vec!["main.go"],
+        "c#" | "csharp" => vec!["Program.cs"],
+        _ => vec![],
+    }
+}
+
 /// Maps programming languages to their common file extensions.
 fn get_extensions_for_language(language: &str) -> Vec<&'static str> {
     match language.to_lowercase().as_str() {
@@ -553,6 +605,7 @@ fn get_extensions_for_language(language: &str) -> Vec<&'static str> {
 ///
 /// Removes common non-source directories and limits results to 50 paths.
 /// Prioritizes shallow paths (fewer `/` characters).
+/// This is a legacy function kept for backward compatibility with existing tests.
 ///
 /// # Arguments
 ///
@@ -562,6 +615,7 @@ fn get_extensions_for_language(language: &str) -> Vec<&'static str> {
 /// # Returns
 ///
 /// Filtered and sorted list of file paths (max 50).
+#[allow(dead_code)]
 fn filter_tree_by_language(entries: &[GitTreeEntry], language: &str) -> Vec<String> {
     let extensions = get_extensions_for_language(language);
     let exclude_dirs = [
@@ -617,10 +671,115 @@ fn filter_tree_by_language(entries: &[GitTreeEntry], language: &str) -> Vec<Stri
     filtered
 }
 
+/// Filters repository tree entries by relevance using tiered keyword matching.
+///
+/// Implements three-tier filtering:
+/// - Tier 1: Files matching keywords (max 35)
+/// - Tier 2: Language entry points (max 10)
+/// - Tier 3: Other relevant files (max 15)
+///
+/// Removes common non-source directories and limits results to 60 paths.
+///
+/// # Arguments
+///
+/// * `entries` - Raw tree entries from GitHub API
+/// * `language` - Repository primary language for extension filtering
+/// * `keywords` - Optional keywords extracted from issue title for relevance matching
+///
+/// # Returns
+///
+/// Filtered and sorted list of file paths (max 60).
+fn filter_tree_by_relevance(
+    entries: &[GitTreeEntry],
+    language: &str,
+    keywords: &[String],
+) -> Vec<String> {
+    let extensions = get_extensions_for_language(language);
+    let entry_points = entry_point_patterns(language);
+
+    // Filter to valid source files
+    let candidates: Vec<String> = entries
+        .iter()
+        .filter(|entry| {
+            // Only include files (blobs), not directories
+            if entry.type_ != "blob" {
+                return false;
+            }
+
+            // Exclude paths containing excluded directories
+            if EXCLUDE_PATTERNS.iter().any(|dir| entry.path.contains(dir)) {
+                return false;
+            }
+
+            // Filter by extension if language is recognized
+            if extensions.is_empty() {
+                // If language not recognized, include all files
+                true
+            } else {
+                extensions.iter().any(|ext| entry.path.ends_with(ext))
+            }
+        })
+        .map(|e| e.path.clone())
+        .collect();
+
+    // Tier 1: Files matching keywords (max 35)
+    let mut tier1: Vec<String> = Vec::new();
+    let mut remaining: Vec<String> = Vec::new();
+
+    for path in candidates {
+        let path_lower = path.to_lowercase();
+        let matches_keyword = keywords.iter().any(|kw| path_lower.contains(kw));
+
+        if matches_keyword && tier1.len() < 35 {
+            tier1.push(path);
+        } else {
+            remaining.push(path);
+        }
+    }
+
+    // Tier 2: Entry point files (max 10)
+    let mut tier2: Vec<String> = Vec::new();
+    let mut tier3_candidates: Vec<String> = Vec::new();
+
+    for path in remaining {
+        let is_entry_point = entry_points.iter().any(|ep| path.ends_with(ep));
+        let is_deprioritized = DEPRIORITIZE_PATTERNS.iter().any(|dp| path.contains(dp));
+
+        if is_entry_point && tier2.len() < 10 {
+            tier2.push(path);
+        } else if !is_deprioritized {
+            tier3_candidates.push(path);
+        }
+    }
+
+    // Tier 3: Other relevant files (max 15)
+    let mut tier3: Vec<String> = tier3_candidates.into_iter().take(15).collect();
+
+    // Combine and sort by depth within each tier
+    let mut result = tier1;
+    result.append(&mut tier2);
+    result.append(&mut tier3);
+
+    // Sort by path depth (fewer slashes first), then alphabetically
+    result.sort_by(|a, b| {
+        let depth_a = a.matches('/').count();
+        let depth_b = b.matches('/').count();
+        if depth_a == depth_b {
+            a.cmp(b)
+        } else {
+            depth_a.cmp(&depth_b)
+        }
+    });
+
+    // Limit to 60 paths
+    result.truncate(60);
+    result
+}
+
 /// Fetches the repository file tree from GitHub.
 ///
 /// Attempts to fetch from the default branch (main, then master).
-/// Returns filtered list of source file paths based on repository language.
+/// Returns filtered list of source file paths based on repository language and optional keywords.
 ///
 /// # Arguments
 ///
@@ -628,6 +787,7 @@ fn filter_tree_by_language(entries: &[GitTreeEntry], language: &str) -> Vec<Stri
 /// * `owner` - Repository owner
 /// * `repo` - Repository name
 /// * `language` - Repository primary language for filtering
+/// * `keywords` - Optional keywords extracted from issue title for relevance matching
 ///
 /// # Errors
 ///
@@ -638,6 +798,7 @@ pub async fn fetch_repo_tree(
     owner: &str,
     repo: &str,
     language: &str,
+    keywords: &[String],
 ) -> Result<Vec<String>> {
     debug!("Fetching repository tree");
 
@@ -665,7 +826,7 @@ pub async fn fetch_repo_tree(
     let response =
         tree_response.context("Failed to fetch repository tree from main or master branch")?;
 
-    let filtered = filter_tree_by_language(&response.tree, language);
+    let filtered = filter_tree_by_relevance(&response.tree, language, keywords);
     debug!(count = filtered.len(), "Filtered tree entries");
 
     Ok(filtered)
@@ -739,6 +900,79 @@ pub async fn fetch_untriaged_issues(
 #[cfg(test)]
 mod tree_tests {
     use super::*;
+
+    #[test]
+    fn filter_tree_by_relevance_keyword_matching() {
+        let entries = vec![
+            GitTreeEntry {
+                path: "src/parser.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "abc123".to_string(),
+            },
+            GitTreeEntry {
+                path: "src/main.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "def456".to_string(),
+            },
+            GitTreeEntry {
+                path: "src/utils.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "ghi789".to_string(),
+            },
+        ];
+
+        let keywords = vec!["parser".to_string()];
+        let filtered = filter_tree_by_relevance(&entries, "rust", &keywords);
+        assert!(filtered.contains(&"src/parser.rs".to_string()));
+    }
+
+    #[test]
+    fn filter_tree_by_relevance_entry_points() {
+        let entries = vec![
+            GitTreeEntry {
+                path: "src/lib.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "abc123".to_string(),
+            },
+            GitTreeEntry {
+                path: "src/utils.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "def456".to_string(),
+            },
+        ];
+
+        let keywords = vec![];
+        let filtered = filter_tree_by_relevance(&entries, "rust", &keywords);
+        assert!(filtered.contains(&"src/lib.rs".to_string()));
+    }
+
+    #[test]
+    fn filter_tree_by_relevance_excludes_tests() {
+        let entries = vec![
+            GitTreeEntry {
+                path: "src/main.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "abc123".to_string(),
+            },
+            GitTreeEntry {
+                path: "tests/integration_test.rs".to_string(),
+                type_: "blob".to_string(),
+                mode: "100644".to_string(),
+                sha: "def456".to_string(),
+            },
+        ];
+
+        let keywords = vec![];
+        let filtered = filter_tree_by_relevance(&entries, "rust", &keywords);
+        assert!(!filtered.contains(&"tests/integration_test.rs".to_string()));
+        assert!(filtered.contains(&"src/main.rs".to_string()));
+    }
 
     #[test]
     fn filter_tree_excludes_node_modules() {
