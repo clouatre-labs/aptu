@@ -50,6 +50,10 @@ run *ARGS:
 ci: fmt lint test build
     @echo "CI pipeline complete!"
 
+# Check REUSE compliance (license headers)
+reuse:
+    uv tool run reuse lint
+
 # Install binary locally
 install:
     cargo install --path crates/aptu-cli
