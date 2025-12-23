@@ -202,8 +202,8 @@ jobs:
             --head "$BRANCH_NAME" \
             --base main
           
-          # Merge immediately (no branch protection on homebrew-tap)
-          gh pr merge "$BRANCH_NAME" --squash --delete-branch
+          # Auto-merge after Audit check passes (ruleset requires status checks)
+          gh pr merge "$BRANCH_NAME" --auto --squash --delete-branch
 
   publish:
     name: Publish to crates.io
