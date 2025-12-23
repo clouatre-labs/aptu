@@ -6,9 +6,22 @@
 //! directly, improving testability and separation of concerns.
 
 use aptu_core::ai::types::TriageResponse;
+use aptu_core::github::auth::TokenSource;
 use aptu_core::github::graphql::IssueNode;
 use aptu_core::history::{Contribution, HistoryData};
 use aptu_core::repos::CuratedRepo;
+use serde::Serialize;
+
+/// Result from the auth status command.
+#[derive(Debug, Clone, Serialize)]
+pub struct AuthStatusResult {
+    /// Whether the user is authenticated.
+    pub authenticated: bool,
+    /// Authentication method (if authenticated).
+    pub method: Option<TokenSource>,
+    /// GitHub username (if authenticated and available).
+    pub username: Option<String>,
+}
 
 /// Result from the repos command.
 pub struct ReposResult {
@@ -29,7 +42,7 @@ pub struct IssuesResult {
 }
 
 /// Result from the triage command.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TriageResult {
     /// Issue title (for display).
     pub issue_title: String,
@@ -54,7 +67,7 @@ pub struct TriageResult {
 }
 
 /// Outcome of a single triage operation in a bulk operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum SingleTriageOutcome {
     /// Triage succeeded.
@@ -69,6 +82,7 @@ pub enum SingleTriageOutcome {
 }
 
 /// Result from a bulk triage operation.
+#[derive(Debug, Clone, Serialize)]
 pub struct BulkTriageResult {
     /// Number of issues successfully triaged.
     pub succeeded: usize,

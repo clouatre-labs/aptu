@@ -16,8 +16,60 @@ use console::style;
 
 use crate::cli::{OutputContext, OutputFormat};
 use crate::commands::types::{
-    CreateResult, HistoryResult, IssuesResult, ReposResult, TriageResult,
+    AuthStatusResult, CreateResult, HistoryResult, IssuesResult, ReposResult, TriageResult,
 };
+
+/// Render auth status result.
+pub fn render_auth_status(result: &AuthStatusResult, ctx: &OutputContext) {
+    match ctx.format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(result)
+                    .expect("Failed to serialize auth status to JSON")
+            );
+        }
+        OutputFormat::Yaml => {
+            println!(
+                "{}",
+                serde_yml::to_string(result).expect("Failed to serialize auth status to YAML")
+            );
+        }
+        OutputFormat::Markdown => {
+            println!("## Authentication Status\n");
+            if result.authenticated {
+                println!("**Status:** Authenticated");
+                if let Some(ref method) = result.method {
+                    println!("**Method:** {method}");
+                }
+                if let Some(ref username) = result.username {
+                    println!("**Username:** {username}");
+                }
+            } else {
+                println!("**Status:** Not authenticated");
+            }
+        }
+        OutputFormat::Text => {
+            println!();
+            if result.authenticated {
+                println!("{} Authenticated with GitHub", style("*").green().bold());
+                if let Some(ref method) = result.method {
+                    println!("  Method: {}", style(method.to_string()).cyan());
+                }
+                if let Some(ref username) = result.username {
+                    println!("  Username: {}", style(username).cyan());
+                }
+            } else {
+                println!(
+                    "{} Not authenticated. Run {} to authenticate.",
+                    style("!").yellow().bold(),
+                    style("aptu auth login").cyan()
+                );
+            }
+            println!();
+        }
+    }
+}
 
 /// Render repos result.
 pub fn render_repos(result: &ReposResult, ctx: &OutputContext) {
@@ -1007,6 +1059,12 @@ pub fn render_bulk_triage_summary(
                 "failed": result.failed,
                 "skipped": result.skipped,
                 "total": result.succeeded + result.failed + result.skipped,
+                "results": result.outcomes.iter().map(|(repo, outcome)| {
+                    serde_json::json!({
+                        "repository": repo,
+                        "outcome": outcome,
+                    })
+                }).collect::<Vec<_>>(),
             });
             println!(
                 "{}",
@@ -1014,14 +1072,20 @@ pub fn render_bulk_triage_summary(
             );
         }
         OutputFormat::Yaml => {
-            let summary = serde_yml::to_string(&serde_json::json!({
+            let summary = serde_json::json!({
                 "succeeded": result.succeeded,
                 "failed": result.failed,
                 "skipped": result.skipped,
                 "total": result.succeeded + result.failed + result.skipped,
-            }))
-            .expect("Failed to serialize summary");
-            println!("{summary}");
+                "results": result.outcomes.iter().map(|(repo, outcome)| {
+                    serde_json::json!({
+                        "repository": repo,
+                        "outcome": outcome,
+                    })
+                }).collect::<Vec<_>>(),
+            });
+            let yaml = serde_yml::to_string(&summary).expect("Failed to serialize summary");
+            println!("{yaml}");
         }
         OutputFormat::Markdown | OutputFormat::Text => {
             println!();

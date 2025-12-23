@@ -221,7 +221,8 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             AuthCommand::Login => auth::run_login().await,
             AuthCommand::Logout => auth::run_logout(),
             AuthCommand::Status => {
-                auth::run_status();
+                let result = auth::run_status().await?;
+                output::render_auth_status(&result, &ctx);
                 Ok(())
             }
         },

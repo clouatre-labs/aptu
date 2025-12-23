@@ -20,12 +20,14 @@ use keyring::Entry;
 use octocrab::Octocrab;
 use reqwest::header::ACCEPT;
 use secrecy::{ExposeSecret, SecretString};
+use serde::Serialize;
 use tracing::{debug, info, instrument};
 
 use super::{KEYRING_SERVICE, KEYRING_USER};
 
 /// Source of the GitHub authentication token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TokenSource {
     /// Token from `GH_TOKEN` or `GITHUB_TOKEN` environment variable.
     Environment,
