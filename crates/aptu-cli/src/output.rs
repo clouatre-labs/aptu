@@ -15,7 +15,9 @@ use aptu_core::utils::{
 use console::style;
 
 use crate::cli::{OutputContext, OutputFormat};
-use crate::commands::types::{HistoryResult, IssuesResult, ReposResult, TriageResult};
+use crate::commands::types::{
+    CreateResult, HistoryResult, IssuesResult, ReposResult, TriageResult,
+};
 
 /// Render repos result.
 pub fn render_repos(result: &ReposResult, ctx: &OutputContext) {
@@ -1022,6 +1024,77 @@ pub fn render_bulk_triage_summary(
                 "  Total:     {}",
                 result.succeeded + result.failed + result.skipped
             );
+            println!();
+        }
+    }
+}
+
+/// Render issue creation result.
+pub fn render_create_result(result: &CreateResult, ctx: &OutputContext) {
+    match ctx.format {
+        OutputFormat::Json => {
+            let json = serde_json::json!({
+                "issue_url": result.issue_url,
+                "issue_number": result.issue_number,
+                "title": result.title,
+                "body": result.body,
+                "suggested_labels": result.suggested_labels,
+                "dry_run": result.dry_run,
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json).expect("Failed to serialize create result")
+            );
+        }
+        OutputFormat::Yaml => {
+            let yaml = serde_yml::to_string(&serde_json::json!({
+                "issue_url": result.issue_url,
+                "issue_number": result.issue_number,
+                "title": result.title,
+                "body": result.body,
+                "suggested_labels": result.suggested_labels,
+                "dry_run": result.dry_run,
+            }))
+            .expect("Failed to serialize create result");
+            println!("{yaml}");
+        }
+        OutputFormat::Markdown => {
+            println!("## Issue Created\n");
+            println!("**Title:** {}\n", result.title);
+            println!("**URL:** {}\n", result.issue_url);
+            if !result.suggested_labels.is_empty() {
+                println!(
+                    "**Suggested Labels:** {}\n",
+                    result.suggested_labels.join(", ")
+                );
+            }
+            println!("### Description\n");
+            println!("{}", result.body);
+        }
+        OutputFormat::Text => {
+            println!();
+            if result.dry_run {
+                println!("{}", style("DRY RUN - Issue not created").yellow().bold());
+            } else {
+                println!("{}", style("Issue Created Successfully").green().bold());
+                println!("  Number: {}", style(result.issue_number).cyan());
+                println!("  URL: {}", style(&result.issue_url).cyan().underlined());
+            }
+            println!();
+            println!("{}", style("Title").bold());
+            println!("  {}", result.title);
+            println!();
+            println!("{}", style("Body").bold());
+            for line in result.body.lines() {
+                println!("  {line}");
+            }
+            if !result.suggested_labels.is_empty() {
+                println!();
+                println!("{}", style("Suggested Labels").bold());
+                for label in &result.suggested_labels {
+                    println!("  - {}", style(label).yellow());
+                }
+            }
             println!();
         }
     }

@@ -212,6 +212,28 @@ pub enum IssueCommand {
         #[arg(long)]
         apply: bool,
     },
+
+    /// Create a GitHub issue with AI assistance
+    Create {
+        /// Repository for the issue (e.g., "owner/repo")
+        repo: String,
+
+        /// Issue title (interactive prompt if not provided)
+        #[arg(long)]
+        title: Option<String>,
+
+        /// Issue body/description (interactive prompt if not provided)
+        #[arg(long)]
+        body: Option<String>,
+
+        /// Read issue content from file (text or markdown)
+        #[arg(long)]
+        from: Option<String>,
+
+        /// Preview issue creation without posting to GitHub
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 /// Completion subcommands

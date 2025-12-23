@@ -205,3 +205,16 @@ pub struct IssueComment {
     /// Comment body.
     pub body: String,
 }
+
+/// Response from AI for creating an issue.
+///
+/// Contains formatted issue content and suggested labels based on AI analysis.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CreateIssueResponse {
+    /// Formatted issue title (follows conventional commit style).
+    pub formatted_title: String,
+    /// Formatted issue body with structured sections.
+    pub formatted_body: String,
+    /// Suggested labels for the issue.
+    pub suggested_labels: Vec<String>,
+}

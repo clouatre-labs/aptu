@@ -85,3 +85,19 @@ pub struct HistoryResult {
     /// Full history data for stats calculation.
     pub history_data: HistoryData,
 }
+
+/// Result from the create command.
+pub struct CreateResult {
+    /// URL of the created issue.
+    pub issue_url: String,
+    /// Issue number.
+    pub issue_number: u64,
+    /// Issue title that was created.
+    pub title: String,
+    /// Issue body that was created.
+    pub body: String,
+    /// AI-suggested labels for the issue.
+    pub suggested_labels: Vec<String>,
+    /// Whether this was a dry run.
+    pub dry_run: bool,
+}
