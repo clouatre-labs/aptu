@@ -24,6 +24,21 @@ use crate::error::AptuError;
 use crate::history::AiStats;
 use crate::retry::{is_retryable_anyhow, retry_backoff};
 
+/// `OpenRouter` account credits status.
+#[derive(Debug, Clone)]
+pub struct CreditsStatus {
+    /// Available credits in USD.
+    pub credits: f64,
+}
+
+impl CreditsStatus {
+    /// Returns a human-readable status message.
+    #[must_use]
+    pub fn message(&self) -> String {
+        format!("OpenRouter credits: ${:.4}", self.credits)
+    }
+}
+
 /// Maximum length for issue body to stay within token limits.
 const MAX_BODY_LENGTH: usize = 4000;
 

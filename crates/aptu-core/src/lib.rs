@@ -102,6 +102,13 @@ pub use ai::{AiModel, ModelProvider, OpenRouterClient};
 
 pub use github::auth::TokenSource;
 pub use github::graphql::IssueNode;
+pub use github::ratelimit::{RateLimitStatus, check_rate_limit};
+
+// ============================================================================
+// AI Integration
+// ============================================================================
+
+pub use ai::openrouter::CreditsStatus;
 
 // ============================================================================
 // History Tracking

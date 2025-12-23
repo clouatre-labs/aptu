@@ -55,16 +55,19 @@ pub struct OutputContext {
     pub format: OutputFormat,
     /// Suppress non-essential output (spinners, progress)
     pub quiet: bool,
+    /// Enable verbose output (debug-level logging)
+    pub verbose: bool,
     /// Whether stdout is a terminal (TTY)
     pub is_tty: bool,
 }
 
 impl OutputContext {
     /// Creates an `OutputContext` from CLI arguments.
-    pub fn from_cli(format: OutputFormat, quiet: bool) -> Self {
+    pub fn from_cli(format: OutputFormat, quiet: bool, verbose: bool) -> Self {
         Self {
             format,
             quiet,
+            verbose,
             is_tty: std::io::stdout().is_terminal(),
         }
     }
@@ -124,6 +127,10 @@ pub struct Cli {
     /// Suppress non-essential output (spinners, progress)
     #[arg(long, short = 'q', global = true)]
     pub quiet: bool,
+
+    /// Enable verbose output (debug-level logging)
+    #[arg(long, short = 'v', global = true)]
+    pub verbose: bool,
 
     /// Subcommand to execute
     #[command(subcommand)]

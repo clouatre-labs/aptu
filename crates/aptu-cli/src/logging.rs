@@ -29,10 +29,13 @@ use tracing_subscriber::{EnvFilter, fmt};
 /// - `reqwest=warn` - Warn level for HTTP client
 ///
 /// These defaults can be overridden via the `RUST_LOG` environment variable.
-pub fn init_logging(quiet: bool) {
+/// When verbose mode is enabled, sets `aptu=debug`.
+pub fn init_logging(quiet: bool, verbose: bool) {
     let fmt_layer = fmt::layer().with_target(false).with_writer(std::io::stderr);
 
-    let default_filter = if quiet {
+    let default_filter = if verbose {
+        "aptu=debug,octocrab=warn,reqwest=warn"
+    } else if quiet {
         "aptu=warn,octocrab=warn,reqwest=warn"
     } else {
         "aptu=info,octocrab=warn,reqwest=warn"
