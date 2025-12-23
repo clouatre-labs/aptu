@@ -6,6 +6,7 @@ description = "Core library for Aptu - OSS issue triage with AI assistance"
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "../../README.md"
 
 [dependencies]
 # Error handling
