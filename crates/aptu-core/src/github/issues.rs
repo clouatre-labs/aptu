@@ -12,6 +12,19 @@ use tracing::{debug, instrument};
 
 use crate::ai::types::{IssueComment, IssueDetails, RepoIssueContext};
 
+/// A GitHub issue without labels (untriaged).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UntriagedIssue {
+    /// Issue number.
+    pub number: u64,
+    /// Issue title.
+    pub title: String,
+    /// Creation timestamp (ISO 8601).
+    pub created_at: String,
+    /// Issue URL.
+    pub url: String,
+}
+
 /// A single entry in a Git tree response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitTreeEntry {
@@ -613,6 +626,71 @@ pub async fn fetch_repo_tree(
     debug!(count = filtered.len(), "Filtered tree entries");
 
     Ok(filtered)
+}
+
+/// Fetches untriaged issues (those without any labels) from a specific repository.
+///
+/// # Arguments
+///
+/// * `client` - The Octocrab GitHub client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `since` - Optional RFC3339 timestamp to filter issues created after this date (client-side filtering)
+///
+/// # Errors
+///
+/// Returns an error if the REST API request fails.
+#[instrument(skip(client), fields(owner = %owner, repo = %repo))]
+pub async fn fetch_untriaged_issues(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    since: Option<&str>,
+) -> Result<Vec<UntriagedIssue>> {
+    debug!("Fetching untriaged issues");
+
+    let issues_page: octocrab::Page<octocrab::models::issues::Issue> = client
+        .issues(owner, repo)
+        .list()
+        .state(octocrab::params::State::Open)
+        .per_page(100)
+        .send()
+        .await
+        .context("Failed to fetch issues from repository")?;
+
+    let total_issues = issues_page.items.len();
+
+    let mut untriaged: Vec<UntriagedIssue> = issues_page
+        .items
+        .into_iter()
+        .filter(|issue| issue.labels.is_empty())
+        .map(|issue| UntriagedIssue {
+            number: issue.number,
+            title: issue.title,
+            created_at: issue.created_at.to_rfc3339(),
+            url: issue.html_url.to_string(),
+        })
+        .collect();
+
+    if let Some(since_date) = since
+        && let Ok(since_timestamp) = chrono::DateTime::parse_from_rfc3339(since_date)
+    {
+        untriaged.retain(|issue| {
+            if let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(&issue.created_at) {
+                created_at >= since_timestamp
+            } else {
+                true
+            }
+        });
+    }
+
+    debug!(
+        total_issues = total_issues,
+        untriaged_count = untriaged.len(),
+        "Fetched untriaged issues"
+    );
+
+    Ok(untriaged)
 }
 
 #[cfg(test)]

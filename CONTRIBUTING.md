@@ -94,18 +94,38 @@ This adds `Signed-off-by: Your Name <email>` to your commit, certifying you agre
 
 ## GitHub API Strategy
 
-We use a hybrid GraphQL + REST approach via Octocrab:
+We use a hybrid GraphQL + REST approach via Octocrab. **Default to REST unless GraphQL provides a clear benefit.**
 
-| Use Case | Approach | Location |
-|----------|----------|----------|
-| Fetch multiple related resources | GraphQL | `github/graphql.rs` |
-| Batch operations across repos | GraphQL (aliases) | `github/graphql.rs` |
-| Simple CRUD on single resource | REST (Octocrab) | `github/issues.rs` |
-| Mutations (create/update/delete) | REST (Octocrab) | `github/issues.rs` |
-| Paginated lists | REST (Octocrab) | Uses `all_pages()` |
-| Search operations | REST (Octocrab) | GitHub search is REST-only |
+### Decision Heuristic
 
-**Rationale**: GraphQL excels at batching reads and precise field selection. REST via Octocrab provides type-safe builders for mutations and simpler operations. Both share the same rate limit pool (5000/hour authenticated).
+Ask: *Does GraphQL save enough API calls to justify custom query/struct overhead?*
+
+**Use GraphQL when:**
+- Fetching **3+ related resource types** in one call (e.g., issue + labels + milestones + comments)
+- Batching **across multiple repos** using aliases
+- **Server-side filtering** reduces payload significantly
+
+**Use REST (Octocrab) when:**
+- Fetching **1-2 resource types** (e.g., list issues, get single issue)
+- Performing **mutations** (create, update, delete)
+- **Client-side filtering** is required anyway (negates GraphQL's advantage)
+- Octocrab has **typed builders** that match your use case
+
+### Examples
+
+| Scenario | Choice | Reasoning |
+|----------|--------|-----------|
+| Single-issue triage (issue + labels + milestones + assignees) | GraphQL | 1 call vs 4 REST calls |
+| List untriaged issues (filter by empty labels) | REST | Single resource, client-side filter anyway |
+| Update issue labels | REST | Mutation, Octocrab has `issues().update()` |
+| Fetch issues from 5 repos | GraphQL | Aliases batch into 1 call vs 5 REST calls |
+
+### File Locations
+
+- `github/graphql.rs` - Custom GraphQL queries and response types
+- `github/issues.rs` - REST operations via Octocrab typed builders
+
+**Rate limits**: Both share the same pool (5000/hour authenticated).
 
 ## Branch Protection
 
