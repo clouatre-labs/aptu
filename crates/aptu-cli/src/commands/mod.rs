@@ -312,6 +312,31 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     return Ok(());
                 }
 
+                // Check GitHub rate limit before triaging (only when we have issues)
+                if aptu_core::github::auth::is_authenticated() {
+                    let spinner = maybe_spinner(&ctx, "Checking GitHub rate limit...");
+                    let gh_client = aptu_core::github::auth::create_client()
+                        .context("Failed to create GitHub client")?;
+                    let rate_limit = aptu_core::check_rate_limit(&gh_client).await?;
+                    if let Some(s) = spinner {
+                        s.finish_and_clear();
+                    }
+
+                    if rate_limit.is_low() && matches!(ctx.format, OutputFormat::Text) {
+                        println!(
+                            "{}",
+                            style(format!("Warning: {}", rate_limit.message())).yellow()
+                        );
+                    }
+                }
+
+                // Show OpenRouter credits in verbose mode
+                if ctx.verbose && matches!(ctx.format, OutputFormat::Text) {
+                    debug!("Verbose mode enabled, showing OpenRouter credits");
+                    // Note: OpenRouter credits check would require additional API call
+                    // For now, we just log that verbose mode is active
+                }
+
                 // Bulk triage loop
                 let mut bulk_result = types::BulkTriageResult {
                     succeeded: 0,
