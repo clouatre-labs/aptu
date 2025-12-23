@@ -70,5 +70,10 @@ assets = [
   ["../../LICENSE", "usr/share/doc/aptu/", "644"]
 ]
 
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/aptu-{ target }.tar.gz"
+bin-dir = "aptu"
+pkg-fmt = "tgz"
+
 [lints]
 workspace = true
