@@ -13,6 +13,22 @@ use tracing::{debug, instrument};
 
 use crate::repos::CuratedRepo;
 
+/// Viewer permission level on a repository.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum ViewerPermission {
+    /// Admin permission.
+    Admin,
+    /// Maintain permission.
+    Maintain,
+    /// Write permission.
+    Write,
+    /// Triage permission.
+    Triage,
+    /// Read permission.
+    Read,
+}
+
 /// A GitHub issue from the GraphQL response.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IssueNode {
@@ -254,6 +270,9 @@ pub struct RepositoryData {
     /// Repository primary language.
     #[serde(rename = "primaryLanguage")]
     pub primary_language: Option<LanguageNode>,
+    /// Viewer permission level on the repository.
+    #[serde(rename = "viewerPermission")]
+    pub viewer_permission: Option<ViewerPermission>,
 }
 
 /// Language information from GraphQL response.
@@ -299,6 +318,7 @@ fn build_issue_with_repo_context_query(owner: &str, repo: &str, number: u64) -> 
             }}
             repository(owner: "{owner}", name: "{repo}") {{
                 nameWithOwner
+                viewerPermission
                 labels(first: 100) {{
                     nodes {{
                         name

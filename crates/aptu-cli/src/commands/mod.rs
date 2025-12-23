@@ -82,6 +82,11 @@ async fn triage_single_issue(
     }
 
     // Build result for rendering (before posting decision)
+    let is_maintainer = issue_details
+        .viewer_permission
+        .as_ref()
+        .is_some_and(|p| p == "Admin" || p == "Maintain" || p == "Write");
+
     let mut result = types::TriageResult {
         issue_title: issue_details.title.clone(),
         issue_number: issue_details.number,
@@ -92,6 +97,7 @@ async fn triage_single_issue(
         applied_labels: Vec::new(),
         applied_milestone: None,
         apply_warnings: Vec::new(),
+        is_maintainer,
     };
 
     // Render triage FIRST (before asking for confirmation)

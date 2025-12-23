@@ -38,6 +38,7 @@
 //!     repo_tree: vec![],
 //!     available_labels: vec![],
 //!     available_milestones: vec![],
+//!     viewer_permission: None,
 //! };
 //!
 //! // Analyze with AI

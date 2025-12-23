@@ -49,6 +49,8 @@ pub struct TriageResult {
     pub applied_milestone: Option<String>,
     /// Warnings from applying labels/milestone.
     pub apply_warnings: Vec<String>,
+    /// Whether the user is a maintainer (has write/maintain/admin permission).
+    pub is_maintainer: bool,
 }
 
 /// Outcome of a single triage operation in a bulk operation.

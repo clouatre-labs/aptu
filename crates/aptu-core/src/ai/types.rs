@@ -195,6 +195,9 @@ pub struct IssueDetails {
     /// Available milestones in the repository.
     #[serde(default)]
     pub available_milestones: Vec<RepoMilestone>,
+    /// Viewer permission level on the repository.
+    #[serde(default)]
+    pub viewer_permission: Option<String>,
 }
 
 /// A comment on an issue.

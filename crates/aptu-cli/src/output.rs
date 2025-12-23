@@ -271,6 +271,7 @@ fn render_triage_content(
     triage: &TriageResponse,
     mode: &OutputMode,
     title: Option<(&str, u64)>,
+    is_maintainer: bool,
 ) -> String {
     use std::fmt::Write;
 
@@ -298,25 +299,28 @@ fn render_triage_content(
         }
     }
 
-    // Labels - format with backticks for markdown
-    let labels: Vec<String> = match mode {
-        OutputMode::Terminal => triage.suggested_labels.clone(),
-        OutputMode::Markdown => triage
-            .suggested_labels
-            .iter()
-            .map(|l| format!("`{l}`"))
-            .collect(),
-    };
-    output.push_str(&render_list_section(
-        "Suggested Labels",
-        &labels,
-        "None",
-        mode,
-        false,
-    ));
+    // Labels - only show if maintainer
+    if is_maintainer {
+        let labels: Vec<String> = match mode {
+            OutputMode::Terminal => triage.suggested_labels.clone(),
+            OutputMode::Markdown => triage
+                .suggested_labels
+                .iter()
+                .map(|l| format!("`{l}`"))
+                .collect(),
+        };
+        output.push_str(&render_list_section(
+            "Suggested Labels",
+            &labels,
+            "None",
+            mode,
+            false,
+        ));
+    }
 
-    // Suggested Milestone
-    if let Some(milestone) = &triage.suggested_milestone
+    // Suggested Milestone - only show if maintainer
+    if is_maintainer
+        && let Some(milestone) = &triage.suggested_milestone
         && !milestone.is_empty()
     {
         match mode {
@@ -461,7 +465,12 @@ pub fn render_triage(result: &TriageResult, ctx: &OutputContext) {
             );
             print!(
                 "{}",
-                render_triage_content(&result.triage, &OutputMode::Markdown, None)
+                render_triage_content(
+                    &result.triage,
+                    &OutputMode::Markdown,
+                    None,
+                    result.is_maintainer
+                )
             );
         }
         OutputFormat::Text => {
@@ -471,7 +480,8 @@ pub fn render_triage(result: &TriageResult, ctx: &OutputContext) {
                 render_triage_content(
                     &result.triage,
                     &OutputMode::Terminal,
-                    Some((&result.issue_title, result.issue_number))
+                    Some((&result.issue_title, result.issue_number)),
+                    result.is_maintainer
                 )
             );
 
@@ -512,7 +522,7 @@ pub fn render_triage(result: &TriageResult, ctx: &OutputContext) {
 
 /// Generates markdown content for posting to GitHub.
 pub fn render_triage_markdown(triage: &TriageResponse) -> String {
-    render_triage_content(triage, &OutputMode::Markdown, None)
+    render_triage_content(triage, &OutputMode::Markdown, None, true)
 }
 
 /// Render fetched issue details.
