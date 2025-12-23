@@ -6,6 +6,7 @@ description = "CLI for Aptu - Gamified OSS issue triage with AI assistance"
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "../../README.md"
 
 [[bin]]
 name = "aptu"
