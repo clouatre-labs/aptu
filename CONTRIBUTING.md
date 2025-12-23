@@ -92,6 +92,21 @@ This adds `Signed-off-by: Your Name <email>` to your commit, certifying you agre
 - Address clippy warnings
 - Write tests for new features
 
+## GitHub API Strategy
+
+We use a hybrid GraphQL + REST approach via Octocrab:
+
+| Use Case | Approach | Location |
+|----------|----------|----------|
+| Fetch multiple related resources | GraphQL | `github/graphql.rs` |
+| Batch operations across repos | GraphQL (aliases) | `github/graphql.rs` |
+| Simple CRUD on single resource | REST (Octocrab) | `github/issues.rs` |
+| Mutations (create/update/delete) | REST (Octocrab) | `github/issues.rs` |
+| Paginated lists | REST (Octocrab) | Uses `all_pages()` |
+| Search operations | REST (Octocrab) | GitHub search is REST-only |
+
+**Rationale**: GraphQL excels at batching reads and precise field selection. REST via Octocrab provides type-safe builders for mutations and simpler operations. Both share the same rate limit pool (5000/hour authenticated).
+
 ## Branch Protection
 
 The `main` branch is protected by the following rules:
