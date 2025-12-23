@@ -24,7 +24,6 @@ use crate::cli::{
 };
 use crate::output;
 use aptu_core::{AppConfig, check_already_triaged};
-use tracing::info;
 
 /// Creates a styled spinner (only if interactive).
 fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
@@ -49,14 +48,11 @@ fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
 /// or Err if an error occurred.
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
-#[allow(clippy::fn_params_excessive_bools)]
 async fn triage_single_issue(
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
     yes: bool,
-    show_issue: bool,
-    force: bool,
     apply: bool,
     ctx: &OutputContext,
     config: &AppConfig,
@@ -68,22 +64,13 @@ async fn triage_single_issue(
         s.finish_and_clear();
     }
 
-    // Phase 1b: Check if already triaged (unless --force)
-    if force {
-        info!("Forcing triage despite detection");
-    } else {
-        let triage_status = check_already_triaged(&issue_details);
-        if triage_status.is_triaged() {
-            if matches!(ctx.format, OutputFormat::Text) {
-                println!("{}", style("Already triaged (skipping)").yellow());
-            }
-            return Ok(None);
+    // Phase 1b: Check if already triaged
+    let triage_status = check_already_triaged(&issue_details);
+    if triage_status.is_triaged() {
+        if matches!(ctx.format, OutputFormat::Text) {
+            println!("{}", style("Already triaged (skipping)").yellow());
         }
-    }
-
-    // Render issue if requested
-    if show_issue {
-        output::render_issue(&issue_details, ctx);
+        return Ok(None);
     }
 
     // Phase 1c: Analyze with AI
@@ -249,27 +236,31 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             IssueCommand::Triage {
                 references,
                 repo,
-                untriaged,
                 since,
                 dry_run,
                 yes,
-                show_issue,
-                force,
                 apply,
             } => {
                 // Determine repo context: --repo flag > default_repo config
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
 
-                // Resolve issue numbers from references or --untriaged flag
-                let issue_refs = if untriaged {
-                    // Fetch untriaged issues from the specified repo
+                // Resolve issue numbers from references or --since flag
+                let issue_refs = if !references.is_empty() {
+                    references
+                } else if let Some(since_date) = since {
+                    // Fetch untriaged issues since the specified date
                     if repo_context.is_none() {
-                        anyhow::bail!("--untriaged requires --repo or default_repo config");
+                        anyhow::bail!(
+                            "--since requires --repo or default_repo config when no references provided"
+                        );
                     }
                     let (owner, repo_name) = repo_context
                         .unwrap()
                         .split_once('/')
                         .context("Invalid repo format, expected 'owner/repo'")?;
+
+                    // Parse the date to RFC3339 format
+                    let rfc3339_date = crate::cli::parse_date_to_rfc3339(&since_date)?;
 
                     let spinner = maybe_spinner(&ctx, "Fetching untriaged issues...");
                     let client = aptu_core::github::auth::create_client()
@@ -278,7 +269,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                         &client,
                         owner,
                         repo_name,
-                        since.as_deref(),
+                        Some(&rfc3339_date),
                     )
                     .await?;
                     if let Some(s) = spinner {
@@ -299,7 +290,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                         .map(|issue| format!("{}#{}", repo_context.unwrap(), issue.number))
                         .collect()
                 } else {
-                    references
+                    Vec::new()
                 };
 
                 if issue_refs.is_empty() {
@@ -334,8 +325,6 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                         repo_context,
                         dry_run,
                         yes,
-                        show_issue,
-                        force,
                         apply,
                         &ctx,
                         config,

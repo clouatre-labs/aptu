@@ -216,52 +216,31 @@ fn test_triage_single_reference() {
 }
 
 #[test]
-fn test_triage_untriaged_requires_repo() {
+fn test_triage_since_flag_invalid_date() {
+    // Test that invalid date format is rejected
     let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("issue")
         .arg("triage")
-        .arg("--untriaged")
-        .assert()
-        .failure();
-}
-
-#[test]
-fn test_triage_untriaged_with_repo() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
-        .arg("triage")
-        .arg("--untriaged")
-        .arg("--repo")
-        .arg("block/goose")
-        .arg("--dry-run")
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains("Not authenticated"));
-}
-
-#[test]
-fn test_triage_since_flag() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
-        .arg("triage")
-        .arg("--untriaged")
         .arg("--repo")
         .arg("block/goose")
         .arg("--since")
-        .arg("2025-01-01T00:00:00Z")
+        .arg("not-a-date")
         .arg("--dry-run")
         .assert()
         .failure()
-        .stderr(predicates::str::contains("Not authenticated"));
+        .stderr(predicates::str::contains("Invalid date format"));
 }
 
 #[test]
-fn test_triage_untriaged_conflicts_with_references() {
+fn test_triage_since_requires_repo() {
+    // Test that --since without --repo fails with helpful message
     let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("issue")
         .arg("triage")
-        .arg("block/goose#1")
-        .arg("--untriaged")
+        .arg("--since")
+        .arg("2025-12-01")
+        .arg("--dry-run")
         .assert()
-        .failure();
+        .failure()
+        .stderr(predicates::str::contains("--since requires --repo"));
 }

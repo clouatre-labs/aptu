@@ -75,6 +75,39 @@ impl OutputContext {
     }
 }
 
+/// Parses a date string in YYYY-MM-DD or RFC3339 format and returns RFC3339 string.
+///
+/// Converts YYYY-MM-DD to RFC3339 format (midnight UTC) for GraphQL filtering.
+///
+/// # Arguments
+///
+/// * `date_str` - Date string in YYYY-MM-DD or RFC3339 format
+///
+/// # Returns
+///
+/// RFC3339 formatted date string, or the input if already in RFC3339 format
+///
+/// # Errors
+///
+/// Returns an error if the date format is invalid.
+pub fn parse_date_to_rfc3339(date_str: &str) -> anyhow::Result<String> {
+    // Try RFC3339 format first
+    if chrono::DateTime::parse_from_rfc3339(date_str).is_ok() {
+        return Ok(date_str.to_string());
+    }
+
+    // Try YYYY-MM-DD format
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+        let datetime = date
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| anyhow::anyhow!("Failed to create datetime from date {date_str}"))?;
+        let rfc3339 = format!("{}Z", datetime.format("%Y-%m-%dT%H:%M:%S"));
+        return Ok(rfc3339);
+    }
+
+    anyhow::bail!("Invalid date format. Expected YYYY-MM-DD or RFC3339 format, got: {date_str}")
+}
+
 /// Aptu - Gamified OSS issue triage with AI assistance.
 ///
 /// A CLI tool that helps developers contribute meaningfully to open source
@@ -163,11 +196,7 @@ pub enum IssueCommand {
         #[arg(long, short = 'r')]
         repo: Option<String>,
 
-        /// Triage all open issues without labels
-        #[arg(long, conflicts_with = "references")]
-        untriaged: bool,
-
-        /// Only triage issues created since this date (RFC3339 format)
+        /// Triage all open issues without labels created since this date (YYYY-MM-DD or RFC3339 format)
         #[arg(long)]
         since: Option<String>,
 
@@ -178,14 +207,6 @@ pub enum IssueCommand {
         /// Skip confirmation prompt (post immediately)
         #[arg(short = 'y', long)]
         yes: bool,
-
-        /// Display fetched issue content before AI triage analysis
-        #[arg(long)]
-        show_issue: bool,
-
-        /// Force triage even if issue appears already triaged
-        #[arg(long)]
-        force: bool,
 
         /// Apply AI-suggested labels and milestone to the issue
         #[arg(long)]

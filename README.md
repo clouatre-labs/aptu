@@ -22,7 +22,7 @@
 - **AI Triage** - Get summaries, suggested labels, clarifying questions, and contributor guidance via OpenRouter
 - **Flexible Issue References** - Triage by URL, short form (owner/repo#123), or bare number
 - **Already-Triaged Detection** - Automatically detects if you've already triaged an issue
-- **Triage Flags** - Control behavior with `--show-issue`, `--force`, `--dry-run`, `--yes`
+- **Triage Flags** - Control behavior with `--dry-run`, `--yes`, `--since`
 - **Multiple Output Formats** - Text, JSON, YAML, and Markdown output
 - **Local History** - Track your contributions offline
 
