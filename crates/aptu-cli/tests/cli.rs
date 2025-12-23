@@ -244,3 +244,15 @@ fn test_triage_since_requires_repo() {
         .failure()
         .stderr(predicates::str::contains("--since requires --repo"));
 }
+
+#[test]
+fn test_triage_no_comment_flag_recognized() {
+    // Test that --no-comment flag is recognized in help
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.arg("issue")
+        .arg("triage")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("--no-comment"));
+}

@@ -91,7 +91,7 @@ runs:
         set -e
         
         ISSUE_REF="${REPO}#${ISSUE_NUMBER}"
-        ARGS="--yes"
+        ARGS=""
         
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"

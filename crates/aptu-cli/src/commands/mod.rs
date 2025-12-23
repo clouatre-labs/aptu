@@ -49,12 +49,14 @@ fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
 /// or Err if an error occurred.
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::fn_params_excessive_bools)]
 async fn triage_single_issue(
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
     yes: bool,
     apply: bool,
+    no_comment: bool,
     ctx: &OutputContext,
     config: &AppConfig,
 ) -> Result<Option<types::TriageResult>> {
@@ -108,13 +110,13 @@ async fn triage_single_issue(
         return Ok(Some(result));
     }
 
-    // For non-interactive without --yes, don't post (safe default)
-    if !ctx.is_interactive() && !yes {
-        return Ok(Some(result));
-    }
-
-    // Handle confirmation (now AFTER user has seen the triage)
-    let should_post = if yes {
+    // Determine if we should post a comment (independent of --apply)
+    let should_post_comment = if no_comment {
+        false
+    } else if !ctx.is_interactive() && !yes {
+        // For non-interactive without --yes, don't post (safe default)
+        false
+    } else if yes {
         true
     } else if config.ui.confirm_before_post {
         println!();
@@ -127,28 +129,29 @@ async fn triage_single_issue(
         true
     };
 
-    if !should_post {
-        if matches!(ctx.format, OutputFormat::Text) {
+    // Phase 2: Post the comment (if not skipped)
+    let comment_url = if should_post_comment {
+        let spinner = maybe_spinner(ctx, "Posting comment...");
+        let analyze_result = triage::AnalyzeResult {
+            issue_details: issue_details.clone(),
+            triage: ai_response.triage.clone(),
+            ai_stats: ai_response.stats.clone(),
+        };
+        let url = triage::post(&analyze_result).await?;
+        if let Some(s) = spinner {
+            s.finish_and_clear();
+        }
+        Some(url)
+    } else {
+        if matches!(ctx.format, OutputFormat::Text) && !no_comment {
             println!("{}", style("Triage not posted.").yellow());
         }
-        return Ok(Some(result));
-    }
-
-    // Phase 2: Post the comment
-    let spinner = maybe_spinner(ctx, "Posting comment...");
-    let analyze_result = triage::AnalyzeResult {
-        issue_details: issue_details.clone(),
-        triage: ai_response.triage.clone(),
-        ai_stats: ai_response.stats.clone(),
+        None
     };
-    let comment_url = triage::post(&analyze_result).await?;
-    if let Some(s) = spinner {
-        s.finish_and_clear();
-    }
 
-    result.comment_url = Some(comment_url.clone());
+    result.comment_url.clone_from(&comment_url);
 
-    // Phase 3: Apply labels and milestone if requested
+    // Phase 3: Apply labels and milestone if requested (independent of comment posting)
     if apply {
         let spinner = maybe_spinner(ctx, "Applying labels and milestone...");
         let apply_result = triage::apply(&issue_details, &ai_response.triage).await?;
@@ -165,28 +168,29 @@ async fn triage_single_issue(
         result.apply_warnings.clone_from(&apply_result.warnings);
     }
 
-    // Record to history
-    let contribution = aptu_core::history::Contribution {
-        id: uuid::Uuid::new_v4(),
-        repo: format!(
-            "{}/{}",
-            analyze_result.issue_details.owner, analyze_result.issue_details.repo
-        ),
-        issue: analyze_result.issue_details.number,
-        action: "triage".to_string(),
-        timestamp: chrono::Utc::now(),
-        comment_url: comment_url.clone(),
-        status: aptu_core::history::ContributionStatus::Pending,
-        ai_stats: Some(ai_response.stats),
-    };
-    aptu_core::history::add_contribution(contribution)?;
-    debug!("Contribution recorded to history");
+    // Record to history only if comment was posted
+    if let Some(url) = &comment_url {
+        let contribution = aptu_core::history::Contribution {
+            id: uuid::Uuid::new_v4(),
+            repo: format!("{}/{}", issue_details.owner, issue_details.repo),
+            issue: issue_details.number,
+            action: "triage".to_string(),
+            timestamp: chrono::Utc::now(),
+            comment_url: url.clone(),
+            status: aptu_core::history::ContributionStatus::Pending,
+            ai_stats: Some(ai_response.stats),
+        };
+        aptu_core::history::add_contribution(contribution)?;
+        debug!("Contribution recorded to history");
+    }
 
-    // Show success
+    // Show success messages
     if matches!(ctx.format, OutputFormat::Text) {
-        println!();
-        println!("{}", style("Comment posted successfully!").green().bold());
-        println!("  {}", style(&comment_url).cyan().underlined());
+        if let Some(url) = &comment_url {
+            println!();
+            println!("{}", style("Comment posted successfully!").green().bold());
+            println!("  {}", style(url).cyan().underlined());
+        }
         if apply && (!result.applied_labels.is_empty() || result.applied_milestone.is_some()) {
             println!();
             println!("{}", style("Applied to issue:").green());
@@ -247,6 +251,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 dry_run,
                 yes,
                 apply,
+                no_comment,
             } => {
                 // Determine repo context: --repo flag > default_repo config
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
@@ -333,6 +338,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                         dry_run,
                         yes,
                         apply,
+                        no_comment,
                         &ctx,
                         config,
                     )

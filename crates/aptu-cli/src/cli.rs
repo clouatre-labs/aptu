@@ -211,6 +211,10 @@ pub enum IssueCommand {
         /// Apply AI-suggested labels and milestone to the issue
         #[arg(long)]
         apply: bool,
+
+        /// Skip posting triage comment to GitHub
+        #[arg(long)]
+        no_comment: bool,
     },
 
     /// Create a GitHub issue with AI assistance
