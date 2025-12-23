@@ -98,6 +98,7 @@ pub fn cache_key_repo_metadata(owner: &str, repo: &str) -> String {
     format!("repo_metadata/{owner}_{repo}.json")
 }
 
+/// A cache key string in the format `issues/{owner}_{repo}.json`
 #[must_use]
 pub fn cache_key_issues(owner: &str, repo: &str) -> String {
     format!("issues/{owner}_{repo}.json")

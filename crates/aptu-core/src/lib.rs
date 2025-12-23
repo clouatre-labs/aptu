@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#![warn(missing_docs)]
+
 //! # Aptu Core
 //!
 //! Core library for the Aptu CLI - AI-powered OSS issue triage.

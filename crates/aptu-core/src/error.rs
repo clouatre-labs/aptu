@@ -17,7 +17,9 @@ pub enum AptuError {
     /// AI provider error (`OpenRouter`, Ollama, etc.).
     #[error("AI provider error: {message}")]
     AI {
+        /// Error message from the AI provider.
         message: String,
+        /// Optional HTTP status code from the provider.
         status: Option<u16>,
     },
 
@@ -27,7 +29,12 @@ pub enum AptuError {
 
     /// Rate limit exceeded from an AI provider.
     #[error("Rate limit exceeded on {provider}, retry after {retry_after}s")]
-    RateLimited { provider: String, retry_after: u64 },
+    RateLimited {
+        /// Name of the provider that rate limited (e.g., `OpenRouter`).
+        provider: String,
+        /// Number of seconds to wait before retrying.
+        retry_after: u64,
+    },
 
     /// Configuration file error.
     #[error("Configuration error: {0}")]
