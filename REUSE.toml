@@ -1,0 +1,121 @@
+version = 1
+
+[[annotations]]
+path = ["crates/**/*.rs", "crates/**/*.toml"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [".github/**/*.yml", ".github/**/*.yaml", ".github/**/*.md"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["assets/**/*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["AptuApp/**/*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["docs/**/*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["tests/**/*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["scripts/**/*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["*.toml", "*.lock"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["*.json"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["*.yml", "*.yaml"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["*.md"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["*.sh"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["LICENSE", "LICENSE.md", "LICENSE.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["README*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["CONTRIBUTING*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["CHANGELOG*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["Makefile", "makefile"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["Dockerfile*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [".gitignore", ".gitattributes", ".editorconfig"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["Justfile"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"

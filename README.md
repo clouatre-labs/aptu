@@ -8,6 +8,7 @@
   <a href="https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml"><img src="https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/clouatre-labs/aptu/releases/latest"><img src="https://img.shields.io/github/v/release/clouatre-labs/aptu" alt="Release"></a>
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img src="https://api.reuse.software/badge/github.com/clouatre-labs/aptu" alt="REUSE Compliant"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/MSRV-1.92.0-orange.svg" alt="MSRV"></a>
 </p>
 
@@ -219,7 +220,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 Aptu follows supply chain security best practices:
 
 - **GitHub Attestations** - Release artifacts are signed with [artifact attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds) for build provenance
-- **SPDX Headers** - All source files include SPDX license identifiers
+- **REUSE Compliant** - All files have machine-readable license metadata ([REUSE 3.3](https://reuse.software/))
 - **Signed Commits** - All commits are GPG-signed with DCO sign-off
 - **Optimized Binaries** - Release builds use LTO and size optimizations (~3MB binary)
 

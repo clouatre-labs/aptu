@@ -42,6 +42,7 @@ just integration  # Run integration tests
 just build        # Build debug binary
 just build-release # Build optimized release binary
 just ci           # Run full CI pipeline locally
+just reuse        # Check REUSE license compliance
 just install      # Install binary to ~/.cargo/bin/
 just clean        # Remove build artifacts
 ```
