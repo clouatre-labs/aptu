@@ -29,6 +29,7 @@ pub struct IssuesResult {
 }
 
 /// Result from the triage command.
+#[derive(Debug, Clone)]
 pub struct TriageResult {
     /// Issue title (for display).
     pub issue_title: String,
@@ -48,6 +49,33 @@ pub struct TriageResult {
     pub applied_milestone: Option<String>,
     /// Warnings from applying labels/milestone.
     pub apply_warnings: Vec<String>,
+}
+
+/// Outcome of a single triage operation in a bulk operation.
+#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
+pub enum SingleTriageOutcome {
+    /// Triage succeeded.
+    #[allow(dead_code)]
+    Success(Box<TriageResult>),
+    /// Triage was skipped (e.g., already triaged).
+    #[allow(dead_code)]
+    Skipped(String),
+    /// Triage failed with an error.
+    #[allow(dead_code)]
+    Failed(String),
+}
+
+/// Result from a bulk triage operation.
+pub struct BulkTriageResult {
+    /// Number of issues successfully triaged.
+    pub succeeded: usize,
+    /// Number of issues that failed.
+    pub failed: usize,
+    /// Number of issues that were skipped.
+    pub skipped: usize,
+    /// Individual outcomes for each issue.
+    pub outcomes: Vec<(String, SingleTriageOutcome)>,
 }
 
 /// Result from the history command.

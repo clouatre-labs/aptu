@@ -191,3 +191,88 @@ fn test_quiet_flag_suppresses_output() {
         .assert()
         .success();
 }
+
+#[test]
+fn test_triage_multiple_references() {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.arg("issue")
+        .arg("triage")
+        .arg("block/goose#1")
+        .arg("block/goose#2")
+        .arg("--dry-run")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_triage_single_reference() {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.arg("issue")
+        .arg("triage")
+        .arg("block/goose#1")
+        .arg("--dry-run")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_triage_untriaged_requires_repo() {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.arg("issue")
+        .arg("triage")
+        .arg("--untriaged")
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_triage_untriaged_with_repo() {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.arg("issue")
+        .arg("triage")
+        .arg("--untriaged")
+        .arg("--repo")
+        .arg("block/goose")
+        .arg("--dry-run")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_triage_delay_flag() {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.arg("issue")
+        .arg("triage")
+        .arg("block/goose#1")
+        .arg("--delay")
+        .arg("500")
+        .arg("--dry-run")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_triage_since_flag() {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.arg("issue")
+        .arg("triage")
+        .arg("--untriaged")
+        .arg("--repo")
+        .arg("block/goose")
+        .arg("--since")
+        .arg("2025-01-01T00:00:00Z")
+        .arg("--dry-run")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_triage_untriaged_conflicts_with_references() {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.arg("issue")
+        .arg("triage")
+        .arg("block/goose#1")
+        .arg("--untriaged")
+        .assert()
+        .failure();
+}
