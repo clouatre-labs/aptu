@@ -421,11 +421,7 @@ fn build_user_prompt(issue: &IssueDetails) -> String {
             } else {
                 format!(" - {}", milestone.description)
             };
-            let _ = writeln!(
-                prompt,
-                "- #{} {}{}",
-                milestone.number, milestone.title, description
-            );
+            let _ = writeln!(prompt, "- {}{}", milestone.title, description);
         }
         prompt.push('\n');
     }
