@@ -216,52 +216,29 @@ fn test_triage_single_reference() {
 }
 
 #[test]
-fn test_triage_untriaged_requires_repo() {
+fn test_triage_since_flag_with_repo() {
     let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("issue")
         .arg("triage")
-        .arg("--untriaged")
-        .assert()
-        .failure();
-}
-
-#[test]
-fn test_triage_untriaged_with_repo() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
-        .arg("triage")
-        .arg("--untriaged")
         .arg("--repo")
         .arg("block/goose")
+        .arg("--since")
+        .arg("2025-01-01")
         .arg("--dry-run")
         .assert()
-        .failure()
-        .stderr(predicates::str::contains("Not authenticated"));
+        .success();
 }
 
 #[test]
-fn test_triage_since_flag() {
+fn test_triage_since_flag_rfc3339_format() {
     let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("issue")
         .arg("triage")
-        .arg("--untriaged")
         .arg("--repo")
         .arg("block/goose")
         .arg("--since")
         .arg("2025-01-01T00:00:00Z")
         .arg("--dry-run")
         .assert()
-        .failure()
-        .stderr(predicates::str::contains("Not authenticated"));
-}
-
-#[test]
-fn test_triage_untriaged_conflicts_with_references() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
-        .arg("triage")
-        .arg("block/goose#1")
-        .arg("--untriaged")
-        .assert()
-        .failure();
+        .success();
 }

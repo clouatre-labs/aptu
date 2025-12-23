@@ -514,6 +514,7 @@ pub fn render_triage_markdown(triage: &TriageResponse) -> String {
 }
 
 /// Render fetched issue details.
+#[allow(dead_code)]
 pub fn render_issue(issue: &IssueDetails, ctx: &OutputContext) {
     match ctx.format {
         OutputFormat::Json => {
@@ -622,6 +623,7 @@ pub fn render_issue(issue: &IssueDetails, ctx: &OutputContext) {
 /// Truncates body text to a maximum length, adding indicator if truncated.
 ///
 /// Uses the core `truncate_with_suffix` function.
+#[allow(dead_code)]
 fn truncate_body(body: &str, max_len: usize) -> String {
     truncate_with_suffix(body, max_len, "... [truncated]")
 }
