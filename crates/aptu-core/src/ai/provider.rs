@@ -190,7 +190,7 @@ pub trait AiProvider: Send + Sync {
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
             }),
-            max_tokens: Some(1024),
+            max_tokens: Some(2048),
             temperature: Some(0.3),
         };
 
@@ -290,7 +290,7 @@ pub trait AiProvider: Send + Sync {
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
             }),
-            max_tokens: Some(1024),
+            max_tokens: Some(2048),
             temperature: Some(0.3),
         };
 
