@@ -66,5 +66,4 @@ mod create;
 mod history;
 mod issues;
 mod repos;
-pub mod table;
 mod triage;
