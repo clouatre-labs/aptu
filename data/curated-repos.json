@@ -1,0 +1,62 @@
+[
+  {
+    "owner": "block",
+    "name": "goose",
+    "language": "Rust",
+    "description": "AI developer agent"
+  },
+  {
+    "owner": "astral-sh",
+    "name": "ruff",
+    "language": "Rust",
+    "description": "Fast Python linter"
+  },
+  {
+    "owner": "astral-sh",
+    "name": "uv",
+    "language": "Rust",
+    "description": "Fast Python package manager"
+  },
+  {
+    "owner": "tauri-apps",
+    "name": "tauri",
+    "language": "Rust",
+    "description": "Desktop app framework"
+  },
+  {
+    "owner": "bevyengine",
+    "name": "bevy",
+    "language": "Rust",
+    "description": "Game engine"
+  },
+  {
+    "owner": "lapce",
+    "name": "lapce",
+    "language": "Rust",
+    "description": "Code editor"
+  },
+  {
+    "owner": "zed-industries",
+    "name": "zed",
+    "language": "Rust",
+    "description": "Code editor"
+  },
+  {
+    "owner": "eza-community",
+    "name": "eza",
+    "language": "Rust",
+    "description": "Modern ls replacement"
+  },
+  {
+    "owner": "sharkdp",
+    "name": "bat",
+    "language": "Rust",
+    "description": "Cat clone with syntax highlighting"
+  },
+  {
+    "owner": "BurntSushi",
+    "name": "ripgrep",
+    "language": "Rust",
+    "description": "Fast grep replacement"
+  }
+]

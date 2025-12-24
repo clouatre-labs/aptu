@@ -2,12 +2,13 @@
 
 //! List curated repositories command.
 
-use aptu_core::repos;
+use anyhow::Result;
+use aptu_core::list_curated_repos;
 
 use super::types::ReposResult;
 
 /// List curated repositories available for contribution.
-pub fn run() -> ReposResult {
-    let repos = repos::list();
-    ReposResult { repos }
+pub async fn run() -> Result<ReposResult> {
+    let repos = list_curated_repos().await?;
+    Ok(ReposResult { repos })
 }

@@ -25,6 +25,12 @@ SPDX-FileCopyrightText = "2025 Aptu Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
+path = ["data/**/*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
 path = ["docs/**/*"]
 precedence = "override"
 SPDX-FileCopyrightText = "2025 Aptu Contributors"

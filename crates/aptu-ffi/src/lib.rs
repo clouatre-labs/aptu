@@ -60,9 +60,15 @@ impl TokenProvider for FfiTokenProvider {
 }
 
 #[uniffi::export]
-pub fn list_curated_repos() -> Vec<FfiCuratedRepo> {
-    let repos = aptu_core::repos::list();
-    repos.iter().map(FfiCuratedRepo::from).collect()
+pub fn list_curated_repos() -> Result<Vec<FfiCuratedRepo>, AptuFfiError> {
+    RUNTIME.block_on(async {
+        match aptu_core::list_curated_repos().await {
+            Ok(repos) => Ok(repos.iter().map(FfiCuratedRepo::from).collect()),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
 }
 
 /// Fetch "good first issue" issues from all curated repositories.

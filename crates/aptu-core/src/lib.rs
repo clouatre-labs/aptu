@@ -148,7 +148,7 @@ pub use utils::{
 // Platform-Agnostic Facade
 // ============================================================================
 
-pub use facade::{analyze_issue, fetch_issues};
+pub use facade::{analyze_issue, fetch_issues, list_curated_repos};
 
 // ============================================================================
 // Modules

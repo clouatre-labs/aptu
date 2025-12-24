@@ -17,7 +17,7 @@ use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
 use crate::error::AptuError;
 use crate::github::graphql::{IssueNode, fetch_issues as gh_fetch_issues};
-use crate::repos;
+use crate::repos::{self, CuratedRepo};
 
 /// Fetches "good first issue" issues from curated repositories.
 ///
@@ -56,7 +56,7 @@ pub async fn fetch_issues(
         .map_err(AptuError::GitHub)?;
 
     // Get curated repos, optionally filtered
-    let all_repos = repos::list();
+    let all_repos = repos::fetch().await?;
     let repos_to_query: Vec<_> = match repo_filter {
         Some(filter) => {
             let filter_lower = filter.to_lowercase();
@@ -69,7 +69,7 @@ pub async fn fetch_issues(
                 .cloned()
                 .collect()
         }
-        None => all_repos.to_vec(),
+        None => all_repos,
     };
 
     // Load config for cache TTL
@@ -82,7 +82,7 @@ pub async fn fetch_issues(
         let mut repos_to_fetch = Vec::new();
 
         for repo in &repos_to_query {
-            let cache_key = cache::cache_key_issues(repo.owner, repo.name);
+            let cache_key = cache::cache_key_issues(&repo.owner, &repo.name);
             match cache::read_cache::<Vec<IssueNode>>(&cache_key) {
                 Ok(Some(entry)) if entry.is_valid(ttl) => {
                     cached_results.push((repo.full_name(), entry.data));
@@ -98,18 +98,23 @@ pub async fn fetch_issues(
             return Ok(cached_results);
         }
 
-        // Fetch missing repos from API
-        let api_results = gh_fetch_issues(&client, &repos_to_fetch)
-            .await
-            .map_err(|e| AptuError::AI {
-                message: format!("Failed to fetch issues: {e}"),
-                status: None,
-            })?;
+        // Fetch missing repos from API - convert to tuples for GraphQL
+        let repo_tuples: Vec<_> = repos_to_fetch
+            .iter()
+            .map(|r| (r.owner.as_str(), r.name.as_str()))
+            .collect();
+        let api_results =
+            gh_fetch_issues(&client, &repo_tuples)
+                .await
+                .map_err(|e| AptuError::AI {
+                    message: format!("Failed to fetch issues: {e}"),
+                    status: None,
+                })?;
 
         // Write fetched results to cache
         for (repo_name, issues) in &api_results {
             if let Some(repo) = repos_to_fetch.iter().find(|r| r.full_name() == *repo_name) {
-                let cache_key = cache::cache_key_issues(repo.owner, repo.name);
+                let cache_key = cache::cache_key_issues(&repo.owner, &repo.name);
                 let entry = CacheEntry::new(issues.clone());
                 let _ = cache::write_cache(&cache_key, &entry);
             }
@@ -119,14 +124,35 @@ pub async fn fetch_issues(
         cached_results.extend(api_results);
         Ok(cached_results)
     } else {
-        // Cache disabled, fetch directly from API
-        gh_fetch_issues(&client, &repos_to_query)
+        // Cache disabled, fetch directly from API - convert to tuples
+        let repo_tuples: Vec<_> = repos_to_query
+            .iter()
+            .map(|r| (r.owner.as_str(), r.name.as_str()))
+            .collect();
+        gh_fetch_issues(&client, &repo_tuples)
             .await
             .map_err(|e| AptuError::AI {
                 message: format!("Failed to fetch issues: {e}"),
                 status: None,
             })
     }
+}
+
+/// Fetches curated repositories with platform-agnostic API.
+///
+/// This function provides a facade for fetching curated repositories,
+/// allowing platforms (CLI, iOS, MCP) to use a consistent interface.
+///
+/// # Returns
+///
+/// A vector of `CuratedRepo` structs.
+///
+/// # Errors
+///
+/// Returns an error if configuration cannot be loaded.
+#[instrument]
+pub async fn list_curated_repos() -> crate::Result<Vec<CuratedRepo>> {
+    repos::fetch().await
 }
 
 /// Analyzes a GitHub issue and generates triage suggestions.

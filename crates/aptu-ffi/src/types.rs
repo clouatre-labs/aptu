@@ -15,10 +15,10 @@ pub struct FfiCuratedRepo {
 impl From<&aptu_core::repos::CuratedRepo> for FfiCuratedRepo {
     fn from(repo: &aptu_core::repos::CuratedRepo) -> Self {
         FfiCuratedRepo {
-            owner: repo.owner.to_string(),
-            name: repo.name.to_string(),
-            description: repo.description.to_string(),
-            language: repo.language.to_string(),
+            owner: repo.owner.clone(),
+            name: repo.name.clone(),
+            description: repo.description.clone(),
+            language: repo.language.clone(),
             open_issues_count: 0, // TODO: fetch from GitHub API in Phase 2
             last_activity: "unknown".to_string(), // TODO: fetch from GitHub API in Phase 2
         }

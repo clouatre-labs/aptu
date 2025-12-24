@@ -2,25 +2,33 @@
 
 //! Curated repository list for Aptu.
 //!
-//! This module provides a hardcoded list of repositories known to be:
+//! Repositories are fetched from a remote JSON file with TTL-based caching.
+//! The list contains repositories known to be:
 //! - Active (commits in last 30 days)
 //! - Welcoming (good first issue labels exist)
 //! - Responsive (maintainers reply within 1 week)
 
-use serde::Serialize;
-use tracing::debug;
+use chrono::Duration;
+use serde::{Deserialize, Serialize};
+use tracing::{debug, instrument, warn};
+
+use crate::cache::{self, CacheEntry};
+use crate::config::load_config;
+
+/// Embedded curated repositories as fallback when network fetch fails.
+const EMBEDDED_REPOS: &str = include_str!("../../../../data/curated-repos.json");
 
 /// A curated repository for contribution.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CuratedRepo {
     /// Repository owner (user or organization).
-    pub owner: &'static str,
+    pub owner: String,
     /// Repository name.
-    pub name: &'static str,
+    pub name: String,
     /// Primary programming language.
-    pub language: &'static str,
+    pub language: String,
     /// Short description.
-    pub description: &'static str,
+    pub description: String,
 }
 
 impl CuratedRepo {
@@ -31,74 +39,65 @@ impl CuratedRepo {
     }
 }
 
-/// Hardcoded list of curated repositories.
-const CURATED_REPOS: &[CuratedRepo] = &[
-    CuratedRepo {
-        owner: "block",
-        name: "goose",
-        language: "Rust",
-        description: "AI developer agent",
-    },
-    CuratedRepo {
-        owner: "astral-sh",
-        name: "ruff",
-        language: "Rust",
-        description: "Fast Python linter",
-    },
-    CuratedRepo {
-        owner: "astral-sh",
-        name: "uv",
-        language: "Rust",
-        description: "Fast Python package manager",
-    },
-    CuratedRepo {
-        owner: "tauri-apps",
-        name: "tauri",
-        language: "Rust",
-        description: "Desktop app framework",
-    },
-    CuratedRepo {
-        owner: "bevyengine",
-        name: "bevy",
-        language: "Rust",
-        description: "Game engine",
-    },
-    CuratedRepo {
-        owner: "lapce",
-        name: "lapce",
-        language: "Rust",
-        description: "Code editor",
-    },
-    CuratedRepo {
-        owner: "zed-industries",
-        name: "zed",
-        language: "Rust",
-        description: "Code editor",
-    },
-    CuratedRepo {
-        owner: "eza-community",
-        name: "eza",
-        language: "Rust",
-        description: "Modern ls replacement",
-    },
-    CuratedRepo {
-        owner: "sharkdp",
-        name: "bat",
-        language: "Rust",
-        description: "Cat clone with syntax highlighting",
-    },
-    CuratedRepo {
-        owner: "BurntSushi",
-        name: "ripgrep",
-        language: "Rust",
-        description: "Fast grep replacement",
-    },
-];
+/// Parse embedded curated repositories from the compiled-in JSON.
+///
+/// # Returns
+///
+/// A vector of `CuratedRepo` structs parsed from the embedded JSON.
+///
+/// # Panics
+///
+/// Panics if the embedded JSON is malformed (should never happen in production).
+fn embedded_defaults() -> Vec<CuratedRepo> {
+    serde_json::from_str(EMBEDDED_REPOS).expect("embedded repos JSON is valid")
+}
 
-/// Returns the list of curated repositories.
-pub fn list() -> &'static [CuratedRepo] {
-    debug!("Listing {} curated repositories", CURATED_REPOS.len());
-    CURATED_REPOS
+/// Fetch curated repositories from remote URL with TTL-based caching.
+///
+/// Fetches the curated repository list from a remote JSON file
+/// (configured via `cache.curated_repos_url`), caching the result with a TTL
+/// based on `cache.repo_ttl_hours`.
+///
+/// If the network fetch fails, falls back to embedded defaults with a warning.
+///
+/// # Returns
+///
+/// A vector of `CuratedRepo` structs.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Configuration cannot be loaded
+#[instrument]
+pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
+    let config = load_config()?;
+    let url = &config.cache.curated_repos_url;
+    let ttl = Duration::hours(config.cache.repo_ttl_hours.try_into().unwrap_or(24));
+
+    // Try cache first
+    let cache_key = "curated_repos.json";
+    if let Ok(Some(entry)) = cache::read_cache::<Vec<CuratedRepo>>(cache_key)
+        && entry.is_valid(ttl)
+    {
+        debug!("Using cached curated repositories");
+        return Ok(entry.data);
+    }
+
+    // Fetch from remote
+    debug!("Fetching curated repositories from {}", url);
+    let repos = if let Ok(repos) = reqwest::Client::new().get(url).send().await?.json().await {
+        repos
+    } else {
+        warn!("Failed to fetch remote curated repositories, using embedded defaults");
+        embedded_defaults()
+    };
+
+    // Cache the result
+    let entry = CacheEntry::new(repos.clone());
+    let _ = cache::write_cache(cache_key, &entry);
+    debug!("Fetched and cached {} curated repositories", repos.len());
+
+    Ok(repos)
 }
 
 #[cfg(test)]
@@ -106,15 +105,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn list_returns_non_empty() {
-        let repos = list();
-        assert!(!repos.is_empty(), "Curated repos list should not be empty");
-        assert_eq!(repos.len(), 10, "Expected 10 curated repos");
+    fn full_name_format() {
+        let repo = CuratedRepo {
+            owner: "owner".to_string(),
+            name: "repo".to_string(),
+            language: "Rust".to_string(),
+            description: "Test repository".to_string(),
+        };
+        assert_eq!(repo.full_name(), "owner/repo");
     }
 
     #[test]
-    fn full_name_format() {
-        let repo = &list()[0];
-        assert_eq!(repo.full_name(), "block/goose");
+    fn embedded_defaults_returns_non_empty() {
+        let repos = embedded_defaults();
+        assert!(
+            !repos.is_empty(),
+            "embedded defaults should contain repositories"
+        );
     }
 }

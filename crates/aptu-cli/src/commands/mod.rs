@@ -232,7 +232,11 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
 
         Commands::Repo(repo_cmd) => match repo_cmd {
             RepoCommand::List => {
-                let result = repo::run();
+                let spinner = maybe_spinner(&ctx, "Fetching repositories...");
+                let result = repo::run().await?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
                 output::render_repos(&result, &ctx);
                 Ok(())
             }
