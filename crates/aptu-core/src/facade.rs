@@ -10,8 +10,7 @@
 use chrono::Duration;
 use tracing::instrument;
 
-use crate::ai::{AiProvider, AiResponse, types::IssueDetails};
-use crate::ai::{CerebrasClient, GeminiClient, GroqClient, OpenRouterClient};
+use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
@@ -187,71 +186,20 @@ pub async fn analyze_issue(
         .ai_api_key(&config.ai.provider)
         .ok_or(AptuError::NotAuthenticated)?;
 
-    // Select AI provider based on config and create appropriate client
-    match config.ai.provider.as_str() {
-        "cerebras" => {
-            let ai_client =
-                CerebrasClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
-                    message: e.to_string(),
-                    status: None,
-                })?;
+    // Create generic AI client with provided API key
+    let ai_client =
+        AiClient::with_api_key(&config.ai.provider, api_key, &config.ai).map_err(|e| {
+            AptuError::AI {
+                message: e.to_string(),
+                status: None,
+            }
+        })?;
 
-            ai_client
-                .analyze_issue(issue)
-                .await
-                .map_err(|e| AptuError::AI {
-                    message: e.to_string(),
-                    status: None,
-                })
-        }
-        "gemini" => {
-            let ai_client =
-                GeminiClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
-                    message: e.to_string(),
-                    status: None,
-                })?;
-
-            ai_client
-                .analyze_issue(issue)
-                .await
-                .map_err(|e| AptuError::AI {
-                    message: e.to_string(),
-                    status: None,
-                })
-        }
-        "groq" => {
-            let ai_client =
-                GroqClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
-                    message: e.to_string(),
-                    status: None,
-                })?;
-
-            ai_client
-                .analyze_issue(issue)
-                .await
-                .map_err(|e| AptuError::AI {
-                    message: e.to_string(),
-                    status: None,
-                })
-        }
-        "openrouter" => {
-            let ai_client =
-                OpenRouterClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
-                    message: e.to_string(),
-                    status: None,
-                })?;
-
-            ai_client
-                .analyze_issue(issue)
-                .await
-                .map_err(|e| AptuError::AI {
-                    message: e.to_string(),
-                    status: None,
-                })
-        }
-        _ => Err(AptuError::AI {
-            message: format!("Unknown AI provider: {}", config.ai.provider),
+    ai_client
+        .analyze_issue(issue)
+        .await
+        .map_err(|e| AptuError::AI {
+            message: e.to_string(),
             status: None,
-        }),
-    }
+        })
 }

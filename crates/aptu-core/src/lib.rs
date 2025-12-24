@@ -16,7 +16,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use aptu_core::{load_config, OpenRouterClient, IssueDetails, ai::AiProvider};
+//! use aptu_core::{load_config, AiClient, IssueDetails, ai::AiProvider};
 //! use anyhow::Result;
 //!
 //! # async fn example() -> Result<()> {
@@ -24,7 +24,7 @@
 //! let config = load_config()?;
 //!
 //! // Create AI client (reuse for multiple requests)
-//! let client = OpenRouterClient::new(&config.ai)?;
+//! let client = AiClient::new(&config.ai.provider, &config.ai)?;
 //!
 //! // Create issue details
 //! let issue = IssueDetails {
@@ -97,8 +97,7 @@ pub use cache::CacheEntry;
 
 pub use ai::types::{IssueComment, IssueDetails, TriageResponse};
 pub use ai::{
-    AiModel, ModelInfo, ModelProvider, OpenRouterClient, ProviderConfig, all_providers,
-    get_provider,
+    AiClient, AiModel, ModelInfo, ModelProvider, ProviderConfig, all_providers, get_provider,
 };
 
 // ============================================================================
@@ -113,7 +112,7 @@ pub use github::ratelimit::{RateLimitStatus, check_rate_limit};
 // AI Integration
 // ============================================================================
 
-pub use ai::openrouter::CreditsStatus;
+pub use ai::types::CreditsStatus;
 
 // ============================================================================
 // History Tracking
