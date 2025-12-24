@@ -65,6 +65,26 @@ impl TokenProvider for FfiTokenProvider {
             }
         }
     }
+
+    fn gemini_key(&self) -> Option<SecretString> {
+        match self
+            .keychain
+            .get_token("aptu".to_string(), "gemini".to_string())
+        {
+            Ok(Some(key)) => {
+                debug!("Retrieved Gemini API key from iOS keychain");
+                Some(SecretString::new(key.into()))
+            }
+            Ok(None) => {
+                debug!("No Gemini API key found in iOS keychain");
+                None
+            }
+            Err(e) => {
+                debug!(error = ?e, "Failed to retrieve Gemini API key from keychain");
+                None
+            }
+        }
+    }
 }
 
 #[cfg(test)]

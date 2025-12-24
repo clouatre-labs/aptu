@@ -47,6 +47,16 @@ impl TokenProvider for FfiTokenProvider {
             _ => None,
         }
     }
+
+    fn gemini_key(&self) -> Option<SecretString> {
+        match self
+            .keychain
+            .get_token("aptu".to_string(), "gemini".to_string())
+        {
+            Ok(Some(key)) => Some(SecretString::new(key.into())),
+            _ => None,
+        }
+    }
 }
 
 #[uniffi::export]

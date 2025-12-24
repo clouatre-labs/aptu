@@ -2,9 +2,9 @@
 
 //! CLI-specific `TokenProvider` implementation.
 //!
-//! Provides GitHub and `OpenRouter` credentials for CLI commands by resolving
+//! Provides GitHub, `OpenRouter`, and Gemini credentials for CLI commands by resolving
 //! tokens from environment variables, GitHub CLI, system keyring, and
-//! environment variables for `OpenRouter` API keys.
+//! environment variables for `OpenRouter` and Gemini API keys.
 
 use aptu_core::auth::TokenProvider;
 use secrecy::SecretString;
@@ -15,6 +15,7 @@ use tracing::debug;
 /// Resolves credentials from:
 /// - GitHub: Environment variables, GitHub CLI, or system keyring
 /// - `OpenRouter`: `OPENROUTER_API_KEY` environment variable
+/// - Gemini: `GEMINI_API_KEY` environment variable
 pub struct CliTokenProvider;
 
 impl TokenProvider for CliTokenProvider {
@@ -36,6 +37,19 @@ impl TokenProvider for CliTokenProvider {
             }
             _ => {
                 debug!("No OpenRouter API key found in environment");
+                None
+            }
+        }
+    }
+
+    fn gemini_key(&self) -> Option<SecretString> {
+        match std::env::var("GEMINI_API_KEY") {
+            Ok(key) if !key.is_empty() => {
+                debug!("Resolved Gemini API key from environment variable");
+                Some(SecretString::from(key))
+            }
+            _ => {
+                debug!("No Gemini API key found in environment");
                 None
             }
         }
