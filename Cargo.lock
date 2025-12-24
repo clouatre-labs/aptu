@@ -108,6 +108,7 @@ name = "aptu-core"
 version = "0.1.4"
 dependencies = [
  "anyhow",
+ "async-trait",
  "backon",
  "chrono",
  "config",

@@ -38,6 +38,9 @@ tracing = { workspace = true }
 # Async runtime
 tokio = { workspace = true }
 
+# Async traits
+async-trait = { workspace = true }
+
 [features]
 default = []
 # Enable UniFFI derive macros for FFI bindings (used by aptu-ffi)

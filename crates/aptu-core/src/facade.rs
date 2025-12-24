@@ -10,7 +10,7 @@
 use chrono::Duration;
 use tracing::instrument;
 
-use crate::ai::{AiResponse, types::IssueDetails};
+use crate::ai::{AiProvider, AiResponse, types::IssueDetails};
 use crate::ai::{GeminiClient, OpenRouterClient};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
