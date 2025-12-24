@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-light.png" alt="Aptu Logo" width="128">
+  <img src="https://raw.githubusercontent.com/clouatre-labs/aptu/main/assets/logo-light.png" alt="Aptu Logo" width="128">
 </p>
 
 <h1 align="center">Aptu</h1>
@@ -19,7 +19,7 @@
 
 ## Demo
 
-![Aptu Demo](assets/demo.gif)
+![Aptu Demo](https://raw.githubusercontent.com/clouatre-labs/aptu/main/assets/demo.gif)
 
 ## Features
 
@@ -218,7 +218,7 @@ export OPENROUTER_API_KEY="sk-or-..."
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute, including our Developer Certificate of Origin (DCO) requirement.
+We welcome contributions! Please see [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines on how to contribute, including our Developer Certificate of Origin (DCO) requirement.
 
 ## Supply Chain Security
 
@@ -240,11 +240,11 @@ We're actively seeking contributors to help expand Aptu! Whether you're interest
 - Reporting bugs or suggesting features
 - Spreading the word - blog posts, social media, talks
 
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and how to get started. All contributions are welcome!
+Please see [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines and how to get started. All contributions are welcome!
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
+Licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/clouatre-labs/aptu/blob/main/LICENSE) for details.
 
 ---
 
