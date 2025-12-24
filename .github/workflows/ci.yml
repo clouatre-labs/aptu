@@ -58,6 +58,29 @@ jobs:
       - name: Validate commit messages
         uses: wagoid/commitlint-github-action@f133a0d95090ef2609192b4a21f54e20af819ea9 # v6
 
+  check-base:
+    name: Check Branch Base
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+      - name: Verify branch is rebased on main
+        run: |
+          git fetch origin main
+          base_commit=$(git merge-base origin/main HEAD)
+          main_head=$(git rev-parse origin/main)
+          if [ "$base_commit" != "$main_head" ]; then
+            behind=$(git rev-list --count $base_commit..$main_head)
+            echo "::error::Branch is $behind commit(s) behind main. Rebase required."
+            echo "Run: git fetch origin && git rebase origin/main"
+            exit 1
+          fi
+          echo "Branch is up to date with main."
+
   format:
     name: Check Format
     runs-on: ubuntu-latest
@@ -74,25 +97,6 @@ jobs:
           components: rustfmt
       - name: Check formatting
         run: cargo fmt --check
-
-  spdx:
-    name: Check SPDX Headers
-    runs-on: ubuntu-latest
-    needs: changes
-    timeout-minutes: 5
-    continue-on-error: true
-    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - name: Check SPDX headers on Rust files
-        run: |
-          missing=$(find crates -name "*.rs" -type f -exec grep -L "SPDX-License-Identifier" {} \;)
-          if [ -n "$missing" ]; then
-            echo "Files missing SPDX headers:"
-            echo "$missing"
-            exit 1
-          fi
 
   lint:
     name: Lint
