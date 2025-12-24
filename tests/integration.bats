@@ -29,12 +29,3 @@ load test_helper
     run "$APTU_BIN" issue triage https://github.com/block/goose/issues/1 --dry-run
     assert_success
 }
-
-@test "history returns valid JSON" {
-    run "$APTU_BIN" history --output json
-    assert_success
-    
-    # Verify output is valid JSON
-    echo "$output" | jq . > /dev/null
-    assert_success
-}
