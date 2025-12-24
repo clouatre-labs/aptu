@@ -2,25 +2,19 @@
 
 //! AI integration module.
 //!
-//! Provides AI-assisted issue triage using multiple AI providers (Gemini, `OpenRouter`).
+//! Provides AI-assisted issue triage using multiple AI providers (Gemini, `OpenRouter`, Groq, Cerebras).
 
-pub mod cerebras;
-pub mod gemini;
-pub mod groq;
+pub mod client;
 pub mod models;
-pub mod openrouter;
 pub mod provider;
 pub mod registry;
 pub mod types;
 
-pub use cerebras::CerebrasClient;
-pub use gemini::GeminiClient;
-pub use groq::GroqClient;
+pub use client::AiClient;
 pub use models::{AiModel, ModelProvider};
-pub use openrouter::OpenRouterClient;
 pub use provider::AiProvider;
 pub use registry::{ModelInfo, ProviderConfig, all_providers, get_provider};
-pub use types::{CreateIssueResponse, TriageResponse};
+pub use types::{CreateIssueResponse, CreditsStatus, TriageResponse};
 
 use crate::history::AiStats;
 
@@ -86,24 +80,7 @@ pub async fn create_issue(
 ) -> anyhow::Result<CreateIssueResponse> {
     let config = crate::config::load_config()?;
 
-    // Select AI provider based on config
-    match config.ai.provider.as_str() {
-        "cerebras" => {
-            let client = CerebrasClient::new(&config.ai)?;
-            client.create_issue(title, body, repo).await
-        }
-        "gemini" => {
-            let client = GeminiClient::new(&config.ai)?;
-            client.create_issue(title, body, repo).await
-        }
-        "groq" => {
-            let client = GroqClient::new(&config.ai)?;
-            client.create_issue(title, body, repo).await
-        }
-        "openrouter" => {
-            let client = OpenRouterClient::new(&config.ai)?;
-            client.create_issue(title, body, repo).await
-        }
-        _ => anyhow::bail!("Unknown AI provider: {}", config.ai.provider),
-    }
+    // Create generic client for the configured provider
+    let client = AiClient::new(&config.ai.provider, &config.ai)?;
+    client.create_issue(title, body, repo).await
 }

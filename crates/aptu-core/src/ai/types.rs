@@ -1,11 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! AI request/response types for `OpenRouter` API.
+//! AI request/response types for API communication.
 //!
-//! Defines the structures used for communicating with the `OpenRouter` API
+//! Defines the structures used for communicating with AI provider APIs
 //! and parsing triage responses.
 
 use serde::{Deserialize, Serialize};
+
+/// Account credits status for `OpenRouter`.
+#[derive(Debug, Clone)]
+pub struct CreditsStatus {
+    /// Available credits in USD.
+    pub credits: f64,
+}
+
+impl CreditsStatus {
+    /// Returns a human-readable status message.
+    #[must_use]
+    pub fn message(&self) -> String {
+        format!("OpenRouter credits: ${:.4}", self.credits)
+    }
+}
 
 /// A chat message for the `OpenRouter` API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
