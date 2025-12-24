@@ -16,7 +16,7 @@ use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
 
 /// Embedded curated repositories as fallback when network fetch fails.
-const EMBEDDED_REPOS: &str = include_str!("../../../../data/curated-repos.json");
+const EMBEDDED_REPOS: &str = include_str!("../../data/curated-repos.json");
 
 /// A curated repository for contribution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
