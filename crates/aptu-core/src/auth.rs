@@ -4,12 +4,12 @@
 //!
 //! This module defines the `TokenProvider` trait, which abstracts credential
 //! resolution across different platforms (CLI, iOS, etc.). Each platform
-//! implements this trait to provide GitHub and `OpenRouter` tokens from their
+//! implements this trait to provide GitHub, `OpenRouter`, and Gemini tokens from their
 //! respective credential sources.
 
 use secrecy::SecretString;
 
-/// Provides GitHub and `OpenRouter` credentials for API calls.
+/// Provides GitHub, `OpenRouter`, and Gemini credentials for API calls.
 ///
 /// This trait abstracts credential resolution across platforms:
 /// - **CLI:** Resolves from environment variables, GitHub CLI, or system keyring
@@ -27,6 +27,11 @@ pub trait TokenProvider: Send + Sync {
     ///
     /// Returns `None` if no API key is available from any source.
     fn openrouter_key(&self) -> Option<SecretString>;
+
+    /// Retrieves the Gemini API key.
+    ///
+    /// Returns `None` if no API key is available from any source.
+    fn gemini_key(&self) -> Option<SecretString>;
 }
 
 #[cfg(test)]
@@ -37,6 +42,7 @@ mod tests {
     struct MockTokenProvider {
         github_token: Option<SecretString>,
         openrouter_key: Option<SecretString>,
+        gemini_key: Option<SecretString>,
     }
 
     impl TokenProvider for MockTokenProvider {
@@ -47,6 +53,10 @@ mod tests {
         fn openrouter_key(&self) -> Option<SecretString> {
             self.openrouter_key.clone()
         }
+
+        fn gemini_key(&self) -> Option<SecretString> {
+            self.gemini_key.clone()
+        }
     }
 
     #[test]
@@ -54,10 +64,12 @@ mod tests {
         let provider = MockTokenProvider {
             github_token: Some(SecretString::new("gh_token".to_string().into())),
             openrouter_key: Some(SecretString::new("or_key".to_string().into())),
+            gemini_key: Some(SecretString::new("gemini_key".to_string().into())),
         };
 
         assert!(provider.github_token().is_some());
         assert!(provider.openrouter_key().is_some());
+        assert!(provider.gemini_key().is_some());
     }
 
     #[test]
@@ -65,9 +77,11 @@ mod tests {
         let provider = MockTokenProvider {
             github_token: None,
             openrouter_key: None,
+            gemini_key: None,
         };
 
         assert!(provider.github_token().is_none());
         assert!(provider.openrouter_key().is_none());
+        assert!(provider.gemini_key().is_none());
     }
 }

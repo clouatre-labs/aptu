@@ -69,8 +69,8 @@ pub struct AiConfig {
 impl Default for AiConfig {
     fn default() -> Self {
         Self {
-            provider: "openrouter".to_string(),
-            model: "mistralai/devstral-2512:free".to_string(),
+            provider: "gemini".to_string(),
+            model: "gemini-3.0-flash-preview".to_string(),
             timeout_seconds: 30,
             allow_paid_models: false,
         }
@@ -201,8 +201,8 @@ mod tests {
         // Without any config file or env vars, should return defaults
         let config = load_config().expect("should load with defaults");
 
-        assert_eq!(config.ai.provider, "openrouter");
-        assert_eq!(config.ai.model, "mistralai/devstral-2512:free");
+        assert_eq!(config.ai.provider, "gemini");
+        assert_eq!(config.ai.model, "gemini-3.0-flash-preview");
         assert_eq!(config.ai.timeout_seconds, 30);
         assert_eq!(config.github.api_timeout_seconds, 10);
         assert!(config.ui.color);

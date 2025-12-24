@@ -10,8 +10,8 @@
 use chrono::Duration;
 use tracing::instrument;
 
-use crate::ai::OpenRouterClient;
 use crate::ai::{AiResponse, types::IssueDetails};
+use crate::ai::{GeminiClient, OpenRouterClient};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
@@ -136,7 +136,7 @@ pub async fn fetch_issues(
 ///
 /// # Arguments
 ///
-/// * `provider` - Token provider for GitHub and `OpenRouter` credentials
+/// * `provider` - Token provider for GitHub and AI provider credentials
 /// * `issue` - Issue details to analyze
 ///
 /// # Returns
@@ -146,7 +146,7 @@ pub async fn fetch_issues(
 /// # Errors
 ///
 /// Returns an error if:
-/// - GitHub or `OpenRouter` token is not available from the provider
+/// - GitHub or AI provider token is not available from the provider
 /// - AI API call fails
 /// - Response parsing fails
 #[instrument(skip(provider, issue), fields(issue_number = issue.number, repo = %format!("{}/{}", issue.owner, issue.repo)))]
@@ -154,27 +154,56 @@ pub async fn analyze_issue(
     provider: &dyn TokenProvider,
     issue: &IssueDetails,
 ) -> crate::Result<AiResponse> {
-    // Get OpenRouter API key from provider
-    let api_key = provider
-        .openrouter_key()
-        .ok_or(AptuError::NotAuthenticated)?;
-
     // Load configuration
     let config = load_config()?;
 
-    // Create AI client with the provided API key
-    let ai_client =
-        OpenRouterClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
-            message: e.to_string(),
-            status: None,
-        })?;
+    // Select AI provider based on config
+    match config.ai.provider.as_str() {
+        "gemini" => {
+            // Get Gemini API key from provider
+            let api_key = provider.gemini_key().ok_or(AptuError::NotAuthenticated)?;
 
-    // Analyze the issue
-    ai_client
-        .analyze_issue(issue)
-        .await
-        .map_err(|e| AptuError::AI {
-            message: e.to_string(),
+            // Create Gemini client with the provided API key
+            let ai_client =
+                GeminiClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                })?;
+
+            // Analyze the issue
+            ai_client
+                .analyze_issue(issue)
+                .await
+                .map_err(|e| AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                })
+        }
+        "openrouter" => {
+            // Get OpenRouter API key from provider
+            let api_key = provider
+                .openrouter_key()
+                .ok_or(AptuError::NotAuthenticated)?;
+
+            // Create OpenRouter client with the provided API key
+            let ai_client =
+                OpenRouterClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                })?;
+
+            // Analyze the issue
+            ai_client
+                .analyze_issue(issue)
+                .await
+                .map_err(|e| AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                })
+        }
+        _ => Err(AptuError::AI {
+            message: format!("Unknown AI provider: {}", config.ai.provider),
             status: None,
-        })
+        }),
+    }
 }

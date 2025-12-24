@@ -203,18 +203,48 @@ Config file: `~/.config/aptu/config.toml`
 
 ```toml
 [ai]
-provider = "openrouter"
-model = "mistralai/devstral-2512:free"
+provider = "gemini"  # or "openrouter"
+model = "gemini-3.0-flash-preview"  # or "mistralai/devstral-2512:free" for OpenRouter
 
 [ui]
 confirm_before_post = true
 ```
 
-Set your OpenRouter API key:
+### AI Provider Setup
 
-```bash
-export OPENROUTER_API_KEY="sk-or-..."
-```
+Aptu supports multiple AI providers. Choose the one that works best for you:
+
+#### Google AI Studio (Gemini) - Default
+
+1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
+2. Set the environment variable:
+   ```bash
+   export GEMINI_API_KEY="your-api-key-here"
+   ```
+3. Configure in `~/.config/aptu/config.toml`:
+   ```toml
+   [ai]
+   provider = "gemini"
+   model = "gemini-3.0-flash-preview"
+   ```
+
+**Free Tier:** 15 requests/minute, 1M+ tokens/day, 1M token context window
+
+#### OpenRouter
+
+1. Get an API key from [OpenRouter](https://openrouter.ai/keys)
+2. Set the environment variable:
+   ```bash
+   export OPENROUTER_API_KEY="sk-or-..."
+   ```
+3. Configure in `~/.config/aptu/config.toml`:
+   ```toml
+   [ai]
+   provider = "openrouter"
+   model = "mistralai/devstral-2512:free"
+   ```
+
+**Free Models:** Look for models with `:free` suffix on OpenRouter
 
 ## Contributing
 
