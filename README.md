@@ -246,6 +246,38 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 **Free Models:** Look for models with `:free` suffix on OpenRouter
 
+#### Groq
+
+1. Get an API key from [Groq Console](https://console.groq.com/keys)
+2. Set the environment variable:
+   ```bash
+   export GROQ_API_KEY="your-api-key-here"
+   ```
+3. Configure in `~/.config/aptu/config.toml`:
+   ```toml
+   [ai]
+   provider = "groq"
+   model = "llama-3.3-70b-versatile"
+   ```
+
+**Free Tier:** Generous rate limits, fast inference with Groq's LPU technology
+
+#### Cerebras
+
+1. Get an API key from [Cerebras Console](https://console.cerebras.ai/keys)
+2. Set the environment variable:
+   ```bash
+   export CEREBRAS_API_KEY="your-api-key-here"
+   ```
+3. Configure in `~/.config/aptu/config.toml`:
+   ```toml
+   [ai]
+   provider = "cerebras"
+   model = "llama3.1-8b"
+   ```
+
+**Free Tier:** Available with Cerebras API account
+
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines on how to contribute, including our Developer Certificate of Origin (DCO) requirement.

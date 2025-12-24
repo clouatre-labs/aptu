@@ -11,7 +11,7 @@ use chrono::Duration;
 use tracing::instrument;
 
 use crate::ai::{AiProvider, AiResponse, types::IssueDetails};
-use crate::ai::{GeminiClient, OpenRouterClient};
+use crate::ai::{CerebrasClient, GeminiClient, GroqClient, OpenRouterClient};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
@@ -184,6 +184,26 @@ pub async fn analyze_issue(
 
     // Select AI provider based on config
     match config.ai.provider.as_str() {
+        "cerebras" => {
+            // Get Cerebras API key from provider
+            let api_key = provider.cerebras_key().ok_or(AptuError::NotAuthenticated)?;
+
+            // Create Cerebras client with the provided API key
+            let ai_client =
+                CerebrasClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                })?;
+
+            // Analyze the issue
+            ai_client
+                .analyze_issue(issue)
+                .await
+                .map_err(|e| AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                })
+        }
         "gemini" => {
             // Get Gemini API key from provider
             let api_key = provider.gemini_key().ok_or(AptuError::NotAuthenticated)?;
@@ -191,6 +211,26 @@ pub async fn analyze_issue(
             // Create Gemini client with the provided API key
             let ai_client =
                 GeminiClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                })?;
+
+            // Analyze the issue
+            ai_client
+                .analyze_issue(issue)
+                .await
+                .map_err(|e| AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                })
+        }
+        "groq" => {
+            // Get Groq API key from provider
+            let api_key = provider.groq_key().ok_or(AptuError::NotAuthenticated)?;
+
+            // Create Groq client with the provided API key
+            let ai_client =
+                GroqClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
                     message: e.to_string(),
                     status: None,
                 })?;
