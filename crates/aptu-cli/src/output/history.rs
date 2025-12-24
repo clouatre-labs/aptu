@@ -5,7 +5,7 @@ use aptu_core::utils::{format_relative_time, truncate};
 use console::style;
 use std::io::{self, Write};
 
-use crate::cli::{OutputContext, OutputFormat};
+use crate::cli::OutputContext;
 use crate::commands::types::HistoryResult;
 
 use super::Renderable;
@@ -137,32 +137,5 @@ impl Renderable for HistoryResult {
             writeln!(w, "- Average tokens per triage: {avg_tokens:.0}")?;
         }
         Ok(())
-    }
-}
-
-// Special handling for HistoryResult to serialize just contributions for JSON/YAML
-impl HistoryResult {
-    #[allow(dead_code)]
-    pub fn render_with_context(&self, ctx: &OutputContext) {
-        match ctx.format {
-            OutputFormat::Json => {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&self.contributions)
-                        .expect("Failed to serialize history to JSON")
-                );
-            }
-            OutputFormat::Yaml => {
-                println!(
-                    "{}",
-                    serde_yml::to_string(&self.contributions)
-                        .expect("Failed to serialize history to YAML")
-                );
-            }
-            _ => {
-                // Use the trait implementation for text/markdown
-                super::render(self, ctx);
-            }
-        }
     }
 }

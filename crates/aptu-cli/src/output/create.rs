@@ -3,7 +3,7 @@
 use console::style;
 use std::io::{self, Write};
 
-use crate::cli::{OutputContext, OutputFormat};
+use crate::cli::OutputContext;
 use crate::commands::types::CreateResult;
 
 use super::Renderable;
@@ -55,44 +55,5 @@ impl Renderable for CreateResult {
         writeln!(w, "### Description\n")?;
         writeln!(w, "{}", self.body)?;
         Ok(())
-    }
-}
-
-// Special handling for CreateResult to use custom JSON/YAML structure
-impl CreateResult {
-    #[allow(dead_code)]
-    pub fn render_with_context(&self, ctx: &OutputContext) {
-        match ctx.format {
-            OutputFormat::Json => {
-                let json = serde_json::json!({
-                    "issue_url": self.issue_url,
-                    "issue_number": self.issue_number,
-                    "title": self.title,
-                    "body": self.body,
-                    "suggested_labels": self.suggested_labels,
-                    "dry_run": self.dry_run,
-                });
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&json).expect("Failed to serialize create result")
-                );
-            }
-            OutputFormat::Yaml => {
-                let yaml = serde_yml::to_string(&serde_json::json!({
-                    "issue_url": self.issue_url,
-                    "issue_number": self.issue_number,
-                    "title": self.title,
-                    "body": self.body,
-                    "suggested_labels": self.suggested_labels,
-                    "dry_run": self.dry_run,
-                }))
-                .expect("Failed to serialize create result");
-                println!("{yaml}");
-            }
-            _ => {
-                // Use the trait implementation for text/markdown
-                super::render(self, ctx);
-            }
-        }
     }
 }

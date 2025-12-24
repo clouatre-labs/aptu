@@ -4,7 +4,7 @@ use aptu_core::triage::APTU_SIGNATURE;
 use console::style;
 use std::io::{self, Write};
 
-use crate::cli::{OutputContext, OutputFormat};
+use crate::cli::OutputContext;
 use crate::commands::types::TriageResult;
 
 use super::{OutputMode, Renderable};
@@ -301,32 +301,6 @@ impl Renderable for TriageResult {
             )
         )?;
         Ok(())
-    }
-}
-
-// Special handling for TriageResult to serialize just the triage field for JSON/YAML
-impl TriageResult {
-    #[allow(dead_code)]
-    pub fn render_with_context(&self, ctx: &OutputContext) {
-        match ctx.format {
-            OutputFormat::Json => {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&self.triage)
-                        .expect("Failed to serialize triage to JSON")
-                );
-            }
-            OutputFormat::Yaml => {
-                println!(
-                    "{}",
-                    serde_yml::to_string(&self.triage).expect("Failed to serialize triage to YAML")
-                );
-            }
-            _ => {
-                // Use the trait implementation for text/markdown
-                super::render(self, ctx);
-            }
-        }
     }
 }
 
