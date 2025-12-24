@@ -437,6 +437,8 @@ Your response MUST be valid JSON with this exact schema:
 Guidelines:
 - summary: Concise explanation of the problem/request and why it matters
 - suggested_labels: Prefer labels from the Available Labels list provided. Choose from: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix. If a more specific label exists in the repository, use it instead of generic ones.
+  - good first issue: Consider this label when the issue has: clear and well-defined scope, minimal codebase knowledge required, isolated change with minimal dependencies, good documentation or examples in the repository, no complex architectural understanding needed.
+  - help wanted: Consider this label when the issue has: well-defined requirements and acceptance criteria, maintainer capacity is limited, issue is not blocked by other work, suitable for external contributors with domain knowledge.
 - clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear. Skip questions already answered in comments.
 - potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none. A duplicate is an issue that describes the exact same problem.
 - related_issues: Include issues from the search results that are contextually related but NOT duplicates. Provide brief reasoning for each. Leave empty array if none are relevant.
@@ -790,5 +792,16 @@ mod tests {
         assert!(prompt.contains("scope"));
         assert!(prompt.contains("file count"));
         assert!(prompt.contains("required knowledge"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_contains_discoverability_label_criteria() {
+        let prompt = build_system_prompt();
+        assert!(prompt.contains("good first issue"));
+        assert!(prompt.contains("help wanted"));
+        assert!(prompt.contains("isolated change"));
+        assert!(prompt.contains("minimal codebase knowledge"));
+        assert!(prompt.contains("well-defined requirements"));
+        assert!(prompt.contains("external contributors"));
     }
 }
