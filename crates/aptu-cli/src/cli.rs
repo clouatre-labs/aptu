@@ -222,6 +222,10 @@ pub enum IssueCommand {
         /// Skip posting triage comment to GitHub
         #[arg(long)]
         no_comment: bool,
+
+        /// Bypass 'already triaged' detection
+        #[arg(short, long)]
+        force: bool,
     },
 
     /// Create a GitHub issue with AI assistance

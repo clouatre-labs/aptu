@@ -57,6 +57,7 @@ async fn triage_single_issue(
     yes: bool,
     apply: bool,
     no_comment: bool,
+    force: bool,
     ctx: &OutputContext,
     config: &AppConfig,
 ) -> Result<Option<types::TriageResult>> {
@@ -67,13 +68,15 @@ async fn triage_single_issue(
         s.finish_and_clear();
     }
 
-    // Phase 1b: Check if already triaged
-    let triage_status = check_already_triaged(&issue_details);
-    if triage_status.is_triaged() {
-        if matches!(ctx.format, OutputFormat::Text) {
-            println!("{}", style("Already triaged (skipping)").yellow());
+    // Phase 1b: Check if already triaged (unless force is true)
+    if !force {
+        let triage_status = check_already_triaged(&issue_details);
+        if triage_status.is_triaged() {
+            if matches!(ctx.format, OutputFormat::Text) {
+                println!("{}", style("Already triaged (skipping)").yellow());
+            }
+            return Ok(None);
         }
-        return Ok(None);
     }
 
     // Phase 1c: Analyze with AI
@@ -253,6 +256,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 yes,
                 apply,
                 no_comment,
+                force,
             } => {
                 // Determine repo context: --repo flag > default_repo config
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
@@ -365,6 +369,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                         yes,
                         apply,
                         no_comment,
+                        force,
                         &ctx,
                         config,
                     )
