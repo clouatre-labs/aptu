@@ -58,7 +58,7 @@ jobs:
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-    model: openai/gpt-4-turbo-preview
+    model: mistralai/devstral-2512:free
 ```
 
 ### Dry Run (Preview Only)
@@ -98,5 +98,5 @@ You can also configure the action using environment variables:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
   with:
-    model: openai/gpt-4-turbo-preview
+    model: mistralai/devstral-2512:free
 ```
