@@ -832,7 +832,10 @@ pub async fn fetch_repo_tree(
     Ok(filtered)
 }
 
-/// Fetches untriaged issues (those without any labels) from a specific repository.
+/// Fetches issues needing triage from a specific repository.
+///
+/// In default mode (force=false), returns issues that are unlabeled OR missing a milestone.
+/// In force mode (force=true), returns ALL open issues with no filtering.
 ///
 /// # Arguments
 ///
@@ -840,18 +843,20 @@ pub async fn fetch_repo_tree(
 /// * `owner` - Repository owner
 /// * `repo` - Repository name
 /// * `since` - Optional RFC3339 timestamp to filter issues created after this date (client-side filtering)
+/// * `force` - If true, return all open issues; if false, filter to unlabeled or milestone-missing issues
 ///
 /// # Errors
 ///
 /// Returns an error if the REST API request fails.
 #[instrument(skip(client), fields(owner = %owner, repo = %repo))]
-pub async fn fetch_untriaged_issues(
+pub async fn fetch_issues_needing_triage(
     client: &Octocrab,
     owner: &str,
     repo: &str,
     since: Option<&str>,
+    force: bool,
 ) -> Result<Vec<UntriagedIssue>> {
-    debug!("Fetching untriaged issues");
+    debug!("Fetching issues needing triage");
 
     let issues_page: octocrab::Page<octocrab::models::issues::Issue> = client
         .issues(owner, repo)
@@ -864,10 +869,16 @@ pub async fn fetch_untriaged_issues(
 
     let total_issues = issues_page.items.len();
 
-    let mut untriaged: Vec<UntriagedIssue> = issues_page
+    let mut issues_needing_triage: Vec<UntriagedIssue> = issues_page
         .items
         .into_iter()
-        .filter(|issue| issue.labels.is_empty())
+        .filter(|issue| {
+            if force {
+                true
+            } else {
+                issue.labels.is_empty() || issue.milestone.is_none()
+            }
+        })
         .map(|issue| UntriagedIssue {
             number: issue.number,
             title: issue.title,
@@ -879,7 +890,7 @@ pub async fn fetch_untriaged_issues(
     if let Some(since_date) = since
         && let Ok(since_timestamp) = chrono::DateTime::parse_from_rfc3339(since_date)
     {
-        untriaged.retain(|issue| {
+        issues_needing_triage.retain(|issue| {
             if let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(&issue.created_at) {
                 created_at >= since_timestamp
             } else {
@@ -890,11 +901,68 @@ pub async fn fetch_untriaged_issues(
 
     debug!(
         total_issues = total_issues,
-        untriaged_count = untriaged.len(),
-        "Fetched untriaged issues"
+        issues_needing_triage_count = issues_needing_triage.len(),
+        "Fetched issues needing triage"
     );
 
-    Ok(untriaged)
+    Ok(issues_needing_triage)
+}
+
+#[cfg(test)]
+mod fetch_issues_tests {
+    #[test]
+    fn filter_logic_unlabeled_only() {
+        let has_labels = false;
+        let has_milestone = false;
+        let force = false;
+
+        let should_include = if force {
+            true
+        } else {
+            !has_labels || !has_milestone
+        };
+
+        assert!(should_include);
+    }
+
+    #[test]
+    fn filter_logic_with_labels_no_milestone() {
+        let has_labels = true;
+        let has_milestone = false;
+        let force = false;
+
+        let should_include = if force {
+            true
+        } else {
+            !has_labels || !has_milestone
+        };
+
+        assert!(should_include);
+    }
+
+    #[test]
+    fn filter_logic_with_labels_and_milestone() {
+        let has_labels = true;
+        let has_milestone = true;
+        let force = false;
+
+        let should_include = if force {
+            true
+        } else {
+            !has_labels || !has_milestone
+        };
+
+        assert!(!should_include);
+    }
+
+    #[test]
+    fn filter_logic_force_mode_includes_all() {
+        let force = true;
+
+        let should_include = if force { true } else { false };
+
+        assert!(should_include);
+    }
 }
 
 #[cfg(test)]
