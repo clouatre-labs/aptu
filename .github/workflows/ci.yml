@@ -39,12 +39,8 @@ jobs:
               - 'crates/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
-              - '.github/workflows/**'
             tests:
               - 'tests/**'
-              - 'crates/**'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
 
   commitlint:
     name: Lint Commits
