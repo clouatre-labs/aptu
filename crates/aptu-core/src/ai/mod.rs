@@ -10,6 +10,7 @@ pub mod groq;
 pub mod models;
 pub mod openrouter;
 pub mod provider;
+pub mod registry;
 pub mod types;
 
 pub use cerebras::CerebrasClient;
@@ -18,6 +19,7 @@ pub use groq::GroqClient;
 pub use models::{AiModel, ModelProvider};
 pub use openrouter::OpenRouterClient;
 pub use provider::AiProvider;
+pub use registry::{ModelInfo, ProviderConfig, all_providers, get_provider};
 pub use types::{CreateIssueResponse, TriageResponse};
 
 use crate::history::AiStats;
