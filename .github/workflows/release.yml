@@ -205,6 +205,27 @@ jobs:
           # Auto-merge after Audit check passes (ruleset requires status checks)
           gh pr merge "$BRANCH_NAME" --auto --squash --delete-branch
 
+  publish-snap:
+    name: Publish to Snap Store
+    needs: build-and-attest
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Build snap
+        id: build
+        uses: snapcore/action-build@b391f430cb2650fd359ed4d2cfe88b2c481800e0 # v1
+
+      - name: Publish snap to stable channel
+        uses: snapcore/action-publish@9334eecb267cfd97a0ce3c8654215d095927252f # v1
+        with:
+          store_login: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          snap: ${{ steps.build.outputs.snap }}
+          release: stable
+
+
   publish:
     name: Publish to crates.io
     needs: build-and-attest
