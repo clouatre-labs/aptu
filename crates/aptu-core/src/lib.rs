@@ -96,7 +96,10 @@ pub use cache::CacheEntry;
 // ============================================================================
 
 pub use ai::types::{IssueComment, IssueDetails, TriageResponse};
-pub use ai::{AiModel, ModelProvider, OpenRouterClient};
+pub use ai::{
+    AiModel, ModelInfo, ModelProvider, OpenRouterClient, ProviderConfig, all_providers,
+    get_provider,
+};
 
 // ============================================================================
 // GitHub Integration

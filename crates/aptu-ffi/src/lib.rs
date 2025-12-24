@@ -237,4 +237,20 @@ pub fn get_default_model() -> FfiAiModel {
     FfiAiModel::from(aptu_core::ai::models::AiModel::default_free())
 }
 
+/// List all available AI providers with their metadata.
+///
+/// Returns the complete registry of providers that Aptu supports,
+/// including their API endpoints, authentication requirements, and available models.
+///
+/// # Returns
+///
+/// A vector of provider names and their configurations.
+#[uniffi::export]
+pub fn list_providers() -> Vec<String> {
+    aptu_core::ai::all_providers()
+        .iter()
+        .map(|p| p.name.to_string())
+        .collect()
+}
+
 uniffi::setup_scaffolding!();
