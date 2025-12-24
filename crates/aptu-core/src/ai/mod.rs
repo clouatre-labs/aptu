@@ -7,11 +7,13 @@
 pub mod gemini;
 pub mod models;
 pub mod openrouter;
+pub mod provider;
 pub mod types;
 
 pub use gemini::GeminiClient;
 pub use models::{AiModel, ModelProvider};
 pub use openrouter::OpenRouterClient;
+pub use provider::AiProvider;
 pub use types::{CreateIssueResponse, TriageResponse};
 
 use crate::history::AiStats;

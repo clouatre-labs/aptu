@@ -16,7 +16,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use aptu_core::{load_config, OpenRouterClient, IssueDetails};
+//! use aptu_core::{load_config, OpenRouterClient, IssueDetails, ai::AiProvider};
 //! use anyhow::Result;
 //!
 //! # async fn example() -> Result<()> {
