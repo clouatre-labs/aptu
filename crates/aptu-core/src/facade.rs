@@ -150,7 +150,6 @@ pub async fn fetch_issues(
 /// # Errors
 ///
 /// Returns an error if configuration cannot be loaded.
-#[instrument]
 pub async fn list_curated_repos() -> crate::Result<Vec<CuratedRepo>> {
     repos::fetch().await
 }

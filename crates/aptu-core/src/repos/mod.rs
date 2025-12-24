@@ -10,7 +10,7 @@
 
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, instrument, warn};
+use tracing::{debug, warn};
 
 use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
@@ -68,7 +68,6 @@ fn embedded_defaults() -> Vec<CuratedRepo> {
 ///
 /// Returns an error if:
 /// - Configuration cannot be loaded
-#[instrument]
 pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
     let config = load_config()?;
     let url = &config.cache.curated_repos_url;
