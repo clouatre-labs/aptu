@@ -43,6 +43,10 @@ pub struct OpenRouterClient {
     api_key: SecretString,
     /// Model name (e.g., "mistralai/devstral-2512:free").
     model: String,
+    /// Maximum tokens for API responses.
+    max_tokens: u32,
+    /// Temperature for API requests.
+    temperature: f32,
 }
 
 impl OpenRouterClient {
@@ -93,6 +97,8 @@ impl OpenRouterClient {
             http,
             api_key: SecretString::new(api_key.into()),
             model: config.model.clone(),
+            max_tokens: config.max_tokens,
+            temperature: config.temperature,
         })
     }
 
@@ -134,6 +140,8 @@ impl OpenRouterClient {
             http,
             api_key,
             model: config.model.clone(),
+            max_tokens: config.max_tokens,
+            temperature: config.temperature,
         })
     }
 }
@@ -162,6 +170,14 @@ impl AiProvider for OpenRouterClient {
 
     fn model(&self) -> &str {
         &self.model
+    }
+
+    fn max_tokens(&self) -> u32 {
+        self.max_tokens
+    }
+
+    fn temperature(&self) -> f32 {
+        self.temperature
     }
 
     fn build_headers(&self) -> reqwest::header::HeaderMap {

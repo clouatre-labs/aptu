@@ -64,6 +64,10 @@ pub struct AiConfig {
     pub timeout_seconds: u64,
     /// Allow paid models (default: false for cost control).
     pub allow_paid_models: bool,
+    /// Maximum tokens for API responses.
+    pub max_tokens: u32,
+    /// Temperature for API requests (0.0-1.0).
+    pub temperature: f32,
 }
 
 impl Default for AiConfig {
@@ -73,6 +77,8 @@ impl Default for AiConfig {
             model: "gemini-3-flash-preview".to_string(),
             timeout_seconds: 30,
             allow_paid_models: false,
+            max_tokens: 2048,
+            temperature: 0.3,
         }
     }
 }
@@ -204,6 +210,8 @@ mod tests {
         assert_eq!(config.ai.provider, "gemini");
         assert_eq!(config.ai.model, "gemini-3-flash-preview");
         assert_eq!(config.ai.timeout_seconds, 30);
+        assert_eq!(config.ai.max_tokens, 2048);
+        assert_eq!(config.ai.temperature, 0.3);
         assert_eq!(config.github.api_timeout_seconds, 10);
         assert!(config.ui.color);
         assert!(config.ui.confirm_before_post);
