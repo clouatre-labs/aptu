@@ -279,14 +279,15 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     // Parse the date to RFC3339 format
                     let rfc3339_date = crate::cli::parse_date_to_rfc3339(&since_date)?;
 
-                    let spinner = maybe_spinner(&ctx, "Fetching untriaged issues...");
+                    let spinner = maybe_spinner(&ctx, "Fetching issues needing triage...");
                     let client = aptu_core::github::auth::create_client()
                         .context("Failed to create GitHub client")?;
-                    let untriaged_issues = aptu_core::github::issues::fetch_untriaged_issues(
+                    let untriaged_issues = aptu_core::github::issues::fetch_issues_needing_triage(
                         &client,
                         owner,
                         repo_name,
                         Some(&rfc3339_date),
+                        force,
                     )
                     .await?;
                     if let Some(s) = spinner {
