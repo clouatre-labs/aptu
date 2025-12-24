@@ -5,15 +5,19 @@
 <h1 align="center">Aptu</h1>
 
 <p align="center">
-  <a href="https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml"><img src="https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/clouatre-labs/aptu/releases/latest"><img src="https://img.shields.io/github/v/release/clouatre-labs/aptu" alt="Release"></a>
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
-  <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img src="https://api.reuse.software/badge/github.com/clouatre-labs/aptu" alt="REUSE Compliant"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/MSRV-1.92.0-orange.svg" alt="MSRV"></a>
-  <a href="https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributors-Welcome-brightgreen.svg" alt="Contributors Welcome"></a>
+  <a href="https://github.com/clouatre-labs/aptu"><img alt="github" src="https://img.shields.io/badge/github-clouatre--labs/aptu-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20"></a>
+  <a href="https://crates.io/crates/aptu"><img alt="crates.io" src="https://img.shields.io/crates/v/aptu.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20"></a>
+  <a href="https://docs.rs/aptu"><img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-aptu-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20"></a>
+  <a href="https://github.com/clouatre-labs/aptu/actions?query=branch%3Amain"><img alt="build status" src="https://img.shields.io/github/actions/workflow/status/clouatre-labs/aptu/ci.yml?branch=main&style=for-the-badge" height="20"></a>
 </p>
 
-<p align="center"><strong>AI-Powered Triage Utility</strong> - A gamified CLI for OSS issue triage with AI assistance.</p>
+<p align="center">
+  <a href="https://opensource.org/licenses/Apache-2.0"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue?style=for-the-badge" height="20"></a>
+  <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img alt="REUSE" src="https://img.shields.io/badge/REUSE-compliant-green?style=for-the-badge" height="20"></a>
+  <a href="https://www.rust-lang.org/"><img alt="MSRV" src="https://img.shields.io/badge/MSRV-1.92.0-orange?style=for-the-badge" height="20"></a>
+</p>
+
+<p align="center"><strong>AI-Powered Triage Utility</strong> - A CLI for OSS issue triage with AI assistance.</p>
 
 > *Aptu* (Mi'kmaq): "Paddle" - Navigate forward through open source contribution
 
@@ -58,24 +62,6 @@ git clone https://github.com/clouatre-labs/aptu.git
 cd aptu
 cargo build --release
 ```
-
-## Project Structure
-
-Aptu is organized as a Rust workspace with multiple crates:
-
-```
-aptu/
-├── aptu-cli/          # CLI binary (user-facing commands)
-├── aptu-core/         # Shared library (GitHub API, AI, config)
-├── aptu-ffi/          # FFI bindings for iOS (Phase 2+)
-├── AptuApp/           # SwiftUI iOS app (Phase 2+)
-└── tests/             # Integration tests (Bats)
-```
-
-**Key Crates:**
-- **aptu-core** - Business logic, API clients, configuration management
-- **aptu-cli** - Command-line interface and user interactions
-- **aptu-ffi** - Rust-to-Swift bridge via UniFFI (iOS support)
 
 ## Quick Start
 
@@ -149,138 +135,17 @@ jobs:
 
 ## Shell Completions
 
-Enable tab completion for your shell using the automated installer:
+Enable tab completion for your shell:
 
 ```bash
-# Auto-detect shell and install
 aptu completion install
-
-# Preview without writing files
-aptu completion install --dry-run
-
-# Explicit shell selection
-aptu completion install --shell zsh
 ```
 
-The installer writes completions to standard locations and prints configuration instructions.
-
-### Manual Setup
-
-If you prefer manual setup, use `aptu completion generate <shell>`:
-
-**Bash** - Add to `~/.bashrc` or `~/.bash_profile`:
-```bash
-eval "$(aptu completion generate bash)"
-```
-
-**Zsh** - Generate completion file:
-```zsh
-mkdir -p ~/.zsh/completions
-aptu completion generate zsh > ~/.zsh/completions/_aptu
-```
-
-Add to `~/.zshrc` (before compinit):
-```zsh
-fpath=(~/.zsh/completions $fpath)
-autoload -U compinit && compinit -i
-```
-
-**Fish** - Generate completion file:
-```fish
-aptu completion generate fish > ~/.config/fish/completions/aptu.fish
-```
-
-**PowerShell** - Add to `$PROFILE`:
-```powershell
-aptu completion generate powershell | Out-String | Invoke-Expression
-```
-
-Run `aptu completion --help` for more options.
+See [Shell Completions](docs/CONFIGURATION.md) for manual setup instructions.
 
 ## Configuration
 
-Config file: `~/.config/aptu/config.toml`
-
-```toml
-[ai]
-provider = "gemini"  # or "openrouter"
-model = "gemini-3-flash-preview"  # or "mistralai/devstral-2512:free" for OpenRouter
-
-[ui]
-confirm_before_post = true
-```
-
-### AI Provider Setup
-
-Aptu supports multiple AI providers. Choose the one that works best for you:
-
-#### Google AI Studio (Gemini) - Default
-
-1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
-2. Set the environment variable:
-   ```bash
-   export GEMINI_API_KEY="your-api-key-here"
-   ```
-3. Configure in `~/.config/aptu/config.toml`:
-   ```toml
-   [ai]
-   provider = "gemini"
-   model = "gemini-3-flash-preview"
-   ```
-
-**Free Tier:** 15 requests/minute, 1M+ tokens/day, 1M token context window
-
-#### OpenRouter
-
-1. Get an API key from [OpenRouter](https://openrouter.ai/keys)
-2. Set the environment variable:
-   ```bash
-   export OPENROUTER_API_KEY="sk-or-..."
-   ```
-3. Configure in `~/.config/aptu/config.toml`:
-   ```toml
-   [ai]
-   provider = "openrouter"
-   model = "mistralai/devstral-2512:free"
-   ```
-
-**Free Models:** Look for models with `:free` suffix on OpenRouter
-
-#### Groq
-
-1. Get an API key from [Groq Console](https://console.groq.com/keys)
-2. Set the environment variable:
-   ```bash
-   export GROQ_API_KEY="your-api-key-here"
-   ```
-3. Configure in `~/.config/aptu/config.toml`:
-   ```toml
-   [ai]
-   provider = "groq"
-   model = "llama-3.3-70b-versatile"
-   ```
-
-**Free Tier:** Generous rate limits, fast inference with Groq's LPU technology
-
-#### Cerebras
-
-1. Get an API key from [Cerebras Console](https://console.cerebras.ai/keys)
-2. Set the environment variable:
-   ```bash
-   export CEREBRAS_API_KEY="your-api-key-here"
-   ```
-3. Configure in `~/.config/aptu/config.toml`:
-   ```toml
-   [ai]
-   provider = "cerebras"
-   model = "llama3.1-8b"
-   ```
-
-**Free Tier:** Available with Cerebras API account
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines on how to contribute, including our Developer Certificate of Origin (DCO) requirement.
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed AI provider setup and configuration options.
 
 ## Supply Chain Security
 
@@ -291,23 +156,10 @@ Aptu follows supply chain security best practices:
 - **Signed Commits** - All commits are GPG-signed with DCO sign-off
 - **Optimized Binaries** - Release builds use LTO and size optimizations (~3MB binary)
 
-## Contributors Welcome
+## Contributing
 
-We're actively seeking contributors to help expand Aptu! Whether you're interested in:
-
-- Adding new AI models or improving triage quality
-- Building the iOS app (Phase 2)
-- Enhancing the CLI experience
-- Writing documentation or tests
-- Reporting bugs or suggesting features
-- Spreading the word - blog posts, social media, talks
-
-Please see [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines and how to get started. All contributions are welcome!
+We welcome contributions! Please see [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines on how to contribute, including our Developer Certificate of Origin (DCO) requirement. Whether you're interested in adding new AI models, building the iOS app, enhancing the CLI, writing documentation, reporting bugs, or spreading the word - all contributions are welcome!
 
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/clouatre-labs/aptu/blob/main/LICENSE) for details.
-
----
-
-If Aptu helps your OSS workflow, consider giving it a star!
