@@ -38,10 +38,10 @@ impl TokenProvider for FfiTokenProvider {
         }
     }
 
-    fn openrouter_key(&self) -> Option<SecretString> {
+    fn cerebras_key(&self) -> Option<SecretString> {
         match self
             .keychain
-            .get_token("aptu".to_string(), "openrouter".to_string())
+            .get_token("aptu".to_string(), "cerebras".to_string())
         {
             Ok(Some(key)) => Some(SecretString::new(key.into())),
             _ => None,
@@ -52,6 +52,26 @@ impl TokenProvider for FfiTokenProvider {
         match self
             .keychain
             .get_token("aptu".to_string(), "gemini".to_string())
+        {
+            Ok(Some(key)) => Some(SecretString::new(key.into())),
+            _ => None,
+        }
+    }
+
+    fn groq_key(&self) -> Option<SecretString> {
+        match self
+            .keychain
+            .get_token("aptu".to_string(), "groq".to_string())
+        {
+            Ok(Some(key)) => Some(SecretString::new(key.into())),
+            _ => None,
+        }
+    }
+
+    fn openrouter_key(&self) -> Option<SecretString> {
+        match self
+            .keychain
+            .get_token("aptu".to_string(), "openrouter".to_string())
         {
             Ok(Some(key)) => Some(SecretString::new(key.into())),
             _ => None,
