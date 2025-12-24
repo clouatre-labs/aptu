@@ -70,7 +70,7 @@ impl Default for AiConfig {
     fn default() -> Self {
         Self {
             provider: "gemini".to_string(),
-            model: "gemini-3.0-flash-preview".to_string(),
+            model: "gemini-3-flash-preview".to_string(),
             timeout_seconds: 30,
             allow_paid_models: false,
         }
@@ -202,7 +202,7 @@ mod tests {
         let config = load_config().expect("should load with defaults");
 
         assert_eq!(config.ai.provider, "gemini");
-        assert_eq!(config.ai.model, "gemini-3.0-flash-preview");
+        assert_eq!(config.ai.model, "gemini-3-flash-preview");
         assert_eq!(config.ai.timeout_seconds, 30);
         assert_eq!(config.github.api_timeout_seconds, 10);
         assert!(config.ui.color);

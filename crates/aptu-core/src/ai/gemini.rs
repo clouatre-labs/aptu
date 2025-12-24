@@ -26,7 +26,7 @@ pub struct GeminiClient {
     http: Client,
     /// API key for Gemini authentication.
     api_key: SecretString,
-    /// Model name (e.g., "gemini-3.0-flash-preview").
+    /// Model name (e.g., "gemini-3-flash-preview").
     model: String,
 }
 

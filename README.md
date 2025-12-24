@@ -204,7 +204,7 @@ Config file: `~/.config/aptu/config.toml`
 ```toml
 [ai]
 provider = "gemini"  # or "openrouter"
-model = "gemini-3.0-flash-preview"  # or "mistralai/devstral-2512:free" for OpenRouter
+model = "gemini-3-flash-preview"  # or "mistralai/devstral-2512:free" for OpenRouter
 
 [ui]
 confirm_before_post = true
@@ -225,7 +225,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```toml
    [ai]
    provider = "gemini"
-   model = "gemini-3.0-flash-preview"
+   model = "gemini-3-flash-preview"
    ```
 
 **Free Tier:** 15 requests/minute, 1M+ tokens/day, 1M token context window
