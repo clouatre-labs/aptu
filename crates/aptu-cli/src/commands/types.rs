@@ -24,12 +24,14 @@ pub struct AuthStatusResult {
 }
 
 /// Result from the repos command.
+#[derive(Debug, Clone, Serialize)]
 pub struct ReposResult {
     /// List of curated repositories.
     pub repos: Vec<CuratedRepo>,
 }
 
 /// Result from the issues command.
+#[derive(Debug, Clone, Serialize)]
 pub struct IssuesResult {
     /// Issues grouped by repository name.
     pub issues_by_repo: Vec<(String, Vec<IssueNode>)>,
@@ -95,6 +97,7 @@ pub struct BulkTriageResult {
 }
 
 /// Result from the history command.
+#[derive(Debug, Serialize)]
 pub struct HistoryResult {
     /// List of contributions.
     pub contributions: Vec<Contribution>,
@@ -103,6 +106,7 @@ pub struct HistoryResult {
 }
 
 /// Result from the create command.
+#[derive(Debug, Clone, Serialize)]
 pub struct CreateResult {
     /// URL of the created issue.
     pub issue_url: String,

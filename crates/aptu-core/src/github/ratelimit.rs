@@ -81,7 +81,7 @@ mod tests {
         let status = RateLimitStatus {
             remaining: 50,
             limit: 5000,
-            reset_at: 1234567890,
+            reset_at: 1_234_567_890,
         };
         assert!(status.is_low());
     }
@@ -91,7 +91,7 @@ mod tests {
         let status = RateLimitStatus {
             remaining: 150,
             limit: 5000,
-            reset_at: 1234567890,
+            reset_at: 1_234_567_890,
         };
         assert!(!status.is_low());
     }
@@ -101,7 +101,7 @@ mod tests {
         let status = RateLimitStatus {
             remaining: 100,
             limit: 5000,
-            reset_at: 1234567890,
+            reset_at: 1_234_567_890,
         };
         assert!(!status.is_low());
     }
@@ -111,7 +111,7 @@ mod tests {
         let status = RateLimitStatus {
             remaining: 42,
             limit: 5000,
-            reset_at: 1234567890,
+            reset_at: 1_234_567_890,
         };
         assert_eq!(status.message(), "GitHub API: 42/5000 calls remaining");
     }
