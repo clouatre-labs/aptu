@@ -13,111 +13,246 @@ use aptu_core::utils::{
     format_relative_time, parse_and_format_relative_time, truncate, truncate_with_suffix,
 };
 use console::style;
+use serde::Serialize;
+use std::io::{self, Write};
 
 use crate::cli::{OutputContext, OutputFormat};
 use crate::commands::types::{
-    AuthStatusResult, CreateResult, HistoryResult, IssuesResult, ReposResult, TriageResult,
+    AuthStatusResult, BulkTriageResult, CreateResult, HistoryResult, IssuesResult, ReposResult,
+    TriageResult,
 };
 
-/// Render auth status result.
-pub fn render_auth_status(result: &AuthStatusResult, ctx: &OutputContext) {
+/// Trait for types that can be rendered in multiple output formats.
+pub trait Renderable: Serialize {
+    /// Render as human-readable text to the given writer.
+    fn render_text(&self, w: &mut dyn Write, ctx: &OutputContext) -> io::Result<()>;
+
+    /// Render as markdown. Defaults to text rendering.
+    fn render_markdown(&self, w: &mut dyn Write, ctx: &OutputContext) -> io::Result<()> {
+        self.render_text(w, ctx)
+    }
+}
+
+/// Generic render function - handles JSON/YAML via serde, delegates text/markdown to trait.
+pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) {
     match ctx.format {
         OutputFormat::Json => {
             println!(
                 "{}",
-                serde_json::to_string_pretty(result)
-                    .expect("Failed to serialize auth status to JSON")
+                serde_json::to_string_pretty(result).expect("Failed to serialize to JSON")
             );
         }
         OutputFormat::Yaml => {
             println!(
                 "{}",
-                serde_yml::to_string(result).expect("Failed to serialize auth status to YAML")
+                serde_yml::to_string(result).expect("Failed to serialize to YAML")
             );
         }
         OutputFormat::Markdown => {
-            println!("## Authentication Status\n");
-            if result.authenticated {
-                println!("**Status:** Authenticated");
-                if let Some(ref method) = result.method {
-                    println!("**Method:** {method}");
-                }
-                if let Some(ref username) = result.username {
-                    println!("**Username:** {username}");
-                }
-            } else {
-                println!("**Status:** Not authenticated");
-            }
+            result
+                .render_markdown(&mut io::stdout(), ctx)
+                .expect("Failed to render markdown");
         }
         OutputFormat::Text => {
-            println!();
-            if result.authenticated {
-                println!("{} Authenticated with GitHub", style("*").green().bold());
-                if let Some(ref method) = result.method {
-                    println!("  Method: {}", style(method.to_string()).cyan());
-                }
-                if let Some(ref username) = result.username {
-                    println!("  Username: {}", style(username).cyan());
-                }
-            } else {
-                println!(
-                    "{} Not authenticated. Run {} to authenticate.",
-                    style("!").yellow().bold(),
-                    style("aptu auth login").cyan()
-                );
-            }
-            println!();
+            result
+                .render_text(&mut io::stdout(), ctx)
+                .expect("Failed to render text");
         }
     }
 }
 
-/// Render repos result.
-pub fn render_repos(result: &ReposResult, ctx: &OutputContext) {
-    match ctx.format {
-        OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&result.repos)
-                    .expect("Failed to serialize repos to JSON")
-            );
-        }
-        OutputFormat::Yaml => {
-            println!(
-                "{}",
-                serde_yml::to_string(&result.repos).expect("Failed to serialize repos to YAML")
-            );
-        }
-        OutputFormat::Markdown => {
-            println!("## Available Repositories\n");
-            for repo in &result.repos {
-                println!(
-                    "- **{}** ({}) - {}",
-                    repo.full_name(),
-                    repo.language,
-                    &repo.description
-                );
+impl Renderable for AuthStatusResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w)?;
+        if self.authenticated {
+            writeln!(w, "{} Authenticated with GitHub", style("*").green().bold())?;
+            if let Some(ref method) = self.method {
+                writeln!(w, "  Method: {}", style(method.to_string()).cyan())?;
             }
+            if let Some(ref username) = self.username {
+                writeln!(w, "  Username: {}", style(username).cyan())?;
+            }
+        } else {
+            writeln!(
+                w,
+                "{} Not authenticated. Run {} to authenticate.",
+                style("!").yellow().bold(),
+                style("aptu auth login").cyan()
+            )?;
         }
-        OutputFormat::Text => {
-            println!();
-            println!("{}", style("Available repositories:").bold());
-            println!();
+        writeln!(w)?;
+        Ok(())
+    }
 
-            for (i, repo) in result.repos.iter().enumerate() {
-                let num = format!("{:>3}.", i + 1);
-                let name = format!("{:<25}", repo.full_name());
-                let lang = format!("{:<10}", repo.language);
+    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w, "## Authentication Status\n")?;
+        if self.authenticated {
+            writeln!(w, "**Status:** Authenticated")?;
+            if let Some(ref method) = self.method {
+                writeln!(w, "**Method:** {method}")?;
+            }
+            if let Some(ref username) = self.username {
+                writeln!(w, "**Username:** {username}")?;
+            }
+        } else {
+            writeln!(w, "**Status:** Not authenticated")?;
+        }
+        Ok(())
+    }
+}
 
-                println!(
+impl Renderable for ReposResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w)?;
+        writeln!(w, "{}", style("Available repositories:").bold())?;
+        writeln!(w)?;
+
+        for (i, repo) in self.repos.iter().enumerate() {
+            let num = format!("{:>3}.", i + 1);
+            let name = format!("{:<25}", repo.full_name());
+            let lang = format!("{:<10}", repo.language);
+
+            writeln!(
+                w,
+                "  {} {} {} {}",
+                style(num).dim(),
+                style(name).cyan(),
+                style(lang).yellow(),
+                style(&repo.description).dim()
+            )?;
+        }
+
+        writeln!(w)?;
+        Ok(())
+    }
+
+    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w, "## Available Repositories\n")?;
+        for repo in &self.repos {
+            writeln!(
+                w,
+                "- **{}** ({}) - {}",
+                repo.full_name(),
+                repo.language,
+                &repo.description
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl Renderable for IssuesResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        if self.total_count == 0 {
+            writeln!(
+                w,
+                "{}",
+                style("No open 'good first issue' issues found.").yellow()
+            )?;
+            return Ok(());
+        }
+
+        writeln!(w)?;
+        writeln!(
+            w,
+            "{}",
+            style(format!(
+                "Found {} issues across {} repositories:",
+                self.total_count,
+                self.issues_by_repo.len()
+            ))
+            .bold()
+        )?;
+        writeln!(w)?;
+
+        for (repo_name, issues) in &self.issues_by_repo {
+            writeln!(w, "{}", style(repo_name).cyan().bold())?;
+
+            for issue in issues {
+                let labels: Vec<&str> =
+                    issue.labels.nodes.iter().map(|l| l.name.as_str()).collect();
+                let label_str = if labels.is_empty() {
+                    String::new()
+                } else {
+                    format!("[{}]", labels.join(", "))
+                };
+
+                let age = parse_and_format_relative_time(&issue.created_at);
+
+                writeln!(
+                    w,
                     "  {} {} {} {}",
-                    style(num).dim(),
-                    style(name).cyan(),
-                    style(lang).yellow(),
-                    style(&repo.description).dim()
+                    style(format!("#{}", issue.number)).green(),
+                    truncate(&issue.title, 50),
+                    style(label_str).dim(),
+                    style(age).dim()
+                )?;
+            }
+            writeln!(w)?;
+        }
+        Ok(())
+    }
+
+    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        if self.total_count == 0 {
+            writeln!(w, "No open 'good first issue' issues found.")?;
+            return Ok(());
+        }
+
+        writeln!(
+            w,
+            "## Issues ({} across {} repositories)\n",
+            self.total_count,
+            self.issues_by_repo.len()
+        )?;
+
+        for (repo_name, issues) in &self.issues_by_repo {
+            writeln!(w, "### {repo_name}\n")?;
+
+            for issue in issues {
+                let labels: Vec<String> = issue
+                    .labels
+                    .nodes
+                    .iter()
+                    .map(|l| format!("`{}`", l.name))
+                    .collect();
+                let label_str = if labels.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", labels.join(" "))
+                };
+
+                writeln!(w, "- **#{}** {}{}", issue.number, issue.title, label_str)?;
+            }
+            writeln!(w)?;
+        }
+        Ok(())
+    }
+}
+
+// Special handling for ReposResult to maintain backward compatibility with JSON output
+impl ReposResult {
+    pub fn render_with_context(&self, ctx: &OutputContext) {
+        match ctx.format {
+            OutputFormat::Json => {
+                // Output just the repos array for backward compatibility
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&self.repos)
+                        .expect("Failed to serialize repos to JSON")
                 );
             }
-
-            println!();
+            OutputFormat::Yaml => {
+                // Output just the repos array for backward compatibility
+                println!(
+                    "{}",
+                    serde_yml::to_string(&self.repos).expect("Failed to serialize repos to YAML")
+                );
+            }
+            _ => {
+                // Use the trait implementation for text/markdown
+                render(self, ctx);
+            }
         }
     }
 }
@@ -129,142 +264,69 @@ struct RepoIssuesOutput {
     issues: Vec<IssueNode>,
 }
 
-/// Render issues result.
-#[allow(clippy::too_many_lines)]
-pub fn render_issues(result: &IssuesResult, ctx: &OutputContext) {
-    // Handle "no repos matched filter" case
-    if result.no_repos_matched {
-        if let Some(ref filter) = result.repo_filter {
-            match ctx.format {
-                OutputFormat::Json | OutputFormat::Yaml => println!("[]"),
-                OutputFormat::Markdown => {
-                    println!("No curated repository matches '{filter}'");
-                }
-                OutputFormat::Text => {
-                    println!(
-                        "{}",
-                        style(format!("No curated repository matches '{filter}'")).yellow()
-                    );
-                    println!("Run `aptu repos` to see available repositories.");
+// Special handling for IssuesResult to handle no_repos_matched and custom JSON/YAML
+impl IssuesResult {
+    pub fn render_with_context(&self, ctx: &OutputContext) {
+        // Handle "no repos matched filter" case
+        if self.no_repos_matched {
+            if let Some(ref filter) = self.repo_filter {
+                match ctx.format {
+                    OutputFormat::Json | OutputFormat::Yaml => println!("[]"),
+                    OutputFormat::Markdown => {
+                        println!("No curated repository matches '{filter}'");
+                    }
+                    OutputFormat::Text => {
+                        println!(
+                            "{}",
+                            style(format!("No curated repository matches '{filter}'")).yellow()
+                        );
+                        println!("Run `aptu repos` to see available repositories.");
+                    }
                 }
             }
+            return;
         }
-        return;
-    }
 
-    match ctx.format {
-        OutputFormat::Json => {
-            let output: Vec<RepoIssuesOutput> = result
-                .issues_by_repo
-                .iter()
-                .map(|(repo, issues)| RepoIssuesOutput {
-                    repo: repo.clone(),
-                    issues: issues.clone(),
-                })
-                .collect();
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output).expect("Failed to serialize issues to JSON")
-            );
-        }
-        OutputFormat::Yaml => {
-            let output: Vec<RepoIssuesOutput> = result
-                .issues_by_repo
-                .iter()
-                .map(|(repo, issues)| RepoIssuesOutput {
-                    repo: repo.clone(),
-                    issues: issues.clone(),
-                })
-                .collect();
-            println!(
-                "{}",
-                serde_yml::to_string(&output).expect("Failed to serialize issues to YAML")
-            );
-        }
-        OutputFormat::Markdown => {
-            if result.total_count == 0 {
-                println!("No open 'good first issue' issues found.");
-                return;
-            }
-
-            println!(
-                "## Issues ({} across {} repositories)\n",
-                result.total_count,
-                result.issues_by_repo.len()
-            );
-
-            for (repo_name, issues) in &result.issues_by_repo {
-                println!("### {repo_name}\n");
-
-                for issue in issues {
-                    let labels: Vec<String> = issue
-                        .labels
-                        .nodes
-                        .iter()
-                        .map(|l| format!("`{}`", l.name))
-                        .collect();
-                    let label_str = if labels.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" {}", labels.join(" "))
-                    };
-
-                    println!("- **#{}** {}{}", issue.number, issue.title, label_str);
-                }
-                println!();
-            }
-        }
-        OutputFormat::Text => {
-            if result.total_count == 0 {
+        match ctx.format {
+            OutputFormat::Json => {
+                let output: Vec<RepoIssuesOutput> = self
+                    .issues_by_repo
+                    .iter()
+                    .map(|(repo, issues)| RepoIssuesOutput {
+                        repo: repo.clone(),
+                        issues: issues.clone(),
+                    })
+                    .collect();
                 println!(
                     "{}",
-                    style("No open 'good first issue' issues found.").yellow()
+                    serde_json::to_string_pretty(&output)
+                        .expect("Failed to serialize issues to JSON")
                 );
-                return;
             }
-
-            println!();
-            println!(
-                "{}",
-                style(format!(
-                    "Found {} issues across {} repositories:",
-                    result.total_count,
-                    result.issues_by_repo.len()
-                ))
-                .bold()
-            );
-            println!();
-
-            for (repo_name, issues) in &result.issues_by_repo {
-                println!("{}", style(repo_name).cyan().bold());
-
-                for issue in issues {
-                    let labels: Vec<&str> =
-                        issue.labels.nodes.iter().map(|l| l.name.as_str()).collect();
-                    let label_str = if labels.is_empty() {
-                        String::new()
-                    } else {
-                        format!("[{}]", labels.join(", "))
-                    };
-
-                    let age = parse_and_format_relative_time(&issue.created_at);
-
-                    println!(
-                        "  {} {} {} {}",
-                        style(format!("#{}", issue.number)).green(),
-                        truncate(&issue.title, 50),
-                        style(label_str).dim(),
-                        style(age).dim()
-                    );
-                }
-                println!();
+            OutputFormat::Yaml => {
+                let output: Vec<RepoIssuesOutput> = self
+                    .issues_by_repo
+                    .iter()
+                    .map(|(repo, issues)| RepoIssuesOutput {
+                        repo: repo.clone(),
+                        issues: issues.clone(),
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    serde_yml::to_string(&output).expect("Failed to serialize issues to YAML")
+                );
+            }
+            _ => {
+                // Use the trait implementation for text/markdown
+                render(self, ctx);
             }
         }
     }
 }
 
 /// Output mode for triage rendering.
-enum OutputMode {
+pub enum OutputMode {
     /// Terminal output with colors.
     Terminal,
     /// Markdown for GitHub comments.
@@ -272,7 +334,7 @@ enum OutputMode {
 }
 
 /// Renders a labeled list section.
-fn render_list_section(
+pub fn render_list_section(
     title: &str,
     items: &[String],
     empty_msg: &str,
@@ -493,80 +555,100 @@ fn render_triage_content(
     output
 }
 
-/// Render triage result.
-pub fn render_triage(result: &TriageResult, ctx: &OutputContext) {
-    match ctx.format {
-        OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&result.triage)
-                    .expect("Failed to serialize triage to JSON")
-            );
-        }
-        OutputFormat::Yaml => {
-            println!(
-                "{}",
-                serde_yml::to_string(&result.triage).expect("Failed to serialize triage to YAML")
-            );
-        }
-        OutputFormat::Markdown => {
-            // Include issue title/number in header for CLI markdown output
-            println!(
-                "## Triage for #{}: {}\n",
-                result.issue_number, result.issue_title
-            );
-            print!(
-                "{}",
-                render_triage_content(
-                    &result.triage,
-                    &OutputMode::Markdown,
-                    None,
-                    result.is_maintainer
-                )
-            );
-        }
-        OutputFormat::Text => {
-            println!();
-            print!(
-                "{}",
-                render_triage_content(
-                    &result.triage,
-                    &OutputMode::Terminal,
-                    Some((&result.issue_title, result.issue_number)),
-                    result.is_maintainer
-                )
-            );
+impl Renderable for TriageResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w)?;
+        write!(
+            w,
+            "{}",
+            render_triage_content(
+                &self.triage,
+                &OutputMode::Terminal,
+                Some((&self.issue_title, self.issue_number)),
+                self.is_maintainer
+            )
+        )?;
 
-            // Status messages
-            if result.dry_run {
-                println!("{}", style("Dry run - comment not posted.").yellow());
-            } else if result.user_declined {
-                println!("{}", style("Triage not posted.").yellow());
-            } else if let Some(ref url) = result.comment_url {
-                println!();
-                println!("{}", style("Comment posted successfully!").green().bold());
-                println!("  {}", style(url).cyan().underlined());
+        // Status messages
+        if self.dry_run {
+            writeln!(w, "{}", style("Dry run - comment not posted.").yellow())?;
+        } else if self.user_declined {
+            writeln!(w, "{}", style("Triage not posted.").yellow())?;
+        } else if let Some(ref url) = self.comment_url {
+            writeln!(w)?;
+            writeln!(
+                w,
+                "{}",
+                style("Comment posted successfully!").green().bold()
+            )?;
+            writeln!(w, "  {}", style(url).cyan().underlined())?;
+        }
+
+        // Show applied labels and milestone
+        if !self.applied_labels.is_empty() || self.applied_milestone.is_some() {
+            writeln!(w)?;
+            writeln!(w, "{}", style("Applied to issue:").green())?;
+            if !self.applied_labels.is_empty() {
+                writeln!(w, "  Labels: {}", self.applied_labels.join(", "))?;
             }
-
-            // Show applied labels and milestone
-            if !result.applied_labels.is_empty() || result.applied_milestone.is_some() {
-                println!();
-                println!("{}", style("Applied to issue:").green());
-                if !result.applied_labels.is_empty() {
-                    println!("  Labels: {}", result.applied_labels.join(", "));
-                }
-                if let Some(ref milestone) = result.applied_milestone {
-                    println!("  Milestone: {milestone}");
-                }
+            if let Some(ref milestone) = self.applied_milestone {
+                writeln!(w, "  Milestone: {milestone}")?;
             }
+        }
 
-            // Show warnings
-            if !result.apply_warnings.is_empty() {
-                println!();
-                println!("{}", style("Warnings:").yellow());
-                for warning in &result.apply_warnings {
-                    println!("  - {warning}");
-                }
+        // Show warnings
+        if !self.apply_warnings.is_empty() {
+            writeln!(w)?;
+            writeln!(w, "{}", style("Warnings:").yellow())?;
+            for warning in &self.apply_warnings {
+                writeln!(w, "  - {warning}")?;
+            }
+        }
+        Ok(())
+    }
+
+    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        // Include issue title/number in header for CLI markdown output
+        writeln!(
+            w,
+            "## Triage for #{}: {}\n",
+            self.issue_number, self.issue_title
+        )?;
+        write!(
+            w,
+            "{}",
+            render_triage_content(
+                &self.triage,
+                &OutputMode::Markdown,
+                None,
+                self.is_maintainer
+            )
+        )?;
+        Ok(())
+    }
+}
+
+// Special handling for TriageResult to serialize just the triage field for JSON/YAML
+impl TriageResult {
+    #[allow(dead_code)]
+    pub fn render_with_context(&self, ctx: &OutputContext) {
+        match ctx.format {
+            OutputFormat::Json => {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&self.triage)
+                        .expect("Failed to serialize triage to JSON")
+                );
+            }
+            OutputFormat::Yaml => {
+                println!(
+                    "{}",
+                    serde_yml::to_string(&self.triage).expect("Failed to serialize triage to YAML")
+                );
+            }
+            _ => {
+                // Use the trait implementation for text/markdown
+                render(self, ctx);
             }
         }
     }
@@ -692,484 +774,313 @@ fn truncate_body(body: &str, max_len: usize) -> String {
     truncate_with_suffix(body, max_len, "... [truncated]")
 }
 
-/// Render history result.
-/// Render AI usage summary for markdown format.
-fn render_ai_stats_markdown(history_data: &aptu_core::history::HistoryData) {
-    let total_tokens = history_data.total_tokens();
-    let total_cost = history_data.total_cost();
-    let avg_tokens = history_data.avg_tokens_per_triage();
-
-    if total_tokens > 0 {
-        println!();
-        println!("### AI Usage Summary");
-        println!();
-        println!("- Total tokens: {total_tokens}");
-        println!("- Total cost: ${total_cost:.4}");
-        println!("- Average tokens per triage: {avg_tokens:.0}");
-    }
-}
-
-/// Render AI usage summary for text format.
-fn render_ai_stats_text(history_data: &aptu_core::history::HistoryData) {
-    let total_tokens = history_data.total_tokens();
-    let total_cost = history_data.total_cost();
-    let avg_tokens = history_data.avg_tokens_per_triage();
-
-    if total_tokens > 0 {
-        println!();
-        println!("  {}", style("AI Usage Summary").cyan().bold());
-        println!("  {}", style("-".repeat(75)).dim());
-        println!(
-            "  Total tokens: {}",
-            style(total_tokens.to_string()).green()
-        );
-        println!(
-            "  Total cost: {}",
-            style(format!("${total_cost:.4}")).green()
-        );
-        println!(
-            "  Average tokens per triage: {}",
-            style(format!("{avg_tokens:.0}")).green()
-        );
-    }
-}
-
-/// Render history result.
-pub fn render_history(result: &HistoryResult, ctx: &OutputContext) {
-    match ctx.format {
-        OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&result.contributions)
-                    .expect("Failed to serialize history to JSON")
-            );
+impl Renderable for HistoryResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        if self.contributions.is_empty() {
+            writeln!(w)?;
+            writeln!(w, "{}", style("No contributions yet.").yellow())?;
+            writeln!(w, "Run `aptu triage <url>` to get started!")?;
+            writeln!(w)?;
+            return Ok(());
         }
-        OutputFormat::Yaml => {
-            println!(
-                "{}",
-                serde_yml::to_string(&result.contributions)
-                    .expect("Failed to serialize history to YAML")
-            );
-        }
-        OutputFormat::Markdown => {
-            render_history_markdown(result);
-        }
-        OutputFormat::Text => {
-            render_history_text(result);
-        }
-    }
-}
 
-/// Render history in markdown format.
-fn render_history_markdown(result: &HistoryResult) {
-    if result.contributions.is_empty() {
-        println!("No contributions yet.");
-        return;
-    }
+        writeln!(w)?;
+        writeln!(
+            w,
+            "{}",
+            style(format!(
+                "Contribution history ({} total):",
+                self.contributions.len()
+            ))
+            .bold()
+        )?;
+        writeln!(w)?;
 
-    println!(
-        "## Contribution History ({} total)\n",
-        result.contributions.len()
-    );
-    println!("| Repository | Issue | Action | When | Status |");
-    println!("|------------|-------|--------|------|--------|");
-
-    for contribution in &result.contributions {
-        let repo = truncate(&contribution.repo, 25);
-        let issue = format!("#{}", contribution.issue);
-        let when = format_relative_time(&contribution.timestamp);
-        let status = match contribution.status {
-            ContributionStatus::Pending => "pending",
-            ContributionStatus::Accepted => "accepted",
-            ContributionStatus::Rejected => "rejected",
-        };
-        println!(
-            "| {repo} | {issue} | {} | {when} | {status} |",
-            contribution.action
-        );
-    }
-
-    render_ai_stats_markdown(&result.history_data);
-}
-
-/// Render history in text format.
-fn render_history_text(result: &HistoryResult) {
-    if result.contributions.is_empty() {
-        println!();
-        println!("{}", style("No contributions yet.").yellow());
-        println!("Run `aptu triage <url>` to get started!");
-        println!();
-        return;
-    }
-
-    println!();
-    println!(
-        "{}",
-        style(format!(
-            "Contribution history ({} total):",
-            result.contributions.len()
-        ))
-        .bold()
-    );
-    println!();
-
-    // Table header
-    println!(
-        "  {:<25} {:<8} {:<10} {:<15} {}",
-        style("Repository").cyan(),
-        style("Issue").cyan(),
-        style("Action").cyan(),
-        style("When").cyan(),
-        style("Status").cyan()
-    );
-    println!("  {}", style("-".repeat(75)).dim());
-
-    for contribution in &result.contributions {
-        let repo = truncate(&contribution.repo, 25);
-        let issue = format!("#{}", contribution.issue);
-        let when = format_relative_time(&contribution.timestamp);
-        let status = match contribution.status {
-            ContributionStatus::Pending => style("pending").yellow().to_string(),
-            ContributionStatus::Accepted => style("accepted").green().to_string(),
-            ContributionStatus::Rejected => style("rejected").red().to_string(),
-        };
-        println!(
+        // Table header
+        writeln!(
+            w,
             "  {:<25} {:<8} {:<10} {:<15} {}",
-            repo,
-            style(issue).green(),
-            contribution.action,
-            style(when).dim(),
-            status
-        );
+            style("Repository").cyan(),
+            style("Issue").cyan(),
+            style("Action").cyan(),
+            style("When").cyan(),
+            style("Status").cyan()
+        )?;
+        writeln!(w, "  {}", style("-".repeat(75)).dim())?;
+
+        for contribution in &self.contributions {
+            let repo = truncate(&contribution.repo, 25);
+            let issue = format!("#{}", contribution.issue);
+            let when = format_relative_time(&contribution.timestamp);
+            let status = match contribution.status {
+                ContributionStatus::Pending => style("pending").yellow().to_string(),
+                ContributionStatus::Accepted => style("accepted").green().to_string(),
+                ContributionStatus::Rejected => style("rejected").red().to_string(),
+            };
+            writeln!(
+                w,
+                "  {:<25} {:<8} {:<10} {:<15} {}",
+                repo,
+                style(issue).green(),
+                contribution.action,
+                style(when).dim(),
+                status
+            )?;
+        }
+
+        // AI stats
+        let total_tokens = self.history_data.total_tokens();
+        let total_cost = self.history_data.total_cost();
+        let avg_tokens = self.history_data.avg_tokens_per_triage();
+
+        if total_tokens > 0 {
+            writeln!(w)?;
+            writeln!(w, "  {}", style("AI Usage Summary").cyan().bold())?;
+            writeln!(w, "  {}", style("-".repeat(75)).dim())?;
+            writeln!(
+                w,
+                "  Total tokens: {}",
+                style(total_tokens.to_string()).green()
+            )?;
+            writeln!(
+                w,
+                "  Total cost: {}",
+                style(format!("${total_cost:.4}")).green()
+            )?;
+            writeln!(
+                w,
+                "  Average tokens per triage: {}",
+                style(format!("{avg_tokens:.0}")).green()
+            )?;
+        }
+        writeln!(w)?;
+        Ok(())
     }
 
-    render_ai_stats_text(&result.history_data);
-    println!();
-}
+    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        if self.contributions.is_empty() {
+            writeln!(w, "No contributions yet.")?;
+            return Ok(());
+        }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use aptu_core::ai::types::TriageResponse;
+        writeln!(
+            w,
+            "## Contribution History ({} total)\n",
+            self.contributions.len()
+        )?;
+        writeln!(w, "| Repository | Issue | Action | When | Status |")?;
+        writeln!(w, "|------------|-------|--------|------|--------|")?;
 
-    #[test]
-    fn test_render_triage_markdown_with_all_fields() {
-        let triage = TriageResponse {
-            summary: "This is a bug report about a crash.".to_string(),
-            suggested_labels: vec!["bug".to_string(), "crash".to_string()],
-            clarifying_questions: vec!["What version are you using?".to_string()],
-            potential_duplicates: vec!["#123".to_string()],
-            status_note: None,
-            related_issues: Vec::new(),
-            contributor_guidance: None,
-            implementation_approach: None,
-            suggested_milestone: Some("v1.0".to_string()),
-        };
+        for contribution in &self.contributions {
+            let repo = truncate(&contribution.repo, 25);
+            let issue = format!("#{}", contribution.issue);
+            let when = format_relative_time(&contribution.timestamp);
+            let status = match contribution.status {
+                ContributionStatus::Pending => "pending",
+                ContributionStatus::Accepted => "accepted",
+                ContributionStatus::Rejected => "rejected",
+            };
+            writeln!(
+                w,
+                "| {repo} | {issue} | {} | {when} | {status} |",
+                contribution.action
+            )?;
+        }
 
-        let comment = render_triage_markdown(&triage);
+        // AI stats
+        let total_tokens = self.history_data.total_tokens();
+        let total_cost = self.history_data.total_cost();
+        let avg_tokens = self.history_data.avg_tokens_per_triage();
 
-        assert!(comment.contains("## Triage Summary"));
-        assert!(comment.contains("This is a bug report about a crash."));
-        assert!(comment.contains("- `bug`"));
-        assert!(comment.contains("- `crash`"));
-        assert!(comment.contains("1. What version are you using?"));
-        assert!(comment.contains("- #123"));
-        assert!(comment.contains("### Suggested Milestone"));
-        assert!(comment.contains("v1.0"));
-        assert!(comment.contains("Aptu"));
-    }
-
-    #[test]
-    fn test_render_triage_markdown_with_empty_fields() {
-        let triage = TriageResponse {
-            summary: "Simple issue.".to_string(),
-            suggested_labels: vec!["enhancement".to_string()],
-            clarifying_questions: vec![],
-            potential_duplicates: vec![],
-            status_note: None,
-            related_issues: Vec::new(),
-            contributor_guidance: None,
-            implementation_approach: None,
-            suggested_milestone: None,
-        };
-
-        let comment = render_triage_markdown(&triage);
-
-        assert!(comment.contains("None needed"));
-        assert!(comment.contains("None found"));
-    }
-
-    #[test]
-    fn test_render_triage_markdown_with_status_note() {
-        let triage = TriageResponse {
-            summary: "Issue with a claimed status.".to_string(),
-            suggested_labels: vec!["bug".to_string()],
-            clarifying_questions: vec![],
-            potential_duplicates: vec![],
-            related_issues: Vec::new(),
-            status_note: Some("Issue claimed by @user".to_string()),
-            contributor_guidance: None,
-            implementation_approach: None,
-            suggested_milestone: None,
-        };
-
-        let comment = render_triage_markdown(&triage);
-
-        assert!(comment.contains("## Triage Summary"));
-        assert!(comment.contains("Issue with a claimed status."));
-        assert!(comment.contains("Status"));
-        assert!(comment.contains("Issue claimed by @user"));
-    }
-
-    #[test]
-    fn test_render_list_section_terminal_numbered() {
-        let items = vec!["First".to_string(), "Second".to_string()];
-        let output = render_list_section("Questions", &items, "None", &OutputMode::Terminal, true);
-
-        assert!(output.contains("1. First"));
-        assert!(output.contains("2. Second"));
-    }
-
-    #[test]
-    fn test_render_list_section_markdown_unnumbered() {
-        let items = vec!["bug".to_string(), "crash".to_string()];
-        let output = render_list_section("Labels", &items, "None", &OutputMode::Markdown, false);
-
-        assert!(output.contains("### Labels"));
-        assert!(output.contains("- bug"));
-        assert!(output.contains("- crash"));
-    }
-
-    #[test]
-    fn test_render_list_section_empty() {
-        let items: Vec<String> = vec![];
-        let output = render_list_section(
-            "Duplicates",
-            &items,
-            "None found",
-            &OutputMode::Markdown,
-            false,
-        );
-
-        assert!(output.contains("None found"));
-    }
-
-    #[test]
-    fn test_render_triage_markdown_with_contributor_guidance_beginner() {
-        use aptu_core::ai::types::ContributorGuidance;
-
-        let triage = TriageResponse {
-            summary: "Simple bug fix.".to_string(),
-            suggested_labels: vec!["bug".to_string()],
-            clarifying_questions: vec![],
-            potential_duplicates: vec![],
-            status_note: None,
-            related_issues: Vec::new(),
-            contributor_guidance: Some(ContributorGuidance {
-                beginner_friendly: true,
-                reasoning: "Small scope, well-defined problem statement.".to_string(),
-            }),
-            implementation_approach: None,
-            suggested_milestone: None,
-        };
-
-        let comment = render_triage_markdown(&triage);
-
-        assert!(comment.contains("### Contributor Guidance"));
-        assert!(comment.contains("**Beginner-friendly**"));
-        assert!(comment.contains("Small scope, well-defined problem statement."));
-    }
-
-    #[test]
-    fn test_render_triage_markdown_with_contributor_guidance_advanced() {
-        use aptu_core::ai::types::ContributorGuidance;
-
-        let triage = TriageResponse {
-            summary: "Complex refactoring.".to_string(),
-            suggested_labels: vec!["enhancement".to_string()],
-            clarifying_questions: vec![],
-            potential_duplicates: vec![],
-            status_note: None,
-            related_issues: Vec::new(),
-            contributor_guidance: Some(ContributorGuidance {
-                beginner_friendly: false,
-                reasoning: "Requires deep knowledge of the compiler internals.".to_string(),
-            }),
-            implementation_approach: None,
-            suggested_milestone: None,
-        };
-
-        let comment = render_triage_markdown(&triage);
-
-        assert!(comment.contains("### Contributor Guidance"));
-        assert!(comment.contains("**Advanced**"));
-        assert!(comment.contains("Requires deep knowledge of the compiler internals."));
-    }
-
-    #[test]
-    fn test_render_triage_markdown_without_contributor_guidance() {
-        let triage = TriageResponse {
-            summary: "Standard issue.".to_string(),
-            suggested_labels: vec!["bug".to_string()],
-            clarifying_questions: vec![],
-            potential_duplicates: vec![],
-            status_note: None,
-            related_issues: Vec::new(),
-            contributor_guidance: None,
-            implementation_approach: None,
-            suggested_milestone: None,
-        };
-
-        let comment = render_triage_markdown(&triage);
-
-        // Should not contain contributor guidance section
-        assert!(!comment.contains("### Contributor Guidance"));
-    }
-
-    #[test]
-    fn test_render_triage_markdown_with_suggested_milestone() {
-        let triage = TriageResponse {
-            summary: "Feature request for v2.0.".to_string(),
-            suggested_labels: vec!["enhancement".to_string()],
-            clarifying_questions: vec![],
-            potential_duplicates: vec![],
-            status_note: None,
-            related_issues: Vec::new(),
-            contributor_guidance: None,
-            implementation_approach: None,
-            suggested_milestone: Some("v2.0".to_string()),
-        };
-
-        let comment = render_triage_markdown(&triage);
-
-        assert!(comment.contains("### Suggested Milestone"));
-        assert!(comment.contains("v2.0"));
+        if total_tokens > 0 {
+            writeln!(w)?;
+            writeln!(w, "### AI Usage Summary")?;
+            writeln!(w)?;
+            writeln!(w, "- Total tokens: {total_tokens}")?;
+            writeln!(w, "- Total cost: ${total_cost:.4}")?;
+            writeln!(w, "- Average tokens per triage: {avg_tokens:.0}")?;
+        }
+        Ok(())
     }
 }
 
-/// Render bulk triage summary.
-pub fn render_bulk_triage_summary(
-    result: &crate::commands::types::BulkTriageResult,
-    ctx: &OutputContext,
-) {
-    match ctx.format {
-        OutputFormat::Json => {
-            let summary = serde_json::json!({
-                "succeeded": result.succeeded,
-                "failed": result.failed,
-                "skipped": result.skipped,
-                "total": result.succeeded + result.failed + result.skipped,
-                "results": result.outcomes.iter().map(|(repo, outcome)| {
-                    serde_json::json!({
-                        "repository": repo,
-                        "outcome": outcome,
-                    })
-                }).collect::<Vec<_>>(),
-            });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&summary).expect("Failed to serialize summary")
-            );
-        }
-        OutputFormat::Yaml => {
-            let summary = serde_json::json!({
-                "succeeded": result.succeeded,
-                "failed": result.failed,
-                "skipped": result.skipped,
-                "total": result.succeeded + result.failed + result.skipped,
-                "results": result.outcomes.iter().map(|(repo, outcome)| {
-                    serde_json::json!({
-                        "repository": repo,
-                        "outcome": outcome,
-                    })
-                }).collect::<Vec<_>>(),
-            });
-            let yaml = serde_yml::to_string(&summary).expect("Failed to serialize summary");
-            println!("{yaml}");
-        }
-        OutputFormat::Markdown | OutputFormat::Text => {
-            println!();
-            println!("{}", style("Bulk Triage Summary").bold().green());
-            println!("{}", style("=".repeat(20)).dim());
-            println!("  Succeeded: {}", style(result.succeeded).green());
-            println!("  Failed:    {}", style(result.failed).red());
-            println!("  Skipped:   {}", style(result.skipped).yellow());
-            println!(
-                "  Total:     {}",
-                result.succeeded + result.failed + result.skipped
-            );
-            println!();
-        }
-    }
-}
-
-/// Render issue creation result.
-pub fn render_create_result(result: &CreateResult, ctx: &OutputContext) {
-    match ctx.format {
-        OutputFormat::Json => {
-            let json = serde_json::json!({
-                "issue_url": result.issue_url,
-                "issue_number": result.issue_number,
-                "title": result.title,
-                "body": result.body,
-                "suggested_labels": result.suggested_labels,
-                "dry_run": result.dry_run,
-            });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json).expect("Failed to serialize create result")
-            );
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&serde_json::json!({
-                "issue_url": result.issue_url,
-                "issue_number": result.issue_number,
-                "title": result.title,
-                "body": result.body,
-                "suggested_labels": result.suggested_labels,
-                "dry_run": result.dry_run,
-            }))
-            .expect("Failed to serialize create result");
-            println!("{yaml}");
-        }
-        OutputFormat::Markdown => {
-            println!("## Issue Created\n");
-            println!("**Title:** {}\n", result.title);
-            println!("**URL:** {}\n", result.issue_url);
-            if !result.suggested_labels.is_empty() {
+// Special handling for HistoryResult to serialize just contributions for JSON/YAML
+impl HistoryResult {
+    #[allow(dead_code)]
+    pub fn render_with_context(&self, ctx: &OutputContext) {
+        match ctx.format {
+            OutputFormat::Json => {
                 println!(
-                    "**Suggested Labels:** {}\n",
-                    result.suggested_labels.join(", ")
+                    "{}",
+                    serde_json::to_string_pretty(&self.contributions)
+                        .expect("Failed to serialize history to JSON")
                 );
             }
-            println!("### Description\n");
-            println!("{}", result.body);
+            OutputFormat::Yaml => {
+                println!(
+                    "{}",
+                    serde_yml::to_string(&self.contributions)
+                        .expect("Failed to serialize history to YAML")
+                );
+            }
+            _ => {
+                // Use the trait implementation for text/markdown
+                render(self, ctx);
+            }
         }
-        OutputFormat::Text => {
-            println!();
-            if result.dry_run {
-                println!("{}", style("DRY RUN - Issue not created").yellow().bold());
-            } else {
-                println!("{}", style("Issue Created Successfully").green().bold());
-                println!("  Number: {}", style(result.issue_number).cyan());
-                println!("  URL: {}", style(&result.issue_url).cyan().underlined());
+    }
+}
+
+impl Renderable for BulkTriageResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w)?;
+        writeln!(w, "{}", style("Bulk Triage Summary").bold().green())?;
+        writeln!(w, "{}", style("=".repeat(20)).dim())?;
+        writeln!(w, "  Succeeded: {}", style(self.succeeded).green())?;
+        writeln!(w, "  Failed:    {}", style(self.failed).red())?;
+        writeln!(w, "  Skipped:   {}", style(self.skipped).yellow())?;
+        writeln!(
+            w,
+            "  Total:     {}",
+            self.succeeded + self.failed + self.skipped
+        )?;
+        writeln!(w)?;
+        Ok(())
+    }
+}
+
+// Special handling for BulkTriageResult to use custom JSON/YAML structure
+impl BulkTriageResult {
+    #[allow(dead_code)]
+    pub fn render_with_context(&self, ctx: &OutputContext) {
+        match ctx.format {
+            OutputFormat::Json => {
+                let summary = serde_json::json!({
+                    "succeeded": self.succeeded,
+                    "failed": self.failed,
+                    "skipped": self.skipped,
+                    "total": self.succeeded + self.failed + self.skipped,
+                    "results": self.outcomes.iter().map(|(repo, outcome)| {
+                        serde_json::json!({
+                            "repository": repo,
+                            "outcome": outcome,
+                        })
+                    }).collect::<Vec<_>>(),
+                });
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&summary).expect("Failed to serialize summary")
+                );
             }
-            println!();
-            println!("{}", style("Title").bold());
-            println!("  {}", result.title);
-            println!();
-            println!("{}", style("Body").bold());
-            for line in result.body.lines() {
-                println!("  {line}");
+            OutputFormat::Yaml => {
+                let summary = serde_json::json!({
+                    "succeeded": self.succeeded,
+                    "failed": self.failed,
+                    "skipped": self.skipped,
+                    "total": self.succeeded + self.failed + self.skipped,
+                    "results": self.outcomes.iter().map(|(repo, outcome)| {
+                        serde_json::json!({
+                            "repository": repo,
+                            "outcome": outcome,
+                        })
+                    }).collect::<Vec<_>>(),
+                });
+                let yaml = serde_yml::to_string(&summary).expect("Failed to serialize summary");
+                println!("{yaml}");
             }
-            if !result.suggested_labels.is_empty() {
-                println!();
-                println!("{}", style("Suggested Labels").bold());
-                for label in &result.suggested_labels {
-                    println!("  - {}", style(label).yellow());
-                }
+            _ => {
+                // Use the trait implementation for text/markdown
+                render(self, ctx);
             }
-            println!();
+        }
+    }
+}
+
+impl Renderable for CreateResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w)?;
+        if self.dry_run {
+            writeln!(
+                w,
+                "{}",
+                style("DRY RUN - Issue not created").yellow().bold()
+            )?;
+        } else {
+            writeln!(w, "{}", style("Issue Created Successfully").green().bold())?;
+            writeln!(w, "  Number: {}", style(self.issue_number).cyan())?;
+            writeln!(w, "  URL: {}", style(&self.issue_url).cyan().underlined())?;
+        }
+        writeln!(w)?;
+        writeln!(w, "{}", style("Title").bold())?;
+        writeln!(w, "  {}", self.title)?;
+        writeln!(w)?;
+        writeln!(w, "{}", style("Body").bold())?;
+        for line in self.body.lines() {
+            writeln!(w, "  {line}")?;
+        }
+        if !self.suggested_labels.is_empty() {
+            writeln!(w)?;
+            writeln!(w, "{}", style("Suggested Labels").bold())?;
+            for label in &self.suggested_labels {
+                writeln!(w, "  - {}", style(label).yellow())?;
+            }
+        }
+        writeln!(w)?;
+        Ok(())
+    }
+
+    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w, "## Issue Created\n")?;
+        writeln!(w, "**Title:** {}\n", self.title)?;
+        writeln!(w, "**URL:** {}\n", self.issue_url)?;
+        if !self.suggested_labels.is_empty() {
+            writeln!(
+                w,
+                "**Suggested Labels:** {}\n",
+                self.suggested_labels.join(", ")
+            )?;
+        }
+        writeln!(w, "### Description\n")?;
+        writeln!(w, "{}", self.body)?;
+        Ok(())
+    }
+}
+
+// Special handling for CreateResult to use custom JSON/YAML structure
+impl CreateResult {
+    #[allow(dead_code)]
+    pub fn render_with_context(&self, ctx: &OutputContext) {
+        match ctx.format {
+            OutputFormat::Json => {
+                let json = serde_json::json!({
+                    "issue_url": self.issue_url,
+                    "issue_number": self.issue_number,
+                    "title": self.title,
+                    "body": self.body,
+                    "suggested_labels": self.suggested_labels,
+                    "dry_run": self.dry_run,
+                });
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json).expect("Failed to serialize create result")
+                );
+            }
+            OutputFormat::Yaml => {
+                let yaml = serde_yml::to_string(&serde_json::json!({
+                    "issue_url": self.issue_url,
+                    "issue_number": self.issue_number,
+                    "title": self.title,
+                    "body": self.body,
+                    "suggested_labels": self.suggested_labels,
+                    "dry_run": self.dry_run,
+                }))
+                .expect("Failed to serialize create result");
+                println!("{yaml}");
+            }
+            _ => {
+                // Use the trait implementation for text/markdown
+                render(self, ctx);
+            }
         }
     }
 }

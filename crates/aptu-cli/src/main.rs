@@ -11,6 +11,7 @@ mod errors;
 mod logging;
 mod output;
 mod provider;
+mod table;
 
 pub use provider::CliTokenProvider;
 

@@ -106,7 +106,7 @@ async fn triage_single_issue(
     };
 
     // Render triage FIRST (before asking for confirmation)
-    output::render_triage(&result, ctx);
+    output::render(&result, ctx);
 
     // Handle dry-run - already rendered, just exit
     if dry_run {
@@ -225,7 +225,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             AuthCommand::Logout => auth::run_logout(),
             AuthCommand::Status => {
                 let result = auth::run_status().await?;
-                output::render_auth_status(&result, &ctx);
+                output::render(&result, &ctx);
                 Ok(())
             }
         },
@@ -237,7 +237,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
-                output::render_repos(&result, &ctx);
+                result.render_with_context(&ctx);
                 Ok(())
             }
         },
@@ -249,7 +249,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
-                output::render_issues(&result, &ctx);
+                result.render_with_context(&ctx);
                 Ok(())
             }
             IssueCommand::Triage {
@@ -409,7 +409,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
 
                 // Render bulk summary (only for multiple issues)
                 if issue_refs.len() > 1 {
-                    output::render_bulk_triage_summary(&bulk_result, &ctx);
+                    output::render(&bulk_result, &ctx);
                 }
 
                 Ok(())
@@ -426,14 +426,14 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
-                output::render_create_result(&result, &ctx);
+                output::render(&result, &ctx);
                 Ok(())
             }
         },
 
         Commands::History => {
             let result = history::run()?;
-            output::render_history(&result, &ctx);
+            output::render(&result, &ctx);
             Ok(())
         }
 
