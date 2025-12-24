@@ -4,12 +4,12 @@
 //!
 //! This module defines the `TokenProvider` trait, which abstracts credential
 //! resolution across different platforms (CLI, iOS, etc.). Each platform
-//! implements this trait to provide GitHub, `OpenRouter`, Gemini, Groq, and Cerebras tokens from their
+//! implements this trait to provide GitHub and AI provider tokens from their
 //! respective credential sources.
 
 use secrecy::SecretString;
 
-/// Provides GitHub, `OpenRouter`, Gemini, Groq, and Cerebras credentials for API calls.
+/// Provides GitHub and AI provider credentials for API calls.
 ///
 /// This trait abstracts credential resolution across platforms:
 /// - **CLI:** Resolves from environment variables, GitHub CLI, or system keyring
@@ -23,38 +23,25 @@ pub trait TokenProvider: Send + Sync {
     /// Returns `None` if no token is available from any source.
     fn github_token(&self) -> Option<SecretString>;
 
-    /// Retrieves the Cerebras API key.
+    /// Retrieves an AI provider API key.
+    ///
+    /// # Arguments
+    /// * `provider` - The AI provider name (must match a registered provider in the registry)
     ///
     /// Returns `None` if no API key is available from any source.
-    fn cerebras_key(&self) -> Option<SecretString>;
-
-    /// Retrieves the Gemini API key.
-    ///
-    /// Returns `None` if no API key is available from any source.
-    fn gemini_key(&self) -> Option<SecretString>;
-
-    /// Retrieves the Groq API key.
-    ///
-    /// Returns `None` if no API key is available from any source.
-    fn groq_key(&self) -> Option<SecretString>;
-
-    /// Retrieves the `OpenRouter` API key.
-    ///
-    /// Returns `None` if no API key is available from any source.
-    fn openrouter_key(&self) -> Option<SecretString>;
+    fn ai_api_key(&self, provider: &str) -> Option<SecretString>;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::registry::all_providers;
+    use std::collections::HashMap;
 
     /// Mock implementation for testing.
     struct MockTokenProvider {
         github_token: Option<SecretString>,
-        cerebras_key: Option<SecretString>,
-        gemini_key: Option<SecretString>,
-        groq_key: Option<SecretString>,
-        openrouter_key: Option<SecretString>,
+        ai_keys: HashMap<String, SecretString>,
     }
 
     impl TokenProvider for MockTokenProvider {
@@ -62,54 +49,50 @@ mod tests {
             self.github_token.clone()
         }
 
-        fn cerebras_key(&self) -> Option<SecretString> {
-            self.cerebras_key.clone()
-        }
-
-        fn gemini_key(&self) -> Option<SecretString> {
-            self.gemini_key.clone()
-        }
-
-        fn groq_key(&self) -> Option<SecretString> {
-            self.groq_key.clone()
-        }
-
-        fn openrouter_key(&self) -> Option<SecretString> {
-            self.openrouter_key.clone()
+        fn ai_api_key(&self, provider: &str) -> Option<SecretString> {
+            self.ai_keys.get(provider).cloned()
         }
     }
 
     #[test]
     fn test_mock_provider_with_tokens() {
+        let mut ai_keys = HashMap::new();
+        for provider_config in all_providers() {
+            ai_keys.insert(
+                provider_config.name.to_string(),
+                SecretString::from(format!("{}_key", provider_config.name)),
+            );
+        }
+
         let provider = MockTokenProvider {
-            github_token: Some(SecretString::new("gh_token".to_string().into())),
-            cerebras_key: Some(SecretString::new("cerebras_key".to_string().into())),
-            gemini_key: Some(SecretString::new("gemini_key".to_string().into())),
-            groq_key: Some(SecretString::new("groq_key".to_string().into())),
-            openrouter_key: Some(SecretString::new("or_key".to_string().into())),
+            github_token: Some(SecretString::from("gh_token")),
+            ai_keys,
         };
 
         assert!(provider.github_token().is_some());
-        assert!(provider.cerebras_key().is_some());
-        assert!(provider.gemini_key().is_some());
-        assert!(provider.groq_key().is_some());
-        assert!(provider.openrouter_key().is_some());
+        for provider_config in all_providers() {
+            assert!(
+                provider.ai_api_key(provider_config.name).is_some(),
+                "Expected key for provider: {}",
+                provider_config.name
+            );
+        }
     }
 
     #[test]
     fn test_mock_provider_without_tokens() {
         let provider = MockTokenProvider {
             github_token: None,
-            cerebras_key: None,
-            gemini_key: None,
-            groq_key: None,
-            openrouter_key: None,
+            ai_keys: HashMap::new(),
         };
 
         assert!(provider.github_token().is_none());
-        assert!(provider.cerebras_key().is_none());
-        assert!(provider.gemini_key().is_none());
-        assert!(provider.groq_key().is_none());
-        assert!(provider.openrouter_key().is_none());
+        for provider_config in all_providers() {
+            assert!(
+                provider.ai_api_key(provider_config.name).is_none(),
+                "Expected no key for provider: {}",
+                provider_config.name
+            );
+        }
     }
 }

@@ -182,20 +182,20 @@ pub async fn analyze_issue(
     // Load configuration
     let config = load_config()?;
 
-    // Select AI provider based on config
+    // Get API key from provider using the configured provider name
+    let api_key = provider
+        .ai_api_key(&config.ai.provider)
+        .ok_or(AptuError::NotAuthenticated)?;
+
+    // Select AI provider based on config and create appropriate client
     match config.ai.provider.as_str() {
         "cerebras" => {
-            // Get Cerebras API key from provider
-            let api_key = provider.cerebras_key().ok_or(AptuError::NotAuthenticated)?;
-
-            // Create Cerebras client with the provided API key
             let ai_client =
                 CerebrasClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
                     message: e.to_string(),
                     status: None,
                 })?;
 
-            // Analyze the issue
             ai_client
                 .analyze_issue(issue)
                 .await
@@ -205,17 +205,12 @@ pub async fn analyze_issue(
                 })
         }
         "gemini" => {
-            // Get Gemini API key from provider
-            let api_key = provider.gemini_key().ok_or(AptuError::NotAuthenticated)?;
-
-            // Create Gemini client with the provided API key
             let ai_client =
                 GeminiClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
                     message: e.to_string(),
                     status: None,
                 })?;
 
-            // Analyze the issue
             ai_client
                 .analyze_issue(issue)
                 .await
@@ -225,17 +220,12 @@ pub async fn analyze_issue(
                 })
         }
         "groq" => {
-            // Get Groq API key from provider
-            let api_key = provider.groq_key().ok_or(AptuError::NotAuthenticated)?;
-
-            // Create Groq client with the provided API key
             let ai_client =
                 GroqClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
                     message: e.to_string(),
                     status: None,
                 })?;
 
-            // Analyze the issue
             ai_client
                 .analyze_issue(issue)
                 .await
@@ -245,19 +235,12 @@ pub async fn analyze_issue(
                 })
         }
         "openrouter" => {
-            // Get OpenRouter API key from provider
-            let api_key = provider
-                .openrouter_key()
-                .ok_or(AptuError::NotAuthenticated)?;
-
-            // Create OpenRouter client with the provided API key
             let ai_client =
                 OpenRouterClient::with_api_key(api_key, &config.ai).map_err(|e| AptuError::AI {
                     message: e.to_string(),
                     status: None,
                 })?;
 
-            // Analyze the issue
             ai_client
                 .analyze_issue(issue)
                 .await
