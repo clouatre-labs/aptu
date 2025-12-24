@@ -402,8 +402,10 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     }
                 }
 
-                // Render bulk summary
-                output::render_bulk_triage_summary(&bulk_result, &ctx);
+                // Render bulk summary (only for multiple issues)
+                if issue_refs.len() > 1 {
+                    output::render_bulk_triage_summary(&bulk_result, &ctx);
+                }
 
                 Ok(())
             }
