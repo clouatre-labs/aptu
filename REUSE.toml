@@ -1,7 +1,7 @@
 version = 1
 
 [[annotations]]
-path = ["crates/**/*.rs", "crates/**/*.toml"]
+path = ["crates/**/*.rs", "crates/**/*.toml", "crates/**/*.json"]
 precedence = "override"
 SPDX-FileCopyrightText = "2025 Aptu Contributors"
 SPDX-License-Identifier = "Apache-2.0"
