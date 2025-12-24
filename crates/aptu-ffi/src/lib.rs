@@ -8,75 +8,10 @@ pub mod types;
 use crate::error::AptuFfiError;
 use crate::keychain::KeychainProviderRef;
 use crate::types::{FfiAiModel, FfiCuratedRepo, FfiIssueNode, FfiTokenStatus, FfiTriageResponse};
-use aptu_core::auth::TokenProvider;
-use secrecy::SecretString;
 use tokio::runtime::Runtime;
 
 lazy_static::lazy_static! {
     static ref RUNTIME: Runtime = Runtime::new().expect("Failed to create Tokio runtime");
-}
-
-/// FFI TokenProvider implementation that bridges iOS keychain to core TokenProvider trait.
-struct FfiTokenProvider {
-    keychain: KeychainProviderRef,
-}
-
-impl FfiTokenProvider {
-    fn new(keychain: KeychainProviderRef) -> Self {
-        Self { keychain }
-    }
-}
-
-impl TokenProvider for FfiTokenProvider {
-    fn github_token(&self) -> Option<SecretString> {
-        match self
-            .keychain
-            .get_token("aptu".to_string(), "github".to_string())
-        {
-            Ok(Some(token)) => Some(SecretString::new(token.into())),
-            _ => None,
-        }
-    }
-
-    fn cerebras_key(&self) -> Option<SecretString> {
-        match self
-            .keychain
-            .get_token("aptu".to_string(), "cerebras".to_string())
-        {
-            Ok(Some(key)) => Some(SecretString::new(key.into())),
-            _ => None,
-        }
-    }
-
-    fn gemini_key(&self) -> Option<SecretString> {
-        match self
-            .keychain
-            .get_token("aptu".to_string(), "gemini".to_string())
-        {
-            Ok(Some(key)) => Some(SecretString::new(key.into())),
-            _ => None,
-        }
-    }
-
-    fn groq_key(&self) -> Option<SecretString> {
-        match self
-            .keychain
-            .get_token("aptu".to_string(), "groq".to_string())
-        {
-            Ok(Some(key)) => Some(SecretString::new(key.into())),
-            _ => None,
-        }
-    }
-
-    fn openrouter_key(&self) -> Option<SecretString> {
-        match self
-            .keychain
-            .get_token("aptu".to_string(), "openrouter".to_string())
-        {
-            Ok(Some(key)) => Some(SecretString::new(key.into())),
-            _ => None,
-        }
-    }
 }
 
 #[uniffi::export]
@@ -115,7 +50,7 @@ pub fn list_curated_repos() -> Result<Vec<FfiCuratedRepo>, AptuFfiError> {
 #[uniffi::export]
 pub fn fetch_issues(keychain: KeychainProviderRef) -> Result<Vec<FfiIssueNode>, AptuFfiError> {
     RUNTIME.block_on(async {
-        let provider = FfiTokenProvider::new(keychain);
+        let provider = auth::FfiTokenProvider::new(keychain);
 
         match aptu_core::fetch_issues(&provider, None, true).await {
             Ok(results) => {
@@ -162,7 +97,7 @@ pub fn analyze_issue(
     issue: crate::types::FfiIssueDetails,
 ) -> Result<FfiTriageResponse, AptuFfiError> {
     RUNTIME.block_on(async {
-        let provider = FfiTokenProvider::new(keychain);
+        let provider = auth::FfiTokenProvider::new(keychain);
 
         let core_issue = aptu_core::ai::types::IssueDetails {
             owner: String::new(),

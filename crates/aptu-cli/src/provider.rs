@@ -2,10 +2,11 @@
 
 //! CLI-specific `TokenProvider` implementation.
 //!
-//! Provides GitHub, `OpenRouter`, Gemini, Groq, and Cerebras credentials for CLI commands by resolving
+//! Provides GitHub and AI provider credentials for CLI commands by resolving
 //! tokens from environment variables, GitHub CLI, system keyring, and
-//! environment variables for `OpenRouter`, Gemini, Groq, and Cerebras API keys.
+//! environment variables for AI provider API keys.
 
+use aptu_core::ai::registry;
 use aptu_core::auth::TokenProvider;
 use secrecy::SecretString;
 use tracing::debug;
@@ -14,10 +15,7 @@ use tracing::debug;
 ///
 /// Resolves credentials from:
 /// - GitHub: Environment variables, GitHub CLI, or system keyring
-/// - `OpenRouter`: `OPENROUTER_API_KEY` environment variable
-/// - Gemini: `GEMINI_API_KEY` environment variable
-/// - Groq: `GROQ_API_KEY` environment variable
-/// - Cerebras: `CEREBRAS_API_KEY` environment variable
+/// - AI Providers: Environment variables specified in the provider registry
 pub struct CliTokenProvider;
 
 impl TokenProvider for CliTokenProvider {
@@ -31,53 +29,21 @@ impl TokenProvider for CliTokenProvider {
         }
     }
 
-    fn cerebras_key(&self) -> Option<SecretString> {
-        match std::env::var("CEREBRAS_API_KEY") {
+    fn ai_api_key(&self, provider: &str) -> Option<SecretString> {
+        let provider_config = registry::get_provider(provider)?;
+        match std::env::var(provider_config.api_key_env) {
             Ok(key) if !key.is_empty() => {
-                debug!("Resolved Cerebras API key from environment variable");
+                debug!(
+                    "Resolved {} API key from environment variable {}",
+                    provider, provider_config.api_key_env
+                );
                 Some(SecretString::from(key))
             }
             _ => {
-                debug!("No Cerebras API key found in environment");
-                None
-            }
-        }
-    }
-
-    fn gemini_key(&self) -> Option<SecretString> {
-        match std::env::var("GEMINI_API_KEY") {
-            Ok(key) if !key.is_empty() => {
-                debug!("Resolved Gemini API key from environment variable");
-                Some(SecretString::from(key))
-            }
-            _ => {
-                debug!("No Gemini API key found in environment");
-                None
-            }
-        }
-    }
-
-    fn groq_key(&self) -> Option<SecretString> {
-        match std::env::var("GROQ_API_KEY") {
-            Ok(key) if !key.is_empty() => {
-                debug!("Resolved Groq API key from environment variable");
-                Some(SecretString::from(key))
-            }
-            _ => {
-                debug!("No Groq API key found in environment");
-                None
-            }
-        }
-    }
-
-    fn openrouter_key(&self) -> Option<SecretString> {
-        match std::env::var("OPENROUTER_API_KEY") {
-            Ok(key) if !key.is_empty() => {
-                debug!("Resolved OpenRouter API key from environment variable");
-                Some(SecretString::from(key))
-            }
-            _ => {
-                debug!("No OpenRouter API key found in environment");
+                debug!(
+                    "No {} API key found in environment variable {}",
+                    provider, provider_config.api_key_env
+                );
                 None
             }
         }
