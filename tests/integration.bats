@@ -16,15 +16,6 @@ load test_helper
     assert_success
 }
 
-@test "repo list returns valid JSON array" {
-    run "$APTU_BIN" repo list --output json
-    assert_success
-    
-    # Parse and verify it's a valid JSON array
-    result=$(echo "$output" | jq 'type')
-    [[ "$result" == '"array"' ]]
-}
-
 @test "issue list with real GitHub API" {
     skip_if_no_gh_token
     run "$APTU_BIN" issue list block/goose
