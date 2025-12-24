@@ -10,11 +10,16 @@
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
   <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img src="https://api.reuse.software/badge/github.com/clouatre-labs/aptu" alt="REUSE Compliant"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/MSRV-1.92.0-orange.svg" alt="MSRV"></a>
+  <a href="https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributors-Welcome-brightgreen.svg" alt="Contributors Welcome"></a>
 </p>
 
 <p align="center"><strong>AI-Powered Triage Utility</strong> - A gamified CLI for OSS issue triage with AI assistance.</p>
 
 > *Aptu* (Mi'kmaq): "Paddle" - Navigate forward through open source contribution
+
+## Demo
+
+![Aptu Demo](assets/demo.gif)
 
 ## Features
 
@@ -224,6 +229,23 @@ Aptu follows supply chain security best practices:
 - **Signed Commits** - All commits are GPG-signed with DCO sign-off
 - **Optimized Binaries** - Release builds use LTO and size optimizations (~3MB binary)
 
+## Contributors Welcome
+
+We're actively seeking contributors to help expand Aptu! Whether you're interested in:
+
+- Adding new AI models or improving triage quality
+- Building the iOS app (Phase 2)
+- Enhancing the CLI experience
+- Writing documentation or tests
+- Reporting bugs or suggesting features
+- Spreading the word - blog posts, social media, talks
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and how to get started. All contributions are welcome!
+
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
+
+---
+
+If Aptu helps your OSS workflow, consider giving it a star!
