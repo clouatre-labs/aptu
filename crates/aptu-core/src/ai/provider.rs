@@ -49,6 +49,12 @@ pub trait AiProvider: Send + Sync {
     /// Returns the model name.
     fn model(&self) -> &str;
 
+    /// Returns the maximum tokens for API responses.
+    fn max_tokens(&self) -> u32;
+
+    /// Returns the temperature for API requests.
+    fn temperature(&self) -> f32;
+
     /// Builds HTTP headers for API requests.
     ///
     /// Default implementation includes Authorization and Content-Type headers.
@@ -190,8 +196,8 @@ pub trait AiProvider: Send + Sync {
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
             }),
-            max_tokens: Some(2048),
-            temperature: Some(0.3),
+            max_tokens: Some(self.max_tokens()),
+            temperature: Some(self.temperature()),
         };
 
         // Make API request with retry logic
@@ -290,8 +296,8 @@ pub trait AiProvider: Send + Sync {
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
             }),
-            max_tokens: Some(2048),
-            temperature: Some(0.3),
+            max_tokens: Some(self.max_tokens()),
+            temperature: Some(self.temperature()),
         };
 
         // Make API request with retry logic
@@ -532,6 +538,14 @@ mod tests {
 
         fn model(&self) -> &str {
             "test-model"
+        }
+
+        fn max_tokens(&self) -> u32 {
+            2048
+        }
+
+        fn temperature(&self) -> f32 {
+            0.3
         }
     }
 
