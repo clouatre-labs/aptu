@@ -129,6 +129,8 @@ pub struct CacheConfig {
     pub issue_ttl_minutes: u64,
     /// Repository metadata cache TTL in hours.
     pub repo_ttl_hours: u64,
+    /// URL to fetch curated repositories from.
+    pub curated_repos_url: String,
 }
 
 impl Default for CacheConfig {
@@ -136,6 +138,9 @@ impl Default for CacheConfig {
         Self {
             issue_ttl_minutes: 60,
             repo_ttl_hours: 24,
+            curated_repos_url:
+                "https://raw.githubusercontent.com/clouatre-labs/aptu/main/data/curated-repos.json"
+                    .to_string(),
         }
     }
 }

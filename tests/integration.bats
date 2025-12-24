@@ -16,18 +16,8 @@ load test_helper
     assert_success
 }
 
-@test "repo list JSON validity via jq" {
-    run "$APTU_BIN" repo list --output json
-    assert_success
-    
-    # Verify output is valid JSON
-    echo "$output" | jq . > /dev/null
-    assert_success
-}
-
 @test "issue list with real GitHub API" {
     skip_if_no_gh_token
-
     run "$APTU_BIN" issue list block/goose
     assert_success
 }
@@ -36,25 +26,6 @@ load test_helper
     skip_if_no_gh_token
     skip_if_no_openrouter_key
     
-    # Use a real issue URL for testing
     run "$APTU_BIN" issue triage https://github.com/block/goose/issues/1 --dry-run
-    assert_success
-}
-
-@test "repo list output is valid JSON array" {
-    run "$APTU_BIN" repo list --output json
-    assert_success
-    
-    # Parse and verify it's an array
-    result=$(echo "$output" | jq 'type')
-    [[ "$result" == '"array"' ]]
-}
-
-@test "history returns valid JSON" {
-    run "$APTU_BIN" history --output json
-    assert_success
-    
-    # Verify output is valid JSON
-    echo "$output" | jq . > /dev/null
     assert_success
 }

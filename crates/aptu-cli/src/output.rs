@@ -77,24 +77,24 @@ pub fn render_repos(result: &ReposResult, ctx: &OutputContext) {
         OutputFormat::Json => {
             println!(
                 "{}",
-                serde_json::to_string_pretty(result.repos)
+                serde_json::to_string_pretty(&result.repos)
                     .expect("Failed to serialize repos to JSON")
             );
         }
         OutputFormat::Yaml => {
             println!(
                 "{}",
-                serde_yml::to_string(result.repos).expect("Failed to serialize repos to YAML")
+                serde_yml::to_string(&result.repos).expect("Failed to serialize repos to YAML")
             );
         }
         OutputFormat::Markdown => {
             println!("## Available Repositories\n");
-            for repo in result.repos {
+            for repo in &result.repos {
                 println!(
                     "- **{}** ({}) - {}",
                     repo.full_name(),
                     repo.language,
-                    repo.description
+                    &repo.description
                 );
             }
         }
@@ -113,7 +113,7 @@ pub fn render_repos(result: &ReposResult, ctx: &OutputContext) {
                     style(num).dim(),
                     style(name).cyan(),
                     style(lang).yellow(),
-                    style(repo.description).dim()
+                    style(&repo.description).dim()
                 );
             }
 

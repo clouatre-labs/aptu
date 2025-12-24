@@ -26,7 +26,7 @@ pub struct AuthStatusResult {
 /// Result from the repos command.
 pub struct ReposResult {
     /// List of curated repositories.
-    pub repos: &'static [CuratedRepo],
+    pub repos: Vec<CuratedRepo>,
 }
 
 /// Result from the issues command.

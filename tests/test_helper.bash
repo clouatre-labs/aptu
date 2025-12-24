@@ -28,14 +28,3 @@ skip_if_no_openrouter_key() {
         skip "OpenRouter API key not available (set OPENROUTER_API_KEY)"
     fi
 }
-
-# Helper: Get GitHub token from gh CLI or environment
-get_github_token() {
-    if [[ -n "$GITHUB_TOKEN" ]]; then
-        echo "$GITHUB_TOKEN"
-    elif command -v gh &> /dev/null; then
-        gh auth token
-    else
-        echo ""
-    fi
-}

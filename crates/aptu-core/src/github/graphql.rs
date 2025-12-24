@@ -11,8 +11,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, instrument};
 
-use crate::repos::CuratedRepo;
-
 /// Viewer permission level on a repository.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -80,11 +78,11 @@ pub struct IssuesConnection {
 /// Builds a GraphQL query to fetch issues from multiple repositories.
 ///
 /// Uses GraphQL aliases to query all repos in a single request.
-fn build_issues_query(repos: &[CuratedRepo]) -> Value {
+fn build_issues_query<R: AsRef<str>>(repos: &[(R, R)]) -> Value {
     let fragments: Vec<String> = repos
         .iter()
         .enumerate()
-        .map(|(i, repo)| {
+        .map(|(i, (owner, name))| {
             format!(
                 r#"repo{i}: repository(owner: "{owner}", name: "{name}") {{
                     nameWithOwner
@@ -105,8 +103,8 @@ fn build_issues_query(repos: &[CuratedRepo]) -> Value {
                     }}
                 }}"#,
                 i = i,
-                owner = repo.owner,
-                name = repo.name
+                owner = owner.as_ref(),
+                name = name.as_ref()
             )
         })
         .collect();
@@ -116,13 +114,14 @@ fn build_issues_query(repos: &[CuratedRepo]) -> Value {
     json!({ "query": query })
 }
 
-/// Fetches open "good first issue" issues from all curated repositories.
+/// Fetches open "good first issue" issues from multiple repositories.
 ///
+/// Accepts a slice of (owner, name) tuples.
 /// Returns a vector of (`repo_name`, issues) tuples.
 #[instrument(skip(client, repos), fields(repo_count = repos.len()))]
-pub async fn fetch_issues(
+pub async fn fetch_issues<R: AsRef<str>>(
     client: &Octocrab,
-    repos: &[CuratedRepo],
+    repos: &[(R, R)],
 ) -> Result<Vec<(String, Vec<IssueNode>)>> {
     if repos.is_empty() {
         return Ok(vec![]);
@@ -407,12 +406,7 @@ mod tests {
 
     #[test]
     fn build_query_single_repo() {
-        let repos = [CuratedRepo {
-            owner: "block",
-            name: "goose",
-            language: "Rust",
-            description: "AI agent",
-        }];
+        let repos = [("block", "goose")];
 
         let query = build_issues_query(&repos);
         let query_str = query["query"].as_str().unwrap();
@@ -424,20 +418,7 @@ mod tests {
 
     #[test]
     fn build_query_multiple_repos() {
-        let repos = [
-            CuratedRepo {
-                owner: "block",
-                name: "goose",
-                language: "Rust",
-                description: "AI agent",
-            },
-            CuratedRepo {
-                owner: "astral-sh",
-                name: "ruff",
-                language: "Rust",
-                description: "Linter",
-            },
-        ];
+        let repos = [("block", "goose"), ("astral-sh", "ruff")];
 
         let query = build_issues_query(&repos);
         let query_str = query["query"].as_str().unwrap();
@@ -448,7 +429,7 @@ mod tests {
 
     #[test]
     fn build_query_empty_repos() {
-        let repos: [CuratedRepo; 0] = [];
+        let repos: [(&str, &str); 0] = [];
         let query = build_issues_query(&repos);
         let query_str = query["query"].as_str().unwrap();
 
