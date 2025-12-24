@@ -140,9 +140,10 @@ jobs:
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: test
+    needs: [changes, test]
     timeout-minutes: 15
     if: |
+      (needs.changes.outputs.code == 'true' || needs.changes.outputs.tests == 'true') &&
       !contains(github.event.pull_request.labels.*.name, 'skip-integration') &&
       (needs.test.result == 'success' || github.event_name != 'pull_request')
     steps:
