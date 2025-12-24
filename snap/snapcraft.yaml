@@ -1,0 +1,36 @@
+name: aptu
+base: core24
+version: git
+summary: Gamified OSS issue triage with AI assistance
+description: |
+  Aptu is a Rust CLI tool that gamifies open source issue triage with AI assistance.
+  It helps developers efficiently manage and prioritize GitHub issues using intelligent
+  categorization and scoring.
+
+grade: stable
+confinement: strict
+
+platforms:
+  amd64:
+  arm64:
+
+parts:
+  aptu:
+    plugin: rust
+    source: .
+    build-packages:
+      - pkg-config
+      - libdbus-1-dev
+
+plugs:
+  network:
+  home:
+  password-manager-service:
+
+apps:
+  aptu:
+    command: bin/aptu
+    plugs:
+      - network
+      - home
+      - password-manager-service
