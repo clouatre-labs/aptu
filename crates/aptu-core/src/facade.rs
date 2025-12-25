@@ -15,8 +15,10 @@ use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
 use crate::error::AptuError;
+use crate::github::auth::create_client_with_token;
 use crate::github::graphql::{IssueNode, fetch_issues as gh_fetch_issues};
 use crate::repos::{self, CuratedRepo};
+use secrecy::SecretString;
 
 /// Fetches "good first issue" issues from curated repositories.
 ///
@@ -49,10 +51,11 @@ pub async fn fetch_issues(
     let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
 
     // Create GitHub client with the provided token
-    let client = octocrab::OctocrabBuilder::new()
-        .personal_token(github_token)
-        .build()
-        .map_err(AptuError::GitHub)?;
+    let token = SecretString::from(github_token);
+    let client = create_client_with_token(&token).map_err(|e| AptuError::AI {
+        message: format!("Failed to create GitHub client: {e}"),
+        status: None,
+    })?;
 
     // Get curated repos, optionally filtered
     let all_repos = repos::fetch().await?;
