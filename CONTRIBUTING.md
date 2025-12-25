@@ -238,7 +238,7 @@ brew install clouatre-labs/tap/aptu
 
 **Cargo**
 \`\`\`bash
-cargo install aptu
+cargo install aptu-cli
 \`\`\`
 
 ---
