@@ -29,6 +29,10 @@ inputs:
     description: Apply AI-suggested labels and milestone to the issue
     required: false
     default: 'true'
+  no-comment:
+    description: Skip posting triage comment to GitHub (only apply labels/milestone)
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -85,6 +89,7 @@ runs:
         APTU_MODEL: ${{ inputs.model }}
         DRY_RUN: ${{ inputs.dry-run }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
+        NO_COMMENT: ${{ inputs.no-comment }}
         ISSUE_NUMBER: ${{ github.event.issue.number }}
         REPO: ${{ github.repository }}
       run: |
@@ -99,6 +104,10 @@ runs:
         
         if [[ "$APPLY_LABELS" == "true" ]]; then
           ARGS="$ARGS --apply"
+        fi
+        
+        if [[ "$NO_COMMENT" == "true" ]]; then
+          ARGS="$ARGS --no-comment"
         fi
         
         echo "Running: aptu issue triage $ARGS $ISSUE_REF"

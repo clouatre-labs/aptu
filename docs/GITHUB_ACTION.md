@@ -37,8 +37,9 @@ jobs:
 - **openrouter-api-key** (required) - OpenRouter API key for AI analysis
 - **model** (optional) - OpenRouter model to use (default: `mistralai/devstral-2512:free`)
 - **skip-labeled** (optional) - Skip triage if issue already has labels (default: `true`)
-- **dry-run** (optional) - Run without posting comments (default: `false`)
+- **dry-run** (optional) - Run without making changes (default: `false`)
 - **apply-labels** (optional) - Apply AI-suggested labels and milestone (default: `true`)
+- **no-comment** (optional) - Skip posting triage comment to GitHub (default: `false`)
 
 ## Examples
 
@@ -79,6 +80,16 @@ jobs:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
     skip-labeled: true
+```
+
+### Labels Only (No Comment)
+
+```yaml
+- uses: clouatre-labs/aptu@v0
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+    no-comment: true
 ```
 
 ## Permissions
