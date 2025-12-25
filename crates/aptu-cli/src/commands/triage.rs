@@ -77,12 +77,6 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         .map(|l| l.clone().into())
         .collect();
 
-    // Apply tiered filtering to prioritize important labels
-    let available_labels = aptu_core::github::issues::filter_labels_by_relevance(
-        &available_labels,
-        aptu_core::ai::provider::MAX_LABELS,
-    );
-
     // Convert repository milestones to our type
     let available_milestones: Vec<RepoMilestone> = repo_data
         .milestones

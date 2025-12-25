@@ -10,6 +10,7 @@
 use chrono::Duration;
 use tracing::instrument;
 
+use crate::ai::provider::MAX_LABELS;
 use crate::ai::types::{PrDetails, ReviewEvent};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
@@ -17,7 +18,10 @@ use crate::cache::{self, CacheEntry};
 use crate::config::load_config;
 use crate::error::AptuError;
 use crate::github::auth::create_client_with_token;
-use crate::github::graphql::{IssueNode, fetch_issues as gh_fetch_issues};
+use crate::github::graphql::{
+    IssueNode, fetch_issue_with_repo_context, fetch_issues as gh_fetch_issues,
+};
+use crate::github::issues::filter_labels_by_relevance;
 use crate::github::pulls::{fetch_pr_details, post_pr_review as gh_post_pr_review};
 use crate::repos::{self, CuratedRepo};
 use secrecy::SecretString;
@@ -186,6 +190,41 @@ pub async fn analyze_issue(
     // Load configuration
     let config = load_config()?;
 
+    // Clone issue into mutable local variable for potential label enrichment
+    let mut issue_mut = issue.clone();
+
+    // Fetch repository labels via GraphQL if available_labels is empty and owner/repo are non-empty
+    if issue_mut.available_labels.is_empty()
+        && !issue_mut.owner.is_empty()
+        && !issue_mut.repo.is_empty()
+    {
+        // Get GitHub token from provider
+        if let Some(github_token) = provider.github_token() {
+            let token = SecretString::from(github_token);
+            if let Ok(client) = create_client_with_token(&token) {
+                // Attempt to fetch issue with repo context to get repository labels
+                if let Ok((_, repo_data)) = fetch_issue_with_repo_context(
+                    &client,
+                    &issue_mut.owner,
+                    &issue_mut.repo,
+                    issue_mut.number,
+                )
+                .await
+                {
+                    // Extract available labels from repository data (not issue labels)
+                    issue_mut.available_labels =
+                        repo_data.labels.nodes.into_iter().map(Into::into).collect();
+                }
+            }
+        }
+    }
+
+    // Apply label filtering before AI analysis
+    if !issue_mut.available_labels.is_empty() {
+        issue_mut.available_labels =
+            filter_labels_by_relevance(&issue_mut.available_labels, MAX_LABELS);
+    }
+
     // Get API key from provider using the configured provider name
     let api_key = provider
         .ai_api_key(&config.ai.provider)
@@ -201,7 +240,7 @@ pub async fn analyze_issue(
         })?;
 
     ai_client
-        .analyze_issue(issue)
+        .analyze_issue(&issue_mut)
         .await
         .map_err(|e| AptuError::AI {
             message: e.to_string(),
