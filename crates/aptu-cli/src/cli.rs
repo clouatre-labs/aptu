@@ -291,5 +291,25 @@ pub enum PrCommand {
         /// Repository for bare PR numbers (e.g., "block/goose")
         #[arg(long, short = 'r')]
         repo: Option<String>,
+
+        /// Post review as a comment (read-only, no approval)
+        #[arg(long, group = "review_type")]
+        comment: bool,
+
+        /// Post review with approval
+        #[arg(long, group = "review_type")]
+        approve: bool,
+
+        /// Post review requesting changes
+        #[arg(long, group = "review_type")]
+        request_changes: bool,
+
+        /// Preview the review without posting
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip confirmation prompt when posting
+        #[arg(long)]
+        yes: bool,
     },
 }

@@ -308,3 +308,24 @@ pub struct PrReviewResponse {
     #[serde(default)]
     pub suggestions: Vec<String>,
 }
+
+/// Review event type for posting to GitHub.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewEvent {
+    /// Post as a comment without approval/request.
+    Comment,
+    /// Approve the PR.
+    Approve,
+    /// Request changes to the PR.
+    RequestChanges,
+}
+
+impl std::fmt::Display for ReviewEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReviewEvent::Comment => write!(f, "COMMENT"),
+            ReviewEvent::Approve => write!(f, "APPROVE"),
+            ReviewEvent::RequestChanges => write!(f, "REQUEST_CHANGES"),
+        }
+    }
+}
