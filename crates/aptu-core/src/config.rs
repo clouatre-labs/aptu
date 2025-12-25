@@ -68,6 +68,10 @@ pub struct AiConfig {
     pub max_tokens: u32,
     /// Temperature for API requests (0.0-1.0).
     pub temperature: f32,
+    /// Circuit breaker failure threshold before opening (default: 3).
+    pub circuit_breaker_threshold: u32,
+    /// Circuit breaker reset timeout in seconds (default: 60).
+    pub circuit_breaker_reset_seconds: u64,
 }
 
 impl Default for AiConfig {
@@ -79,6 +83,8 @@ impl Default for AiConfig {
             allow_paid_models: false,
             max_tokens: 2048,
             temperature: 0.3,
+            circuit_breaker_threshold: 3,
+            circuit_breaker_reset_seconds: 60,
         }
     }
 }

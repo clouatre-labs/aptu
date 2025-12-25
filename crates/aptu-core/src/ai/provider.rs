@@ -55,6 +55,14 @@ pub trait AiProvider: Send + Sync {
     /// Returns the temperature for API requests.
     fn temperature(&self) -> f32;
 
+    /// Returns the circuit breaker for this provider (optional).
+    ///
+    /// Default implementation returns None. Providers can override
+    /// to provide circuit breaker functionality.
+    fn circuit_breaker(&self) -> Option<&super::CircuitBreaker> {
+        None
+    }
+
     /// Builds HTTP headers for API requests.
     ///
     /// Default implementation includes Authorization and Content-Type headers.
@@ -89,6 +97,13 @@ pub trait AiProvider: Send + Sync {
 
         use crate::error::AptuError;
         use crate::retry::{is_retryable_anyhow, retry_backoff};
+
+        // Check circuit breaker before attempting request
+        if let Some(cb) = self.circuit_breaker()
+            && cb.is_open()
+        {
+            return Err(AptuError::CircuitOpen.into());
+        }
 
         let completion: ChatCompletionResponse = (|| async {
             let mut req = self.http_client().post(self.api_url());
@@ -156,6 +171,11 @@ pub trait AiProvider: Send + Sync {
         .when(is_retryable_anyhow)
         .notify(|err, dur| warn!(error = %err, delay = ?dur, "Retrying after error"))
         .await?;
+
+        // Record success in circuit breaker
+        if let Some(cb) = self.circuit_breaker() {
+            cb.record_success();
+        }
 
         Ok(completion)
     }
