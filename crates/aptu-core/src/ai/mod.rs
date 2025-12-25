@@ -4,12 +4,14 @@
 //!
 //! Provides AI-assisted issue triage using multiple AI providers (Gemini, `OpenRouter`, Groq, Cerebras).
 
+pub mod circuit_breaker;
 pub mod client;
 pub mod models;
 pub mod provider;
 pub mod registry;
 pub mod types;
 
+pub use circuit_breaker::CircuitBreaker;
 pub use client::AiClient;
 pub use models::{AiModel, ModelProvider};
 pub use provider::AiProvider;

@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use secrecy::SecretString;
 
+use super::circuit_breaker::CircuitBreaker;
 use super::provider::AiProvider;
 use super::registry::{ProviderConfig, get_provider};
 use crate::config::AiConfig;
@@ -35,6 +36,8 @@ pub struct AiClient {
     max_tokens: u32,
     /// Temperature for API requests.
     temperature: f32,
+    /// Circuit breaker for resilience.
+    circuit_breaker: CircuitBreaker,
 }
 
 impl AiClient {
@@ -97,6 +100,10 @@ impl AiClient {
             model: config.model.clone(),
             max_tokens: config.max_tokens,
             temperature: config.temperature,
+            circuit_breaker: CircuitBreaker::new(
+                config.circuit_breaker_threshold,
+                config.circuit_breaker_reset_seconds,
+            ),
         })
     }
 
@@ -154,7 +161,17 @@ impl AiClient {
             model: config.model.clone(),
             max_tokens: config.max_tokens,
             temperature: config.temperature,
+            circuit_breaker: CircuitBreaker::new(
+                config.circuit_breaker_threshold,
+                config.circuit_breaker_reset_seconds,
+            ),
         })
+    }
+
+    /// Get the circuit breaker for this client.
+    #[must_use]
+    pub fn circuit_breaker(&self) -> &CircuitBreaker {
+        &self.circuit_breaker
     }
 }
 
@@ -192,6 +209,10 @@ impl AiProvider for AiClient {
         self.temperature
     }
 
+    fn circuit_breaker(&self) -> Option<&super::CircuitBreaker> {
+        Some(&self.circuit_breaker)
+    }
+
     fn build_headers(&self) -> reqwest::header::HeaderMap {
         let mut headers = reqwest::header::HeaderMap::new();
         if let Ok(val) = "application/json".parse() {
@@ -225,6 +246,8 @@ mod tests {
             temperature: 0.3,
             timeout_seconds: 30,
             allow_paid_models: false,
+            circuit_breaker_threshold: 3,
+            circuit_breaker_reset_seconds: 60,
         }
     }
 
