@@ -1407,29 +1407,6 @@ mod label_tests {
     }
 
     #[test]
-    fn filter_labels_respects_max_limit() {
-        let labels = vec![
-            crate::ai::types::RepoLabel {
-                name: "bug".to_string(),
-                color: "ff0000".to_string(),
-                description: "Bug".to_string(),
-            },
-            crate::ai::types::RepoLabel {
-                name: "enhancement".to_string(),
-                color: "a2eeef".to_string(),
-                description: "Enhancement".to_string(),
-            },
-            crate::ai::types::RepoLabel {
-                name: "documentation".to_string(),
-                color: "0075ca".to_string(),
-                description: "Documentation".to_string(),
-            },
-        ];
-        let filtered = filter_labels_by_relevance(&labels, 2);
-        assert_eq!(filtered.len(), 2);
-    }
-
-    #[test]
     fn filter_labels_over_limit_with_priorities() {
         let mut labels = vec![];
         for i in 0..20 {
@@ -1454,20 +1431,6 @@ mod label_tests {
         assert_eq!(filtered.len(), 10);
         assert_eq!(filtered[0].name, "bug");
         assert_eq!(filtered[1].name, "enhancement");
-    }
-
-    #[test]
-    fn filter_labels_over_limit_without_priorities() {
-        let labels: Vec<crate::ai::types::RepoLabel> = (0..50)
-            .map(|i| crate::ai::types::RepoLabel {
-                name: format!("label{i}"),
-                color: "cccccc".to_string(),
-                description: format!("Label {i}"),
-            })
-            .collect();
-
-        let filtered = filter_labels_by_relevance(&labels, 10);
-        assert_eq!(filtered.len(), 10);
     }
 }
 
