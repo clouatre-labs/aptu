@@ -24,7 +24,8 @@ pub async fn run(reference: &str, repo_context: Option<&str>) -> Result<PrReview
     let provider = crate::provider::CliTokenProvider;
 
     // Call facade for PR review
-    let (pr_details, review) = aptu_core::review_pr(&provider, reference, repo_context).await?;
+    let (pr_details, review, ai_stats) =
+        aptu_core::review_pr(&provider, reference, repo_context).await?;
 
     debug!(
         pr_number = pr_details.number,
@@ -37,5 +38,6 @@ pub async fn run(reference: &str, repo_context: Option<&str>) -> Result<PrReview
         pr_number: pr_details.number,
         pr_url: pr_details.url,
         review,
+        ai_stats,
     })
 }

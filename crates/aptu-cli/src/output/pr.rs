@@ -88,6 +88,21 @@ impl Renderable for PrReviewResult {
             writeln!(w)?;
         }
 
+        // AI Stats
+        writeln!(w, "{}", style("AI Stats").dim().bold())?;
+        writeln!(
+            w,
+            "  Model: {} | Tokens: {} in, {} out | Duration: {}ms",
+            self.ai_stats.model,
+            self.ai_stats.input_tokens,
+            self.ai_stats.output_tokens,
+            self.ai_stats.duration_ms
+        )?;
+        if let Some(cost) = self.ai_stats.cost_usd {
+            writeln!(w, "  Cost: ${cost:.6}")?;
+        }
+        writeln!(w)?;
+
         Ok(())
     }
 
