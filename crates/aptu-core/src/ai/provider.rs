@@ -416,16 +416,19 @@ Your response MUST be valid JSON with this exact schema:
 
 Guidelines:
 - summary: Concise explanation of the problem/request and why it matters
-- suggested_labels: Prefer labels from the Available Labels list provided. Choose from: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix. If a more specific label exists in the repository, use it instead of generic ones.
-  - good first issue: Consider this label when the issue has: clear and well-defined scope, minimal codebase knowledge required, isolated change with minimal dependencies, good documentation or examples in the repository, no complex architectural understanding needed.
-  - help wanted: Consider this label when the issue has: well-defined requirements and acceptance criteria, maintainer capacity is limited, issue is not blocked by other work, suitable for external contributors with domain knowledge.
+- suggested_labels: Prefer labels from the Available Labels list provided. Choose from: bug, enhancement, documentation, question, duplicate, invalid, wontfix. If a more specific label exists in the repository, use it instead of generic ones.
 - clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear. Skip questions already answered in comments.
 - potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none. A duplicate is an issue that describes the exact same problem.
 - related_issues: Include issues from the search results that are contextually related but NOT duplicates. Provide brief reasoning for each. Leave empty array if none are relevant.
-- status_note: Detect if someone has claimed the issue or is working on it. Look for patterns like "I'd like to work on this", "I'll submit a PR", "working on this", or "@user I've assigned you". If claimed, set status_note to a brief description (e.g., "Issue claimed by @username"). If not claimed, leave as null or empty string. IMPORTANT: If issue is claimed, do NOT suggest 'help wanted' label.
+- status_note: Detect if someone has claimed the issue or is working on it. Look for patterns like "I'd like to work on this", "I'll submit a PR", "working on this", or "@user I've assigned you". If claimed, set status_note to a brief description (e.g., "Issue claimed by @username"). If not claimed, leave as null or empty string.
 - contributor_guidance: Assess whether the issue is suitable for beginners. Consider: scope (small, well-defined), file count (few files to modify), required knowledge (no deep expertise needed), clarity (clear problem statement). Set beginner_friendly to true if all factors are favorable. Provide 1-2 sentence reasoning explaining the assessment.
 - implementation_approach: Based on the repository structure provided, suggest specific files or modules to modify. Reference the file paths from the repository structure. Be concrete and actionable. Leave as null or empty string if no specific guidance can be provided.
 - suggested_milestone: If applicable, suggest a milestone title from the Available Milestones list. Only include if a milestone is clearly relevant to the issue. Leave as null or empty string if no milestone is appropriate.
+
+Rare Labels:
+These labels are rarely applied. Do NOT apply unless ALL conditions are true:
+- good first issue: Do NOT apply unless ALL are true: (1) issue has clear, well-defined scope with minimal codebase knowledge required, (2) change is isolated with minimal dependencies and good documentation exists, (3) no complex architectural understanding needed.
+- help wanted: Do NOT apply unless ALL are true: (1) requirements and acceptance criteria are well-defined, (2) issue is not claimed by anyone and not blocked by other work, (3) issue is suitable for external contributors with domain knowledge.
 
 Be helpful, concise, and actionable. Focus on what a maintainer needs to know."##.to_string()
     }
@@ -553,7 +556,7 @@ Guidelines:
   * Use bullet points for lists
   * Improve grammar and clarity
   * Add relevant context if missing
-- suggested_labels: Suggest up to 3 relevant GitHub labels. Common ones: bug, enhancement, documentation, question, good first issue, help wanted, duplicate, invalid, wontfix. Choose based on the issue content.
+- suggested_labels: Suggest up to 3 relevant GitHub labels. Common ones: bug, enhancement, documentation, question, duplicate, invalid, wontfix. Choose based on the issue content.
 
 Be professional but friendly. Maintain the user's intent while improving clarity and structure."#.to_string()
     }
