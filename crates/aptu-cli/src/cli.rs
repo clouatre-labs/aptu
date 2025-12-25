@@ -50,6 +50,7 @@ pub enum OutputFormat {
 }
 
 /// Global output configuration passed to commands.
+#[derive(Clone)]
 pub struct OutputContext {
     /// Output format (text, json, yaml)
     pub format: OutputFormat,

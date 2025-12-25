@@ -89,6 +89,7 @@ dependencies = [
  "console",
  "dialoguer",
  "dirs",
+ "futures",
  "indicatif",
  "predicates",
  "secrecy",

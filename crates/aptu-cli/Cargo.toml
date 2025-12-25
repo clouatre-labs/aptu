@@ -48,6 +48,9 @@ secrecy = { workspace = true }
 # Paths
 dirs = { workspace = true }
 
+# Concurrency
+futures = { workspace = true }
+
 [dev-dependencies]
 tokio-test = { workspace = true }
 wiremock = { workspace = true }

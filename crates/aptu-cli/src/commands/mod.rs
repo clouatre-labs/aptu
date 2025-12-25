@@ -17,6 +17,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use console::style;
 use dialoguer::Confirm;
+use futures::{StreamExt, stream};
 use indicatif::{ProgressBar, ProgressStyle};
 use tracing::debug;
 
@@ -348,7 +349,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     // For now, we just log that verbose mode is active
                 }
 
-                // Bulk triage loop
+                // Bulk triage loop with concurrent processing
                 let mut bulk_result = types::BulkTriageResult {
                     succeeded: 0,
                     failed: 0,
@@ -356,49 +357,66 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     outcomes: Vec::new(),
                 };
 
-                for (idx, issue_ref) in issue_refs.iter().enumerate() {
-                    // Progress output
-                    if matches!(ctx.format, OutputFormat::Text) {
-                        println!(
-                            "\n[{}/{}] Triaging {}",
-                            idx + 1,
-                            issue_refs.len(),
-                            style(issue_ref).cyan()
-                        );
-                    }
+                // Process issues concurrently with buffer_unordered(5) for rate limit awareness
+                let total_issues = issue_refs.len();
+                let ctx_clone = ctx.clone();
+                let outcomes = stream::iter(issue_refs.iter().enumerate())
+                    .map(|(idx, issue_ref)| {
+                        let issue_ref = issue_ref.clone();
+                        let ctx = ctx_clone.clone();
+                        async move {
+                            // Progress output for concurrent processing
+                            if matches!(ctx.format, OutputFormat::Text) {
+                                println!(
+                                    "\n[{}/{}] Triaging {}",
+                                    idx + 1,
+                                    total_issues,
+                                    style(&issue_ref).cyan()
+                                );
+                            }
 
-                    // Triage single issue
-                    match triage_single_issue(
-                        issue_ref,
-                        repo_context,
-                        dry_run,
-                        yes,
-                        apply,
-                        no_comment,
-                        force,
-                        &ctx,
-                        config,
-                    )
-                    .await
-                    {
-                        Ok(Some(result)) => {
+                            // Triage single issue
+                            let result = triage_single_issue(
+                                &issue_ref,
+                                repo_context,
+                                dry_run,
+                                yes,
+                                apply,
+                                no_comment,
+                                force,
+                                &ctx,
+                                config,
+                            )
+                            .await;
+
+                            (issue_ref, result)
+                        }
+                    })
+                    .buffer_unordered(5)
+                    .collect::<Vec<_>>()
+                    .await;
+
+                // Process results and update bulk_result
+                for (issue_ref, result) in outcomes {
+                    match result {
+                        Ok(Some(triage_result)) => {
                             bulk_result.succeeded += 1;
                             bulk_result.outcomes.push((
-                                issue_ref.clone(),
-                                types::SingleTriageOutcome::Success(Box::new(result)),
+                                issue_ref,
+                                types::SingleTriageOutcome::Success(Box::new(triage_result)),
                             ));
                         }
                         Ok(None) => {
                             bulk_result.skipped += 1;
                             bulk_result.outcomes.push((
-                                issue_ref.clone(),
+                                issue_ref,
                                 types::SingleTriageOutcome::Skipped("Already triaged".to_string()),
                             ));
                         }
                         Err(e) => {
                             bulk_result.failed += 1;
                             bulk_result.outcomes.push((
-                                issue_ref.clone(),
+                                issue_ref,
                                 types::SingleTriageOutcome::Failed(e.to_string()),
                             ));
                             if matches!(ctx.format, OutputFormat::Text) {
