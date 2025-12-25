@@ -145,7 +145,6 @@ jobs:
           class Aptu < Formula
             desc "Gamified OSS issue triage with AI assistance"
             homepage "https://github.com/clouatre-labs/aptu"
-            version "VERSION_NUMBER_PLACEHOLDER"
             license "Apache-2.0"
             
             if OS.mac? && Hardware::CPU.arm?
