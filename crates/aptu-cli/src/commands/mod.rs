@@ -457,10 +457,30 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
         }
 
         Commands::Pr(pr_cmd) => match pr_cmd {
-            PrCommand::Review { reference, repo } => {
+            PrCommand::Review {
+                reference,
+                repo,
+                comment,
+                approve,
+                request_changes,
+                dry_run,
+                yes,
+            } => {
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
+
+                // Determine review type from flags
+                let review_type = if comment {
+                    Some(aptu_core::ReviewEvent::Comment)
+                } else if approve {
+                    Some(aptu_core::ReviewEvent::Approve)
+                } else if request_changes {
+                    Some(aptu_core::ReviewEvent::RequestChanges)
+                } else {
+                    None
+                };
+
                 let spinner = maybe_spinner(&ctx, "Fetching PR and analyzing...");
-                let result = pr::run(&reference, repo_context).await?;
+                let result = pr::run(&reference, repo_context, review_type, dry_run, yes).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }

@@ -33,6 +33,14 @@ inputs:
     description: Skip posting triage comment to GitHub (only apply labels/milestone)
     required: false
     default: 'false'
+  pr-review-event:
+    description: Post PR review with specified event type (comment, approve, request-changes)
+    required: false
+    default: ''
+  pr-review-dry-run:
+    description: Preview PR review without posting
+    required: false
+    default: 'false'
 
 runs:
   using: composite

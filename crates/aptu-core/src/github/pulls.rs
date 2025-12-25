@@ -9,7 +9,7 @@ use anyhow::{Context, Result, bail};
 use octocrab::Octocrab;
 use tracing::{debug, instrument};
 
-use crate::ai::types::{PrDetails, PrFile};
+use crate::ai::types::{PrDetails, PrFile, ReviewEvent};
 
 /// Parses a PR reference into (owner, repo, number).
 ///
@@ -163,6 +163,62 @@ pub async fn fetch_pr_details(
     );
 
     Ok(details)
+}
+
+/// Posts a PR review to GitHub.
+///
+/// Uses Octocrab's custom HTTP POST to create a review with the specified event type.
+/// Requires write access to the repository.
+///
+/// # Arguments
+///
+/// * `client` - Authenticated Octocrab client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `number` - PR number
+/// * `body` - Review comment text
+/// * `event` - Review event type (Comment, Approve, or `RequestChanges`)
+///
+/// # Returns
+///
+/// Review ID on success.
+///
+/// # Errors
+///
+/// Returns an error if the API call fails, user lacks write access, or PR is not found.
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number, event = %event))]
+pub async fn post_pr_review(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    body: &str,
+    event: ReviewEvent,
+) -> Result<u64> {
+    debug!("Posting PR review");
+
+    let route = format!("repos/{owner}/{repo}/pulls/{number}/reviews");
+
+    let payload = serde_json::json!({
+        "body": body,
+        "event": event.to_string(),
+    });
+
+    #[derive(serde::Deserialize)]
+    struct ReviewResponse {
+        id: u64,
+    }
+
+    let response: ReviewResponse = client.post(route, Some(&payload)).await.with_context(|| {
+        format!(
+            "Failed to post review to PR #{number} in {owner}/{repo}. \
+                 Check that you have write access to the repository."
+        )
+    })?;
+
+    debug!(review_id = response.id, "PR review posted successfully");
+
+    Ok(response.id)
 }
 
 #[cfg(test)]

@@ -143,6 +143,75 @@ pub fn check_auth_status(keychain: KeychainProviderRef) -> Result<FfiTokenStatus
     })
 }
 
+/// Posts a PR review to GitHub.
+///
+/// This function wires the FFI layer to the core facade by:
+/// 1. Creating an FfiTokenProvider from the iOS keychain
+/// 2. Calling the core facade post_pr_review() function
+/// 3. Returning the review ID on success
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `reference` - PR reference (URL, owner/repo#number, or number)
+/// * `repo_context` - Optional repository context for bare numbers
+/// * `body` - Review comment text
+/// * `event_type` - Review event type: "COMMENT", "APPROVE", or "REQUEST_CHANGES"
+///
+/// # Returns
+///
+/// The review ID on success.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available in keychain
+/// - PR cannot be parsed or found
+/// - User lacks write access to the repository
+/// - API call fails
+#[uniffi::export]
+pub fn post_pr_review(
+    keychain: KeychainProviderRef,
+    reference: String,
+    repo_context: Option<String>,
+    body: String,
+    event_type: String,
+) -> Result<u64, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        // Parse event type string to ReviewEvent enum
+        let event = match event_type.as_str() {
+            "COMMENT" => aptu_core::ReviewEvent::Comment,
+            "APPROVE" => aptu_core::ReviewEvent::Approve,
+            "REQUEST_CHANGES" => aptu_core::ReviewEvent::RequestChanges,
+            _ => {
+                return Err(AptuFfiError::InternalError {
+                    message: format!(
+                        "Invalid event type: {}. Expected COMMENT, APPROVE, or REQUEST_CHANGES",
+                        event_type
+                    ),
+                });
+            }
+        };
+
+        match aptu_core::post_pr_review(
+            &provider,
+            &reference,
+            repo_context.as_deref(),
+            &body,
+            event,
+        )
+        .await
+        {
+            Ok(review_id) => Ok(review_id),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
 /// List all available AI models across all providers.
 ///
 /// Returns the complete registry of models that Aptu supports,

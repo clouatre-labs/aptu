@@ -10,7 +10,7 @@
 use chrono::Duration;
 use tracing::instrument;
 
-use crate::ai::types::PrDetails;
+use crate::ai::types::{PrDetails, ReviewEvent};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
@@ -18,7 +18,7 @@ use crate::config::load_config;
 use crate::error::AptuError;
 use crate::github::auth::create_client_with_token;
 use crate::github::graphql::{IssueNode, fetch_issues as gh_fetch_issues};
-use crate::github::pulls::fetch_pr_details;
+use crate::github::pulls::{fetch_pr_details, post_pr_review as gh_post_pr_review};
 use crate::repos::{self, CuratedRepo};
 use secrecy::SecretString;
 
@@ -294,4 +294,64 @@ pub async fn review_pr(
         })?;
 
     Ok((pr_details, review, ai_stats))
+}
+
+/// Posts a PR review to GitHub.
+///
+/// This function abstracts the credential resolution and API client creation,
+/// allowing platforms to provide credentials via `TokenProvider` implementations.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `reference` - PR reference (URL, owner/repo#number, or number)
+/// * `repo_context` - Optional repository context for bare numbers
+/// * `body` - Review comment text
+/// * `event` - Review event type (Comment, Approve, or `RequestChanges`)
+///
+/// # Returns
+///
+/// Review ID on success.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available from the provider
+/// - PR cannot be parsed or found
+/// - User lacks write access to the repository
+/// - API call fails
+#[instrument(skip(provider), fields(reference = %reference, event = %event))]
+pub async fn post_pr_review(
+    provider: &dyn TokenProvider,
+    reference: &str,
+    repo_context: Option<&str>,
+    body: &str,
+    event: ReviewEvent,
+) -> crate::Result<u64> {
+    use crate::github::pulls::parse_pr_reference;
+
+    // Get GitHub token from provider
+    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
+
+    // Parse PR reference
+    let (owner, repo, number) =
+        parse_pr_reference(reference, repo_context).map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+        })?;
+
+    // Create GitHub client with the provided token
+    let token = SecretString::from(github_token);
+    let client = create_client_with_token(&token).map_err(|e| AptuError::AI {
+        message: format!("Failed to create GitHub client: {e}"),
+        status: None,
+    })?;
+
+    // Post the review
+    gh_post_pr_review(&client, &owner, &repo, number, body, event)
+        .await
+        .map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+        })
 }
