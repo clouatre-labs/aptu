@@ -66,10 +66,7 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         .comments
         .nodes
         .iter()
-        .map(|c| IssueComment {
-            author: c.author.login.clone(),
-            body: c.body.clone(),
-        })
+        .map(|c| c.clone().into())
         .collect();
 
     // Convert repository labels to our type
@@ -77,11 +74,7 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         .labels
         .nodes
         .iter()
-        .map(|l| RepoLabel {
-            name: l.name.clone(),
-            description: l.description.clone().unwrap_or_default(),
-            color: l.color.clone(),
-        })
+        .map(|l| l.clone().into())
         .collect();
 
     // Convert repository milestones to our type
@@ -89,11 +82,7 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         .milestones
         .nodes
         .iter()
-        .map(|m| RepoMilestone {
-            number: m.number,
-            title: m.title.clone(),
-            description: m.description.clone().unwrap_or_default(),
-        })
+        .map(|m| m.clone().into())
         .collect();
 
     let mut issue_details = IssueDetails {
