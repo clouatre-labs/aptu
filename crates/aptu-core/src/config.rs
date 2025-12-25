@@ -2,9 +2,6 @@
 
 //! Configuration management for the Aptu CLI.
 //!
-// Allow dead_code - module will be used in PR 6 (CLI scaffolding)
-#![allow(dead_code)]
-//!
 //! Provides layered configuration from files and environment variables.
 //! Uses XDG-compliant paths via the `dirs` crate.
 //!
