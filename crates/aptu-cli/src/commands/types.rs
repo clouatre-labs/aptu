@@ -121,3 +121,16 @@ pub struct CreateResult {
     /// Whether this was a dry run.
     pub dry_run: bool,
 }
+
+/// Result from the PR review command.
+#[derive(Debug, Clone, Serialize)]
+pub struct PrReviewResult {
+    /// PR title.
+    pub pr_title: String,
+    /// PR number.
+    pub pr_number: u64,
+    /// PR URL.
+    pub pr_url: String,
+    /// AI review response.
+    pub review: aptu_core::ai::types::PrReviewResponse,
+}

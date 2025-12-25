@@ -10,6 +10,7 @@
 use chrono::Duration;
 use tracing::instrument;
 
+use crate::ai::types::PrDetails;
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
@@ -17,6 +18,7 @@ use crate::config::load_config;
 use crate::error::AptuError;
 use crate::github::auth::create_client_with_token;
 use crate::github::graphql::{IssueNode, fetch_issues as gh_fetch_issues};
+use crate::github::pulls::fetch_pr_details;
 use crate::repos::{self, CuratedRepo};
 use secrecy::SecretString;
 
@@ -205,4 +207,87 @@ pub async fn analyze_issue(
             message: e.to_string(),
             status: None,
         })
+}
+
+/// Reviews a pull request and generates AI feedback.
+///
+/// This function abstracts the credential resolution and API client creation,
+/// allowing platforms to provide credentials via `TokenProvider` implementations.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub and AI provider credentials
+/// * `reference` - PR reference (URL, owner/repo#number, or number)
+/// * `repo_context` - Optional repository context for bare numbers
+///
+/// # Returns
+///
+/// Tuple of (`PrDetails`, `PrReviewResponse`) with PR info and AI review.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub or AI provider token is not available from the provider
+/// - PR cannot be fetched
+/// - AI API call fails
+#[instrument(skip(provider), fields(reference = %reference))]
+pub async fn review_pr(
+    provider: &dyn TokenProvider,
+    reference: &str,
+    repo_context: Option<&str>,
+) -> crate::Result<(PrDetails, crate::ai::types::PrReviewResponse)> {
+    use crate::github::pulls::parse_pr_reference;
+
+    // Get GitHub token from provider
+    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
+
+    // Parse PR reference
+    let (owner, repo, number) =
+        parse_pr_reference(reference, repo_context).map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+        })?;
+
+    // Create GitHub client with the provided token
+    let token = SecretString::from(github_token);
+    let client = create_client_with_token(&token).map_err(|e| AptuError::AI {
+        message: format!("Failed to create GitHub client: {e}"),
+        status: None,
+    })?;
+
+    // Fetch PR details
+    let pr_details = fetch_pr_details(&client, &owner, &repo, number)
+        .await
+        .map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+        })?;
+
+    // Load configuration
+    let config = load_config()?;
+
+    // Get API key from provider using the configured provider name
+    let api_key = provider
+        .ai_api_key(&config.ai.provider)
+        .ok_or(AptuError::NotAuthenticated)?;
+
+    // Create generic AI client with provided API key
+    let ai_client =
+        AiClient::with_api_key(&config.ai.provider, api_key, &config.ai).map_err(|e| {
+            AptuError::AI {
+                message: e.to_string(),
+                status: None,
+            }
+        })?;
+
+    // Review PR with AI
+    let review = ai_client
+        .review_pr(&pr_details)
+        .await
+        .map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+        })?;
+
+    Ok((pr_details, review))
 }

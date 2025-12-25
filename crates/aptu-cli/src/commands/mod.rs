@@ -7,6 +7,7 @@ pub mod completion;
 pub mod create;
 pub mod history;
 pub mod issue;
+pub mod pr;
 pub mod repo;
 pub mod triage;
 pub mod types;
@@ -20,7 +21,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use tracing::debug;
 
 use crate::cli::{
-    AuthCommand, Commands, CompletionCommand, IssueCommand, OutputContext, OutputFormat,
+    AuthCommand, Commands, CompletionCommand, IssueCommand, OutputContext, OutputFormat, PrCommand,
     RepoCommand,
 };
 use crate::output;
@@ -436,6 +437,19 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             output::render(&result, &ctx);
             Ok(())
         }
+
+        Commands::Pr(pr_cmd) => match pr_cmd {
+            PrCommand::Review { reference, repo } => {
+                let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
+                let spinner = maybe_spinner(&ctx, "Fetching PR and analyzing...");
+                let result = pr::run(&reference, repo_context).await?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
+                output::render(&result, &ctx);
+                Ok(())
+            }
+        },
 
         Commands::Completion(completion_cmd) => match completion_cmd {
             CompletionCommand::Generate { shell } => completion::run_generate(shell),

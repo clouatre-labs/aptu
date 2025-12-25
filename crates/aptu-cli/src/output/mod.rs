@@ -65,5 +65,6 @@ mod bulk;
 mod create;
 mod history;
 mod issues;
+mod pr;
 mod repos;
 mod triage;

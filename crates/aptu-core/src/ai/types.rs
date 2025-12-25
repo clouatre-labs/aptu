@@ -236,3 +236,75 @@ pub struct CreateIssueResponse {
     /// Suggested labels for the issue.
     pub suggested_labels: Vec<String>,
 }
+
+/// Details about a pull request for AI review.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrDetails {
+    /// Repository owner.
+    pub owner: String,
+    /// Repository name.
+    pub repo: String,
+    /// Pull request number.
+    pub number: u64,
+    /// Pull request title.
+    pub title: String,
+    /// Pull request body/description.
+    pub body: String,
+    /// Base branch (target of the PR).
+    pub base_branch: String,
+    /// Head branch (source of the PR).
+    pub head_branch: String,
+    /// Files changed in the PR with their diffs.
+    pub files: Vec<PrFile>,
+    /// Pull request URL.
+    pub url: String,
+}
+
+/// A file changed in a pull request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrFile {
+    /// File path.
+    pub filename: String,
+    /// Change status (added, modified, removed, renamed).
+    pub status: String,
+    /// Number of additions.
+    pub additions: u64,
+    /// Number of deletions.
+    pub deletions: u64,
+    /// Unified diff patch (may be truncated for large files).
+    pub patch: Option<String>,
+}
+
+/// A specific comment on a line of code in a PR review.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PrReviewComment {
+    /// File path the comment applies to.
+    pub file: String,
+    /// Line number in the diff (optional for general file comments).
+    pub line: Option<u32>,
+    /// The comment text.
+    pub comment: String,
+    /// Severity: "info", "suggestion", "warning", "issue".
+    pub severity: String,
+}
+
+/// Structured PR review response from AI.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PrReviewResponse {
+    /// Overall summary of the PR (2-3 sentences).
+    pub summary: String,
+    /// Overall assessment: one of approve, request-changes, or comment.
+    pub verdict: String,
+    /// Key strengths of the PR.
+    #[serde(default)]
+    pub strengths: Vec<String>,
+    /// Areas of concern or improvement.
+    #[serde(default)]
+    pub concerns: Vec<String>,
+    /// Specific line-level comments.
+    #[serde(default)]
+    pub comments: Vec<PrReviewComment>,
+    /// Suggested improvements (not blocking).
+    #[serde(default)]
+    pub suggestions: Vec<String>,
+}

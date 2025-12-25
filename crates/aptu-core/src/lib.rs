@@ -95,7 +95,9 @@ pub use cache::CacheEntry;
 // AI Triage
 // ============================================================================
 
-pub use ai::types::{IssueComment, IssueDetails, TriageResponse};
+pub use ai::types::{
+    IssueComment, IssueDetails, PrDetails, PrFile, PrReviewResponse, TriageResponse,
+};
 pub use ai::{
     AiClient, AiModel, ModelInfo, ModelProvider, ProviderConfig, all_providers, get_provider,
 };
@@ -150,7 +152,7 @@ pub use utils::{
 // Platform-Agnostic Facade
 // ============================================================================
 
-pub use facade::{analyze_issue, fetch_issues, list_curated_repos};
+pub use facade::{analyze_issue, fetch_issues, list_curated_repos, review_pr};
 
 // ============================================================================
 // Modules

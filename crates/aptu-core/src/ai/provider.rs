@@ -527,6 +527,168 @@ Be professional but friendly. Maintain the user's intent while improving clarity
     fn build_create_user_prompt(title: &str, body: &str, _repo: &str) -> String {
         format!("Please format this GitHub issue:\n\nTitle: {title}\n\nBody:\n{body}")
     }
+
+    /// Reviews a pull request using the provider's API.
+    ///
+    /// Analyzes PR metadata and file diffs to provide structured review feedback.
+    ///
+    /// # Arguments
+    ///
+    /// * `pr` - Pull request details including files and diffs
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - API request fails (network, timeout, rate limit)
+    /// - Response cannot be parsed as valid JSON
+    #[instrument(skip(self, pr), fields(pr_number = pr.number, repo = %format!("{}/{}", pr.owner, pr.repo)))]
+    async fn review_pr(
+        &self,
+        pr: &super::types::PrDetails,
+    ) -> Result<super::types::PrReviewResponse> {
+        debug!(model = %self.model(), "Calling {} API for PR review", self.name());
+
+        // Build request
+        let request = ChatCompletionRequest {
+            model: self.model().to_string(),
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: Self::build_pr_review_system_prompt(),
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: Self::build_pr_review_user_prompt(pr),
+                },
+            ],
+            response_format: Some(ResponseFormat {
+                format_type: "json_object".to_string(),
+            }),
+            max_tokens: Some(self.max_tokens()),
+            temperature: Some(self.temperature()),
+        };
+
+        // Make API request with retry logic
+        let completion = self.send_request(&request).await?;
+
+        // Extract message content
+        let content = completion
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .context("No response from AI model")?;
+
+        debug!(response_length = content.len(), "Received AI response");
+
+        // Parse JSON response
+        let review: super::types::PrReviewResponse =
+            serde_json::from_str(&content).with_context(|| {
+                format!("Failed to parse AI response as JSON. Raw response:\n{content}")
+            })?;
+
+        debug!(verdict = %review.verdict, "PR review complete");
+
+        Ok(review)
+    }
+
+    /// Builds the system prompt for PR review.
+    #[must_use]
+    fn build_pr_review_system_prompt() -> String {
+        r#"You are a code review assistant. Analyze the provided pull request and provide structured review feedback.
+
+Your response MUST be valid JSON with this exact schema:
+{
+  "summary": "A 2-3 sentence summary of what the PR does and its impact",
+  "verdict": "approve|request_changes|comment",
+  "strengths": ["strength1", "strength2"],
+  "concerns": ["concern1", "concern2"],
+  "comments": [
+    {
+      "file": "path/to/file.rs",
+      "line": 42,
+      "comment": "Specific feedback about this line",
+      "severity": "info|suggestion|warning|issue"
+    }
+  ],
+  "suggestions": ["suggestion1", "suggestion2"]
+}
+
+Guidelines:
+- summary: Concise explanation of the changes and their purpose
+- verdict: Use "approve" for good PRs, "request_changes" for blocking issues, "comment" for feedback without blocking
+- strengths: What the PR does well (good patterns, clear code, etc.)
+- concerns: Potential issues or risks (bugs, performance, security, maintainability)
+- comments: Specific line-level feedback. Use severity:
+  - "info": Informational, no action needed
+  - "suggestion": Optional improvement
+  - "warning": Should consider changing
+  - "issue": Should be fixed before merge
+- suggestions: General improvements that are not blocking
+
+Focus on:
+1. Correctness: Does the code do what it claims?
+2. Security: Any potential vulnerabilities?
+3. Performance: Any obvious inefficiencies?
+4. Maintainability: Is the code clear and well-structured?
+5. Testing: Are changes adequately tested?
+
+Be constructive and specific. Explain why something is an issue and how to fix it."#.to_string()
+    }
+
+    /// Builds the user prompt for PR review.
+    #[must_use]
+    fn build_pr_review_user_prompt(pr: &super::types::PrDetails) -> String {
+        use std::fmt::Write;
+
+        let mut prompt = String::new();
+
+        prompt.push_str("<pull_request>\n");
+        let _ = writeln!(prompt, "Title: {}\n", pr.title);
+        let _ = writeln!(prompt, "Branch: {} -> {}\n", pr.head_branch, pr.base_branch);
+
+        // PR description
+        let body = if pr.body.is_empty() {
+            "[No description provided]".to_string()
+        } else if pr.body.len() > MAX_BODY_LENGTH {
+            format!(
+                "{}...\n[Description truncated - original length: {} chars]",
+                &pr.body[..MAX_BODY_LENGTH],
+                pr.body.len()
+            )
+        } else {
+            pr.body.clone()
+        };
+        let _ = writeln!(prompt, "Description:\n{body}\n");
+
+        // File changes
+        prompt.push_str("Files Changed:\n");
+        for file in &pr.files {
+            let _ = writeln!(
+                prompt,
+                "- {} ({}) +{} -{}\n",
+                file.filename, file.status, file.additions, file.deletions
+            );
+
+            // Include patch if available (truncate large patches)
+            if let Some(patch) = &file.patch {
+                const MAX_PATCH_LENGTH: usize = 2000;
+                let patch_content = if patch.len() > MAX_PATCH_LENGTH {
+                    format!(
+                        "{}...\n[Patch truncated - original length: {} chars]",
+                        &patch[..MAX_PATCH_LENGTH],
+                        patch.len()
+                    )
+                } else {
+                    patch.clone()
+                };
+                let _ = writeln!(prompt, "```diff\n{patch_content}\n```\n");
+            }
+        }
+
+        prompt.push_str("</pull_request>");
+
+        prompt
+    }
 }
 
 #[cfg(test)]
