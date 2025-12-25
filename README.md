@@ -13,7 +13,7 @@
 
 <p align="center"><strong>AI-Powered Triage Utility</strong> - A CLI for OSS issue triage with AI assistance.</p>
 
-> *Aptu* (Mi'kmaq): "Paddle" - Navigate forward through open source contribution
+Aptu is a context-engineering experiment: instead of throwing big models at problems, it crafts tight prompts that let smaller models (Devstral, Llama 3.3, Qwen) do the job with fewer tokens and surprising precision.
 
 ## Demo
 
@@ -21,27 +21,26 @@
 
 ## Features
 
-- **GitHub OAuth** - Secure device flow authentication (or use existing `gh` CLI auth)
-- **Issue Discovery** - Find "good first issue" from curated repositories
-- **AI Triage** - Get summaries, suggested labels, clarifying questions, and contributor guidance via OpenRouter
-- **Flexible Issue References** - Triage by URL, short form (owner/repo#123), or bare number
-- **Already-Triaged Detection** - Automatically detects if you've already triaged an issue
-- **Triage Flags** - Control behavior with `--dry-run`, `--yes`, `--since`
-- **Multiple Output Formats** - Text, JSON, YAML, and Markdown output
+- **AI Triage** - Summaries, suggested labels, clarifying questions, and contributor guidance
+- **Issue Discovery** - Find good-first-issues from curated repositories
+- **PR Analysis** - AI-powered pull request review and feedback
+- **GitHub Action** - Auto-triage incoming issues with labels and comments
+- **Multiple Providers** - Gemini, OpenRouter, Groq, and Cerebras
 - **Local History** - Track your contributions offline
+- **Multiple Outputs** - Text, JSON, YAML, and Markdown
 
 ## Installation
 
 ```bash
 # Homebrew (recommended)
 brew tap clouatre-labs/tap
-brew install aptu
+brew install aptu-cli
 
 # Or via cargo-binstall (fast, ~5 seconds)
-cargo binstall aptu
+cargo binstall aptu-cli
 
 # Or from crates.io (~2-3 minutes)
-cargo install aptu
+cargo install aptu-cli
 
 # Or build from source
 git clone https://github.com/clouatre-labs/aptu.git
@@ -54,14 +53,14 @@ cd aptu && cargo build --release
 aptu auth login                                                    # Authenticate with GitHub
 aptu repo list                                                     # List curated repositories
 aptu issue list block/goose                                        # Browse issues
-aptu issue triage https://github.com/block/goose/issues/123       # Triage with AI
-aptu issue triage https://github.com/block/goose/issues/123 --dry-run  # Preview
+aptu issue triage block/goose#123                                  # Triage with AI
+aptu issue triage block/goose#123 --dry-run                        # Preview
 aptu history                                                       # View your contributions
 ```
 
 ## GitHub Action
 
-Automatically triage new issues using the Aptu GitHub Action. Create `.github/workflows/triage.yml`:
+Auto-triage new issues. Create `.github/workflows/triage.yml`:
 
 ```yaml
 name: Triage New Issues
@@ -75,23 +74,24 @@ jobs:
       issues: write
       contents: read
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@v6
       - uses: clouatre-labs/aptu@v0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          apply-labels: true  # Apply AI-suggested labels
 ```
 
-See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for detailed inputs documentation.
+See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for all options.
 
 ## Configuration
 
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed AI provider setup and configuration options.
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for AI provider setup.
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines on how to contribute, including our Developer Certificate of Origin (DCO) requirement. Whether you're interested in adding new AI models, building the iOS app, enhancing the CLI, writing documentation, reporting bugs, or spreading the word - all contributions are welcome!
+We welcome contributions! See [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines.
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/clouatre-labs/aptu/blob/main/LICENSE) for details.
+Apache-2.0. See [LICENSE](https://github.com/clouatre-labs/aptu/blob/main/LICENSE).
