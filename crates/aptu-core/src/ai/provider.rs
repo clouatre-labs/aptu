@@ -31,6 +31,12 @@ pub const MAX_FILES: usize = 20;
 /// Maximum total diff size (in characters) for PR review prompt.
 pub const MAX_TOTAL_DIFF_SIZE: usize = 50_000;
 
+/// Maximum number of labels to include in the prompt.
+pub const MAX_LABELS: usize = 30;
+
+/// Maximum number of milestones to include in the prompt.
+pub const MAX_MILESTONES: usize = 10;
+
 /// AI provider trait for issue triage and creation.
 ///
 /// Defines the interface that all AI providers must implement.
@@ -501,7 +507,7 @@ Be helpful, concise, and actionable. Focus on what a maintainer needs to know."#
         // Include available labels
         if !issue.available_labels.is_empty() {
             prompt.push_str("Available Labels:\n");
-            for label in issue.available_labels.iter().take(30) {
+            for label in issue.available_labels.iter().take(MAX_LABELS) {
                 let description = if label.description.is_empty() {
                     String::new()
                 } else {
@@ -519,7 +525,7 @@ Be helpful, concise, and actionable. Focus on what a maintainer needs to know."#
         // Include available milestones
         if !issue.available_milestones.is_empty() {
             prompt.push_str("Available Milestones:\n");
-            for milestone in issue.available_milestones.iter().take(10) {
+            for milestone in issue.available_milestones.iter().take(MAX_MILESTONES) {
                 let description = if milestone.description.is_empty() {
                     String::new()
                 } else {

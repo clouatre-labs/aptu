@@ -570,6 +570,75 @@ pub async fn update_issue_labels_and_milestone(
     })
 }
 
+/// Priority labels that should be included first in tiered filtering.
+/// These labels are most actionable for issue triage.
+const PRIORITY_LABELS: &[&str] = &[
+    "bug",
+    "enhancement",
+    "documentation",
+    "good first issue",
+    "help wanted",
+    "question",
+    "feature",
+    "fix",
+    "breaking",
+    "security",
+    "performance",
+    "breaking-change",
+];
+
+/// Filters labels using tiered selection: priority labels first, then remaining labels.
+///
+/// Implements two-tier filtering:
+/// - Tier 1: Priority labels (case-insensitive matching)
+/// - Tier 2: Remaining labels to fill up to `max_labels`
+///
+/// This ensures the AI sees the most actionable labels regardless of repository size.
+///
+/// # Arguments
+///
+/// * `labels` - List of available labels from the repository
+/// * `max_labels` - Maximum number of labels to return
+///
+/// # Returns
+///
+/// Filtered list of labels with priority labels first.
+#[must_use]
+pub fn filter_labels_by_relevance(
+    labels: &[crate::ai::types::RepoLabel],
+    max_labels: usize,
+) -> Vec<crate::ai::types::RepoLabel> {
+    if labels.is_empty() || max_labels == 0 {
+        return Vec::new();
+    }
+
+    let mut priority_labels = Vec::new();
+    let mut other_labels = Vec::new();
+
+    // Separate labels into priority and other
+    for label in labels {
+        let label_lower = label.name.to_lowercase();
+        let is_priority = PRIORITY_LABELS
+            .iter()
+            .any(|&p| label_lower == p.to_lowercase());
+
+        if is_priority {
+            priority_labels.push(label.clone());
+        } else {
+            other_labels.push(label.clone());
+        }
+    }
+
+    // Combine: priority labels first, then fill remaining slots with other labels
+    let mut result = priority_labels;
+    let remaining_slots = max_labels.saturating_sub(result.len());
+    result.extend(other_labels.into_iter().take(remaining_slots));
+
+    // Limit to max_labels
+    result.truncate(max_labels);
+    result
+}
+
 /// Patterns for directories/files to completely exclude from tree filtering.
 /// Based on GitHub Linguist vendor.yml and common build artifacts.
 const EXCLUDE_PATTERNS: &[&str] = &[
@@ -1266,6 +1335,139 @@ mod tree_tests {
     fn get_extensions_for_language_unknown() {
         let exts = get_extensions_for_language("unknown_language");
         assert!(exts.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod label_tests {
+    use super::*;
+
+    #[test]
+    fn filter_labels_empty_input() {
+        let labels = vec![];
+        let filtered = filter_labels_by_relevance(&labels, 30);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn filter_labels_zero_max() {
+        let labels = vec![crate::ai::types::RepoLabel {
+            name: "bug".to_string(),
+            color: "ff0000".to_string(),
+            description: "Bug report".to_string(),
+        }];
+        let filtered = filter_labels_by_relevance(&labels, 0);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn filter_labels_priority_first() {
+        let labels = vec![
+            crate::ai::types::RepoLabel {
+                name: "documentation".to_string(),
+                color: "0075ca".to_string(),
+                description: "Documentation".to_string(),
+            },
+            crate::ai::types::RepoLabel {
+                name: "other".to_string(),
+                color: "cccccc".to_string(),
+                description: "Other".to_string(),
+            },
+            crate::ai::types::RepoLabel {
+                name: "bug".to_string(),
+                color: "ff0000".to_string(),
+                description: "Bug".to_string(),
+            },
+        ];
+        let filtered = filter_labels_by_relevance(&labels, 30);
+        assert_eq!(filtered.len(), 3);
+        assert_eq!(filtered[0].name, "documentation");
+        assert_eq!(filtered[1].name, "bug");
+        assert_eq!(filtered[2].name, "other");
+    }
+
+    #[test]
+    fn filter_labels_case_insensitive() {
+        let labels = vec![
+            crate::ai::types::RepoLabel {
+                name: "Bug".to_string(),
+                color: "ff0000".to_string(),
+                description: "Bug".to_string(),
+            },
+            crate::ai::types::RepoLabel {
+                name: "ENHANCEMENT".to_string(),
+                color: "a2eeef".to_string(),
+                description: "Enhancement".to_string(),
+            },
+        ];
+        let filtered = filter_labels_by_relevance(&labels, 30);
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].name, "Bug");
+        assert_eq!(filtered[1].name, "ENHANCEMENT");
+    }
+
+    #[test]
+    fn filter_labels_respects_max_limit() {
+        let labels = vec![
+            crate::ai::types::RepoLabel {
+                name: "bug".to_string(),
+                color: "ff0000".to_string(),
+                description: "Bug".to_string(),
+            },
+            crate::ai::types::RepoLabel {
+                name: "enhancement".to_string(),
+                color: "a2eeef".to_string(),
+                description: "Enhancement".to_string(),
+            },
+            crate::ai::types::RepoLabel {
+                name: "documentation".to_string(),
+                color: "0075ca".to_string(),
+                description: "Documentation".to_string(),
+            },
+        ];
+        let filtered = filter_labels_by_relevance(&labels, 2);
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn filter_labels_over_limit_with_priorities() {
+        let mut labels = vec![];
+        for i in 0..20 {
+            labels.push(crate::ai::types::RepoLabel {
+                name: format!("label{}", i),
+                color: "cccccc".to_string(),
+                description: format!("Label {}", i),
+            });
+        }
+        labels.push(crate::ai::types::RepoLabel {
+            name: "bug".to_string(),
+            color: "ff0000".to_string(),
+            description: "Bug".to_string(),
+        });
+        labels.push(crate::ai::types::RepoLabel {
+            name: "enhancement".to_string(),
+            color: "a2eeef".to_string(),
+            description: "Enhancement".to_string(),
+        });
+
+        let filtered = filter_labels_by_relevance(&labels, 10);
+        assert_eq!(filtered.len(), 10);
+        assert_eq!(filtered[0].name, "bug");
+        assert_eq!(filtered[1].name, "enhancement");
+    }
+
+    #[test]
+    fn filter_labels_over_limit_without_priorities() {
+        let labels: Vec<crate::ai::types::RepoLabel> = (0..50)
+            .map(|i| crate::ai::types::RepoLabel {
+                name: format!("label{i}"),
+                color: "cccccc".to_string(),
+                description: format!("Label {i}"),
+            })
+            .collect();
+
+        let filtered = filter_labels_by_relevance(&labels, 10);
+        assert_eq!(filtered.len(), 10);
     }
 }
 
