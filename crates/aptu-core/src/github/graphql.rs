@@ -6,12 +6,14 @@
 //! efficiently, avoiding multiple REST API calls.
 
 use anyhow::{Context, Result};
+use backon::Retryable;
 use octocrab::Octocrab;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, instrument};
 
 use crate::ai::types::{IssueComment, RepoLabel, RepoMilestone};
+use crate::retry::retry_backoff;
 
 /// Viewer permission level on a repository.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -132,11 +134,19 @@ pub async fn fetch_issues<R: AsRef<str>>(
     let query = build_issues_query(repos);
     debug!("Executing GraphQL query");
 
-    // Execute the GraphQL query
-    let response: Value = client
-        .graphql(&query)
-        .await
-        .context("Failed to execute GraphQL query")?;
+    // Execute the GraphQL query with retry logic
+    let response: Value =
+        (|| async { client.graphql(&query).await.map_err(|e| anyhow::anyhow!(e)) })
+            .retry(retry_backoff())
+            .notify(|err, dur| {
+                tracing::warn!(
+                    error = %err,
+                    retry_after = ?dur,
+                    "Retrying fetch_issues (GraphQL query)"
+                );
+            })
+            .await
+            .context("Failed to execute GraphQL query")?;
 
     // Check for GraphQL errors
     if let Some(errors) = response.get("errors") {

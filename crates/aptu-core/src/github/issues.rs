@@ -6,11 +6,13 @@
 //! and post triage comments.
 
 use anyhow::{Context, Result};
+use backon::Retryable;
 use octocrab::Octocrab;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
 use crate::ai::types::{IssueComment, IssueDetails, RepoIssueContext};
+use crate::retry::retry_backoff;
 
 /// A GitHub issue without labels (untriaged).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,21 +201,45 @@ pub async fn fetch_issue_with_comments(
 ) -> Result<IssueDetails> {
     debug!("Fetching issue details");
 
-    // Fetch the issue
-    let issue = client
-        .issues(owner, repo)
-        .get(number)
-        .await
-        .with_context(|| format!("Failed to fetch issue #{number} from {owner}/{repo}"))?;
+    // Fetch the issue with retry logic
+    let issue = (|| async {
+        client
+            .issues(owner, repo)
+            .get(number)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    })
+    .retry(retry_backoff())
+    .notify(|err, dur| {
+        tracing::warn!(
+            error = %err,
+            retry_after = ?dur,
+            "Retrying fetch_issue_with_comments (issue fetch)"
+        );
+    })
+    .await
+    .with_context(|| format!("Failed to fetch issue #{number} from {owner}/{repo}"))?;
 
-    // Fetch comments (limited to first page)
-    let comments_page = client
-        .issues(owner, repo)
-        .list_comments(number)
-        .per_page(5)
-        .send()
-        .await
-        .with_context(|| format!("Failed to fetch comments for issue #{number}"))?;
+    // Fetch comments (limited to first page) with retry logic
+    let comments_page = (|| async {
+        client
+            .issues(owner, repo)
+            .list_comments(number)
+            .per_page(5)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    })
+    .retry(retry_backoff())
+    .notify(|err, dur| {
+        tracing::warn!(
+            error = %err,
+            retry_after = ?dur,
+            "Retrying fetch_issue_with_comments (comments fetch)"
+        );
+    })
+    .await
+    .with_context(|| format!("Failed to fetch comments for issue #{number}"))?;
 
     // Convert to our types
     let labels: Vec<String> = issue.labels.iter().map(|l| l.name.clone()).collect();
@@ -320,14 +346,26 @@ pub async fn search_related_issues(
 
     debug!(query = %query, "Searching for related issues");
 
-    // Search for issues
-    let search_result = client
-        .search()
-        .issues_and_pull_requests(&query)
-        .per_page(20)
-        .send()
-        .await
-        .with_context(|| format!("Failed to search for related issues in {owner}/{repo}"))?;
+    // Search for issues with retry logic
+    let search_result = (|| async {
+        client
+            .search()
+            .issues_and_pull_requests(&query)
+            .per_page(20)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    })
+    .retry(retry_backoff())
+    .notify(|err, dur| {
+        tracing::warn!(
+            error = %err,
+            retry_after = ?dur,
+            "Retrying search_related_issues"
+        );
+    })
+    .await
+    .with_context(|| format!("Failed to search for related issues in {owner}/{repo}"))?;
 
     // Convert to our context type
     let related: Vec<RepoIssueContext> = search_result
@@ -808,10 +846,24 @@ pub async fn fetch_repo_tree(
 
     for branch in &branches {
         let route = format!("/repos/{owner}/{repo}/git/trees/{branch}?recursive=1");
-        match client
-            .get::<GitTreeResponse, _, _>(&route, None::<&()>)
-            .await
-        {
+        let result = (|| async {
+            client
+                .get::<GitTreeResponse, _, _>(&route, None::<&()>)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))
+        })
+        .retry(retry_backoff())
+        .notify(|err, dur| {
+            tracing::warn!(
+                error = %err,
+                retry_after = ?dur,
+                branch = %branch,
+                "Retrying fetch_repo_tree"
+            );
+        })
+        .await;
+
+        match result {
             Ok(response) => {
                 tree_response = Some(response);
                 debug!(branch = %branch, "Fetched tree from branch");

@@ -28,9 +28,40 @@ pub fn is_retryable_http(status: u16) -> bool {
     matches!(status, 429 | 500 | 502 | 503 | 504)
 }
 
+/// Determines if an octocrab error is retryable.
+///
+/// Retryable octocrab errors include:
+/// - GitHub API errors with retryable status codes (429, 500, 502, 503, 504, 403)
+/// - Service errors (transient)
+/// - Hyper errors (network-related)
+///
+/// # Arguments
+///
+/// * `e` - Reference to an octocrab error
+///
+/// # Returns
+///
+/// `true` if the error is transient and should be retried
+#[must_use]
+pub fn is_retryable_octocrab(e: &octocrab::Error) -> bool {
+    match e {
+        octocrab::Error::GitHub { source, .. } => {
+            // Check if the GitHub error has a retryable status code
+            // 403 is included for GitHub secondary rate limits
+            matches!(
+                source.status_code.as_u16(),
+                429 | 500 | 502 | 503 | 504 | 403
+            )
+        }
+        octocrab::Error::Service { .. } | octocrab::Error::Hyper { .. } => true,
+        _ => false,
+    }
+}
+
 /// Determines if an anyhow error is retryable.
 ///
 /// Checks if the error chain contains a retryable HTTP status code or network error.
+/// Supports reqwest, octocrab, and `AptuError` variants.
 ///
 /// # Arguments
 ///
@@ -41,6 +72,11 @@ pub fn is_retryable_http(status: u16) -> bool {
 /// `true` if the error is transient and should be retried
 #[must_use]
 pub fn is_retryable_anyhow(e: &anyhow::Error) -> bool {
+    // Check if it's an octocrab error
+    if let Some(oct_err) = e.downcast_ref::<octocrab::Error>() {
+        return is_retryable_octocrab(oct_err);
+    }
+
     // Check if it's a reqwest error
     if let Some(req_err) = e.downcast_ref::<reqwest::Error>() {
         // Retryable network errors
@@ -133,5 +169,24 @@ mod tests {
     fn test_is_retryable_anyhow_with_non_retryable() {
         let err = anyhow::anyhow!("some other error");
         assert!(!is_retryable_anyhow(&err));
+    }
+
+    #[test]
+    fn test_is_retryable_http_retryable_codes() {
+        assert!(is_retryable_http(429));
+        assert!(is_retryable_http(500));
+        assert!(is_retryable_http(502));
+        assert!(is_retryable_http(503));
+        assert!(is_retryable_http(504));
+    }
+
+    #[test]
+    fn test_is_retryable_http_non_retryable_codes() {
+        assert!(!is_retryable_http(400));
+        assert!(!is_retryable_http(401));
+        assert!(!is_retryable_http(403));
+        assert!(!is_retryable_http(404));
+        assert!(!is_retryable_http(200));
+        assert!(!is_retryable_http(201));
     }
 }
