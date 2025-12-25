@@ -104,9 +104,22 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
             .map(|p| format!("{p:?}")),
     };
 
-    // Search for related issues to provide context to AI
-    match issues::search_related_issues(&client, &owner, &repo, &issue_details.title, number).await
-    {
+    // Extract keywords and language for parallel calls
+    let keywords = issues::extract_keywords(&issue_details.title);
+    let language = repo_data
+        .primary_language
+        .as_ref()
+        .map_or("unknown", |l| l.name.as_str())
+        .to_string();
+
+    // Run search and tree fetch in parallel - both depend on GraphQL results but not each other
+    let (search_result, tree_result) = tokio::join!(
+        issues::search_related_issues(&client, &owner, &repo, &issue_details.title, number),
+        issues::fetch_repo_tree(&client, &owner, &repo, &language, &keywords)
+    );
+
+    // Handle search results
+    match search_result {
         Ok(related) => {
             issue_details.repo_context = related;
             debug!(
@@ -120,16 +133,8 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         }
     }
 
-    // Fetch repository tree for implementation context
-    let language = repo_data
-        .primary_language
-        .as_ref()
-        .map_or("unknown", |l| l.name.as_str());
-
-    // Extract keywords from issue title for relevance matching
-    let keywords = issues::extract_keywords(&issue_details.title);
-
-    match issues::fetch_repo_tree(&client, &owner, &repo, language, &keywords).await {
+    // Handle tree results
+    match tree_result {
         Ok(tree) => {
             issue_details.repo_tree = tree;
             debug!(
