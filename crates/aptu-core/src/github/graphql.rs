@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, instrument};
 
+use crate::ai::types::{IssueComment, RepoLabel, RepoMilestone};
+
 /// Viewer permission level on a repository.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -191,6 +193,16 @@ pub struct RepoLabelNode {
     pub color: String,
 }
 
+impl From<RepoLabelNode> for RepoLabel {
+    fn from(node: RepoLabelNode) -> Self {
+        RepoLabel {
+            name: node.name,
+            description: node.description.unwrap_or_default(),
+            color: node.color,
+        }
+    }
+}
+
 /// Repository labels connection from GraphQL.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RepoLabelsConnection {
@@ -209,6 +221,16 @@ pub struct RepoMilestoneNode {
     pub description: Option<String>,
 }
 
+impl From<RepoMilestoneNode> for RepoMilestone {
+    fn from(node: RepoMilestoneNode) -> Self {
+        RepoMilestone {
+            number: node.number,
+            title: node.title,
+            description: node.description.unwrap_or_default(),
+        }
+    }
+}
+
 /// Repository milestones connection from GraphQL.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RepoMilestonesConnection {
@@ -223,6 +245,15 @@ pub struct IssueCommentNode {
     pub author: Author,
     /// Comment body.
     pub body: String,
+}
+
+impl From<IssueCommentNode> for IssueComment {
+    fn from(node: IssueCommentNode) -> Self {
+        IssueComment {
+            author: node.author.login,
+            body: node.body,
+        }
+    }
 }
 
 /// Author information from GraphQL response.
