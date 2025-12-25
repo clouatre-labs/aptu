@@ -152,6 +152,10 @@ pub enum Commands {
     #[command(subcommand)]
     Issue(IssueCommand),
 
+    /// Work with pull requests
+    #[command(subcommand)]
+    Pr(PrCommand),
+
     /// Show your contribution history
     History,
 
@@ -271,5 +275,20 @@ pub enum CompletionCommand {
         /// Preview installation without writing files
         #[arg(long)]
         dry_run: bool,
+    },
+}
+
+/// Pull request subcommands
+#[derive(Subcommand)]
+pub enum PrCommand {
+    /// Review a pull request with AI assistance
+    Review {
+        /// PR reference (URL, owner/repo#number, or number)
+        #[arg(value_name = "REFERENCE")]
+        reference: String,
+
+        /// Repository for bare PR numbers (e.g., "block/goose")
+        #[arg(long, short = 'r')]
+        repo: Option<String>,
     },
 }
