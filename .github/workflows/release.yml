@@ -223,9 +223,10 @@ jobs:
         uses: snapcore/action-build@b391f430cb2650fd359ed4d2cfe88b2c481800e0 # v1
 
       - name: Publish snap to stable channel
-        uses: snapcore/action-publish@9334eecb267cfd97a0ce3c8654215d095927252f # v1
+        uses: snapcore/action-publish@214b86e8c07f17194e4e0cc5f866e75fda8d6e97 # v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          store_login: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
           snap: ${{ steps.build.outputs.snap }}
           release: stable
 
