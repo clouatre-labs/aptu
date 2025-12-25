@@ -92,6 +92,7 @@ jobs:
       target: ${{ matrix.target }}
       os: ${{ matrix.os }}
       cross: ${{ matrix.cross }}
+      version: ${{ needs.create-release.outputs.version }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
     secrets: inherit
 
@@ -148,13 +149,13 @@ jobs:
             license "Apache-2.0"
             
             if OS.mac? && Hardware::CPU.arm?
-              url "https://github.com/clouatre-labs/aptu/releases/download/TAG_PLACEHOLDER/aptu-aarch64-apple-darwin.tar.gz"
+              url "https://github.com/clouatre-labs/aptu/releases/download/TAG_PLACEHOLDER/aptu-VERSION_NUMBER_PLACEHOLDER-aarch64-apple-darwin.tar.gz"
               sha256 "SHA256_MACOS_ARM_PLACEHOLDER"
             elsif OS.linux? && Hardware::CPU.arm?
-              url "https://github.com/clouatre-labs/aptu/releases/download/TAG_PLACEHOLDER/aptu-aarch64-unknown-linux-musl.tar.gz"
+              url "https://github.com/clouatre-labs/aptu/releases/download/TAG_PLACEHOLDER/aptu-VERSION_NUMBER_PLACEHOLDER-aarch64-unknown-linux-musl.tar.gz"
               sha256 "SHA256_LINUX_ARM_PLACEHOLDER"
             elsif OS.linux? && Hardware::CPU.intel?
-              url "https://github.com/clouatre-labs/aptu/releases/download/TAG_PLACEHOLDER/aptu-x86_64-unknown-linux-musl.tar.gz"
+              url "https://github.com/clouatre-labs/aptu/releases/download/TAG_PLACEHOLDER/aptu-VERSION_NUMBER_PLACEHOLDER-x86_64-unknown-linux-musl.tar.gz"
               sha256 "SHA256_LINUX_INTEL_PLACEHOLDER"
             end
             
@@ -171,9 +172,9 @@ jobs:
           # Replace placeholders with actual values
           sed -i "s/VERSION_NUMBER_PLACEHOLDER/${VERSION_NUMBER}/g" "$FORMULA"
           sed -i "s/TAG_PLACEHOLDER/${RELEASE_TAG}/g" "$FORMULA"
-          sed -i "s/SHA256_MACOS_ARM_PLACEHOLDER/${shas["aptu-aarch64-apple-darwin.tar.gz"]}/g" "$FORMULA"
-          sed -i "s/SHA256_LINUX_ARM_PLACEHOLDER/${shas["aptu-aarch64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
-          sed -i "s/SHA256_LINUX_INTEL_PLACEHOLDER/${shas["aptu-x86_64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
+          sed -i "s/SHA256_MACOS_ARM_PLACEHOLDER/${shas["aptu-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz"]}/g" "$FORMULA"
+          sed -i "s/SHA256_LINUX_ARM_PLACEHOLDER/${shas["aptu-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
+          sed -i "s/SHA256_LINUX_INTEL_PLACEHOLDER/${shas["aptu-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
 
       - name: Create feature branch and commit formula update
         run: |
