@@ -133,4 +133,6 @@ pub struct PrReviewResult {
     pub pr_url: String,
     /// AI review response.
     pub review: aptu_core::ai::types::PrReviewResponse,
+    /// AI usage statistics.
+    pub ai_stats: aptu_core::history::AiStats,
 }

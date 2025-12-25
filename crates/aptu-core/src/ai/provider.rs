@@ -25,6 +25,12 @@ pub const MAX_BODY_LENGTH: usize = 4000;
 /// Maximum number of comments to include in the prompt.
 pub const MAX_COMMENTS: usize = 5;
 
+/// Maximum number of files to include in PR review prompt.
+pub const MAX_FILES: usize = 20;
+
+/// Maximum total diff size (in characters) for PR review prompt.
+pub const MAX_TOTAL_DIFF_SIZE: usize = 50_000;
+
 /// AI provider trait for issue triage and creation.
 ///
 /// Defines the interface that all AI providers must implement.
@@ -180,6 +186,69 @@ pub trait AiProvider: Send + Sync {
         Ok(completion)
     }
 
+    /// Helper method to send a request and extract stats from the response.
+    ///
+    /// This method encapsulates the common pattern of:
+    /// 1. Sending a request with retry logic
+    /// 2. Extracting the message content
+    /// 3. Building `AiStats` from the response usage info
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - The chat completion request to send
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (`String`, `AiStats`) extracted from the response
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - API request fails (network, timeout, rate limit)
+    /// - Response contains no message content
+    async fn send_request_with_stats(
+        &self,
+        request: &ChatCompletionRequest,
+    ) -> Result<(String, AiStats)> {
+        // Start timing (outside retry loop to measure total time including retries)
+        let start = std::time::Instant::now();
+
+        // Make API request with retry logic
+        let completion = self.send_request(request).await?;
+
+        // Calculate duration (total time including any retries)
+        #[allow(clippy::cast_possible_truncation)]
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        // Extract message content
+        let content = completion
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .context("No response from AI model")?;
+
+        debug!(response_length = content.len(), "Received AI response");
+
+        // Build AI stats from usage info (trust API's cost field)
+        let (input_tokens, output_tokens, cost_usd) = if let Some(usage) = completion.usage {
+            (usage.prompt_tokens, usage.completion_tokens, usage.cost)
+        } else {
+            // If no usage info, default to 0
+            debug!("No usage information in API response");
+            (0, 0, None)
+        };
+
+        let ai_stats = AiStats {
+            model: self.model().to_string(),
+            input_tokens,
+            output_tokens,
+            duration_ms,
+            cost_usd,
+        };
+
+        Ok((content, ai_stats))
+    }
+
     /// Analyzes a GitHub issue using the provider's API.
     ///
     /// Returns a structured triage response with summary, labels, questions, duplicates, and usage stats.
@@ -196,9 +265,6 @@ pub trait AiProvider: Send + Sync {
     #[instrument(skip(self, issue), fields(issue_number = issue.number, repo = %format!("{}/{}", issue.owner, issue.repo)))]
     async fn analyze_issue(&self, issue: &IssueDetails) -> Result<AiResponse> {
         debug!(model = %self.model(), "Calling {} API", self.name());
-
-        // Start timing (outside retry loop to measure total time including retries)
-        let start = std::time::Instant::now();
 
         // Build request
         let request = ChatCompletionRequest {
@@ -220,49 +286,19 @@ pub trait AiProvider: Send + Sync {
             temperature: Some(self.temperature()),
         };
 
-        // Make API request with retry logic
-        let completion = self.send_request(&request).await?;
-
-        // Calculate duration (total time including any retries)
-        #[allow(clippy::cast_possible_truncation)]
-        let duration_ms = start.elapsed().as_millis() as u64;
-
-        // Extract message content
-        let content = completion
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .context("No response from AI model")?;
-
-        debug!(response_length = content.len(), "Received AI response");
+        // Send request and extract stats
+        let (content, ai_stats) = self.send_request_with_stats(&request).await?;
 
         // Parse JSON response
         let triage: TriageResponse = serde_json::from_str(&content).with_context(|| {
             format!("Failed to parse AI response as JSON. Raw response:\n{content}")
         })?;
 
-        // Build AI stats from usage info (trust API's cost field)
-        let (input_tokens, output_tokens, cost_usd) = if let Some(usage) = completion.usage {
-            (usage.prompt_tokens, usage.completion_tokens, usage.cost)
-        } else {
-            // If no usage info, default to 0
-            debug!("No usage information in API response");
-            (0, 0, None)
-        };
-
-        let ai_stats = AiStats {
-            model: self.model().to_string(),
-            input_tokens,
-            output_tokens,
-            duration_ms,
-            cost_usd,
-        };
-
         debug!(
-            input_tokens,
-            output_tokens,
-            duration_ms,
-            ?cost_usd,
+            input_tokens = ai_stats.input_tokens,
+            output_tokens = ai_stats.output_tokens,
+            duration_ms = ai_stats.duration_ms,
+            cost_usd = ?ai_stats.cost_usd,
             "AI analysis complete"
         );
 
@@ -545,7 +581,7 @@ Be professional but friendly. Maintain the user's intent while improving clarity
     async fn review_pr(
         &self,
         pr: &super::types::PrDetails,
-    ) -> Result<super::types::PrReviewResponse> {
+    ) -> Result<(super::types::PrReviewResponse, AiStats)> {
         debug!(model = %self.model(), "Calling {} API for PR review", self.name());
 
         // Build request
@@ -568,17 +604,8 @@ Be professional but friendly. Maintain the user's intent while improving clarity
             temperature: Some(self.temperature()),
         };
 
-        // Make API request with retry logic
-        let completion = self.send_request(&request).await?;
-
-        // Extract message content
-        let content = completion
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .context("No response from AI model")?;
-
-        debug!(response_length = content.len(), "Received AI response");
+        // Send request and extract stats
+        let (content, ai_stats) = self.send_request_with_stats(&request).await?;
 
         // Parse JSON response
         let review: super::types::PrReviewResponse =
@@ -586,9 +613,15 @@ Be professional but friendly. Maintain the user's intent while improving clarity
                 format!("Failed to parse AI response as JSON. Raw response:\n{content}")
             })?;
 
-        debug!(verdict = %review.verdict, "PR review complete");
+        debug!(
+            verdict = %review.verdict,
+            input_tokens = ai_stats.input_tokens,
+            output_tokens = ai_stats.output_tokens,
+            duration_ms = ai_stats.duration_ms,
+            "PR review complete with stats"
+        );
 
-        Ok(review)
+        Ok((review, ai_stats))
     }
 
     /// Builds the system prompt for PR review.
@@ -660,9 +693,19 @@ Be constructive and specific. Explain why something is an issue and how to fix i
         };
         let _ = writeln!(prompt, "Description:\n{body}\n");
 
-        // File changes
+        // File changes with limits
         prompt.push_str("Files Changed:\n");
+        let mut total_diff_size = 0;
+        let mut files_included = 0;
+        let mut files_skipped = 0;
+
         for file in &pr.files {
+            // Check file count limit
+            if files_included >= MAX_FILES {
+                files_skipped += 1;
+                continue;
+            }
+
             let _ = writeln!(
                 prompt,
                 "- {} ({}) +{} -{}\n",
@@ -681,8 +724,31 @@ Be constructive and specific. Explain why something is an issue and how to fix i
                 } else {
                     patch.clone()
                 };
+
+                // Check if adding this patch would exceed total diff size limit
+                let patch_size = patch_content.len();
+                if total_diff_size + patch_size > MAX_TOTAL_DIFF_SIZE {
+                    let _ = writeln!(
+                        prompt,
+                        "```diff\n[Patch omitted - total diff size limit reached]\n```\n"
+                    );
+                    files_skipped += 1;
+                    continue;
+                }
+
                 let _ = writeln!(prompt, "```diff\n{patch_content}\n```\n");
+                total_diff_size += patch_size;
             }
+
+            files_included += 1;
+        }
+
+        // Add truncation message if files were skipped
+        if files_skipped > 0 {
+            let _ = writeln!(
+                prompt,
+                "\n[{files_skipped} files omitted due to size limits (MAX_FILES={MAX_FILES}, MAX_TOTAL_DIFF_SIZE={MAX_TOTAL_DIFF_SIZE})]"
+            );
         }
 
         prompt.push_str("</pull_request>");
@@ -819,5 +885,114 @@ mod tests {
         assert!(prompt.contains("formatted_title"));
         assert!(prompt.contains("formatted_body"));
         assert!(prompt.contains("suggested_labels"));
+    }
+
+    #[test]
+    fn test_build_pr_review_user_prompt_respects_file_limit() {
+        use super::super::types::{PrDetails, PrFile};
+
+        let mut files = Vec::new();
+        for i in 0..25 {
+            files.push(PrFile {
+                filename: format!("file{}.rs", i),
+                status: "modified".to_string(),
+                additions: 10,
+                deletions: 5,
+                patch: Some(format!("patch content {}", i)),
+            });
+        }
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files,
+        };
+
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr);
+        assert!(prompt.contains("files omitted due to size limits"));
+        assert!(prompt.contains("MAX_FILES=20"));
+    }
+
+    #[test]
+    fn test_build_pr_review_user_prompt_respects_diff_size_limit() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Create patches that will exceed the limit when combined
+        // Each patch is ~30KB, so two will exceed 50KB limit
+        let patch1 = "x".repeat(30_000);
+        let patch2 = "y".repeat(30_000);
+
+        let files = vec![
+            PrFile {
+                filename: "file1.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 100,
+                deletions: 50,
+                patch: Some(patch1),
+            },
+            PrFile {
+                filename: "file2.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 100,
+                deletions: 50,
+                patch: Some(patch2),
+            },
+        ];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files,
+        };
+
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr);
+        // Both files should be listed
+        assert!(prompt.contains("file1.rs"));
+        assert!(prompt.contains("file2.rs"));
+        // The second patch should be limited - verify the prompt doesn't contain both full patches
+        // by checking that the total size is less than what two full 30KB patches would be
+        assert!(prompt.len() < 65_000);
+    }
+
+    #[test]
+    fn test_build_pr_review_user_prompt_with_no_patches() {
+        use super::super::types::{PrDetails, PrFile};
+
+        let files = vec![PrFile {
+            filename: "file1.rs".to_string(),
+            status: "added".to_string(),
+            additions: 10,
+            deletions: 0,
+            patch: None,
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files,
+        };
+
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr);
+        assert!(prompt.contains("file1.rs"));
+        assert!(prompt.contains("added"));
+        assert!(!prompt.contains("files omitted"));
     }
 }

@@ -235,7 +235,11 @@ pub async fn review_pr(
     provider: &dyn TokenProvider,
     reference: &str,
     repo_context: Option<&str>,
-) -> crate::Result<(PrDetails, crate::ai::types::PrReviewResponse)> {
+) -> crate::Result<(
+    PrDetails,
+    crate::ai::types::PrReviewResponse,
+    crate::history::AiStats,
+)> {
     use crate::github::pulls::parse_pr_reference;
 
     // Get GitHub token from provider
@@ -280,8 +284,8 @@ pub async fn review_pr(
             }
         })?;
 
-    // Review PR with AI
-    let review = ai_client
+    // Review PR with AI (timing and stats are captured in provider)
+    let (review, ai_stats) = ai_client
         .review_pr(&pr_details)
         .await
         .map_err(|e| AptuError::AI {
@@ -289,5 +293,5 @@ pub async fn review_pr(
             status: None,
         })?;
 
-    Ok((pr_details, review))
+    Ok((pr_details, review, ai_stats))
 }
