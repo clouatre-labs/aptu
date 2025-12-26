@@ -59,8 +59,8 @@ assert_cmd = { workspace = true }
 predicates = "3.1"
 
 [package.metadata.deb]
-maintainer = "Hugues Clouâtre <hugues@clouatre.dev>"
-copyright = "2025 Hugues Clouâtre <hugues@clouatre.dev>"
+maintainer = "Hugues Clouâtre <hugues@linux.com>"
+copyright = "2025 Hugues Clouâtre <hugues@linux.com>"
 license-file = ["../../LICENSE", "4"]
 extended-description = """\
 Aptu is a gamified CLI for OSS issue triage with AI assistance. \
