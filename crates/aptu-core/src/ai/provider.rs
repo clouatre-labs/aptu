@@ -431,11 +431,6 @@ Guidelines:
 - implementation_approach: Based on the repository structure provided, suggest specific files or modules to modify. Reference the file paths from the repository structure. Be concrete and actionable. Leave as null or empty string if no specific guidance can be provided.
 - suggested_milestone: If applicable, suggest a milestone title from the Available Milestones list. Only include if a milestone is clearly relevant to the issue. Leave as null or empty string if no milestone is appropriate.
 
-Rare Labels:
-These labels are rarely applied. Do NOT apply unless ALL conditions are true:
-- good first issue: Do NOT apply unless ALL are true: (1) issue has clear, well-defined scope with minimal codebase knowledge required, (2) change is isolated with minimal dependencies and good documentation exists, (3) no complex architectural understanding needed.
-- help wanted: Do NOT apply unless ALL are true: (1) requirements and acceptance criteria are well-defined, (2) issue is not claimed by anyone and not blocked by other work, (3) issue is suitable for external contributors with domain knowledge.
-
 Be helpful, concise, and actionable. Focus on what a maintainer needs to know."##.to_string()
     }
 
