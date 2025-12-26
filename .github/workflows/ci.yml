@@ -161,7 +161,7 @@ jobs:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build release binary
-        run: cargo build --release
+        run: cargo build --profile ci
       - name: Setup Bats testing framework
         uses: bats-core/bats-action@e412797c46257a2dbf3775f6f6010b33ee6cb99f # v3
         with:
@@ -171,7 +171,7 @@ jobs:
           detik-install: false
       - name: Run integration tests
         env:
-          APTU_BIN: ${{ github.workspace }}/target/release/aptu
+          APTU_BIN: ${{ github.workspace }}/target/ci/aptu
           BATS_LIB_PATH: ${{ github.workspace }}/.bats-libs
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
