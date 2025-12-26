@@ -127,7 +127,7 @@ pub use history::{Contribution, ContributionStatus, HistoryData};
 // Repository Discovery
 // ============================================================================
 
-pub use repos::CuratedRepo;
+pub use repos::{CuratedRepo, RepoFilter};
 
 // ============================================================================
 // Triage Detection
@@ -153,7 +153,10 @@ pub use utils::{
 // Platform-Agnostic Facade
 // ============================================================================
 
-pub use facade::{analyze_issue, fetch_issues, list_curated_repos, post_pr_review, review_pr};
+pub use facade::{
+    add_custom_repo, analyze_issue, fetch_issues, list_curated_repos, list_repos, post_pr_review,
+    remove_custom_repo, review_pr,
+};
 
 // ============================================================================
 // Modules

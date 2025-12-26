@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Curated repository list for Aptu.
+//! Curated and custom repository management for Aptu.
 //!
-//! Repositories are fetched from a remote JSON file with TTL-based caching.
-//! The list contains repositories known to be:
+//! Repositories can come from two sources:
+//! - Curated: fetched from a remote JSON file with TTL-based caching
+//! - Custom: stored locally in TOML format at `~/.config/aptu/repos.toml`
+//!
+//! The curated list contains repositories known to be:
 //! - Active (commits in last 30 days)
 //! - Welcoming (good first issue labels exist)
 //! - Responsive (maintainers reply within 1 week)
+
+pub mod custom;
 
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
@@ -96,6 +101,74 @@ pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
     let _ = cache::write_cache(cache_key, &entry);
     debug!("Fetched and cached {} curated repositories", repos.len());
 
+    Ok(repos)
+}
+
+/// Repository filter for fetching repositories.
+#[derive(Debug, Clone, Copy)]
+pub enum RepoFilter {
+    /// Include all repositories (curated and custom).
+    All,
+    /// Include only curated repositories.
+    Curated,
+    /// Include only custom repositories.
+    Custom,
+}
+
+/// Fetch repositories based on filter and configuration.
+///
+/// Merges curated and custom repositories based on the filter and config settings.
+/// Deduplicates by full repository name.
+///
+/// # Arguments
+///
+/// * `filter` - Repository filter (All, Curated, or Custom)
+///
+/// # Returns
+///
+/// A vector of `CuratedRepo` structs.
+///
+/// # Errors
+///
+/// Returns an error if configuration cannot be loaded or repositories cannot be fetched.
+pub async fn fetch_all(filter: RepoFilter) -> crate::Result<Vec<CuratedRepo>> {
+    let config = load_config()?;
+    let mut repos = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    // Add curated repos if enabled and filter allows
+    match filter {
+        RepoFilter::All | RepoFilter::Curated => {
+            if config.repos.curated {
+                let curated = fetch().await?;
+                for repo in curated {
+                    if seen.insert(repo.full_name()) {
+                        repos.push(repo);
+                    }
+                }
+            }
+        }
+        RepoFilter::Custom => {}
+    }
+
+    // Add custom repos if filter allows
+    match filter {
+        RepoFilter::All | RepoFilter::Custom => {
+            let custom = custom::read_custom_repos()?;
+            for repo in custom {
+                if seen.insert(repo.full_name()) {
+                    repos.push(repo);
+                }
+            }
+        }
+        RepoFilter::Curated => {}
+    }
+
+    debug!(
+        "Fetched {} repositories with filter {:?}",
+        repos.len(),
+        filter
+    );
     Ok(repos)
 }
 

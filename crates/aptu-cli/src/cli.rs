@@ -181,8 +181,28 @@ pub enum AuthCommand {
 /// Repository subcommands
 #[derive(Subcommand)]
 pub enum RepoCommand {
-    /// List curated repositories available for contribution
-    List,
+    /// List repositories available for contribution
+    List {
+        /// Include only curated repositories
+        #[arg(long)]
+        curated: bool,
+
+        /// Include only custom repositories
+        #[arg(long)]
+        custom: bool,
+    },
+
+    /// Add a custom repository
+    Add {
+        /// Repository in owner/name format
+        repo: String,
+    },
+
+    /// Remove a custom repository
+    Remove {
+        /// Repository in owner/name format
+        repo: String,
+    },
 }
 
 /// Issue subcommands

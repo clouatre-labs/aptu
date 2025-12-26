@@ -11,8 +11,11 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum AptuError {
     /// GitHub API error from octocrab.
-    #[error("GitHub API error: {0}")]
-    GitHub(#[from] octocrab::Error),
+    #[error("GitHub API error: {message}")]
+    GitHub {
+        /// Error message.
+        message: String,
+    },
 
     /// AI provider error (`OpenRouter`, Ollama, etc.).
     #[error("AI provider error: {message}")]
@@ -39,8 +42,11 @@ pub enum AptuError {
     },
 
     /// Configuration file error.
-    #[error("Configuration error: {0}")]
-    Config(#[from] config::ConfigError),
+    #[error("Configuration error: {message}")]
+    Config {
+        /// Error message.
+        message: String,
+    },
 
     /// Invalid JSON response from AI provider.
     #[error("Invalid JSON response from AI")]
@@ -57,4 +63,20 @@ pub enum AptuError {
     /// Circuit breaker is open - AI provider is unavailable.
     #[error("Circuit breaker is open - AI provider is temporarily unavailable")]
     CircuitOpen,
+}
+
+impl From<octocrab::Error> for AptuError {
+    fn from(err: octocrab::Error) -> Self {
+        AptuError::GitHub {
+            message: err.to_string(),
+        }
+    }
+}
+
+impl From<config::ConfigError> for AptuError {
+    fn from(err: config::ConfigError) -> Self {
+        AptuError::Config {
+            message: err.to_string(),
+        }
+    }
 }

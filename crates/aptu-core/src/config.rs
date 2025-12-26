@@ -39,6 +39,8 @@ pub struct AppConfig {
     pub ui: UiConfig,
     /// Cache settings.
     pub cache: CacheConfig,
+    /// Repository settings.
+    pub repos: ReposConfig,
 }
 
 /// User preferences.
@@ -145,6 +147,20 @@ impl Default for CacheConfig {
                 "https://raw.githubusercontent.com/clouatre-labs/aptu/main/data/curated-repos.json"
                     .to_string(),
         }
+    }
+}
+
+/// Repository settings.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct ReposConfig {
+    /// Include curated repositories (default: true).
+    pub curated: bool,
+}
+
+impl Default for ReposConfig {
+    fn default() -> Self {
+        Self { curated: true }
     }
 }
 
