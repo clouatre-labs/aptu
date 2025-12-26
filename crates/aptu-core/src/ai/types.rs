@@ -193,6 +193,9 @@ pub struct IssueDetails {
     pub body: String,
     /// Current labels on the issue.
     pub labels: Vec<String>,
+    /// Current milestone on the issue (if any).
+    #[serde(default)]
+    pub milestone: Option<String>,
     /// Recent comments on the issue.
     pub comments: Vec<IssueComment>,
     /// Issue URL.

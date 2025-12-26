@@ -220,7 +220,7 @@ pub enum IssueCommand {
         #[arg(short = 'y', long)]
         yes: bool,
 
-        /// Apply AI-suggested labels and milestone to the issue
+        /// Apply AI-suggested labels and milestone to the issue (additive: merges with existing labels, preserves existing priority labels and milestone)
         #[arg(long)]
         apply: bool,
 

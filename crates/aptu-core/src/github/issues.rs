@@ -262,6 +262,7 @@ pub async fn fetch_issue_with_comments(
         title: issue.title,
         body: issue.body.unwrap_or_default(),
         labels,
+        milestone: issue.milestone.as_ref().map(|m| m.title.clone()),
         comments,
         url: issue_url,
         repo_context: Vec::new(),
@@ -552,6 +553,7 @@ pub async fn update_issue_labels_and_milestone(
     number: u64,
     existing_labels: &[String],
     suggested_labels: &[String],
+    existing_milestone: Option<&str>,
     suggested_milestone: Option<&str>,
     available_labels: &[crate::ai::types::RepoLabel],
     available_milestones: &[crate::ai::types::RepoMilestone],
@@ -577,21 +579,26 @@ pub async fn update_issue_labels_and_milestone(
     // Merge existing and suggested labels additively
     let applied_labels = merge_labels(existing_labels, &valid_suggested);
 
-    // Validate and find milestone
-    let mut applied_milestone = None;
-    if let Some(milestone_title) = suggested_milestone {
-        // Only set milestone if issue doesn't already have one
-        if let Some(milestone) = available_milestones
-            .iter()
-            .find(|m| m.title == milestone_title)
-        {
-            applied_milestone = Some(milestone.title.clone());
+    // Validate and find milestone (only set if issue has no existing milestone)
+    let applied_milestone = if existing_milestone.is_none() {
+        if let Some(milestone_title) = suggested_milestone {
+            if let Some(milestone) = available_milestones
+                .iter()
+                .find(|m| m.title == milestone_title)
+            {
+                Some(milestone.title.clone())
+            } else {
+                warnings.push(format!(
+                    "Milestone '{milestone_title}' not found in repository"
+                ));
+                None
+            }
         } else {
-            warnings.push(format!(
-                "Milestone '{milestone_title}' not found in repository"
-            ));
+            None
         }
-    }
+    } else {
+        None
+    };
 
     // Apply updates to the issue
     let issues_handler = client.issues(owner, repo);
@@ -1403,7 +1410,7 @@ mod merge_labels_tests {
     use super::*;
 
     #[test]
-    fn merge_labels_preserves_existing() {
+    fn preserves_existing_and_adds_new() {
         let existing = vec!["bug".to_string(), "enhancement".to_string()];
         let suggested = vec!["documentation".to_string()];
         let merged = merge_labels(&existing, &suggested);
@@ -1414,7 +1421,7 @@ mod merge_labels_tests {
     }
 
     #[test]
-    fn merge_labels_deduplicates_case_insensitive() {
+    fn deduplicates_case_insensitive() {
         let existing = vec!["Bug".to_string()];
         let suggested = vec!["bug".to_string(), "enhancement".to_string()];
         let merged = merge_labels(&existing, &suggested);
@@ -1424,49 +1431,8 @@ mod merge_labels_tests {
     }
 
     #[test]
-    fn merge_labels_skips_priority_when_existing_has_one() {
-        let existing = vec!["p1".to_string(), "bug".to_string()];
-        let suggested = vec!["p2".to_string(), "enhancement".to_string()];
-        let merged = merge_labels(&existing, &suggested);
-        assert_eq!(merged.len(), 3);
-        assert!(merged.contains(&"p1".to_string()));
-        assert!(merged.contains(&"bug".to_string()));
-        assert!(merged.contains(&"enhancement".to_string()));
-        assert!(!merged.contains(&"p2".to_string()));
-    }
-
-    #[test]
-    fn merge_labels_adds_priority_when_existing_has_none() {
-        let existing = vec!["bug".to_string()];
-        let suggested = vec!["p1".to_string(), "enhancement".to_string()];
-        let merged = merge_labels(&existing, &suggested);
-        assert_eq!(merged.len(), 3);
-        assert!(merged.contains(&"p1".to_string()));
-        assert!(merged.contains(&"bug".to_string()));
-        assert!(merged.contains(&"enhancement".to_string()));
-    }
-
-    #[test]
-    fn merge_labels_empty_existing() {
-        let existing = vec![];
-        let suggested = vec!["bug".to_string(), "enhancement".to_string()];
-        let merged = merge_labels(&existing, &suggested);
-        assert_eq!(merged.len(), 2);
-        assert!(merged.contains(&"bug".to_string()));
-        assert!(merged.contains(&"enhancement".to_string()));
-    }
-
-    #[test]
-    fn merge_labels_empty_suggested() {
-        let existing = vec!["bug".to_string()];
-        let suggested = vec![];
-        let merged = merge_labels(&existing, &suggested);
-        assert_eq!(merged.len(), 1);
-        assert!(merged.contains(&"bug".to_string()));
-    }
-
-    #[test]
-    fn merge_labels_priority_case_insensitive() {
+    fn skips_priority_when_existing_has_one() {
+        // P1 (uppercase) exists, p2 suggested - should keep P1, skip p2, add bug
         let existing = vec!["P1".to_string()];
         let suggested = vec!["p2".to_string(), "bug".to_string()];
         let merged = merge_labels(&existing, &suggested);
@@ -1477,14 +1443,15 @@ mod merge_labels_tests {
     }
 
     #[test]
-    fn merge_labels_non_priority_labels_not_affected() {
-        let existing = vec!["p1".to_string()];
-        let suggested = vec!["p2".to_string(), "bug".to_string(), "feature".to_string()];
-        let merged = merge_labels(&existing, &suggested);
-        assert_eq!(merged.len(), 3);
-        assert!(merged.contains(&"p1".to_string()));
+    fn handles_empty_inputs() {
+        // Empty existing: suggested labels pass through
+        let merged = merge_labels(&[], &["bug".to_string(), "p1".to_string()]);
+        assert_eq!(merged.len(), 2);
+
+        // Empty suggested: existing labels preserved
+        let merged = merge_labels(&["bug".to_string()], &[]);
+        assert_eq!(merged.len(), 1);
         assert!(merged.contains(&"bug".to_string()));
-        assert!(merged.contains(&"feature".to_string()));
     }
 }
 

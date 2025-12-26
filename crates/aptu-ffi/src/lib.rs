@@ -106,6 +106,7 @@ pub fn analyze_issue(
             title: issue.title,
             body: issue.body,
             labels: issue.labels,
+            milestone: None,
             comments: vec![],
             url: issue.url,
             repo_context: vec![],

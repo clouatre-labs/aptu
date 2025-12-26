@@ -34,6 +34,7 @@
 //!     title: "Example issue".to_string(),
 //!     body: "Issue description...".to_string(),
 //!     labels: vec![],
+//!     milestone: None,
 //!     comments: vec![],
 //!     url: "https://github.com/block/goose/issues/123".to_string(),
 //!     repo_context: vec![],
