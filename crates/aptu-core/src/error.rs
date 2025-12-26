@@ -57,6 +57,7 @@ pub enum AptuError {
     Network(#[from] reqwest::Error),
 
     /// Keyring/credential storage error.
+    #[cfg(feature = "keyring")]
     #[error("Keyring error: {0}")]
     Keyring(#[from] keyring::Error),
 

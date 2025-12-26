@@ -27,7 +27,7 @@ backon = { workspace = true }
 # Configuration
 config = { workspace = true }
 dirs = { workspace = true }
-keyring = { workspace = true }
+keyring = { workspace = true, optional = true }
 
 # History
 chrono = { workspace = true }
@@ -47,6 +47,8 @@ bon = { workspace = true }
 
 [features]
 default = []
+# Enable system keyring for secure token storage
+keyring = ["dep:keyring"]
 # Enable UniFFI derive macros for FFI bindings (used by aptu-ffi)
 uniffi = []
 

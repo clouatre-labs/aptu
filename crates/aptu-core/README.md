@@ -27,6 +27,19 @@ Add to your `Cargo.toml`:
 aptu-core = "0.2"
 ```
 
+### Optional Features
+
+| Feature | Description |
+|---------|-------------|
+| `keyring` | Secure token storage using system keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager) |
+
+To enable optional features:
+
+```toml
+[dependencies]
+aptu-core = { version = "0.2", features = ["keyring"] }
+```
+
 ## Example
 
 ```rust,no_run
@@ -42,22 +55,14 @@ async fn main() -> Result<()> {
     let client = AiClient::new(&config.ai.provider, &config.ai)?;
 
     // Create issue details
-    let issue = IssueDetails {
-        owner: "block".to_string(),
-        repo: "goose".to_string(),
-        number: 123,
-        title: "Example issue".to_string(),
-        body: "Issue description...".to_string(),
-        labels: vec![],
-        milestone: None,
-        comments: vec![],
-        url: "https://github.com/block/goose/issues/123".to_string(),
-        repo_context: vec![],
-        repo_tree: vec![],
-        available_labels: vec![],
-        available_milestones: vec![],
-        viewer_permission: None,
-    };
+    let issue = IssueDetails::builder()
+        .owner("block")
+        .repo("goose")
+        .number(123)
+        .title("Example issue")
+        .body("Issue description...")
+        .url("https://github.com/block/goose/issues/123")
+        .build();
 
     // Analyze with AI
     let response = client.analyze_issue(&issue).await?;

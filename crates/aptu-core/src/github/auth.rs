@@ -17,13 +17,16 @@ use std::process::Command;
 use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
+#[cfg(feature = "keyring")]
 use keyring::Entry;
 use octocrab::Octocrab;
+#[cfg(feature = "keyring")]
 use reqwest::header::ACCEPT;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 use tracing::{debug, info, instrument};
 
+#[cfg(feature = "keyring")]
 use super::{KEYRING_SERVICE, KEYRING_USER};
 
 /// Session-level cache for resolved GitHub tokens.
@@ -53,9 +56,11 @@ impl std::fmt::Display for TokenSource {
 }
 
 /// OAuth scopes required for Aptu functionality.
+#[cfg(feature = "keyring")]
 const OAUTH_SCOPES: &[&str] = &["repo", "read:user"];
 
 /// Creates a keyring entry for the GitHub token.
+#[cfg(feature = "keyring")]
 fn keyring_entry() -> Result<Entry> {
     Entry::new(KEYRING_SERVICE, KEYRING_USER).context("Failed to create keyring entry")
 }
@@ -74,6 +79,7 @@ pub fn is_authenticated() -> bool {
 ///
 /// Returns `true` only if a token exists in the system keyring,
 /// ignoring environment variables and `gh` CLI.
+#[cfg(feature = "keyring")]
 #[instrument]
 #[allow(clippy::let_and_return)] // Intentional: Rust 2024 drop order compliance
 pub fn has_keyring_token() -> bool {
@@ -87,6 +93,7 @@ pub fn has_keyring_token() -> bool {
 /// Retrieves the stored GitHub token from the keyring.
 ///
 /// Returns `None` if no token is stored or if keyring access fails.
+#[cfg(feature = "keyring")]
 #[instrument]
 pub fn get_stored_token() -> Option<SecretString> {
     let entry = keyring_entry().ok()?;
@@ -169,6 +176,7 @@ fn resolve_token_inner() -> Option<(SecretString, TokenSource)> {
     }
 
     // Priority 4: System keyring
+    #[cfg(feature = "keyring")]
     if let Some(token) = get_stored_token() {
         debug!("Using token from system keyring");
         return Some((token, TokenSource::Keyring));
@@ -202,6 +210,7 @@ pub fn resolve_token() -> Option<(SecretString, TokenSource)> {
 }
 
 /// Stores a GitHub token in the system keyring.
+#[cfg(feature = "keyring")]
 #[instrument(skip(token))]
 pub fn store_token(token: &SecretString) -> Result<()> {
     let entry = keyring_entry()?;
@@ -224,6 +233,7 @@ pub fn clear_token_cache() {
 }
 
 /// Deletes the stored GitHub token from the keyring.
+#[cfg(feature = "keyring")]
 #[instrument]
 pub fn delete_token() -> Result<()> {
     let entry = keyring_entry()?;
@@ -244,6 +254,7 @@ pub fn delete_token() -> Result<()> {
 /// 4. Stores the resulting token in the system keychain
 ///
 /// Requires `APTU_GH_CLIENT_ID` environment variable to be set.
+#[cfg(feature = "keyring")]
 #[instrument]
 pub async fn authenticate(client_id: &SecretString) -> Result<()> {
     debug!("Starting OAuth device flow");
@@ -339,6 +350,7 @@ pub fn create_client_with_token(token: &SecretString) -> Result<Octocrab> {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "keyring")]
     #[test]
     fn test_keyring_entry_creation() {
         // Just verify we can create an entry without panicking
