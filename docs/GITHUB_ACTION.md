@@ -55,7 +55,7 @@ For detailed provider setup and model options, see [Configuration](CONFIGURATION
 | `cerebras-api-key` | No | - | Cerebras API key |
 | `model` | No | Provider default | Model to use (provider-specific) |
 | `provider` | No | - | AI provider to use (gemini, openrouter, groq, cerebras) |
-| `skip-labeled` | No | `true` | Skip triage if issue already has labels |
+| `skip-labeled` | No | `false` | Skip triage if issue already has both type and priority labels |
 | `dry-run` | No | `false` | Run without making changes |
 | `apply-labels` | No | `true` | Apply AI-suggested labels and milestone |
 | `no-comment` | No | `false` | Skip posting triage comment |
