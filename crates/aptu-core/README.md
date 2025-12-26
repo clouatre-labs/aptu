@@ -3,10 +3,9 @@
 
 # aptu-core
 
-Core library for Aptu - AI-powered OSS issue triage.
+Core library for Aptu - AI-Powered Triage Utility.
 
 [![docs.rs](https://img.shields.io/badge/docs.rs-aptu--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs)](https://docs.rs/aptu-core)
-[![repository](https://img.shields.io/badge/repository-clouatre--labs/aptu-8da0cb?style=flat-square&labelColor=555555&logo=github)](https://github.com/clouatre-labs/aptu)
 [![CLI crate](https://img.shields.io/badge/CLI-aptu--cli-fc8d62?style=flat-square&labelColor=555555&logo=rust)](https://crates.io/crates/aptu-cli)
 [![REUSE](https://api.reuse.software/badge/github.com/clouatre-labs/aptu)](https://api.reuse.software/info/github.com/clouatre-labs/aptu)
 
