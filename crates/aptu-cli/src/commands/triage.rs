@@ -85,25 +85,18 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         .map(|m| m.clone().into())
         .collect();
 
-    let mut issue_details = IssueDetails {
-        owner: owner.clone(),
-        repo: repo.clone(),
-        number,
-        title: issue_node.title,
-        body: issue_node.body.unwrap_or_default(),
-        labels,
-        milestone: None,
-        comments,
-        url: issue_node.url,
-        repo_context: Vec::new(),
-        repo_tree: Vec::new(),
-        available_labels,
-        available_milestones,
-        viewer_permission: repo_data
-            .viewer_permission
-            .as_ref()
-            .map(|p| format!("{p:?}")),
-    };
+    let mut issue_details = IssueDetails::builder()
+        .owner(owner.clone())
+        .repo(repo.clone())
+        .number(number)
+        .title(issue_node.title)
+        .body(issue_node.body.unwrap_or_default())
+        .labels(labels)
+        .comments(comments)
+        .url(issue_node.url)
+        .available_labels(available_labels)
+        .available_milestones(available_milestones)
+        .build();
 
     // Extract keywords and language for parallel calls
     let keywords = issues::extract_keywords(&issue_details.title);

@@ -179,7 +179,7 @@ pub struct RepoMilestone {
 }
 
 /// Details about an issue for triage.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, bon::Builder)]
 pub struct IssueDetails {
     /// Repository owner.
     pub owner: String,
@@ -192,26 +192,32 @@ pub struct IssueDetails {
     /// Issue body (markdown content).
     pub body: String,
     /// Current labels on the issue.
+    #[builder(default)]
     pub labels: Vec<String>,
     /// Current milestone on the issue (if any).
     #[serde(default)]
     pub milestone: Option<String>,
     /// Recent comments on the issue.
+    #[builder(default)]
     pub comments: Vec<IssueComment>,
     /// Issue URL.
     #[allow(dead_code)] // Used for future features (history tracking)
     pub url: String,
     /// Related issues from repository search (for AI context).
     #[serde(default)]
+    #[builder(default)]
     pub repo_context: Vec<RepoIssueContext>,
     /// Repository file tree (source files for implementation context).
     #[serde(default)]
+    #[builder(default)]
     pub repo_tree: Vec<String>,
     /// Available labels in the repository.
     #[serde(default)]
+    #[builder(default)]
     pub available_labels: Vec<RepoLabel>,
     /// Available milestones in the repository.
     #[serde(default)]
+    #[builder(default)]
     pub available_milestones: Vec<RepoMilestone>,
     /// Viewer permission level on the repository.
     #[serde(default)]

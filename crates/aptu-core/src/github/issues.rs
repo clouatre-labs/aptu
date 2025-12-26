@@ -255,22 +255,16 @@ pub async fn fetch_issue_with_comments(
 
     let issue_url = issue.html_url.to_string();
 
-    let details = IssueDetails {
-        owner: owner.to_string(),
-        repo: repo.to_string(),
-        number,
-        title: issue.title,
-        body: issue.body.unwrap_or_default(),
-        labels,
-        milestone: issue.milestone.as_ref().map(|m| m.title.clone()),
-        comments,
-        url: issue_url,
-        repo_context: Vec::new(),
-        repo_tree: Vec::new(),
-        available_labels: Vec::new(),
-        available_milestones: Vec::new(),
-        viewer_permission: None,
-    };
+    let details = IssueDetails::builder()
+        .owner(owner.to_string())
+        .repo(repo.to_string())
+        .number(number)
+        .title(issue.title)
+        .body(issue.body.unwrap_or_default())
+        .labels(labels)
+        .comments(comments)
+        .url(issue_url)
+        .build();
 
     debug!(
         labels = details.labels.len(),
