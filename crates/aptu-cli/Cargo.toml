@@ -37,6 +37,7 @@ tracing-subscriber = { workspace = true }
 indicatif = { workspace = true }
 dialoguer = { workspace = true }
 console = { workspace = true }
+comfy-table = { workspace = true }
 
 # Time and IDs
 chrono = { workspace = true }
