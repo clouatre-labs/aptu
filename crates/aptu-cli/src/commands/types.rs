@@ -83,6 +83,16 @@ pub enum SingleTriageOutcome {
     Failed(String),
 }
 
+impl SingleTriageOutcome {
+    /// Extract `TriageResult` if this is a Success outcome.
+    pub fn as_triage_result(&self) -> Option<&TriageResult> {
+        match self {
+            SingleTriageOutcome::Success(result) => Some(result),
+            _ => None,
+        }
+    }
+}
+
 /// Result from a bulk triage operation.
 #[derive(Debug, Clone, Serialize)]
 pub struct BulkTriageResult {
@@ -94,6 +104,17 @@ pub struct BulkTriageResult {
     pub skipped: usize,
     /// Individual outcomes for each issue.
     pub outcomes: Vec<(String, SingleTriageOutcome)>,
+}
+
+impl BulkTriageResult {
+    /// Check if any outcomes are dry-run operations.
+    pub fn has_dry_run(&self) -> bool {
+        self.outcomes.iter().any(|(_, outcome)| {
+            outcome
+                .as_triage_result()
+                .is_some_and(|result| result.dry_run)
+        })
+    }
 }
 
 /// Result from the history command.
