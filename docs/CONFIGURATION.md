@@ -12,6 +12,16 @@ allow_paid_models = false  # default: blocks paid OpenRouter models
 confirm_before_post = true
 ```
 
+## CLI Overrides
+
+Override the configured provider and model with global flags:
+
+```bash
+aptu --provider openrouter --model mistralai/devstral-2512:free issue triage owner/repo#123
+```
+
+Flags can be used independently (`--model` alone uses configured provider). CLI flags take precedence over config file.
+
 ## AI Provider Setup
 
 Aptu supports multiple AI providers. Choose the one that works best for you:

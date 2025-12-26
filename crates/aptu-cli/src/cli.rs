@@ -133,6 +133,14 @@ pub struct Cli {
     #[arg(long, short = 'v', global = true)]
     pub verbose: bool,
 
+    /// Override configured AI provider (e.g., openrouter, anthropic)
+    #[arg(long, global = true)]
+    pub provider: Option<String>,
+
+    /// Override configured AI model (e.g., gpt-4, claude-3-opus)
+    #[arg(long, global = true)]
+    pub model: Option<String>,
+
     /// Subcommand to execute
     #[command(subcommand)]
     pub command: Commands,
