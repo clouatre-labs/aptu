@@ -13,9 +13,11 @@ Set Height 800
 Set TypingSpeed 50ms
 Set Theme "Catppuccin Mocha"
 
-# Setup PATH to use local build (hidden from recording)
+# Setup PATH and AI provider (hidden from recording)
 Hide
 Type "export PATH=$PWD/target/release:$PATH"
+Enter
+Type "export APTU__AI__PROVIDER=openrouter APTU__AI__MODEL='mistralai/devstral-2512:free'"
 Enter
 Show
 
@@ -37,6 +39,6 @@ Sleep 2s
 # Scene 4: AI-powered triage (clear for full visibility)
 Type "clear"
 Enter
-Type "aptu issue triage --force --dry-run block/goose#6216"
+Type "aptu issue triage --force --dry-run -v block/goose#6216"
 Enter
 Sleep 15s
