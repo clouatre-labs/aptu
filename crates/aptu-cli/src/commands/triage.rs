@@ -92,6 +92,7 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
         title: issue_node.title,
         body: issue_node.body.unwrap_or_default(),
         labels,
+        milestone: None,
         comments,
         url: issue_node.url,
         repo_context: Vec::new(),
@@ -201,6 +202,9 @@ pub async fn post(analyze_result: &AnalyzeResult) -> Result<String> {
 
 /// Apply AI-suggested labels and milestone to an issue.
 ///
+/// Labels are applied additively: existing labels are preserved and AI-suggested labels are merged in.
+/// Priority labels (p1/p2/p3) defer to existing human judgment.
+/// Milestones are only set if the issue doesn't already have one.
 /// Validates suggestions against available labels and milestones before applying.
 /// Returns what was applied and any warnings.
 ///
@@ -229,7 +233,9 @@ pub async fn apply(
         &issue_details.owner,
         &issue_details.repo,
         issue_details.number,
+        &issue_details.labels,
         &triage.suggested_labels,
+        issue_details.milestone.as_deref(),
         triage.suggested_milestone.as_deref(),
         &issue_details.available_labels,
         &issue_details.available_milestones,

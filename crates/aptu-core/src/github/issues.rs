@@ -262,6 +262,7 @@ pub async fn fetch_issue_with_comments(
         title: issue.title,
         body: issue.body.unwrap_or_default(),
         labels,
+        milestone: issue.milestone.as_ref().map(|m| m.title.clone()),
         comments,
         url: issue_url,
         repo_context: Vec::new(),
@@ -481,9 +482,63 @@ pub struct ApplyResult {
     pub warnings: Vec<String>,
 }
 
+/// Merges existing and suggested labels additively.
+///
+/// Implements additive label merging with priority label handling:
+/// - If existing labels contain a priority label (p[0-9]), skip AI-suggested priority labels
+/// - Merge remaining labels with case-insensitive deduplication
+/// - Preserve all existing labels
+///
+/// # Arguments
+///
+/// * `existing_labels` - Labels currently on the issue
+/// * `suggested_labels` - Labels suggested by AI
+///
+/// # Returns
+///
+/// Merged label list with duplicates removed (case-insensitive)
+fn merge_labels(existing_labels: &[String], suggested_labels: &[String]) -> Vec<String> {
+    // Check if existing labels contain a priority label (p[0-9])
+    let has_priority = existing_labels.iter().any(|label| {
+        let lower = label.to_lowercase();
+        lower.len() == 2
+            && lower.starts_with('p')
+            && lower.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
+    });
+
+    // Start with existing labels
+    let mut merged = existing_labels.to_vec();
+
+    // Add suggested labels, filtering out priority labels if existing has one
+    for suggested in suggested_labels {
+        let is_priority = {
+            let lower = suggested.to_lowercase();
+            lower.len() == 2
+                && lower.starts_with('p')
+                && lower.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
+        };
+
+        // Skip priority labels if existing already has one
+        if is_priority && has_priority {
+            continue;
+        }
+
+        // Add if not already present (case-insensitive check)
+        if !merged
+            .iter()
+            .any(|l| l.to_lowercase() == suggested.to_lowercase())
+        {
+            merged.push(suggested.clone());
+        }
+    }
+
+    merged
+}
+
 /// Updates an issue with labels and milestone.
 ///
-/// Validates suggested labels and milestone against available options before applying.
+/// Applies labels additively by merging existing and suggested labels.
+/// Validates suggestions against available options before applying.
 /// Returns what was actually applied and any warnings.
 ///
 /// # Errors
@@ -496,42 +551,54 @@ pub async fn update_issue_labels_and_milestone(
     owner: &str,
     repo: &str,
     number: u64,
+    existing_labels: &[String],
     suggested_labels: &[String],
+    existing_milestone: Option<&str>,
     suggested_milestone: Option<&str>,
     available_labels: &[crate::ai::types::RepoLabel],
     available_milestones: &[crate::ai::types::RepoMilestone],
 ) -> Result<ApplyResult> {
     debug!("Updating issue with labels and milestone");
 
-    let mut applied_labels = Vec::new();
     let mut warnings = Vec::new();
 
     // Validate and collect labels
     let available_label_names: std::collections::HashSet<_> =
         available_labels.iter().map(|l| l.name.as_str()).collect();
 
+    // Validate suggested labels
+    let mut valid_suggested = Vec::new();
     for label in suggested_labels {
         if available_label_names.contains(label.as_str()) {
-            applied_labels.push(label.clone());
+            valid_suggested.push(label.clone());
         } else {
             warnings.push(format!("Label '{label}' not found in repository"));
         }
     }
 
-    // Validate and find milestone
-    let mut applied_milestone = None;
-    if let Some(milestone_title) = suggested_milestone {
-        if let Some(milestone) = available_milestones
-            .iter()
-            .find(|m| m.title == milestone_title)
-        {
-            applied_milestone = Some(milestone.title.clone());
+    // Merge existing and suggested labels additively
+    let applied_labels = merge_labels(existing_labels, &valid_suggested);
+
+    // Validate and find milestone (only set if issue has no existing milestone)
+    let applied_milestone = if existing_milestone.is_none() {
+        if let Some(milestone_title) = suggested_milestone {
+            if let Some(milestone) = available_milestones
+                .iter()
+                .find(|m| m.title == milestone_title)
+            {
+                Some(milestone.title.clone())
+            } else {
+                warnings.push(format!(
+                    "Milestone '{milestone_title}' not found in repository"
+                ));
+                None
+            }
         } else {
-            warnings.push(format!(
-                "Milestone '{milestone_title}' not found in repository"
-            ));
+            None
         }
-    }
+    } else {
+        None
+    };
 
     // Apply updates to the issue
     let issues_handler = client.issues(owner, repo);
@@ -1335,6 +1402,56 @@ mod tree_tests {
     fn get_extensions_for_language_unknown() {
         let exts = get_extensions_for_language("unknown_language");
         assert!(exts.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod merge_labels_tests {
+    use super::*;
+
+    #[test]
+    fn preserves_existing_and_adds_new() {
+        let existing = vec!["bug".to_string(), "enhancement".to_string()];
+        let suggested = vec!["documentation".to_string()];
+        let merged = merge_labels(&existing, &suggested);
+        assert_eq!(merged.len(), 3);
+        assert!(merged.contains(&"bug".to_string()));
+        assert!(merged.contains(&"enhancement".to_string()));
+        assert!(merged.contains(&"documentation".to_string()));
+    }
+
+    #[test]
+    fn deduplicates_case_insensitive() {
+        let existing = vec!["Bug".to_string()];
+        let suggested = vec!["bug".to_string(), "enhancement".to_string()];
+        let merged = merge_labels(&existing, &suggested);
+        assert_eq!(merged.len(), 2);
+        assert!(merged.contains(&"Bug".to_string()));
+        assert!(merged.contains(&"enhancement".to_string()));
+    }
+
+    #[test]
+    fn skips_priority_when_existing_has_one() {
+        // P1 (uppercase) exists, p2 suggested - should keep P1, skip p2, add bug
+        let existing = vec!["P1".to_string()];
+        let suggested = vec!["p2".to_string(), "bug".to_string()];
+        let merged = merge_labels(&existing, &suggested);
+        assert_eq!(merged.len(), 2);
+        assert!(merged.contains(&"P1".to_string()));
+        assert!(merged.contains(&"bug".to_string()));
+        assert!(!merged.contains(&"p2".to_string()));
+    }
+
+    #[test]
+    fn handles_empty_inputs() {
+        // Empty existing: suggested labels pass through
+        let merged = merge_labels(&[], &["bug".to_string(), "p1".to_string()]);
+        assert_eq!(merged.len(), 2);
+
+        // Empty suggested: existing labels preserved
+        let merged = merge_labels(&["bug".to_string()], &[]);
+        assert_eq!(merged.len(), 1);
+        assert!(merged.contains(&"bug".to_string()));
     }
 }
 
