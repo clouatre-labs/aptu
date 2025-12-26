@@ -18,7 +18,9 @@ pub mod ratelimit;
 pub const OAUTH_CLIENT_ID: &str = "Ov23lifiYQrh6Ga7Hpyr";
 
 /// Keyring service name for storing credentials.
+#[cfg(feature = "keyring")]
 pub const KEYRING_SERVICE: &str = "aptu";
 
 /// Keyring username for the GitHub token.
+#[cfg(feature = "keyring")]
 pub const KEYRING_USER: &str = "github_token";
