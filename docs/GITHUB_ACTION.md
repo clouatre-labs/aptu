@@ -54,6 +54,7 @@ For detailed provider setup and model options, see [Configuration](CONFIGURATION
 | `groq-api-key` | No | - | Groq API key |
 | `cerebras-api-key` | No | - | Cerebras API key |
 | `model` | No | Provider default | Model to use (provider-specific) |
+| `provider` | No | - | AI provider to use (gemini, openrouter, groq, cerebras) |
 | `skip-labeled` | No | `true` | Skip triage if issue already has labels |
 | `dry-run` | No | `false` | Run without making changes |
 | `apply-labels` | No | `true` | Apply AI-suggested labels and milestone |
@@ -110,6 +111,17 @@ For detailed provider setup and model options, see [Configuration](CONFIGURATION
     github-token: ${{ secrets.GITHUB_TOKEN }}
     gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
     skip-labeled: 'false'
+```
+
+### Explicit Provider and Model Selection
+
+```yaml
+- uses: clouatre-labs/aptu@v0
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+    provider: gemini
+    model: gemini-3-flash-preview
 ```
 
 ## Permissions
