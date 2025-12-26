@@ -237,7 +237,15 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
     let mut labels = Vec::new();
 
     // Extract conventional commit prefix from title
-    let prefix = title.split(':').next().unwrap_or("").trim();
+    // Handle both "feat: ..." and "feat(scope): ..." formats
+    let prefix = title
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .split('(')
+        .next()
+        .unwrap_or("")
+        .trim();
 
     // Map conventional commit type to label
     let type_label = match prefix {
@@ -339,91 +347,118 @@ mod tests {
     }
 
     #[test]
-    fn test_labels_from_pr_metadata_feat_prefix() {
-        let labels = labels_from_pr_metadata("feat: add new feature", &[]);
-        assert!(labels.contains(&"enhancement".to_string()));
+    fn test_title_prefix_to_label_mapping() {
+        let cases = vec![
+            (
+                "feat: add new feature",
+                vec!["enhancement"],
+                "feat should map to enhancement",
+            ),
+            ("fix: resolve bug", vec!["bug"], "fix should map to bug"),
+            (
+                "docs: update readme",
+                vec!["documentation"],
+                "docs should map to documentation",
+            ),
+            (
+                "refactor: improve code",
+                vec!["refactor"],
+                "refactor should map to refactor",
+            ),
+            (
+                "perf: optimize",
+                vec!["enhancement"],
+                "perf should map to enhancement",
+            ),
+            (
+                "chore: update deps",
+                vec![],
+                "chore should produce no labels",
+            ),
+        ];
+
+        for (title, expected_labels, msg) in cases {
+            let labels = labels_from_pr_metadata(title, &[]);
+            for expected in &expected_labels {
+                assert!(
+                    labels.contains(&expected.to_string()),
+                    "{}: expected '{}' in {:?}",
+                    msg,
+                    expected,
+                    labels
+                );
+            }
+            if expected_labels.is_empty() {
+                assert!(
+                    labels.is_empty(),
+                    "{}: expected empty, got {:?}",
+                    msg,
+                    labels
+                );
+            }
+        }
     }
 
     #[test]
-    fn test_labels_from_pr_metadata_fix_prefix() {
-        let labels = labels_from_pr_metadata("fix: resolve bug", &[]);
-        assert!(labels.contains(&"bug".to_string()));
+    fn test_file_path_to_scope_mapping() {
+        let cases = vec![
+            (
+                "feat: cli",
+                vec!["crates/aptu-cli/src/main.rs"],
+                vec!["enhancement", "cli"],
+                "cli path should map to cli scope",
+            ),
+            (
+                "feat: ios",
+                vec!["crates/aptu-ffi/src/lib.rs"],
+                vec!["enhancement", "ios"],
+                "ffi path should map to ios scope",
+            ),
+            (
+                "feat: ios",
+                vec!["AptuApp/ContentView.swift"],
+                vec!["enhancement", "ios"],
+                "app path should map to ios scope",
+            ),
+            (
+                "feat: docs",
+                vec!["docs/GITHUB_ACTION.md"],
+                vec!["enhancement", "documentation"],
+                "docs path should map to documentation scope",
+            ),
+            (
+                "feat: snap",
+                vec!["snap/snapcraft.yaml"],
+                vec!["enhancement", "distribution"],
+                "snap path should map to distribution scope",
+            ),
+            (
+                "feat: workflow",
+                vec![".github/workflows/test.yml"],
+                vec!["enhancement"],
+                "workflow path should be ignored",
+            ),
+        ];
+
+        for (title, paths, expected_labels, msg) in cases {
+            let labels = labels_from_pr_metadata(
+                title,
+                &paths.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            );
+            for expected in expected_labels {
+                assert!(
+                    labels.contains(&expected.to_string()),
+                    "{}: expected '{}' in {:?}",
+                    msg,
+                    expected,
+                    labels
+                );
+            }
+        }
     }
 
     #[test]
-    fn test_labels_from_pr_metadata_docs_prefix() {
-        let labels = labels_from_pr_metadata("docs: update readme", &[]);
-        assert!(labels.contains(&"documentation".to_string()));
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_refactor_prefix() {
-        let labels = labels_from_pr_metadata("refactor: improve code", &[]);
-        assert!(labels.contains(&"refactor".to_string()));
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_perf_prefix() {
-        let labels = labels_from_pr_metadata("perf: optimize", &[]);
-        assert!(labels.contains(&"enhancement".to_string()));
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_ignored_prefix() {
-        let labels = labels_from_pr_metadata("chore: update deps", &[]);
-        assert!(labels.is_empty());
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_cli_path() {
-        let labels =
-            labels_from_pr_metadata("feat: cli", &["crates/aptu-cli/src/main.rs".to_string()]);
-        assert!(labels.contains(&"enhancement".to_string()));
-        assert!(labels.contains(&"cli".to_string()));
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_ios_path_ffi() {
-        let labels =
-            labels_from_pr_metadata("feat: ios", &["crates/aptu-ffi/src/lib.rs".to_string()]);
-        assert!(labels.contains(&"enhancement".to_string()));
-        assert!(labels.contains(&"ios".to_string()));
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_ios_path_app() {
-        let labels =
-            labels_from_pr_metadata("feat: ios", &["AptuApp/ContentView.swift".to_string()]);
-        assert!(labels.contains(&"enhancement".to_string()));
-        assert!(labels.contains(&"ios".to_string()));
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_docs_path() {
-        let labels = labels_from_pr_metadata("feat: docs", &["docs/GITHUB_ACTION.md".to_string()]);
-        assert!(labels.contains(&"enhancement".to_string()));
-        assert!(labels.contains(&"documentation".to_string()));
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_distribution_path() {
-        let labels = labels_from_pr_metadata("feat: snap", &["snap/snapcraft.yaml".to_string()]);
-        assert!(labels.contains(&"enhancement".to_string()));
-        assert!(labels.contains(&"distribution".to_string()));
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_workflow_path_ignored() {
-        let labels = labels_from_pr_metadata(
-            "feat: workflow",
-            &[".github/workflows/test.yml".to_string()],
-        );
-        assert!(labels.contains(&"enhancement".to_string()));
-        assert!(!labels.contains(&"workflow".to_string()));
-    }
-
-    #[test]
-    fn test_labels_from_pr_metadata_multiple_paths() {
+    fn test_combined_title_and_paths() {
         let labels = labels_from_pr_metadata(
             "feat: multi",
             &[
@@ -431,14 +466,47 @@ mod tests {
                 "docs/README.md".to_string(),
             ],
         );
-        assert!(labels.contains(&"enhancement".to_string()));
-        assert!(labels.contains(&"cli".to_string()));
-        assert!(labels.contains(&"documentation".to_string()));
+        assert!(
+            labels.contains(&"enhancement".to_string()),
+            "should include enhancement from feat prefix"
+        );
+        assert!(
+            labels.contains(&"cli".to_string()),
+            "should include cli from path"
+        );
+        assert!(
+            labels.contains(&"documentation".to_string()),
+            "should include documentation from path"
+        );
     }
 
     #[test]
-    fn test_labels_from_pr_metadata_no_prefix() {
-        let labels = labels_from_pr_metadata("Random title", &[]);
-        assert!(labels.is_empty());
+    fn test_no_match_returns_empty() {
+        let cases = vec![
+            (
+                "Random title",
+                vec![],
+                "unrecognized prefix should return empty",
+            ),
+            (
+                "chore: update",
+                vec![],
+                "ignored prefix should return empty",
+            ),
+        ];
+
+        for (title, paths, msg) in cases {
+            let labels = labels_from_pr_metadata(title, &paths);
+            assert!(labels.is_empty(), "{}: got {:?}", msg, labels);
+        }
+    }
+
+    #[test]
+    fn test_scoped_prefix_extracts_type() {
+        let labels = labels_from_pr_metadata("feat(cli): add new feature", &[]);
+        assert!(
+            labels.contains(&"enhancement".to_string()),
+            "scoped prefix should extract type from feat(cli)"
+        );
     }
 }
