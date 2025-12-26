@@ -26,40 +26,60 @@ jobs:
         uses: clouatre-labs/aptu@v0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
 ```
 
-2. Add your OpenRouter API key as a repository secret (`OPENROUTER_API_KEY`)
+2. Add your AI provider API key as a repository secret (e.g., `GEMINI_API_KEY`)
+
+## AI Providers
+
+The action supports all providers available in the CLI. Provide **one** API key:
+
+| Provider | Input | Default Model |
+|----------|-------|---------------|
+| Google Gemini | `gemini-api-key` | `gemini-3-flash-preview` |
+| OpenRouter | `openrouter-api-key` | `mistralai/devstral-2512:free` |
+| Groq | `groq-api-key` | `llama-3.3-70b-versatile` |
+| Cerebras | `cerebras-api-key` | `qwen-3-32b` |
+
+For detailed provider setup and model options, see [Configuration](CONFIGURATION.md).
 
 ## Inputs
 
-- **github-token** (required) - GitHub token for API access (use `secrets.GITHUB_TOKEN`)
-- **openrouter-api-key** (required) - OpenRouter API key for AI analysis
-- **model** (optional) - OpenRouter model to use (default: `mistralai/devstral-2512:free`)
-- **skip-labeled** (optional) - Skip triage if issue already has labels (default: `true`)
-- **dry-run** (optional) - Run without making changes (default: `false`)
-- **apply-labels** (optional) - Apply AI-suggested labels and milestone (default: `true`)
-- **no-comment** (optional) - Skip posting triage comment to GitHub (default: `false`)
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `github-token` | Yes | - | GitHub token for API access |
+| `gemini-api-key` | No | - | Google Gemini API key |
+| `openrouter-api-key` | No | - | OpenRouter API key |
+| `groq-api-key` | No | - | Groq API key |
+| `cerebras-api-key` | No | - | Cerebras API key |
+| `model` | No | Provider default | Model to use (provider-specific) |
+| `skip-labeled` | No | `true` | Skip triage if issue already has labels |
+| `dry-run` | No | `false` | Run without making changes |
+| `apply-labels` | No | `true` | Apply AI-suggested labels and milestone |
+| `no-comment` | No | `false` | Skip posting triage comment |
+
+> **Note:** At least one API key is required.
 
 ## Examples
 
-### Basic Setup
+### Google Gemini (Recommended)
 
 ```yaml
 - uses: clouatre-labs/aptu@v0
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
-    openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
 ```
 
-### Custom Model
+### OpenRouter with Custom Model
 
 ```yaml
 - uses: clouatre-labs/aptu@v0
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-    model: mistralai/devstral-2512:free
+    model: google/gemini-3-flash-preview
 ```
 
 ### Dry Run (Preview Only)
@@ -68,18 +88,8 @@ jobs:
 - uses: clouatre-labs/aptu@v0
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
-    openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-    dry-run: true
-```
-
-### Skip Already-Labeled Issues
-
-```yaml
-- uses: clouatre-labs/aptu@v0
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-    skip-labeled: true
+    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+    dry-run: 'true'
 ```
 
 ### Labels Only (No Comment)
@@ -88,8 +98,18 @@ jobs:
 - uses: clouatre-labs/aptu@v0
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
-    openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-    no-comment: true
+    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+    no-comment: 'true'
+```
+
+### Triage All Issues (Including Already-Labeled)
+
+```yaml
+- uses: clouatre-labs/aptu@v0
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+    skip-labeled: 'false'
 ```
 
 ## Permissions
@@ -98,16 +118,3 @@ The action requires the following permissions:
 
 - `issues: write` - To post comments and apply labels
 - `contents: read` - To read repository contents
-
-## Environment Variables
-
-You can also configure the action using environment variables:
-
-```yaml
-- uses: clouatre-labs/aptu@v0
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-  with:
-    model: mistralai/devstral-2512:free
-```
