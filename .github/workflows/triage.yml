@@ -17,6 +17,6 @@ jobs:
         uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
           skip-labeled: 'false'
           no-comment: 'true'
