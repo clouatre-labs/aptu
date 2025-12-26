@@ -229,6 +229,7 @@ pub async fn apply(
         &issue_details.owner,
         &issue_details.repo,
         issue_details.number,
+        &issue_details.labels,
         &triage.suggested_labels,
         triage.suggested_milestone.as_deref(),
         &issue_details.available_labels,
