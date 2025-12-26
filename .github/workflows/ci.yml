@@ -115,6 +115,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run Clippy lints
         run: cargo clippy -- -D warnings
+      - name: Build examples
+        run: cargo build --examples -p aptu-core
 
   test:
     name: Test
