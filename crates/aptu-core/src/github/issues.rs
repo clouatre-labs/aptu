@@ -477,6 +477,9 @@ pub struct ApplyResult {
 }
 
 /// Merges existing and suggested labels additively.
+/// Labels that should only be applied by maintainers, not by AI suggestions
+const MAINTAINER_ONLY_LABELS: &[&str] = &["good first issue", "help wanted"];
+
 ///
 /// Implements additive label merging with priority label handling:
 /// - If existing labels contain a priority label (p[0-9]), skip AI-suggested priority labels
@@ -514,6 +517,14 @@ fn merge_labels(existing_labels: &[String], suggested_labels: &[String]) -> Vec<
 
         // Skip priority labels if existing already has one
         if is_priority && has_priority {
+            continue;
+        }
+
+        // Skip maintainer-only labels
+        if MAINTAINER_ONLY_LABELS
+            .iter()
+            .any(|&m| m.eq_ignore_ascii_case(suggested))
+        {
             continue;
         }
 
@@ -1483,6 +1494,36 @@ mod merge_labels_tests {
         let merged = merge_labels(&["bug".to_string()], &[]);
         assert_eq!(merged.len(), 1);
         assert!(merged.contains(&"bug".to_string()));
+    }
+
+    #[test]
+    fn filters_maintainer_only_labels() {
+        let existing = vec![];
+        let suggested = vec![
+            "good first issue".to_string(),
+            "help wanted".to_string(),
+            "bug".to_string(),
+        ];
+        let merged = merge_labels(&existing, &suggested);
+        assert_eq!(merged.len(), 1);
+        assert!(merged.contains(&"bug".to_string()));
+        assert!(!merged.contains(&"good first issue".to_string()));
+        assert!(!merged.contains(&"help wanted".to_string()));
+    }
+
+    #[test]
+    fn filters_maintainer_only_case_insensitive() {
+        let existing = vec![];
+        let suggested = vec![
+            "Good First Issue".to_string(),
+            "HELP WANTED".to_string(),
+            "enhancement".to_string(),
+        ];
+        let merged = merge_labels(&existing, &suggested);
+        assert_eq!(merged.len(), 1);
+        assert!(merged.contains(&"enhancement".to_string()));
+        assert!(!merged.contains(&"Good First Issue".to_string()));
+        assert!(!merged.contains(&"HELP WANTED".to_string()));
     }
 }
 
