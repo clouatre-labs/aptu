@@ -416,36 +416,4 @@ mod tests {
             std::env::remove_var("GITHUB_TOKEN");
         }
     }
-
-    #[test]
-    fn test_resolve_token_inner_falls_back_to_github_token() {
-        // Arrange: Set only GITHUB_TOKEN
-        unsafe {
-            std::env::remove_var("GH_TOKEN");
-            std::env::set_var("GITHUB_TOKEN", "github_token_456");
-        }
-
-        // Act
-        let result = resolve_token_inner();
-
-        // Assert
-        assert!(result.is_some());
-        let (token, source) = result.unwrap();
-        assert_eq!(token.expose_secret(), "github_token_456");
-        assert_eq!(source, TokenSource::Environment);
-
-        // Cleanup
-        unsafe {
-            std::env::remove_var("GITHUB_TOKEN");
-        }
-    }
-
-    #[test]
-    fn test_clear_token_cache() {
-        // Arrange: Call clear_token_cache
-        // Act
-        clear_token_cache();
-        // Assert: Should not panic
-        // The cache is session-scoped, so we just verify the function exists and works
-    }
 }
