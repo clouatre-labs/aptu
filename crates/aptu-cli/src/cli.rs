@@ -56,19 +56,19 @@ pub struct OutputContext {
     pub format: OutputFormat,
     /// Suppress non-essential output (spinners, progress)
     pub quiet: bool,
-    /// Enable verbose output (debug-level logging)
-    pub verbose: bool,
+    /// Verbosity level: 0 = default, 1 = verbose (-v), 2+ = debug (-vv)
+    pub verbosity: u8,
     /// Whether stdout is a terminal (TTY)
     pub is_tty: bool,
 }
 
 impl OutputContext {
     /// Creates an `OutputContext` from CLI arguments.
-    pub fn from_cli(format: OutputFormat, quiet: bool, verbose: bool) -> Self {
+    pub fn from_cli(format: OutputFormat, quiet: bool, verbosity: u8) -> Self {
         Self {
             format,
             quiet,
-            verbose,
+            verbosity,
             is_tty: std::io::stdout().is_terminal(),
         }
     }
@@ -76,6 +76,17 @@ impl OutputContext {
     /// Returns true if interactive elements (spinners, colors) should be shown.
     pub fn is_interactive(&self) -> bool {
         self.is_tty && !self.quiet && matches!(self.format, OutputFormat::Text)
+    }
+
+    /// Returns true if verbose output is enabled (-v or higher).
+    pub fn is_verbose(&self) -> bool {
+        self.verbosity >= 1
+    }
+
+    /// Returns true if debug output is enabled (-vv or higher).
+    #[allow(dead_code)]
+    pub fn is_debug(&self) -> bool {
+        self.verbosity >= 2
     }
 }
 
@@ -129,9 +140,9 @@ pub struct Cli {
     #[arg(long, short = 'q', global = true)]
     pub quiet: bool,
 
-    /// Enable verbose output (debug-level logging)
-    #[arg(long, short = 'v', global = true)]
-    pub verbose: bool,
+    /// Enable verbose output (debug-level logging). Use -v for verbose, -vv for debug
+    #[arg(long, short = 'v', global = true, action = clap::ArgAction::Count)]
+    pub verbose: u8,
 
     /// Override configured AI provider (e.g., openrouter, anthropic)
     #[arg(long, global = true)]

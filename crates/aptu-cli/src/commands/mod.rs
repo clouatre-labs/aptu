@@ -12,7 +12,7 @@ pub mod repo;
 pub mod triage;
 pub mod types;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use console::style;
@@ -65,7 +65,9 @@ async fn triage_single_issue(
 ) -> Result<Option<types::TriageResult>> {
     // Phase 1a: Fetch issue
     let spinner = maybe_spinner(ctx, "Fetching issue...");
+    let fetch_start = Instant::now();
     let issue_details = triage::fetch(reference, repo_context).await?;
+    let fetch_elapsed = fetch_start.elapsed();
     if let Some(s) = spinner {
         s.finish_and_clear();
     }
@@ -86,6 +88,27 @@ async fn triage_single_issue(
     let ai_response = triage::analyze(&issue_details).await?;
     if let Some(s) = spinner {
         s.finish_and_clear();
+    }
+
+    // Verbose output: show fetch timing and AI analysis timing
+    if ctx.is_verbose() && matches!(ctx.format, OutputFormat::Text) {
+        let fetch_ms = fetch_elapsed.as_millis();
+        println!(
+            "  {}",
+            style(format!("Fetched issue in {fetch_ms}ms")).dim()
+        );
+
+        let stats = &ai_response.stats;
+        #[allow(clippy::cast_precision_loss)]
+        let duration_secs = stats.duration_ms as f64 / 1000.0;
+        let total_tokens = stats.input_tokens + stats.output_tokens;
+        println!(
+            "  {} (model: {}) in {:.1}s ({} tokens)",
+            style("AI analysis").dim(),
+            style(&stats.model).cyan(),
+            duration_secs,
+            total_tokens
+        );
     }
 
     // Build result for rendering (before posting decision)
@@ -362,13 +385,6 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                             style(format!("Warning: {}", rate_limit.message())).yellow()
                         );
                     }
-                }
-
-                // Show OpenRouter credits in verbose mode
-                if ctx.verbose && matches!(ctx.format, OutputFormat::Text) {
-                    debug!("Verbose mode enabled, showing OpenRouter credits");
-                    // Note: OpenRouter credits check would require additional API call
-                    // For now, we just log that verbose mode is active
                 }
 
                 // Bulk triage loop with concurrent processing
