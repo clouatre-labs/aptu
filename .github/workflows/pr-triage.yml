@@ -1,0 +1,22 @@
+name: Auto-Label Pull Requests
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Auto-Label PR
+        uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          command: pr
+          subcommand: label
+          reference: ${{ github.event.pull_request.number }}

@@ -221,6 +221,62 @@ pub async fn post_pr_review(
     Ok(response.id)
 }
 
+/// Extract labels from PR metadata (title and file paths).
+///
+/// Parses conventional commit prefix from PR title and maps file paths to scope labels.
+/// Returns a vector of label names to apply to the PR.
+///
+/// # Arguments
+/// * `title` - PR title (may contain conventional commit prefix)
+/// * `file_paths` - List of file paths changed in the PR
+///
+/// # Returns
+/// Vector of label names to apply
+#[must_use]
+pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String> {
+    let mut labels = Vec::new();
+
+    // Extract conventional commit prefix from title
+    let prefix = title.split(':').next().unwrap_or("").trim();
+
+    // Map conventional commit type to label
+    let type_label = match prefix {
+        "feat" | "perf" => Some("enhancement"),
+        "fix" => Some("bug"),
+        "docs" => Some("documentation"),
+        "refactor" => Some("refactor"),
+        _ => None,
+    };
+
+    if let Some(label) = type_label {
+        labels.push(label.to_string());
+    }
+
+    // Map file paths to scope labels
+    let mut scope_labels = std::collections::HashSet::new();
+
+    for path in file_paths {
+        let scope = if path.starts_with("crates/aptu-cli/") {
+            Some("cli")
+        } else if path.starts_with("crates/aptu-ffi/") || path.starts_with("AptuApp/") {
+            Some("ios")
+        } else if path.starts_with("docs/") {
+            Some("documentation")
+        } else if path.starts_with("snap/") {
+            Some("distribution")
+        } else {
+            None
+        };
+
+        if let Some(label) = scope {
+            scope_labels.insert(label.to_string());
+        }
+    }
+
+    labels.extend(scope_labels);
+    labels
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,5 +336,109 @@ mod tests {
     fn test_parse_pr_reference_invalid_number() {
         let result = parse_pr_reference("block/goose#abc", None);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_feat_prefix() {
+        let labels = labels_from_pr_metadata("feat: add new feature", &[]);
+        assert!(labels.contains(&"enhancement".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_fix_prefix() {
+        let labels = labels_from_pr_metadata("fix: resolve bug", &[]);
+        assert!(labels.contains(&"bug".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_docs_prefix() {
+        let labels = labels_from_pr_metadata("docs: update readme", &[]);
+        assert!(labels.contains(&"documentation".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_refactor_prefix() {
+        let labels = labels_from_pr_metadata("refactor: improve code", &[]);
+        assert!(labels.contains(&"refactor".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_perf_prefix() {
+        let labels = labels_from_pr_metadata("perf: optimize", &[]);
+        assert!(labels.contains(&"enhancement".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_ignored_prefix() {
+        let labels = labels_from_pr_metadata("chore: update deps", &[]);
+        assert!(labels.is_empty());
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_cli_path() {
+        let labels =
+            labels_from_pr_metadata("feat: cli", &["crates/aptu-cli/src/main.rs".to_string()]);
+        assert!(labels.contains(&"enhancement".to_string()));
+        assert!(labels.contains(&"cli".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_ios_path_ffi() {
+        let labels =
+            labels_from_pr_metadata("feat: ios", &["crates/aptu-ffi/src/lib.rs".to_string()]);
+        assert!(labels.contains(&"enhancement".to_string()));
+        assert!(labels.contains(&"ios".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_ios_path_app() {
+        let labels =
+            labels_from_pr_metadata("feat: ios", &["AptuApp/ContentView.swift".to_string()]);
+        assert!(labels.contains(&"enhancement".to_string()));
+        assert!(labels.contains(&"ios".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_docs_path() {
+        let labels = labels_from_pr_metadata("feat: docs", &["docs/GITHUB_ACTION.md".to_string()]);
+        assert!(labels.contains(&"enhancement".to_string()));
+        assert!(labels.contains(&"documentation".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_distribution_path() {
+        let labels = labels_from_pr_metadata("feat: snap", &["snap/snapcraft.yaml".to_string()]);
+        assert!(labels.contains(&"enhancement".to_string()));
+        assert!(labels.contains(&"distribution".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_workflow_path_ignored() {
+        let labels = labels_from_pr_metadata(
+            "feat: workflow",
+            &[".github/workflows/test.yml".to_string()],
+        );
+        assert!(labels.contains(&"enhancement".to_string()));
+        assert!(!labels.contains(&"workflow".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_multiple_paths() {
+        let labels = labels_from_pr_metadata(
+            "feat: multi",
+            &[
+                "crates/aptu-cli/src/main.rs".to_string(),
+                "docs/README.md".to_string(),
+            ],
+        );
+        assert!(labels.contains(&"enhancement".to_string()));
+        assert!(labels.contains(&"cli".to_string()));
+        assert!(labels.contains(&"documentation".to_string()));
+    }
+
+    #[test]
+    fn test_labels_from_pr_metadata_no_prefix() {
+        let labels = labels_from_pr_metadata("Random title", &[]);
+        assert!(labels.is_empty());
     }
 }

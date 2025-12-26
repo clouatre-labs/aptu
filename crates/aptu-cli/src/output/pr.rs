@@ -7,7 +7,7 @@ use std::io::{self, Write};
 use console::style;
 
 use crate::cli::OutputContext;
-use crate::commands::types::PrReviewResult;
+use crate::commands::types::{PrLabelResult, PrReviewResult};
 use crate::output::Renderable;
 
 impl Renderable for PrReviewResult {
@@ -153,6 +153,60 @@ impl Renderable for PrReviewResult {
             }
             writeln!(w)?;
         }
+
+        Ok(())
+    }
+}
+
+impl Renderable for PrLabelResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w)?;
+        writeln!(
+            w,
+            "{} #{}: {}",
+            style("PR").cyan().bold(),
+            self.pr_number,
+            style(&self.pr_title).bold()
+        )?;
+        writeln!(w, "{}", style(&self.pr_url).dim())?;
+        writeln!(w)?;
+
+        if self.dry_run {
+            writeln!(w, "{}", style("DRY RUN MODE").yellow().bold())?;
+            writeln!(w)?;
+        }
+
+        if self.labels.is_empty() {
+            writeln!(w, "{}", style("No labels extracted").dim())?;
+        } else {
+            writeln!(w, "{}", style("Labels").cyan().bold())?;
+            for label in &self.labels {
+                writeln!(w, "  - {}", style(label).green())?;
+            }
+        }
+        writeln!(w)?;
+
+        Ok(())
+    }
+
+    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w, "## PR Labels: #{} - {}", self.pr_number, self.pr_title)?;
+        writeln!(w)?;
+
+        if self.dry_run {
+            writeln!(w, "**DRY RUN MODE**")?;
+            writeln!(w)?;
+        }
+
+        if self.labels.is_empty() {
+            writeln!(w, "No labels extracted")?;
+        } else {
+            writeln!(w, "### Labels")?;
+            for label in &self.labels {
+                writeln!(w, "- `{label}`")?;
+            }
+        }
+        writeln!(w)?;
 
         Ok(())
     }

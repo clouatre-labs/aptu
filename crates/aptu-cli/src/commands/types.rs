@@ -157,3 +157,18 @@ pub struct PrReviewResult {
     /// AI usage statistics.
     pub ai_stats: aptu_core::history::AiStats,
 }
+
+/// Result from the PR label command.
+#[derive(Debug, Clone, Serialize)]
+pub struct PrLabelResult {
+    /// PR number.
+    pub pr_number: u64,
+    /// PR title.
+    pub pr_title: String,
+    /// PR URL.
+    pub pr_url: String,
+    /// Labels extracted and applied.
+    pub labels: Vec<String>,
+    /// Whether this was a dry run.
+    pub dry_run: bool,
+}

@@ -495,3 +495,81 @@ pub async fn post_pr_review(
             status: None,
         })
 }
+
+/// Auto-label a pull request based on conventional commit prefix and file paths.
+///
+/// Fetches PR details, extracts labels from title and changed files,
+/// and applies them to the PR. Optionally previews without applying.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `reference` - PR reference (URL, owner/repo#number, or bare number)
+/// * `repo_context` - Optional repository context for bare numbers
+/// * `dry_run` - If true, preview labels without applying
+///
+/// # Returns
+///
+/// Tuple of (`pr_number`, `pr_title`, `pr_url`, `labels`).
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available from the provider
+/// - PR cannot be parsed or found
+/// - API call fails
+#[instrument(skip(provider), fields(reference = %reference))]
+pub async fn label_pr(
+    provider: &dyn TokenProvider,
+    reference: &str,
+    repo_context: Option<&str>,
+    dry_run: bool,
+) -> crate::Result<(u64, String, String, Vec<String>)> {
+    use crate::github::issues::apply_labels_to_number;
+    use crate::github::pulls::{fetch_pr_details, labels_from_pr_metadata, parse_pr_reference};
+
+    // Get GitHub token from provider
+    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
+
+    // Parse PR reference
+    let (owner, repo, number) =
+        parse_pr_reference(reference, repo_context).map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+        })?;
+
+    // Create GitHub client with the provided token
+    let token = SecretString::from(github_token);
+    let client = create_client_with_token(&token).map_err(|e| AptuError::AI {
+        message: format!("Failed to create GitHub client: {e}"),
+        status: None,
+    })?;
+
+    // Fetch PR details
+    let pr_details = fetch_pr_details(&client, &owner, &repo, number)
+        .await
+        .map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+        })?;
+
+    // Extract labels from PR metadata
+    let file_paths: Vec<String> = pr_details
+        .files
+        .iter()
+        .map(|f| f.filename.clone())
+        .collect();
+    let labels = labels_from_pr_metadata(&pr_details.title, &file_paths);
+
+    // Apply labels if not dry-run
+    if !dry_run && !labels.is_empty() {
+        apply_labels_to_number(&client, &owner, &repo, number, &labels)
+            .await
+            .map_err(|e| AptuError::AI {
+                message: e.to_string(),
+                status: None,
+            })?;
+    }
+
+    Ok((number, pr_details.title, pr_details.url, labels))
+}
