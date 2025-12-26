@@ -162,6 +162,107 @@ pub async fn list_curated_repos() -> crate::Result<Vec<CuratedRepo>> {
     repos::fetch().await
 }
 
+/// Adds a custom repository.
+///
+/// Validates the repository via GitHub API and adds it to the custom repos file.
+///
+/// # Arguments
+///
+/// * `owner` - Repository owner
+/// * `name` - Repository name
+///
+/// # Returns
+///
+/// The added `CuratedRepo`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Repository cannot be found on GitHub
+/// - Custom repos file cannot be read or written
+#[instrument]
+pub async fn add_custom_repo(owner: &str, name: &str) -> crate::Result<CuratedRepo> {
+    // Validate and fetch metadata from GitHub
+    let repo = repos::custom::validate_and_fetch_metadata(owner, name).await?;
+
+    // Read existing custom repos
+    let mut custom_repos = repos::custom::read_custom_repos()?;
+
+    // Check if repo already exists
+    if custom_repos
+        .iter()
+        .any(|r| r.full_name() == repo.full_name())
+    {
+        return Err(crate::error::AptuError::Config {
+            message: format!(
+                "Repository {} already exists in custom repos",
+                repo.full_name()
+            ),
+        });
+    }
+
+    // Add new repo
+    custom_repos.push(repo.clone());
+
+    // Write back to file
+    repos::custom::write_custom_repos(&custom_repos)?;
+
+    Ok(repo)
+}
+
+/// Removes a custom repository.
+///
+/// # Arguments
+///
+/// * `owner` - Repository owner
+/// * `name` - Repository name
+///
+/// # Returns
+///
+/// True if the repository was removed, false if it was not found.
+///
+/// # Errors
+///
+/// Returns an error if the custom repos file cannot be read or written.
+#[instrument]
+pub fn remove_custom_repo(owner: &str, name: &str) -> crate::Result<bool> {
+    let full_name = format!("{owner}/{name}");
+
+    // Read existing custom repos
+    let mut custom_repos = repos::custom::read_custom_repos()?;
+
+    // Find and remove the repo
+    let initial_len = custom_repos.len();
+    custom_repos.retain(|r| r.full_name() != full_name);
+
+    if custom_repos.len() == initial_len {
+        return Ok(false); // Not found
+    }
+
+    // Write back to file
+    repos::custom::write_custom_repos(&custom_repos)?;
+
+    Ok(true)
+}
+
+/// Lists repositories with optional filtering.
+///
+/// # Arguments
+///
+/// * `filter` - Repository filter (All, Curated, or Custom)
+///
+/// # Returns
+///
+/// A vector of `CuratedRepo` structs.
+///
+/// # Errors
+///
+/// Returns an error if repositories cannot be fetched.
+#[instrument]
+pub async fn list_repos(filter: repos::RepoFilter) -> crate::Result<Vec<CuratedRepo>> {
+    repos::fetch_all(filter).await
+}
+
 /// Analyzes a GitHub issue and generates triage suggestions.
 ///
 /// This function abstracts the credential resolution and API client creation,

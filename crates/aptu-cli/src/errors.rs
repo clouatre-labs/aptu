@@ -43,7 +43,7 @@ pub fn format_error(error: &Error) -> String {
                 msg.push_str("\n\nTip: Check your OPENROUTER_API_KEY environment variable.");
                 msg
             }
-            AptuError::Config(_) => {
+            AptuError::Config { message: _ } => {
                 format!(
                     "{aptu_err}\n\nTip: Check your config file at {}",
                     aptu_core::config::config_file_path().display()
@@ -57,7 +57,7 @@ pub fn format_error(error: &Error) -> String {
             AptuError::Network(_) => {
                 format!("{aptu_err}\n\nTip: Check your internet connection and try again.")
             }
-            AptuError::GitHub(_) => {
+            AptuError::GitHub { message: _ } => {
                 format!("{aptu_err}\n\nTip: Check your GitHub token with `aptu auth status`.")
             }
             AptuError::Keyring(_) => {

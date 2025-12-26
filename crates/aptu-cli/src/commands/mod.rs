@@ -233,13 +233,35 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
         },
 
         Commands::Repo(repo_cmd) => match repo_cmd {
-            RepoCommand::List => {
+            RepoCommand::List { curated, custom } => {
                 let spinner = maybe_spinner(&ctx, "Fetching repositories...");
-                let result = repo::run().await?;
+                let result = repo::run_list(curated, custom).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
                 result.render_with_context(&ctx);
+                Ok(())
+            }
+            RepoCommand::Add { repo } => {
+                let spinner = maybe_spinner(&ctx, "Adding repository...");
+                let result = repo::run_add(&repo).await?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
+                if matches!(ctx.format, OutputFormat::Text) {
+                    println!("{}", style(result).green());
+                }
+                Ok(())
+            }
+            RepoCommand::Remove { repo } => {
+                let spinner = maybe_spinner(&ctx, "Removing repository...");
+                let result = repo::run_remove(&repo)?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
+                if matches!(ctx.format, OutputFormat::Text) {
+                    println!("{}", style(result).green());
+                }
                 Ok(())
             }
         },

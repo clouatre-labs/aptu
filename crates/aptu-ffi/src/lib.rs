@@ -213,6 +213,91 @@ pub fn post_pr_review(
     })
 }
 
+/// Add a custom repository.
+///
+/// Validates the repository via GitHub API and adds it to the custom repos file.
+///
+/// # Arguments
+///
+/// * `owner` - Repository owner
+/// * `name` - Repository name
+///
+/// # Returns
+///
+/// The added repository details.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Repository cannot be found on GitHub
+/// - Custom repos file cannot be read or written
+#[uniffi::export]
+pub fn add_custom_repo(owner: String, name: String) -> Result<FfiCuratedRepo, AptuFfiError> {
+    RUNTIME.block_on(async {
+        match aptu_core::add_custom_repo(&owner, &name).await {
+            Ok(repo) => Ok(FfiCuratedRepo::from(&repo)),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
+/// Remove a custom repository.
+///
+/// # Arguments
+///
+/// * `owner` - Repository owner
+/// * `name` - Repository name
+///
+/// # Returns
+///
+/// True if the repository was removed, false if it was not found.
+///
+/// # Errors
+///
+/// Returns an error if the custom repos file cannot be read or written.
+#[uniffi::export]
+pub fn remove_custom_repo(owner: String, name: String) -> Result<bool, AptuFfiError> {
+    match aptu_core::remove_custom_repo(&owner, &name) {
+        Ok(removed) => Ok(removed),
+        Err(e) => Err(AptuFfiError::InternalError {
+            message: e.to_string(),
+        }),
+    }
+}
+
+/// List repositories with optional filtering.
+///
+/// # Arguments
+///
+/// * `filter_type` - Filter type: "all", "curated", or "custom"
+///
+/// # Returns
+///
+/// A vector of repositories matching the filter.
+///
+/// # Errors
+///
+/// Returns an error if repositories cannot be fetched.
+#[uniffi::export]
+pub fn list_repos(filter_type: String) -> Result<Vec<FfiCuratedRepo>, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let filter = match filter_type.as_str() {
+            "curated" => aptu_core::RepoFilter::Curated,
+            "custom" => aptu_core::RepoFilter::Custom,
+            _ => aptu_core::RepoFilter::All,
+        };
+
+        match aptu_core::list_repos(filter).await {
+            Ok(repos) => Ok(repos.iter().map(FfiCuratedRepo::from).collect()),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
 /// List all available AI models across all providers.
 ///
 /// Returns the complete registry of models that Aptu supports,
