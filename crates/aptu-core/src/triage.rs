@@ -133,22 +133,16 @@ mod tests {
     use crate::ai::types::IssueComment;
 
     fn create_test_issue(labels: Vec<String>, comments: Vec<IssueComment>) -> IssueDetails {
-        IssueDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test issue".to_string(),
-            body: "Test body".to_string(),
-            labels,
-            milestone: None,
-            comments,
-            url: "https://github.com/test/repo/issues/1".to_string(),
-            repo_context: Vec::new(),
-            repo_tree: Vec::new(),
-            available_labels: Vec::new(),
-            available_milestones: Vec::new(),
-            viewer_permission: None,
-        }
+        IssueDetails::builder()
+            .owner("test".to_string())
+            .repo("repo".to_string())
+            .number(1)
+            .title("Test issue".to_string())
+            .body("Test body".to_string())
+            .labels(labels)
+            .comments(comments)
+            .url("https://github.com/test/repo/issues/1".to_string())
+            .build()
     }
 
     #[test]

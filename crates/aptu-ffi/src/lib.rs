@@ -99,22 +99,16 @@ pub fn analyze_issue(
     RUNTIME.block_on(async {
         let provider = auth::FfiTokenProvider::new(keychain);
 
-        let core_issue = aptu_core::ai::types::IssueDetails {
-            owner: String::new(),
-            repo: String::new(),
-            number: issue.number,
-            title: issue.title,
-            body: issue.body,
-            labels: issue.labels,
-            milestone: None,
-            comments: vec![],
-            url: issue.url,
-            repo_context: vec![],
-            repo_tree: vec![],
-            available_labels: vec![],
-            available_milestones: vec![],
-            viewer_permission: None,
-        };
+        let core_issue = aptu_core::ai::types::IssueDetails::builder()
+            .owner(String::new())
+            .repo(String::new())
+            .number(issue.number)
+            .title(issue.title)
+            .body(issue.body)
+            .labels(issue.labels)
+            .comments(vec![])
+            .url(issue.url)
+            .build();
 
         match aptu_core::analyze_issue(&provider, &core_issue).await {
             Ok(ai_response) => Ok(FfiTriageResponse::from(ai_response.triage)),

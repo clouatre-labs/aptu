@@ -26,6 +26,9 @@ futures = "0.3"
 octocrab = "0.44"
 secrecy = "0.10"
 
+# Builder
+bon = "3"
+
 # Error handling and logging
 thiserror = "2"
 anyhow = "1"

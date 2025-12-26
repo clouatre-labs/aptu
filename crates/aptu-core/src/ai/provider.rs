@@ -813,22 +813,16 @@ mod tests {
 
     #[test]
     fn test_build_user_prompt_with_delimiters() {
-        let issue = IssueDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test issue".to_string(),
-            body: "This is the body".to_string(),
-            labels: vec!["bug".to_string()],
-            milestone: None,
-            comments: vec![],
-            url: "https://github.com/test/repo/issues/1".to_string(),
-            repo_context: Vec::new(),
-            repo_tree: Vec::new(),
-            available_labels: Vec::new(),
-            available_milestones: Vec::new(),
-            viewer_permission: None,
-        };
+        let issue = IssueDetails::builder()
+            .owner("test".to_string())
+            .repo("repo".to_string())
+            .number(1)
+            .title("Test issue".to_string())
+            .body("This is the body".to_string())
+            .labels(vec!["bug".to_string()])
+            .comments(vec![])
+            .url("https://github.com/test/repo/issues/1".to_string())
+            .build();
 
         let prompt = TestProvider::build_user_prompt(&issue);
         assert!(prompt.starts_with("<issue_content>"));
@@ -841,22 +835,16 @@ mod tests {
     #[test]
     fn test_build_user_prompt_truncates_long_body() {
         let long_body = "x".repeat(5000);
-        let issue = IssueDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test".to_string(),
-            body: long_body,
-            labels: vec![],
-            milestone: None,
-            comments: vec![],
-            url: "https://github.com/test/repo/issues/1".to_string(),
-            repo_context: Vec::new(),
-            repo_tree: Vec::new(),
-            available_labels: Vec::new(),
-            available_milestones: Vec::new(),
-            viewer_permission: None,
-        };
+        let issue = IssueDetails::builder()
+            .owner("test".to_string())
+            .repo("repo".to_string())
+            .number(1)
+            .title("Test".to_string())
+            .body(long_body)
+            .labels(vec![])
+            .comments(vec![])
+            .url("https://github.com/test/repo/issues/1".to_string())
+            .build();
 
         let prompt = TestProvider::build_user_prompt(&issue);
         assert!(prompt.contains("[Body truncated"));
@@ -865,22 +853,16 @@ mod tests {
 
     #[test]
     fn test_build_user_prompt_empty_body() {
-        let issue = IssueDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test".to_string(),
-            body: String::new(),
-            labels: vec![],
-            milestone: None,
-            comments: vec![],
-            url: "https://github.com/test/repo/issues/1".to_string(),
-            repo_context: Vec::new(),
-            repo_tree: Vec::new(),
-            available_labels: Vec::new(),
-            available_milestones: Vec::new(),
-            viewer_permission: None,
-        };
+        let issue = IssueDetails::builder()
+            .owner("test".to_string())
+            .repo("repo".to_string())
+            .number(1)
+            .title("Test".to_string())
+            .body(String::new())
+            .labels(vec![])
+            .comments(vec![])
+            .url("https://github.com/test/repo/issues/1".to_string())
+            .build();
 
         let prompt = TestProvider::build_user_prompt(&issue);
         assert!(prompt.contains("[No description provided]"));

@@ -27,22 +27,16 @@
 //! let client = AiClient::new(&config.ai.provider, &config.ai)?;
 //!
 //! // Create issue details
-//! let issue = IssueDetails {
-//!     owner: "block".to_string(),
-//!     repo: "goose".to_string(),
-//!     number: 123,
-//!     title: "Example issue".to_string(),
-//!     body: "Issue description...".to_string(),
-//!     labels: vec![],
-//!     milestone: None,
-//!     comments: vec![],
-//!     url: "https://github.com/block/goose/issues/123".to_string(),
-//!     repo_context: vec![],
-//!     repo_tree: vec![],
-//!     available_labels: vec![],
-//!     available_milestones: vec![],
-//!     viewer_permission: None,
-//! };
+//! let issue = IssueDetails::builder()
+//!     .owner("block".to_string())
+//!     .repo("goose".to_string())
+//!     .number(123)
+//!     .title("Example issue".to_string())
+//!     .body("Issue description...".to_string())
+//!     .labels(vec![])
+//!     .comments(vec![])
+//!     .url("https://github.com/block/goose/issues/123".to_string())
+//!     .build();
 //!
 //! // Analyze with AI
 //! let ai_response = client.analyze_issue(&issue).await?;
