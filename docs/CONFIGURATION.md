@@ -4,8 +4,9 @@ Config file: `~/.config/aptu/config.toml`
 
 ```toml
 [ai]
-provider = "gemini"  # or "openrouter"
-model = "gemini-3-flash-preview"  # or "mistralai/devstral-2512:free" for OpenRouter
+provider = "gemini"  # or "openrouter", "groq", "cerebras"
+model = "gemini-3-flash-preview"
+allow_paid_models = false  # default: blocks paid OpenRouter models
 
 [ui]
 confirm_before_post = true

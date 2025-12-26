@@ -10,13 +10,22 @@ inputs:
   github-token:
     description: GitHub token for API access
     required: true
-  openrouter-api-key:
-    description: OpenRouter API key for AI analysis
-    required: true
-  model:
-    description: OpenRouter model to use for analysis
+  gemini-api-key:
+    description: Google Gemini API key (from https://aistudio.google.com/apikey)
     required: false
-    default: mistralai/devstral-2512:free
+  openrouter-api-key:
+    description: OpenRouter API key (from https://openrouter.ai/keys)
+    required: false
+  groq-api-key:
+    description: Groq API key (from https://console.groq.com/keys)
+    required: false
+  cerebras-api-key:
+    description: Cerebras API key (from https://console.cerebras.ai/keys)
+    required: false
+  model:
+    description: Model to use for analysis (provider-specific, see docs/CONFIGURATION.md)
+    required: false
+    default: ''
   skip-labeled:
     description: Skip triage if issue already has labels
     required: false
@@ -93,7 +102,10 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         APTU_MODEL: ${{ inputs.model }}
         DRY_RUN: ${{ inputs.dry-run }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
