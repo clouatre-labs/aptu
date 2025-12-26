@@ -49,8 +49,6 @@ bon = { workspace = true }
 default = []
 # Enable system keyring for secure token storage
 keyring = ["dep:keyring"]
-# Enable UniFFI derive macros for FFI bindings (used by aptu-ffi)
-uniffi = []
 
 [lints]
 workspace = true

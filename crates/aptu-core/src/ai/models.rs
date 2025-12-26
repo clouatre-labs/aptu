@@ -38,7 +38,6 @@ use serde::{Deserialize, Serialize};
 /// Represents different AI service providers that Aptu can integrate with.
 /// Each provider has different capabilities, pricing, and deployment models.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ModelProvider {
     /// `OpenRouter` - Unified API for multiple AI providers
     /// Supports free and paid models from Mistral, Anthropic, xAI, and others.
@@ -68,7 +67,6 @@ impl std::fmt::Display for ModelProvider {
 /// Represents a single AI model with its capabilities, pricing, and provider information.
 /// Used for model selection, validation, and UI display.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct AiModel {
     /// Human-readable model name for UI display
     /// Example: "Devstral 2", "Claude Sonnet 4.5"
