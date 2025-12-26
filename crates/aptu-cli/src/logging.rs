@@ -23,22 +23,24 @@ use tracing_subscriber::{EnvFilter, fmt};
 
 /// Initialize the logging subsystem.
 ///
-/// Sets up `tracing` with the following defaults:
-/// - `aptu=info` - Info level for Aptu code
-/// - `octocrab=warn` - Warn level for GitHub API client
-/// - `reqwest=warn` - Warn level for HTTP client
+/// Verbosity levels:
+/// - 0 (default): No tracing output (clean user-facing output)
+/// - 1 (-v): No tracing output (verbose user info handled separately)
+/// - 2+ (-vv): Full debug tracing with timestamps
 ///
-/// These defaults can be overridden via the `RUST_LOG` environment variable.
-/// When verbose mode is enabled, sets `aptu=debug`.
-pub fn init_logging(quiet: bool, verbose: bool) {
+/// The `RUST_LOG` environment variable can override these defaults.
+pub fn init_logging(quiet: bool, verbosity: u8) {
     let fmt_layer = fmt::layer().with_target(false).with_writer(std::io::stderr);
 
-    let default_filter = if verbose {
+    // Only enable tracing output for debug mode (verbosity >= 2)
+    // Default and verbose modes use direct user output instead
+    let default_filter = if verbosity >= 2 {
         "aptu=debug,octocrab=warn,reqwest=warn"
     } else if quiet {
-        "aptu=warn,octocrab=warn,reqwest=warn"
+        "aptu=error,octocrab=error,reqwest=error"
     } else {
-        "aptu=info,octocrab=warn,reqwest=warn"
+        // Suppress tracing for default/verbose - user output is handled separately
+        "aptu=error,octocrab=error,reqwest=error"
     };
     let filter_layer = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new(default_filter))
