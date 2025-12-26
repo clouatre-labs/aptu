@@ -1,0 +1,12 @@
+# Commitlint configuration
+# Enforced by CI via wagoid/commitlint-github-action
+# See: https://commitlint.js.org/reference/rules.html
+
+extends:
+  - '@commitlint/config-conventional'
+
+# Using config-conventional defaults:
+# - header-max-length: 100
+# - body-max-line-length: 100
+# - footer-max-line-length: 100
+# - type-enum: [build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test]
