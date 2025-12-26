@@ -59,8 +59,8 @@ assert_cmd = "2"
 [workspace.lints.rust]
 unsafe_code = "warn"
 unused_must_use = "deny"
-# Allow cfg(feature = "uniffi") and cfg(feature = "keyring") even when the features are not enabled
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(feature, values(\"uniffi\", \"keyring\"))"] }
+# Allow cfg(feature = "keyring") even when the feature is not enabled
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(feature, values(\"keyring\"))"] }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
