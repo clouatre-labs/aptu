@@ -26,6 +26,10 @@ inputs:
     description: Model to use for analysis (provider-specific, see docs/CONFIGURATION.md)
     required: false
     default: ''
+  provider:
+    description: AI provider to use (gemini, openrouter, groq, cerebras)
+    required: false
+    default: ''
   skip-labeled:
     description: Skip triage if issue already has labels
     required: false
@@ -106,7 +110,8 @@ runs:
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         GROQ_API_KEY: ${{ inputs.groq-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
-        APTU_MODEL: ${{ inputs.model }}
+        APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__PROVIDER: ${{ inputs.provider }}
         DRY_RUN: ${{ inputs.dry-run }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         NO_COMMENT: ${{ inputs.no-comment }}
