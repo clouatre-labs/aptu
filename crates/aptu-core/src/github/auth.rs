@@ -143,18 +143,28 @@ fn get_token_from_gh_cli() -> Option<SecretString> {
     }
 }
 
-/// Internal token resolution logic without caching.
+/// Generic token resolution logic that accepts an environment variable reader.
+///
+/// This function enables dependency injection of the environment reader,
+/// allowing tests to pass mock values without manipulating the real environment.
 ///
 /// Checks sources in order:
-/// 1. `GH_TOKEN` environment variable
-/// 2. `GITHUB_TOKEN` environment variable
+/// 1. `GH_TOKEN` environment variable (via provided reader)
+/// 2. `GITHUB_TOKEN` environment variable (via provided reader)
 /// 3. GitHub CLI (`gh auth token`)
 /// 4. System keyring (native aptu auth)
 ///
+/// # Arguments
+///
+/// * `env_reader` - A function that reads environment variables, returning `Ok(value)` or `Err(_)`
+///
 /// Returns the token and its source, or `None` if no token is found.
-fn resolve_token_inner() -> Option<(SecretString, TokenSource)> {
+fn resolve_token_with_env<F>(env_reader: F) -> Option<(SecretString, TokenSource)>
+where
+    F: Fn(&str) -> Result<String, std::env::VarError>,
+{
     // Priority 1: GH_TOKEN environment variable
-    if let Ok(token) = std::env::var("GH_TOKEN")
+    if let Ok(token) = env_reader("GH_TOKEN")
         && !token.is_empty()
     {
         debug!("Using token from GH_TOKEN environment variable");
@@ -162,7 +172,7 @@ fn resolve_token_inner() -> Option<(SecretString, TokenSource)> {
     }
 
     // Priority 2: GITHUB_TOKEN environment variable
-    if let Ok(token) = std::env::var("GITHUB_TOKEN")
+    if let Ok(token) = env_reader("GITHUB_TOKEN")
         && !token.is_empty()
     {
         debug!("Using token from GITHUB_TOKEN environment variable");
@@ -184,6 +194,19 @@ fn resolve_token_inner() -> Option<(SecretString, TokenSource)> {
 
     debug!("No token found in any source");
     None
+}
+
+/// Internal token resolution logic without caching.
+///
+/// Checks sources in order:
+/// 1. `GH_TOKEN` environment variable
+/// 2. `GITHUB_TOKEN` environment variable
+/// 3. GitHub CLI (`gh auth token`)
+/// 4. System keyring (native aptu auth)
+///
+/// Returns the token and its source, or `None` if no token is found.
+fn resolve_token_inner() -> Option<(SecretString, TokenSource)> {
+    resolve_token_with_env(|key| std::env::var(key))
 }
 
 /// Resolves a GitHub token using the priority chain with session-level caching.
@@ -385,47 +408,43 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_token_inner_with_env_var() {
-        // Arrange: Set GH_TOKEN environment variable
-        unsafe {
-            std::env::set_var("GH_TOKEN", "test_token_123");
-        }
+    fn test_resolve_token_with_env_var() {
+        // Arrange: Create a mock env reader that returns a test token
+        let mock_env = |key: &str| -> Result<String, std::env::VarError> {
+            match key {
+                "GH_TOKEN" => Ok("test_token_123".to_string()),
+                "GITHUB_TOKEN" => Err(std::env::VarError::NotPresent),
+                _ => Err(std::env::VarError::NotPresent),
+            }
+        };
 
         // Act
-        let result = resolve_token_inner();
+        let result = resolve_token_with_env(mock_env);
 
         // Assert
         assert!(result.is_some());
         let (token, source) = result.unwrap();
         assert_eq!(token.expose_secret(), "test_token_123");
         assert_eq!(source, TokenSource::Environment);
-
-        // Cleanup
-        unsafe {
-            std::env::remove_var("GH_TOKEN");
-        }
     }
 
     #[test]
-    fn test_resolve_token_inner_prefers_gh_token_over_github_token() {
-        // Arrange: Set both GH_TOKEN and GITHUB_TOKEN
-        unsafe {
-            std::env::set_var("GH_TOKEN", "gh_token");
-            std::env::set_var("GITHUB_TOKEN", "github_token");
-        }
+    fn test_resolve_token_with_env_prefers_gh_token_over_github_token() {
+        // Arrange: Create a mock env reader that returns both tokens
+        let mock_env = |key: &str| -> Result<String, std::env::VarError> {
+            match key {
+                "GH_TOKEN" => Ok("gh_token".to_string()),
+                "GITHUB_TOKEN" => Ok("github_token".to_string()),
+                _ => Err(std::env::VarError::NotPresent),
+            }
+        };
 
         // Act
-        let result = resolve_token_inner();
+        let result = resolve_token_with_env(mock_env);
 
         // Assert: GH_TOKEN should take priority
         assert!(result.is_some());
         let (token, _) = result.unwrap();
         assert_eq!(token.expose_secret(), "gh_token");
-
-        // Cleanup
-        unsafe {
-            std::env::remove_var("GH_TOKEN");
-            std::env::remove_var("GITHUB_TOKEN");
-        }
     }
 }
