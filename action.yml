@@ -46,14 +46,18 @@ inputs:
     description: Skip posting triage comment to GitHub (only apply labels/milestone)
     required: false
     default: 'false'
-  pr-review-event:
-    description: Post PR review with specified event type (comment, approve, request-changes)
+  command:
+    description: Command to run (issue or pr)
+    required: false
+    default: 'issue'
+  subcommand:
+    description: Subcommand to run (triage for issue, label or review for pr)
+    required: false
+    default: 'triage'
+  reference:
+    description: Reference for the command (issue/PR number or URL)
     required: false
     default: ''
-  pr-review-dry-run:
-    description: Preview PR review without posting
-    required: false
-    default: 'false'
 
 runs:
   using: composite
@@ -102,7 +106,7 @@ runs:
         echo "aptu v$APTU_VERSION installed successfully"
 
     - name: Run aptu issue triage
-      if: steps.check-skip.outputs.skip != 'true'
+      if: github.event_name == 'issues' && steps.check-skip.outputs.skip != 'true'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
@@ -137,3 +141,24 @@ runs:
         
         echo "Running: aptu issue triage $ARGS $ISSUE_REF"
         aptu issue triage $ARGS "$ISSUE_REF"
+
+    - name: Run aptu PR label
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -e
+        
+        PR_REF="${REPO}#${PR_NUMBER}"
+        ARGS=""
+        
+        if [[ "$DRY_RUN" == "true" ]]; then
+          ARGS="$ARGS --dry-run"
+        fi
+        
+        echo "Running: aptu pr label $ARGS $PR_REF"
+        aptu pr label $ARGS "$PR_REF"

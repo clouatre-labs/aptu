@@ -631,6 +631,43 @@ pub async fn update_issue_labels_and_milestone(
     })
 }
 
+/// Apply labels to an issue or PR by number.
+///
+/// Simplified label-only application function for PRs (no milestone, no merge logic).
+/// Returns an error if the GitHub API call fails.
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
+pub async fn apply_labels_to_number(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    labels: &[String],
+) -> Result<Vec<String>> {
+    debug!("Applying labels to issue/PR");
+
+    if labels.is_empty() {
+        debug!("No labels to apply");
+        return Ok(Vec::new());
+    }
+
+    let route = format!("repos/{owner}/{repo}/issues/{number}/labels");
+    let payload = serde_json::json!({ "labels": labels });
+
+    client
+        .post::<_, ()>(route, Some(&payload))
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to apply labels to issue/PR #{number} in {owner}/{repo}. \
+                     Check that you have write access to the repository."
+            )
+        })?;
+
+    debug!(labels = ?labels, "Labels applied successfully");
+
+    Ok(labels.to_vec())
+}
+
 /// Priority labels that should be included first in tiered filtering.
 /// These labels are most actionable for issue triage.
 const PRIORITY_LABELS: &[&str] = &[

@@ -8,7 +8,7 @@
 use anyhow::Result;
 use tracing::{debug, instrument};
 
-use super::types::PrReviewResult;
+use super::types::{PrLabelResult, PrReviewResult};
 
 /// Review a pull request with AI assistance.
 ///
@@ -95,5 +95,37 @@ pub async fn run(
         pr_url: pr_details.url,
         review,
         ai_stats,
+    })
+}
+
+/// Auto-label a pull request based on conventional commit prefix and file paths.
+///
+/// Fetches PR details, extracts labels from title and changed files,
+/// and applies them to the PR. Optionally previews without applying.
+///
+/// # Arguments
+///
+/// * `reference` - PR reference (URL, owner/repo#number, or bare number)
+/// * `repo_context` - Optional repository context for bare numbers
+/// * `dry_run` - If true, preview labels without applying
+#[instrument(skip_all, fields(reference = %reference))]
+pub async fn run_label(
+    reference: &str,
+    repo_context: Option<&str>,
+    dry_run: bool,
+) -> Result<PrLabelResult> {
+    // Create CLI token provider
+    let provider = crate::provider::CliTokenProvider;
+
+    // Call facade for PR label
+    let (pr_number, pr_title, pr_url, labels) =
+        aptu_core::label_pr(&provider, reference, repo_context, dry_run).await?;
+
+    Ok(PrLabelResult {
+        pr_number,
+        pr_title,
+        pr_url,
+        labels,
+        dry_run,
     })
 }
