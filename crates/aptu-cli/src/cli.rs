@@ -49,6 +49,18 @@ pub enum OutputFormat {
     Markdown,
 }
 
+/// Issue state filter for triage operations.
+#[derive(Clone, Copy, Default, ValueEnum)]
+pub enum IssueState {
+    /// Only open issues (default)
+    #[default]
+    Open,
+    /// Only closed issues
+    Closed,
+    /// Both open and closed issues
+    All,
+}
+
 /// Global output configuration passed to commands.
 #[derive(Clone)]
 pub struct OutputContext {
@@ -247,9 +259,13 @@ pub enum IssueCommand {
         #[arg(long, short = 'r')]
         repo: Option<String>,
 
-        /// Triage all open issues without labels created since this date (YYYY-MM-DD or RFC3339 format)
+        /// Triage all issues without labels created since this date (YYYY-MM-DD or RFC3339 format)
         #[arg(long)]
         since: Option<String>,
+
+        /// Filter issues by state when using --since (open, closed, or all)
+        #[arg(long, short = 's', default_value = "open")]
+        state: IssueState,
 
         /// Preview triage without posting to GitHub
         #[arg(long)]

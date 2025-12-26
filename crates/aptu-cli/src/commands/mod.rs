@@ -23,11 +23,11 @@ use indicatif::{ProgressBar, ProgressStyle};
 use tracing::debug;
 
 use crate::cli::{
-    AuthCommand, Commands, CompletionCommand, IssueCommand, OutputContext, OutputFormat, PrCommand,
-    RepoCommand,
+    AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
+    OutputFormat, PrCommand, RepoCommand,
 };
 use crate::output;
-use aptu_core::{AppConfig, check_already_triaged, is_retryable_anyhow, retry_backoff};
+use aptu_core::{AppConfig, State, check_already_triaged, is_retryable_anyhow, retry_backoff};
 
 /// Creates a styled spinner (only if interactive).
 fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
@@ -304,6 +304,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 references,
                 repo,
                 since,
+                state,
                 dry_run,
                 yes,
                 apply,
@@ -331,6 +332,13 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     // Parse the date to RFC3339 format
                     let rfc3339_date = crate::cli::parse_date_to_rfc3339(&since_date)?;
 
+                    // Convert IssueState to octocrab::params::State
+                    let octocrab_state = match state {
+                        IssueState::Open => State::Open,
+                        IssueState::Closed => State::Closed,
+                        IssueState::All => State::All,
+                    };
+
                     let spinner = maybe_spinner(&ctx, "Fetching issues needing triage...");
                     let client = aptu_core::github::auth::create_client()
                         .context("Failed to create GitHub client")?;
@@ -340,6 +348,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                         repo_name,
                         Some(&rfc3339_date),
                         force,
+                        octocrab_state,
                     )
                     .await?;
                     if let Some(s) = spinner {
