@@ -1,0 +1,84 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2025 Aptu Contributors -->
+
+# aptu-core
+
+Core library for Aptu - AI-powered OSS issue triage.
+
+[![docs.rs](https://img.shields.io/badge/docs.rs-aptu--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs)](https://docs.rs/aptu-core)
+[![repository](https://img.shields.io/badge/repository-clouatre--labs/aptu-8da0cb?style=flat-square&labelColor=555555&logo=github)](https://github.com/clouatre-labs/aptu)
+[![CLI crate](https://img.shields.io/badge/CLI-aptu--cli-fc8d62?style=flat-square&labelColor=555555&logo=rust)](https://crates.io/crates/aptu-cli)
+[![REUSE](https://api.reuse.software/badge/github.com/clouatre-labs/aptu)](https://api.reuse.software/info/github.com/clouatre-labs/aptu)
+
+## Features
+
+- **AI Triage** - Analyze issues with summaries, labels, and contributor guidance
+- **PR Review** - AI-powered pull request analysis and feedback
+- **Multiple Providers** - OpenRouter, Groq, Google Gemini, and Cerebras
+- **GitHub Integration** - Auth, issues, PRs, and GraphQL queries
+- **Resilient** - Exponential backoff, circuit breaker, rate limit handling
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+aptu-core = "0.2"
+```
+
+## Example
+
+```rust,no_run
+use aptu_core::{load_config, AiClient, IssueDetails, ai::AiProvider};
+use anyhow::Result;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Load configuration
+    let config = load_config()?;
+
+    // Create AI client
+    let client = AiClient::new(&config.ai.provider, &config.ai)?;
+
+    // Create issue details
+    let issue = IssueDetails {
+        owner: "block".to_string(),
+        repo: "goose".to_string(),
+        number: 123,
+        title: "Example issue".to_string(),
+        body: "Issue description...".to_string(),
+        labels: vec![],
+        milestone: None,
+        comments: vec![],
+        url: "https://github.com/block/goose/issues/123".to_string(),
+        repo_context: vec![],
+        repo_tree: vec![],
+        available_labels: vec![],
+        available_milestones: vec![],
+        viewer_permission: None,
+    };
+
+    // Analyze with AI
+    let response = client.analyze_issue(&issue).await?;
+    println!("Summary: {}", response.triage.summary);
+
+    Ok(())
+}
+```
+
+## Modules
+
+- [`ai`](https://docs.rs/aptu-core/latest/aptu_core/ai/) - AI integration and triage analysis
+- [`config`](https://docs.rs/aptu-core/latest/aptu_core/config/) - Configuration loading and XDG paths
+- [`github`](https://docs.rs/aptu-core/latest/aptu_core/github/) - GitHub API and authentication
+- [`history`](https://docs.rs/aptu-core/latest/aptu_core/history/) - Contribution history tracking
+- [`repos`](https://docs.rs/aptu-core/latest/aptu_core/repos/) - Curated repository list
+
+## Support
+
+For questions and support, visit [clouatre.ca](https://clouatre.ca/about/).
+
+## License
+
+Apache-2.0. See [LICENSE](https://github.com/clouatre-labs/aptu/blob/main/LICENSE).
