@@ -15,6 +15,7 @@ pub mod types;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use backon::Retryable;
 use console::style;
 use dialoguer::Confirm;
 use futures::{StreamExt, stream};
@@ -26,7 +27,7 @@ use crate::cli::{
     RepoCommand,
 };
 use crate::output;
-use aptu_core::{AppConfig, check_already_triaged};
+use aptu_core::{AppConfig, check_already_triaged, is_retryable_anyhow, retry_backoff};
 
 /// Creates a styled spinner (only if interactive).
 fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
@@ -413,18 +414,30 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                                 );
                             }
 
-                            // Triage single issue
-                            let result = triage_single_issue(
-                                &issue_ref,
-                                repo_context,
-                                dry_run,
-                                yes,
-                                apply,
-                                no_comment,
-                                force,
-                                &ctx,
-                                config,
-                            )
+                            // Triage single issue with retry logic
+                            let result = (|| async {
+                                triage_single_issue(
+                                    &issue_ref,
+                                    repo_context,
+                                    dry_run,
+                                    yes,
+                                    apply,
+                                    no_comment,
+                                    force,
+                                    &ctx,
+                                    config,
+                                )
+                                .await
+                            })
+                            .retry(retry_backoff())
+                            .when(is_retryable_anyhow)
+                            .notify(|err, dur| {
+                                tracing::warn!(
+                                    error = %err,
+                                    delay_ms = dur.as_millis(),
+                                    "Retrying triage after transient failure"
+                                );
+                            })
                             .await;
 
                             (issue_ref, result)

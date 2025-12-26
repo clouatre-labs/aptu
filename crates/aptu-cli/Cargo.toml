@@ -51,6 +51,7 @@ dirs = { workspace = true }
 
 # Concurrency
 futures = { workspace = true }
+backon = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }
