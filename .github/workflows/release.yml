@@ -220,6 +220,8 @@ jobs:
       - name: Build snap
         id: build
         uses: snapcore/action-build@b391f430cb2650fd359ed4d2cfe88b2c481800e0 # v1
+        with:
+          snapcraft-args: pack
 
       - name: Publish snap to stable channel
         uses: snapcore/action-publish@9334eecb267cfd97a0ce3c8654215d095927252f # v1

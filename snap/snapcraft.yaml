@@ -24,11 +24,11 @@ parts:
   aptu:
     plugin: rust
     source: .
+    rust-path:
+      - crates/aptu-cli
     build-packages:
       - pkg-config
       - libdbus-1-dev
-    organize:
-      aptu: bin/aptu
     override-pull: |
       craftctl default
       craftctl set version="$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo '0.0.0-dev')"
