@@ -187,7 +187,7 @@ Ask: *Does GraphQL save enough API calls to justify custom query/struct overhead
 
 ## Branch Protection
 
-The `main` branch is protected by the following rules:
+The `main` branch is protected by GitHub rulesets with the following rules:
 
 - **Required Status Checks**: All CI checks must pass before merging
   - `Check Labels`: Validates PR labels
