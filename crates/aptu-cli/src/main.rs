@@ -15,6 +15,7 @@ mod provider;
 pub use provider::CliTokenProvider;
 
 use anyhow::{Context, Result};
+use aptu_core::ai::registry;
 use aptu_core::config;
 use clap::Parser;
 use tracing::debug;
@@ -29,8 +30,21 @@ async fn main() -> Result<()> {
     let output_ctx = OutputContext::from_cli(cli.output, cli.quiet, cli.verbose);
 
     // Load config early to validate it works (Option A from plan)
-    let config = config::load_config().context("Failed to load configuration")?;
+    let mut config = config::load_config().context("Failed to load configuration")?;
     debug!("Configuration loaded successfully");
+
+    // Apply CLI overrides to config
+    if let Some(provider) = &cli.provider {
+        registry::get_provider(provider)
+            .ok_or_else(|| anyhow::anyhow!("Unknown AI provider: {provider}"))?;
+        config.ai.provider.clone_from(provider);
+        debug!("Overriding AI provider to: {provider}");
+    }
+
+    if let Some(model) = &cli.model {
+        config.ai.model.clone_from(model);
+        debug!("Overriding AI model to: {model}");
+    }
 
     match commands::run(cli.command, output_ctx, &config).await {
         Ok(()) => Ok(()),
