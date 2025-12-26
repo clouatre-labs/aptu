@@ -31,9 +31,9 @@ inputs:
     required: false
     default: ''
   skip-labeled:
-    description: Skip triage if issue already has labels
+    description: Skip triage if issue already has both type and priority labels
     required: false
-    default: 'true'
+    default: 'false'
   dry-run:
     description: Run without making changes
     required: false
