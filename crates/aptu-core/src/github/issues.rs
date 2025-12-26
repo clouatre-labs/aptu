@@ -1073,7 +1073,8 @@ pub async fn fetch_repo_tree(
 /// * `owner` - Repository owner
 /// * `repo` - Repository name
 /// * `since` - Optional RFC3339 timestamp to filter issues created after this date (client-side filtering)
-/// * `force` - If true, return all open issues; if false, filter to unlabeled or milestone-missing issues
+/// * `force` - If true, return all issues in the specified state; if false, filter to unlabeled or milestone-missing issues
+/// * `state` - Issue state filter (Open, Closed, or All)
 ///
 /// # Errors
 ///
@@ -1085,13 +1086,14 @@ pub async fn fetch_issues_needing_triage(
     repo: &str,
     since: Option<&str>,
     force: bool,
+    state: octocrab::params::State,
 ) -> Result<Vec<UntriagedIssue>> {
     debug!("Fetching issues needing triage");
 
     let issues_page: octocrab::Page<octocrab::models::issues::Issue> = client
         .issues(owner, repo)
         .list()
-        .state(octocrab::params::State::Open)
+        .state(state)
         .per_page(100)
         .send()
         .await

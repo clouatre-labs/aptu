@@ -104,6 +104,7 @@ pub use ai::{
 pub use github::auth::TokenSource;
 pub use github::graphql::IssueNode;
 pub use github::ratelimit::{RateLimitStatus, check_rate_limit};
+pub use octocrab::params::State;
 
 // ============================================================================
 // AI Integration
