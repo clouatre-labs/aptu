@@ -24,7 +24,9 @@ pub enum AptuError {
     },
 
     /// User is not authenticated - needs to run `aptu auth login`.
-    #[error("Authentication required - run `aptu auth login` first")]
+    #[error(
+        "Authentication required - run `aptu auth login` first, or set GITHUB_TOKEN environment variable"
+    )]
     NotAuthenticated,
 
     /// Rate limit exceeded from an AI provider.

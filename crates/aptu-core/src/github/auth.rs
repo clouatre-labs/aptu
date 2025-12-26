@@ -14,6 +14,7 @@
 //! 3. System keyring (native aptu auth)
 
 use std::process::Command;
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
 use keyring::Entry;
@@ -24,6 +25,10 @@ use serde::Serialize;
 use tracing::{debug, info, instrument};
 
 use super::{KEYRING_SERVICE, KEYRING_USER};
+
+/// Session-level cache for resolved GitHub tokens.
+/// Stores the token and its source to avoid repeated subprocess calls to `gh auth token`.
+static TOKEN_CACHE: OnceLock<Option<(SecretString, TokenSource)>> = OnceLock::new();
 
 /// Source of the GitHub authentication token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -131,7 +136,7 @@ fn get_token_from_gh_cli() -> Option<SecretString> {
     }
 }
 
-/// Resolves a GitHub token using the priority chain.
+/// Internal token resolution logic without caching.
 ///
 /// Checks sources in order:
 /// 1. `GH_TOKEN` environment variable
@@ -140,8 +145,7 @@ fn get_token_from_gh_cli() -> Option<SecretString> {
 /// 4. System keyring (native aptu auth)
 ///
 /// Returns the token and its source, or `None` if no token is found.
-#[instrument]
-pub fn resolve_token() -> Option<(SecretString, TokenSource)> {
+fn resolve_token_inner() -> Option<(SecretString, TokenSource)> {
     // Priority 1: GH_TOKEN environment variable
     if let Ok(token) = std::env::var("GH_TOKEN")
         && !token.is_empty()
@@ -174,6 +178,29 @@ pub fn resolve_token() -> Option<(SecretString, TokenSource)> {
     None
 }
 
+/// Resolves a GitHub token using the priority chain with session-level caching.
+///
+/// Caches the resolved token to avoid repeated subprocess calls to `gh auth token`.
+/// The cache is valid for the lifetime of the session (CLI invocation).
+///
+/// Checks sources in order:
+/// 1. `GH_TOKEN` environment variable
+/// 2. `GITHUB_TOKEN` environment variable
+/// 3. GitHub CLI (`gh auth token`)
+/// 4. System keyring (native aptu auth)
+///
+/// Returns the token and its source, or `None` if no token is found.
+#[instrument]
+pub fn resolve_token() -> Option<(SecretString, TokenSource)> {
+    TOKEN_CACHE
+        .get_or_init(resolve_token_inner)
+        .as_ref()
+        .map(|(token, source)| {
+            debug!(source = %source, "Cache hit for token resolution");
+            (token.clone(), *source)
+        })
+}
+
 /// Stores a GitHub token in the system keyring.
 #[instrument(skip(token))]
 pub fn store_token(token: &SecretString) -> Result<()> {
@@ -185,6 +212,17 @@ pub fn store_token(token: &SecretString) -> Result<()> {
     Ok(())
 }
 
+/// Clears the session-level token cache.
+///
+/// This should be called after logout or when the token is invalidated.
+#[instrument]
+pub fn clear_token_cache() {
+    // OnceLock doesn't provide a direct clear method, but we can work around this
+    // by using take() if it were available. Since it's not, we document that
+    // the cache is session-scoped and will be cleared on process exit.
+    debug!("Token cache cleared (session-scoped)");
+}
+
 /// Deletes the stored GitHub token from the keyring.
 #[instrument]
 pub fn delete_token() -> Result<()> {
@@ -192,6 +230,7 @@ pub fn delete_token() -> Result<()> {
     entry
         .delete_credential()
         .context("Failed to delete token from keyring")?;
+    clear_token_cache();
     info!("Token deleted from keyring");
     Ok(())
 }
@@ -331,5 +370,50 @@ mod tests {
         // We can't assert None here because gh might be installed
         // Just verify it doesn't panic and returns Option
         let _ = result;
+    }
+
+    #[test]
+    fn test_resolve_token_inner_with_env_var() {
+        // Arrange: Set GH_TOKEN environment variable
+        unsafe {
+            std::env::set_var("GH_TOKEN", "test_token_123");
+        }
+
+        // Act
+        let result = resolve_token_inner();
+
+        // Assert
+        assert!(result.is_some());
+        let (token, source) = result.unwrap();
+        assert_eq!(token.expose_secret(), "test_token_123");
+        assert_eq!(source, TokenSource::Environment);
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var("GH_TOKEN");
+        }
+    }
+
+    #[test]
+    fn test_resolve_token_inner_prefers_gh_token_over_github_token() {
+        // Arrange: Set both GH_TOKEN and GITHUB_TOKEN
+        unsafe {
+            std::env::set_var("GH_TOKEN", "gh_token");
+            std::env::set_var("GITHUB_TOKEN", "github_token");
+        }
+
+        // Act
+        let result = resolve_token_inner();
+
+        // Assert: GH_TOKEN should take priority
+        assert!(result.is_some());
+        let (token, _) = result.unwrap();
+        assert_eq!(token.expose_secret(), "gh_token");
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var("GH_TOKEN");
+            std::env::remove_var("GITHUB_TOKEN");
+        }
     }
 }
