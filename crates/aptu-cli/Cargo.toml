@@ -57,7 +57,7 @@ backon = { workspace = true }
 tokio-test = { workspace = true }
 wiremock = { workspace = true }
 assert_cmd = { workspace = true }
-predicates = "3.1"
+predicates = "=3.1.3"
 
 [package.metadata.deb]
 maintainer = "Hugues Clouâtre <hugues@linux.com>"
