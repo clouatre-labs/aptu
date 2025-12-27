@@ -665,7 +665,7 @@ pub async fn apply_labels_to_number(
     let payload = serde_json::json!({ "labels": labels });
 
     client
-        .post::<_, ()>(route, Some(&payload))
+        .post::<_, serde_json::Value>(route, Some(&payload))
         .await
         .with_context(|| {
             format!(
