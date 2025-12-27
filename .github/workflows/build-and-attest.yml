@@ -87,11 +87,11 @@ jobs:
           fi
       - name: Attest build provenance (tarball)
         if: ${{ !inputs.dry_run }}
-        uses: actions/attest-build-provenance@46a583fd92dfbf46b772907a9740f888f4324bb9 # v3
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: ${{ steps.upload.outputs.tar }}
       - name: Attest build provenance (.deb)
         if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
-        uses: actions/attest-build-provenance@46a583fd92dfbf46b772907a9740f888f4324bb9 # v3
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: target/${{ inputs.target }}/debian/*.deb
