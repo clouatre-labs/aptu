@@ -16,10 +16,9 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Auto-Label PR
-        continue-on-error: true # Temporary: released aptu may lack fixes from this PR
         uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          command: pr
-          subcommand: label
-          reference: ${{ github.event.pull_request.number }}
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          skip-labeled: 'false'
+          no-comment: 'true'
