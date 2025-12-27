@@ -58,9 +58,8 @@ pub async fn fetch_issues(
 
     // Create GitHub client with the provided token
     let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::AI {
+    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
         message: format!("Failed to create GitHub client: {e}"),
-        status: None,
     })?;
 
     // Get curated repos, optionally filtered
@@ -114,9 +113,8 @@ pub async fn fetch_issues(
         let api_results =
             gh_fetch_issues(&client, &repo_tuples)
                 .await
-                .map_err(|e| AptuError::AI {
+                .map_err(|e| AptuError::GitHub {
                     message: format!("Failed to fetch issues: {e}"),
-                    status: None,
                 })?;
 
         // Write fetched results to cache
@@ -139,9 +137,8 @@ pub async fn fetch_issues(
             .collect();
         gh_fetch_issues(&client, &repo_tuples)
             .await
-            .map_err(|e| AptuError::AI {
+            .map_err(|e| AptuError::GitHub {
                 message: format!("Failed to fetch issues: {e}"),
-                status: None,
             })
     }
 }
@@ -387,24 +384,21 @@ pub async fn review_pr(
 
     // Parse PR reference
     let (owner, repo, number) =
-        parse_pr_reference(reference, repo_context).map_err(|e| AptuError::AI {
+        parse_pr_reference(reference, repo_context).map_err(|e| AptuError::GitHub {
             message: e.to_string(),
-            status: None,
         })?;
 
     // Create GitHub client with the provided token
     let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::AI {
+    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
         message: format!("Failed to create GitHub client: {e}"),
-        status: None,
     })?;
 
     // Fetch PR details
     let pr_details = fetch_pr_details(&client, &owner, &repo, number)
         .await
-        .map_err(|e| AptuError::AI {
+        .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
-            status: None,
         })?;
 
     // Get API key from provider using the configured provider name
@@ -472,24 +466,21 @@ pub async fn post_pr_review(
 
     // Parse PR reference
     let (owner, repo, number) =
-        parse_pr_reference(reference, repo_context).map_err(|e| AptuError::AI {
+        parse_pr_reference(reference, repo_context).map_err(|e| AptuError::GitHub {
             message: e.to_string(),
-            status: None,
         })?;
 
     // Create GitHub client with the provided token
     let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::AI {
+    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
         message: format!("Failed to create GitHub client: {e}"),
-        status: None,
     })?;
 
     // Post the review
     gh_post_pr_review(&client, &owner, &repo, number, body, event)
         .await
-        .map_err(|e| AptuError::AI {
+        .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
-            status: None,
         })
 }
 
@@ -530,24 +521,21 @@ pub async fn label_pr(
 
     // Parse PR reference
     let (owner, repo, number) =
-        parse_pr_reference(reference, repo_context).map_err(|e| AptuError::AI {
+        parse_pr_reference(reference, repo_context).map_err(|e| AptuError::GitHub {
             message: e.to_string(),
-            status: None,
         })?;
 
     // Create GitHub client with the provided token
     let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::AI {
+    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
         message: format!("Failed to create GitHub client: {e}"),
-        status: None,
     })?;
 
     // Fetch PR details
     let pr_details = fetch_pr_details(&client, &owner, &repo, number)
         .await
-        .map_err(|e| AptuError::AI {
+        .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
-            status: None,
         })?;
 
     // Extract labels from PR metadata
@@ -562,9 +550,8 @@ pub async fn label_pr(
     if !dry_run && !labels.is_empty() {
         apply_labels_to_number(&client, &owner, &repo, number, &labels)
             .await
-            .map_err(|e| AptuError::AI {
+            .map_err(|e| AptuError::GitHub {
                 message: e.to_string(),
-                status: None,
             })?;
     }
 
