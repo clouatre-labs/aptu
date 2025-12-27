@@ -17,6 +17,7 @@ jobs:
 
       - name: Auto-Label PR
         uses: ./
+        continue-on-error: true  # Non-blocking until fix released
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
