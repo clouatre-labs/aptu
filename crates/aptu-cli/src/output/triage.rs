@@ -320,14 +320,8 @@ mod tests {
     fn test_render_triage_content_multiline_approach_indentation() {
         let triage = aptu_core::ai::types::TriageResponse {
             summary: "Test summary".to_string(),
-            suggested_labels: vec![],
-            clarifying_questions: vec![],
-            potential_duplicates: vec![],
-            related_issues: vec![],
-            status_note: None,
-            contributor_guidance: None,
             implementation_approach: Some("First line\nSecond line\nThird line".to_string()),
-            suggested_milestone: None,
+            ..Default::default()
         };
 
         let output = render_triage_content(&triage, &OutputMode::Terminal, None, false);

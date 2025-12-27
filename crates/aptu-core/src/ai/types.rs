@@ -114,7 +114,7 @@ pub struct RelatedIssue {
 /// Structured triage response from AI.
 ///
 /// This is the expected JSON structure in the AI's response content.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct TriageResponse {
     /// 2-3 sentence summary of the issue.
     pub summary: String,
