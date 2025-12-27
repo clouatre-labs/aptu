@@ -338,3 +338,10 @@ impl std::fmt::Display for ReviewEvent {
         }
     }
 }
+
+/// Structured PR label response from AI.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PrLabelResponse {
+    /// Suggested labels for the PR.
+    pub suggested_labels: Vec<String>,
+}

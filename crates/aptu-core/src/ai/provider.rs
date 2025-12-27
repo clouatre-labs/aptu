@@ -628,6 +628,70 @@ Be professional but friendly. Maintain the user's intent while improving clarity
         Ok((review, ai_stats))
     }
 
+    /// Suggests labels for a pull request using the provider's API.
+    ///
+    /// Analyzes PR title, body, and file paths to suggest relevant labels.
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - Pull request title
+    /// * `body` - Pull request description
+    /// * `file_paths` - List of file paths changed in the PR
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - API request fails (network, timeout, rate limit)
+    /// - Response cannot be parsed as valid JSON
+    #[instrument(skip(self), fields(title = %title))]
+    async fn suggest_pr_labels(
+        &self,
+        title: &str,
+        body: &str,
+        file_paths: &[String],
+    ) -> Result<(Vec<String>, AiStats)> {
+        debug!(model = %self.model(), "Calling {} API for PR label suggestion", self.name());
+
+        // Build request
+        let request = ChatCompletionRequest {
+            model: self.model().to_string(),
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: Self::build_pr_label_system_prompt(),
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: Self::build_pr_label_user_prompt(title, body, file_paths),
+                },
+            ],
+            response_format: Some(ResponseFormat {
+                format_type: "json_object".to_string(),
+            }),
+            max_tokens: Some(self.max_tokens()),
+            temperature: Some(self.temperature()),
+        };
+
+        // Send request and extract stats
+        let (content, ai_stats) = self.send_request_with_stats(&request).await?;
+
+        // Parse JSON response
+        let response: super::types::PrLabelResponse =
+            serde_json::from_str(&content).with_context(|| {
+                format!("Failed to parse AI response as JSON. Raw response:\n{content}")
+            })?;
+
+        debug!(
+            label_count = response.suggested_labels.len(),
+            input_tokens = ai_stats.input_tokens,
+            output_tokens = ai_stats.output_tokens,
+            duration_ms = ai_stats.duration_ms,
+            "PR label suggestion complete with stats"
+        );
+
+        Ok((response.suggested_labels, ai_stats))
+    }
+
     /// Builds the system prompt for PR review.
     #[must_use]
     fn build_pr_review_system_prompt() -> String {
@@ -753,6 +817,68 @@ Be constructive and specific. Explain why something is an issue and how to fix i
                 prompt,
                 "\n[{files_skipped} files omitted due to size limits (MAX_FILES={MAX_FILES}, MAX_TOTAL_DIFF_SIZE={MAX_TOTAL_DIFF_SIZE})]"
             );
+        }
+
+        prompt.push_str("</pull_request>");
+
+        prompt
+    }
+
+    /// Builds the system prompt for PR label suggestion.
+    #[must_use]
+    fn build_pr_label_system_prompt() -> String {
+        r#"You are a GitHub label suggestion assistant. Analyze the provided pull request and suggest relevant labels.
+
+Your response MUST be valid JSON with this exact schema:
+{
+  "suggested_labels": ["label1", "label2", "label3"]
+}
+
+Response format: json_object
+
+Guidelines:
+- suggested_labels: Suggest 1-3 relevant GitHub labels based on the PR content. Common labels include: bug, enhancement, documentation, feature, refactor, performance, security, testing, ci, dependencies. Choose labels that best describe the type of change.
+- Focus on the PR title, description, and file paths to determine appropriate labels.
+- Prefer specific labels over generic ones when possible.
+- Only suggest labels that are commonly used in GitHub repositories.
+
+Be concise and practical."#.to_string()
+    }
+
+    /// Builds the user prompt for PR label suggestion.
+    #[must_use]
+    fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]) -> String {
+        use std::fmt::Write;
+
+        let mut prompt = String::new();
+
+        prompt.push_str("<pull_request>\n");
+        let _ = writeln!(prompt, "Title: {title}\n");
+
+        // PR description
+        let body_content = if body.is_empty() {
+            "[No description provided]".to_string()
+        } else if body.len() > MAX_BODY_LENGTH {
+            format!(
+                "{}...\n[Description truncated - original length: {} chars]",
+                &body[..MAX_BODY_LENGTH],
+                body.len()
+            )
+        } else {
+            body.to_string()
+        };
+        let _ = writeln!(prompt, "Description:\n{body_content}\n");
+
+        // File paths
+        if !file_paths.is_empty() {
+            prompt.push_str("Files Changed:\n");
+            for path in file_paths.iter().take(20) {
+                let _ = writeln!(prompt, "- {path}");
+            }
+            if file_paths.len() > 20 {
+                let _ = writeln!(prompt, "- ... and {} more files", file_paths.len() - 20);
+            }
+            prompt.push('\n');
         }
 
         prompt.push_str("</pull_request>");
@@ -983,5 +1109,79 @@ mod tests {
         assert!(prompt.contains("file1.rs"));
         assert!(prompt.contains("added"));
         assert!(!prompt.contains("files omitted"));
+    }
+
+    #[test]
+    fn test_build_pr_label_system_prompt_contains_json_schema() {
+        let prompt = TestProvider::build_pr_label_system_prompt();
+        assert!(prompt.contains("suggested_labels"));
+        assert!(prompt.contains("json_object"));
+        assert!(prompt.contains("bug"));
+        assert!(prompt.contains("enhancement"));
+    }
+
+    #[test]
+    fn test_build_pr_label_user_prompt_with_title_and_body() {
+        let title = "feat: add new feature";
+        let body = "This PR adds a new feature";
+        let files = vec!["src/main.rs".to_string(), "tests/test.rs".to_string()];
+
+        let prompt = TestProvider::build_pr_label_user_prompt(title, body, &files);
+        assert!(prompt.starts_with("<pull_request>"));
+        assert!(prompt.ends_with("</pull_request>"));
+        assert!(prompt.contains("feat: add new feature"));
+        assert!(prompt.contains("This PR adds a new feature"));
+        assert!(prompt.contains("src/main.rs"));
+        assert!(prompt.contains("tests/test.rs"));
+    }
+
+    #[test]
+    fn test_build_pr_label_user_prompt_empty_body() {
+        let title = "fix: bug fix";
+        let body = "";
+        let files = vec!["src/lib.rs".to_string()];
+
+        let prompt = TestProvider::build_pr_label_user_prompt(title, body, &files);
+        assert!(prompt.contains("[No description provided]"));
+        assert!(prompt.contains("src/lib.rs"));
+    }
+
+    #[test]
+    fn test_build_pr_label_user_prompt_truncates_long_body() {
+        let title = "test";
+        let long_body = "x".repeat(5000);
+        let files = vec![];
+
+        let prompt = TestProvider::build_pr_label_user_prompt(title, &long_body, &files);
+        assert!(prompt.contains("[Description truncated"));
+        assert!(prompt.contains("5000 chars"));
+    }
+
+    #[test]
+    fn test_build_pr_label_user_prompt_respects_file_limit() {
+        let title = "test";
+        let body = "test";
+        let mut files = Vec::new();
+        for i in 0..25 {
+            files.push(format!("file{}.rs", i));
+        }
+
+        let prompt = TestProvider::build_pr_label_user_prompt(title, body, &files);
+        assert!(prompt.contains("file0.rs"));
+        assert!(prompt.contains("file19.rs"));
+        assert!(!prompt.contains("file20.rs"));
+        assert!(prompt.contains("... and 5 more files"));
+    }
+
+    #[test]
+    fn test_build_pr_label_user_prompt_empty_files() {
+        let title = "test";
+        let body = "test";
+        let files: Vec<String> = vec![];
+
+        let prompt = TestProvider::build_pr_label_user_prompt(title, body, &files);
+        assert!(prompt.contains("Title: test"));
+        assert!(prompt.contains("Description:\ntest"));
+        assert!(!prompt.contains("Files Changed:"));
     }
 }

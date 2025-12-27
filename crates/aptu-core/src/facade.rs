@@ -8,7 +8,7 @@
 //! functions with their own credential source.
 
 use chrono::Duration;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use crate::ai::provider::MAX_LABELS;
 use crate::ai::types::{PrDetails, ReviewEvent};
@@ -512,6 +512,7 @@ pub async fn label_pr(
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
+    ai_config: &AiConfig,
 ) -> crate::Result<(u64, String, String, Vec<String>)> {
     use crate::github::issues::apply_labels_to_number;
     use crate::github::pulls::{fetch_pr_details, labels_from_pr_metadata, parse_pr_reference};
@@ -538,13 +539,38 @@ pub async fn label_pr(
             message: e.to_string(),
         })?;
 
-    // Extract labels from PR metadata
+    // Extract labels from PR metadata (deterministic approach)
     let file_paths: Vec<String> = pr_details
         .files
         .iter()
         .map(|f| f.filename.clone())
         .collect();
-    let labels = labels_from_pr_metadata(&pr_details.title, &file_paths);
+    let mut labels = labels_from_pr_metadata(&pr_details.title, &file_paths);
+
+    // If no labels found, try AI fallback
+    if labels.is_empty() {
+        // Get API key from provider using the configured provider name
+        if let Some(api_key) = provider.ai_api_key(&ai_config.provider) {
+            // Create AI client with provided API key
+            if let Ok(ai_client) =
+                crate::ai::AiClient::with_api_key(&ai_config.provider, api_key, ai_config)
+            {
+                match ai_client
+                    .suggest_pr_labels(&pr_details.title, &pr_details.body, &file_paths)
+                    .await
+                {
+                    Ok((ai_labels, _stats)) => {
+                        labels = ai_labels;
+                        debug!("AI fallback provided {} labels", labels.len());
+                    }
+                    Err(e) => {
+                        debug!("AI fallback failed: {}", e);
+                        // Continue without labels rather than failing
+                    }
+                }
+            }
+        }
+    }
 
     // Apply labels if not dry-run
     if !dry_run && !labels.is_empty() {
