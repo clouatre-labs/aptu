@@ -35,7 +35,7 @@ fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
         let s = ProgressBar::new_spinner();
         s.set_style(
             ProgressStyle::default_spinner()
-                .template("{spinner:.cyan} {msg}")
+                .template("{spinner:.cyan} {msg} ({elapsed:.cyan})")
                 .expect("Invalid spinner template"),
         );
         s.set_message(message.to_string());
@@ -71,6 +71,27 @@ async fn triage_single_issue(
     let fetch_elapsed = fetch_start.elapsed();
     if let Some(s) = spinner {
         s.finish_and_clear();
+    }
+
+    // Phase 1a.5: Display issue preview (title and labels) immediately after fetch
+    if matches!(ctx.format, OutputFormat::Text) {
+        println!(
+            "  {}  {}",
+            style("title:").dim(),
+            style(&issue_details.title).bold()
+        );
+        let labels_display = if issue_details.labels.is_empty() {
+            style("none").dim().to_string()
+        } else {
+            issue_details
+                .labels
+                .iter()
+                .map(|l| style(l).cyan().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        println!("  {}  {}", style("labels:").dim(), labels_display);
+        println!();
     }
 
     // Phase 1b: Check if already triaged (unless force is true)
