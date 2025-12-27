@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2025 Clouatre Labs
+# SPDX-License-Identifier: Apache-2.0
+#
+# cargo-deny configuration
+# https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+version = 2
+ignore = [
+    # Tracked in #378 - serde_yml migration
+    { id = "RUSTSEC-2025-0067", reason = "libyml - tracked in #378" },
+    { id = "RUSTSEC-2025-0068", reason = "serde_yml - tracked in #378" },
+    { id = "RUSTSEC-2025-0119", reason = "number_prefix via indicatif - tracked in #378" },
+]
+
+[licenses]
+version = 2
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+]
+exceptions = [
+    { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
+    { allow = ["LGPL-2.1-or-later"], crate = "r-efi" },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
