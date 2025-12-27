@@ -29,13 +29,14 @@ pub async fn run(
     review_type: Option<aptu_core::ReviewEvent>,
     dry_run: bool,
     skip_confirm: bool,
+    ai_config: &aptu_core::AiConfig,
 ) -> Result<PrReviewResult> {
     // Create CLI token provider
     let provider = crate::provider::CliTokenProvider;
 
     // Call facade for PR review
     let (pr_details, review, ai_stats) =
-        aptu_core::review_pr(&provider, reference, repo_context).await?;
+        aptu_core::review_pr(&provider, reference, repo_context, ai_config).await?;
 
     debug!(
         pr_number = pr_details.number,
