@@ -109,18 +109,20 @@ pub async fn run(
 /// * `reference` - PR reference (URL, owner/repo#number, or bare number)
 /// * `repo_context` - Optional repository context for bare numbers
 /// * `dry_run` - If true, preview labels without applying
+/// * `ai_config` - AI configuration for fallback label suggestion
 #[instrument(skip_all, fields(reference = %reference))]
 pub async fn run_label(
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
+    ai_config: &aptu_core::AiConfig,
 ) -> Result<PrLabelResult> {
     // Create CLI token provider
     let provider = crate::provider::CliTokenProvider;
 
     // Call facade for PR label
     let (pr_number, pr_title, pr_url, labels) =
-        aptu_core::label_pr(&provider, reference, repo_context, dry_run).await?;
+        aptu_core::label_pr(&provider, reference, repo_context, dry_run, ai_config).await?;
 
     Ok(PrLabelResult {
         pr_number,
