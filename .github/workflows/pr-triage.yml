@@ -1,11 +1,9 @@
-# Disabled: requires aptu v0.3.0+ with pr label command (PR #349)
-# TODO: Re-enable after v0.3.0 release
 name: Auto-Label Pull Requests
 
 on:
-  # pull_request:
-  #   types: [opened]
-  workflow_dispatch: # Manual trigger only for now
+  pull_request:
+    types: [opened]
+  workflow_dispatch: # Manual trigger for testing
 
 jobs:
   label:
