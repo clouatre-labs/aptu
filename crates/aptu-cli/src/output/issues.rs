@@ -155,7 +155,7 @@ impl IssuesResult {
                     .collect();
                 println!(
                     "{}",
-                    serde_yml::to_string(&output).expect("Failed to serialize issues to YAML")
+                    serde_saphyr::to_string(&output).expect("Failed to serialize issues to YAML")
                 );
             }
             _ => {
