@@ -211,7 +211,10 @@ pub fn render_triage_content(
         match mode {
             OutputMode::Terminal => {
                 let _ = writeln!(output, "{}", style("Implementation Approach").cyan().bold());
-                let _ = writeln!(output, "  {approach}\n");
+                for line in approach.lines() {
+                    let _ = writeln!(output, "  {line}");
+                }
+                output.push('\n');
             }
             OutputMode::Markdown => {
                 output.push_str("### Implementation Approach\n\n");
@@ -307,4 +310,65 @@ impl Renderable for TriageResult {
 /// Generates markdown content for posting to GitHub.
 pub fn render_triage_markdown(triage: &aptu_core::ai::types::TriageResponse) -> String {
     render_triage_content(triage, &OutputMode::Markdown, None, true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_render_triage_content_multiline_approach_indentation() {
+        let triage = aptu_core::ai::types::TriageResponse {
+            summary: "Test summary".to_string(),
+            suggested_labels: vec![],
+            clarifying_questions: vec![],
+            potential_duplicates: vec![],
+            related_issues: vec![],
+            status_note: None,
+            contributor_guidance: None,
+            implementation_approach: Some("First line\nSecond line\nThird line".to_string()),
+            suggested_milestone: None,
+        };
+
+        let output = render_triage_content(&triage, &OutputMode::Terminal, None, false);
+
+        // Verify each line of implementation_approach is prefixed with 2 spaces
+        let lines: Vec<&str> = output.lines().collect();
+
+        // Find the implementation approach section
+        let mut found_approach = false;
+        for (i, line) in lines.iter().enumerate() {
+            if line.contains("Implementation Approach") {
+                found_approach = true;
+                // Next lines should be the approach content with 2-space indent
+                if i + 1 < lines.len() {
+                    assert!(
+                        lines[i + 1].starts_with("  First line"),
+                        "First line should be indented with 2 spaces, got: '{}'",
+                        lines[i + 1]
+                    );
+                }
+                if i + 2 < lines.len() {
+                    assert!(
+                        lines[i + 2].starts_with("  Second line"),
+                        "Second line should be indented with 2 spaces, got: '{}'",
+                        lines[i + 2]
+                    );
+                }
+                if i + 3 < lines.len() {
+                    assert!(
+                        lines[i + 3].starts_with("  Third line"),
+                        "Third line should be indented with 2 spaces, got: '{}'",
+                        lines[i + 3]
+                    );
+                }
+                break;
+            }
+        }
+
+        assert!(
+            found_approach,
+            "Implementation Approach section not found in output"
+        );
+    }
 }
