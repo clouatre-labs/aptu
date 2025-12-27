@@ -15,7 +15,7 @@ use crate::ai::types::{PrDetails, ReviewEvent};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
-use crate::config::load_config;
+use crate::config::{AiConfig, load_config};
 use crate::error::AptuError;
 use crate::github::auth::create_client_with_token;
 use crate::github::graphql::{
@@ -287,10 +287,8 @@ pub async fn list_repos(filter: repos::RepoFilter) -> crate::Result<Vec<CuratedR
 pub async fn analyze_issue(
     provider: &dyn TokenProvider,
     issue: &IssueDetails,
+    ai_config: &AiConfig,
 ) -> crate::Result<AiResponse> {
-    // Load configuration
-    let config = load_config()?;
-
     // Clone issue into mutable local variable for potential label enrichment
     let mut issue_mut = issue.clone();
 
@@ -328,12 +326,12 @@ pub async fn analyze_issue(
 
     // Get API key from provider using the configured provider name
     let api_key = provider
-        .ai_api_key(&config.ai.provider)
+        .ai_api_key(&ai_config.provider)
         .ok_or(AptuError::NotAuthenticated)?;
 
     // Create generic AI client with provided API key
     let ai_client =
-        AiClient::with_api_key(&config.ai.provider, api_key, &config.ai).map_err(|e| {
+        AiClient::with_api_key(&ai_config.provider, api_key, ai_config).map_err(|e| {
             AptuError::AI {
                 message: e.to_string(),
                 status: None,
@@ -359,6 +357,7 @@ pub async fn analyze_issue(
 /// * `provider` - Token provider for GitHub and AI provider credentials
 /// * `reference` - PR reference (URL, owner/repo#number, or number)
 /// * `repo_context` - Optional repository context for bare numbers
+/// * `ai_config` - AI configuration (provider, model, etc.)
 ///
 /// # Returns
 ///
@@ -375,6 +374,7 @@ pub async fn review_pr(
     provider: &dyn TokenProvider,
     reference: &str,
     repo_context: Option<&str>,
+    ai_config: &AiConfig,
 ) -> crate::Result<(
     PrDetails,
     crate::ai::types::PrReviewResponse,
@@ -407,17 +407,14 @@ pub async fn review_pr(
             status: None,
         })?;
 
-    // Load configuration
-    let config = load_config()?;
-
     // Get API key from provider using the configured provider name
     let api_key = provider
-        .ai_api_key(&config.ai.provider)
+        .ai_api_key(&ai_config.provider)
         .ok_or(AptuError::NotAuthenticated)?;
 
     // Create generic AI client with provided API key
     let ai_client =
-        AiClient::with_api_key(&config.ai.provider, api_key, &config.ai).map_err(|e| {
+        AiClient::with_api_key(&ai_config.provider, api_key, ai_config).map_err(|e| {
             AptuError::AI {
                 message: e.to_string(),
                 status: None,

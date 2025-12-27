@@ -156,12 +156,15 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
 ///
 /// * `issue_details` - Fetched issue details from `fetch()`
 #[instrument(skip_all, fields(issue_number = issue_details.number))]
-pub async fn analyze(issue_details: &IssueDetails) -> Result<AiResponse> {
+pub async fn analyze(
+    issue_details: &IssueDetails,
+    ai_config: &aptu_core::AiConfig,
+) -> Result<AiResponse> {
     // Create CLI token provider
     let provider = crate::provider::CliTokenProvider;
 
     // Call facade for analysis
-    let ai_response = aptu_core::analyze_issue(&provider, issue_details).await?;
+    let ai_response = aptu_core::analyze_issue(&provider, issue_details, ai_config).await?;
 
     debug!("Issue analyzed successfully");
     Ok(ai_response)

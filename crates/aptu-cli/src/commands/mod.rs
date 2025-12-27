@@ -86,7 +86,7 @@ async fn triage_single_issue(
 
     // Phase 1c: Analyze with AI
     let spinner = maybe_spinner(ctx, "Analyzing with AI...");
-    let ai_response = triage::analyze(&issue_details).await?;
+    let ai_response = triage::analyze(&issue_details, &config.ai).await?;
     if let Some(s) = spinner {
         s.finish_and_clear();
     }
@@ -540,7 +540,15 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 };
 
                 let spinner = maybe_spinner(&ctx, "Fetching PR and analyzing...");
-                let result = pr::run(&reference, repo_context, review_type, dry_run, yes).await?;
+                let result = pr::run(
+                    &reference,
+                    repo_context,
+                    review_type,
+                    dry_run,
+                    yes,
+                    &config.ai,
+                )
+                .await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }

@@ -97,6 +97,11 @@ pub fn analyze_issue(
     issue: crate::types::FfiIssueDetails,
 ) -> Result<FfiTriageResponse, AptuFfiError> {
     RUNTIME.block_on(async {
+        // Load configuration at FFI boundary
+        let config = aptu_core::config::load_config().map_err(|e| AptuFfiError::InternalError {
+            message: format!("Failed to load config: {e}"),
+        })?;
+
         let provider = auth::FfiTokenProvider::new(keychain);
 
         let core_issue = aptu_core::ai::types::IssueDetails::builder()
@@ -110,7 +115,7 @@ pub fn analyze_issue(
             .url(issue.url)
             .build();
 
-        match aptu_core::analyze_issue(&provider, &core_issue).await {
+        match aptu_core::analyze_issue(&provider, &core_issue, &config.ai).await {
             Ok(ai_response) => Ok(FfiTriageResponse::from(ai_response.triage)),
             Err(e) => Err(AptuFfiError::InternalError {
                 message: e.to_string(),
