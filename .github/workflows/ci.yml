@@ -77,6 +77,22 @@ jobs:
           fi
           echo "Branch is up to date with main."
 
+  deny:
+    name: Audit Dependencies
+    runs-on: ubuntu-latest
+    needs: changes
+    timeout-minutes: 10
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@3d30e7d625f7c928dccd48823053b03bb2f6ed05 # v2
+        with:
+          tool: cargo-deny
+      - name: Run cargo-deny
+        run: cargo deny check
+
   format:
     name: Check Format
     runs-on: ubuntu-latest
