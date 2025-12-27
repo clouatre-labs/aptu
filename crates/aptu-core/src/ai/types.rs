@@ -68,7 +68,7 @@ pub struct ChatCompletionResponse {
 }
 
 /// Token usage information from the API.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct UsageInfo {
     /// Number of tokens in the prompt.
     #[serde(default)]
@@ -298,7 +298,7 @@ pub struct PrReviewComment {
 }
 
 /// Structured PR review response from AI.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct PrReviewResponse {
     /// Overall summary of the PR (2-3 sentences).
     pub summary: String,
@@ -340,7 +340,7 @@ impl std::fmt::Display for ReviewEvent {
 }
 
 /// Structured PR label response from AI.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct PrLabelResponse {
     /// Suggested labels for the PR.
     pub suggested_labels: Vec<String>,
