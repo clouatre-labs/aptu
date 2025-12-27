@@ -64,7 +64,8 @@ impl ReposResult {
                 // Output just the repos array for backward compatibility
                 println!(
                     "{}",
-                    serde_yml::to_string(&self.repos).expect("Failed to serialize repos to YAML")
+                    serde_saphyr::to_string(&self.repos)
+                        .expect("Failed to serialize repos to YAML")
                 );
             }
             _ => {

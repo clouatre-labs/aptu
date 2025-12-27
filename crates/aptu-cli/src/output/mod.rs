@@ -33,7 +33,7 @@ pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) {
         OutputFormat::Yaml => {
             println!(
                 "{}",
-                serde_yml::to_string(result).expect("Failed to serialize to YAML")
+                serde_saphyr::to_string(result).expect("Failed to serialize to YAML")
             );
         }
         OutputFormat::Markdown => {
