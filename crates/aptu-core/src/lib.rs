@@ -91,8 +91,8 @@ pub use retry::{is_retryable_anyhow, is_retryable_http, retry_backoff};
 // ============================================================================
 
 pub use utils::{
-    format_relative_time, is_priority_label, parse_and_format_relative_time, truncate,
-    truncate_with_suffix,
+    format_relative_time, infer_repo_from_git, is_priority_label, parse_and_format_relative_time,
+    truncate, truncate_with_suffix,
 };
 
 // ============================================================================
@@ -102,7 +102,7 @@ pub use utils::{
 pub use facade::{
     add_custom_repo, analyze_issue, apply_triage_labels, fetch_issue_for_triage, fetch_issues,
     generate_release_notes, label_pr, list_curated_repos, list_repos, post_pr_review,
-    post_triage_comment, remove_custom_repo, review_pr,
+    post_release_notes, post_triage_comment, remove_custom_repo, review_pr,
 };
 pub use github::issues::ApplyResult;
 

@@ -596,16 +596,22 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
 
         Commands::Release(release_cmd) => match release_cmd {
             ReleaseCommand::Notes {
+                tag,
                 repo,
                 from,
                 to,
+                unreleased,
+                update,
                 dry_run,
             } => {
                 let spinner = maybe_spinner(&ctx, "Generating release notes...");
                 let result = release::run_generate(
+                    tag.as_deref(),
                     repo.as_deref(),
                     from.as_deref(),
                     to.as_deref(),
+                    unreleased,
+                    update,
                     dry_run,
                     &ctx,
                 )

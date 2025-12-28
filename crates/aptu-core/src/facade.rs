@@ -927,3 +927,48 @@ pub async fn generate_release_notes(
 
     Ok(response)
 }
+
+/// Post release notes to GitHub.
+///
+/// Creates or updates a release on GitHub with the provided release notes body.
+/// If the release already exists, it will be updated. Otherwise, a new release is created.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `tag` - The tag name for the release
+/// * `body` - The release notes body
+///
+/// # Returns
+///
+/// The URL of the created or updated release.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available
+/// - GitHub API call fails
+#[instrument(skip(provider))]
+pub async fn post_release_notes(
+    provider: &dyn TokenProvider,
+    owner: &str,
+    repo: &str,
+    tag: &str,
+    body: &str,
+) -> Result<String, AptuError> {
+    let token = provider.github_token().ok_or_else(|| AptuError::GitHub {
+        message: "GitHub token not available".to_string(),
+    })?;
+
+    let gh_client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
+        message: e.to_string(),
+    })?;
+
+    crate::github::releases::post_release_notes(&gh_client, owner, repo, tag, body)
+        .await
+        .map_err(|e| AptuError::GitHub {
+            message: e.to_string(),
+        })
+}
