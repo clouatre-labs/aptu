@@ -25,7 +25,7 @@ use tracing::debug;
 
 use crate::cli::{
     AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
-    OutputFormat, PrCommand, ReleaseCommand, RepoCommand,
+    OutputFormat, PrCommand, RepoCommand,
 };
 use crate::output;
 use aptu_core::{AppConfig, State, check_already_triaged, is_retryable_anyhow, retry_backoff};
@@ -594,35 +594,33 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             }
         },
 
-        Commands::Release(release_cmd) => match release_cmd {
-            ReleaseCommand::Notes {
-                tag,
-                repo,
-                from,
-                to,
+        Commands::Release {
+            tag,
+            repo,
+            from,
+            to,
+            unreleased,
+            update,
+            dry_run,
+        } => {
+            let spinner = maybe_spinner(&ctx, "Generating release notes...");
+            let result = release::run_generate(
+                tag.as_deref(),
+                repo.as_deref(),
+                from.as_deref(),
+                to.as_deref(),
                 unreleased,
                 update,
                 dry_run,
-            } => {
-                let spinner = maybe_spinner(&ctx, "Generating release notes...");
-                let result = release::run_generate(
-                    tag.as_deref(),
-                    repo.as_deref(),
-                    from.as_deref(),
-                    to.as_deref(),
-                    unreleased,
-                    update,
-                    dry_run,
-                    &ctx,
-                )
-                .await?;
-                if let Some(s) = spinner {
-                    s.finish_and_clear();
-                }
-                output::render(&result, &ctx);
-                Ok(())
+                &ctx,
+            )
+            .await?;
+            if let Some(s) = spinner {
+                s.finish_and_clear();
             }
-        },
+            output::render(&result, &ctx);
+            Ok(())
+        }
 
         Commands::Completion(completion_cmd) => match completion_cmd {
             CompletionCommand::Generate { shell } => completion::run_generate(shell),
