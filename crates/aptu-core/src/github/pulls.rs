@@ -236,62 +236,15 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
 mod tests {
     use super::*;
 
+    // Smoke test to verify parse_pr_reference delegates correctly.
+    // Comprehensive parsing tests are in github/mod.rs.
     #[test]
-    fn test_parse_pr_reference_full_url() {
+    fn test_parse_pr_reference_delegates_to_shared() {
         let (owner, repo, number) =
             parse_pr_reference("https://github.com/block/goose/pull/123", None).unwrap();
         assert_eq!(owner, "block");
         assert_eq!(repo, "goose");
         assert_eq!(number, 123);
-    }
-
-    #[test]
-    fn test_parse_pr_reference_short_form() {
-        let (owner, repo, number) = parse_pr_reference("block/goose#456", None).unwrap();
-        assert_eq!(owner, "block");
-        assert_eq!(repo, "goose");
-        assert_eq!(number, 456);
-    }
-
-    #[test]
-    fn test_parse_pr_reference_bare_number_with_context() {
-        let (owner, repo, number) = parse_pr_reference("789", Some("block/goose")).unwrap();
-        assert_eq!(owner, "block");
-        assert_eq!(repo, "goose");
-        assert_eq!(number, 789);
-    }
-
-    #[test]
-    fn test_parse_pr_reference_bare_number_without_context() {
-        let result = parse_pr_reference("123", None);
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        // The shared function uses "Bare pull request number requires repository context"
-        assert!(
-            err_msg.contains("requires repository context")
-                || err_msg.contains("requires --repo flag"),
-            "Error message was: {}",
-            err_msg
-        );
-    }
-
-    #[test]
-    fn test_parse_pr_reference_hash_with_context() {
-        // Bare hash without owner/repo prefix is not supported
-        let result = parse_pr_reference("#42", Some("owner/repo"));
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_pr_reference_invalid_url() {
-        let result = parse_pr_reference("https://github.com/invalid", None);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_pr_reference_invalid_number() {
-        let result = parse_pr_reference("block/goose#abc", None);
-        assert!(result.is_err());
     }
 
     #[test]

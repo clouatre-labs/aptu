@@ -1534,108 +1534,12 @@ mod label_tests {
 mod tests {
     use super::*;
 
+    // Smoke test to verify parse_issue_reference delegates correctly.
+    // Comprehensive parsing tests are in github/mod.rs.
     #[test]
-    fn parse_reference_full_url() {
-        let url = "https://github.com/block/goose/issues/5836";
-        let (owner, repo, number) = parse_issue_reference(url, None).unwrap();
-        assert_eq!(owner, "block");
-        assert_eq!(repo, "goose");
-        assert_eq!(number, 5836);
-    }
-
-    #[test]
-    fn parse_reference_short_form() {
-        let reference = "block/goose#5836";
-        let (owner, repo, number) = parse_issue_reference(reference, None).unwrap();
-        assert_eq!(owner, "block");
-        assert_eq!(repo, "goose");
-        assert_eq!(number, 5836);
-    }
-
-    #[test]
-    fn parse_reference_short_form_with_context() {
-        let reference = "block/goose#5836";
+    fn parse_issue_reference_delegates_to_shared() {
         let (owner, repo, number) =
-            parse_issue_reference(reference, Some("astral-sh/ruff")).unwrap();
-        assert_eq!(owner, "block");
-        assert_eq!(repo, "goose");
-        assert_eq!(number, 5836);
-    }
-
-    #[test]
-    fn parse_reference_bare_number_with_context() {
-        let reference = "5836";
-        let (owner, repo, number) = parse_issue_reference(reference, Some("block/goose")).unwrap();
-        assert_eq!(owner, "block");
-        assert_eq!(repo, "goose");
-        assert_eq!(number, 5836);
-    }
-
-    #[test]
-    fn parse_reference_bare_number_without_context() {
-        let reference = "5836";
-        let result = parse_issue_reference(reference, None);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Bare issue number requires repository context")
-        );
-    }
-
-    #[test]
-    fn parse_reference_invalid_short_form_missing_slash() {
-        let reference = "owner#123";
-        let result = parse_issue_reference(reference, None);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Invalid owner/repo format")
-        );
-    }
-
-    #[test]
-    fn parse_reference_invalid_short_form_extra_slash() {
-        let reference = "owner/repo/extra#123";
-        let result = parse_issue_reference(reference, None);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Invalid owner/repo format")
-        );
-    }
-
-    #[test]
-    fn parse_reference_invalid_bare_number() {
-        let reference = "abc";
-        let result = parse_issue_reference(reference, Some("block/goose"));
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Invalid issue reference format")
-        );
-    }
-
-    #[test]
-    fn parse_reference_whitespace_trimming() {
-        let reference = "  block/goose#5836  ";
-        let (owner, repo, number) = parse_issue_reference(reference, None).unwrap();
-        assert_eq!(owner, "block");
-        assert_eq!(repo, "goose");
-        assert_eq!(number, 5836);
-    }
-
-    #[test]
-    fn parse_reference_bare_number_whitespace() {
-        let reference = "  5836  ";
-        let (owner, repo, number) = parse_issue_reference(reference, Some("block/goose")).unwrap();
+            parse_issue_reference("https://github.com/block/goose/issues/5836", None).unwrap();
         assert_eq!(owner, "block");
         assert_eq!(repo, "goose");
         assert_eq!(number, 5836);
