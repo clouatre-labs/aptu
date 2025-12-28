@@ -45,6 +45,9 @@ async-trait = { workspace = true }
 # Builder
 bon = { workspace = true }
 
+# Regex for git URL parsing
+regex = "1"
+
 [features]
 default = []
 # Enable system keyring for secure token storage

@@ -132,6 +132,7 @@ dependencies = [
  "dirs",
  "keyring",
  "octocrab",
+ "regex",
  "reqwest",
  "secrecy",
  "serde",

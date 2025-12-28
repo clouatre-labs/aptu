@@ -243,6 +243,57 @@ pub fn parse_tag_reference(tag: &str) -> String {
     version.to_string()
 }
 
+/// Post release notes to GitHub.
+///
+/// Creates or updates a release on GitHub with the provided body.
+/// If the release already exists, it will be updated. Otherwise, a new release is created.
+///
+/// # Arguments
+///
+/// * `client` - Octocrab GitHub client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `tag` - The tag name for the release
+/// * `body` - The release notes body
+///
+/// # Returns
+///
+/// The URL of the created or updated release.
+#[instrument(skip(client))]
+pub async fn post_release_notes(
+    client: &octocrab::Octocrab,
+    owner: &str,
+    repo: &str,
+    tag: &str,
+    body: &str,
+) -> Result<String> {
+    let repo_handle = client.repos(owner, repo);
+    let releases = repo_handle.releases();
+
+    // Try to get existing release by tag
+    if let Ok(existing_release) = releases.get_by_tag(tag).await {
+        // Update existing release
+        let updated = releases
+            .update(existing_release.id.0)
+            .body(body)
+            .send()
+            .await
+            .context(format!("Failed to update release for tag {tag}"))?;
+
+        Ok(updated.html_url.to_string())
+    } else {
+        // Create new release
+        let created = releases
+            .create(tag)
+            .body(body)
+            .send()
+            .await
+            .context(format!("Failed to create release for tag {tag}"))?;
+
+        Ok(created.html_url.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

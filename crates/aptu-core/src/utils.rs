@@ -6,6 +6,8 @@
 //! These functions are used by CLI, and will be available to iOS and MCP consumers.
 
 use chrono::{DateTime, Utc};
+use regex::Regex;
+use std::process::Command;
 
 /// Truncates text to a maximum length with a custom suffix.
 ///
@@ -173,6 +175,89 @@ pub fn is_priority_label(label: &str) -> bool {
     }
 
     false
+}
+
+/// Parses a git remote URL to extract owner/repo.
+///
+/// Supports SSH (git@github.com:owner/repo.git) and HTTPS
+/// (<https://github.com/owner/repo.git>) formats.
+///
+/// # Examples
+///
+/// ```
+/// use aptu_core::utils::parse_git_remote_url;
+///
+/// assert_eq!(parse_git_remote_url("git@github.com:owner/repo.git"), Ok("owner/repo".to_string()));
+/// assert_eq!(parse_git_remote_url("https://github.com/owner/repo.git"), Ok("owner/repo".to_string()));
+/// assert_eq!(parse_git_remote_url("git@github.com:owner/repo"), Ok("owner/repo".to_string()));
+/// ```
+pub fn parse_git_remote_url(url: &str) -> Result<String, String> {
+    // Parse SSH format: git@github.com:owner/repo.git
+    if let Some(ssh_part) = url.strip_prefix("git@github.com:") {
+        let repo = ssh_part.strip_suffix(".git").unwrap_or(ssh_part);
+        return Ok(repo.to_string());
+    }
+
+    // Parse HTTPS format: https://github.com/owner/repo.git
+    if let Some(https_part) = url.strip_prefix("https://github.com/") {
+        let repo = https_part.strip_suffix(".git").unwrap_or(https_part);
+        return Ok(repo.to_string());
+    }
+
+    // Try generic regex pattern for other git hosts
+    let re = Regex::new(r"(?:git@|https://)[^/]+[:/]([^/]+)/(.+?)(?:\.git)?$")
+        .map_err(|e| format!("Regex error: {e}"))?;
+
+    if let Some(caps) = re.captures(url)
+        && let (Some(owner), Some(repo)) = (caps.get(1), caps.get(2))
+    {
+        return Ok(format!("{}/{}", owner.as_str(), repo.as_str()));
+    }
+
+    Err(format!("Could not parse git remote URL: {url}"))
+}
+
+/// Infers the GitHub repository (owner/repo) from the local git config.
+///
+/// Runs `git config --get remote.origin.url` and parses the result.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Not in a git repository
+/// - No origin remote is configured
+/// - Origin URL cannot be parsed
+///
+/// # Examples
+///
+/// ```no_run
+/// use aptu_core::utils::infer_repo_from_git;
+///
+/// match infer_repo_from_git() {
+///     Ok(repo) => println!("Found repo: {}", repo),
+///     Err(e) => eprintln!("Error: {}", e),
+/// }
+/// ```
+pub fn infer_repo_from_git() -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["config", "--get", "remote.origin.url"])
+        .output()
+        .map_err(|e| format!("Failed to run git command: {e}"))?;
+
+    if !output.status.success() {
+        return Err("Not in a git repository or no origin remote configured".to_string());
+    }
+
+    let url = String::from_utf8(output.stdout)
+        .map_err(|e| format!("Invalid UTF-8 in git output: {e}"))?
+        .trim()
+        .to_string();
+
+    if url.is_empty() {
+        return Err("No origin remote configured".to_string());
+    }
+
+    parse_git_remote_url(&url)
 }
 
 #[cfg(test)]
@@ -380,5 +465,46 @@ mod tests {
         assert!(!is_priority_label("documentation"));
         assert!(!is_priority_label("help wanted"));
         assert!(!is_priority_label("good first issue"));
+    }
+
+    // ========================================================================
+    // parse_git_remote_url() tests
+    // ========================================================================
+
+    #[test]
+    fn parse_git_remote_url_ssh_with_git_suffix() {
+        assert_eq!(
+            parse_git_remote_url("git@github.com:owner/repo.git"),
+            Ok("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_git_remote_url_ssh_without_git_suffix() {
+        assert_eq!(
+            parse_git_remote_url("git@github.com:owner/repo"),
+            Ok("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_git_remote_url_https_with_git_suffix() {
+        assert_eq!(
+            parse_git_remote_url("https://github.com/owner/repo.git"),
+            Ok("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_git_remote_url_https_without_git_suffix() {
+        assert_eq!(
+            parse_git_remote_url("https://github.com/owner/repo"),
+            Ok("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_git_remote_url_invalid() {
+        assert!(parse_git_remote_url("not-a-url").is_err());
     }
 }
