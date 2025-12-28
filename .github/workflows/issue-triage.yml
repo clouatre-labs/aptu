@@ -4,6 +4,8 @@ on:
   issues:
     types: [opened]
 
+permissions: {}
+
 jobs:
   triage:
     runs-on: ubuntu-latest

@@ -5,6 +5,8 @@ on:
     types: [opened]
   workflow_dispatch: # Manual trigger for testing
 
+permissions: {}
+
 jobs:
   label:
     runs-on: ubuntu-latest

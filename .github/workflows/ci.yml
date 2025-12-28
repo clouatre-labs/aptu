@@ -16,6 +16,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
