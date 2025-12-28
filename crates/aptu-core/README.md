@@ -13,7 +13,7 @@ Core library for Aptu - AI-Powered Triage Utility.
 
 - **AI Triage** - Analyze issues with summaries, labels, and contributor guidance
 - **PR Review** - AI-powered pull request analysis and feedback
-- **Multiple Providers** - OpenRouter, Groq, Google Gemini, and Cerebras
+- **Multiple Providers** - `OpenRouter`, Groq, Google Gemini, and Cerebras
 - **GitHub Integration** - Auth, issues, PRs, and GraphQL queries
 - **Resilient** - Exponential backoff, circuit breaker, rate limit handling
 
@@ -55,12 +55,12 @@ async fn main() -> Result<()> {
 
     // Create issue details
     let issue = IssueDetails::builder()
-        .owner("block")
-        .repo("goose")
+        .owner("block".to_string())
+        .repo("goose".to_string())
         .number(123)
-        .title("Example issue")
-        .body("Issue description...")
-        .url("https://github.com/block/goose/issues/123")
+        .title("Example issue".to_string())
+        .body("Issue description...".to_string())
+        .url("https://github.com/block/goose/issues/123".to_string())
         .build();
 
     // Analyze with AI
