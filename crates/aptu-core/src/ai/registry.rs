@@ -107,20 +107,12 @@ const ZENMUX_MODELS: &[ModelInfo] = &[ModelInfo {
 }];
 
 /// `Z.AI` models
-const ZAI_MODELS: &[ModelInfo] = &[
-    ModelInfo {
-        display_name: "GLM-4.5 Air",
-        identifier: "glm-4.5-air",
-        is_free: true,
-        context_window: 128_000,
-    },
-    ModelInfo {
-        display_name: "GLM-4.6",
-        identifier: "glm-4.6",
-        is_free: false,
-        context_window: 128_000,
-    },
-];
+const ZAI_MODELS: &[ModelInfo] = &[ModelInfo {
+    display_name: "GLM-4.5 Air",
+    identifier: "glm-4.5-air",
+    is_free: false,
+    context_window: 128_000,
+}];
 
 // ============================================================================
 // Provider Registry
@@ -373,13 +365,11 @@ mod tests {
     #[test]
     fn test_zai_models() {
         let provider = get_provider("zai").unwrap();
-        assert_eq!(provider.models.len(), 2);
-        let air_model = &provider.models[0];
-        assert_eq!(air_model.identifier, "glm-4.5-air");
-        assert!(air_model.is_free);
-        let model_46 = &provider.models[1];
-        assert_eq!(model_46.identifier, "glm-4.6");
-        assert!(!model_46.is_free);
+        assert_eq!(provider.models.len(), 1);
+        let model = &provider.models[0];
+        assert_eq!(model.identifier, "glm-4.5-air");
+        assert!(!model.is_free);
+        assert_eq!(model.context_window, 128_000);
     }
 
     #[test]

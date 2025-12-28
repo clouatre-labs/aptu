@@ -120,4 +120,4 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    model = "glm-4.5-air"
    ```
 
-**Free Tier:** glm-4.5-air with 128K context window. Paid tier: glm-4.6 with 128K context window
+**Budget Tier:** glm-4.5-air with 128K context window ($0.20/$1.10 per 1M tokens)
