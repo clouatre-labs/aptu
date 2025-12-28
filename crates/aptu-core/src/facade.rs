@@ -689,6 +689,11 @@ pub async fn fetch_issue_for_triage(
         .available_milestones(available_milestones)
         .build();
 
+    // Populate optional fields from issue_node
+    issue_details.author = issue_node.author.as_ref().map(|a| a.login.clone());
+    issue_details.created_at = Some(issue_node.created_at.clone());
+    issue_details.updated_at = Some(issue_node.updated_at.clone());
+
     // Extract keywords and language for parallel calls
     let keywords = crate::github::issues::extract_keywords(&issue_details.title);
     let language = repo_data

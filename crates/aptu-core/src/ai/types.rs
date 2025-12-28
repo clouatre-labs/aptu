@@ -222,6 +222,15 @@ pub struct IssueDetails {
     /// Viewer permission level on the repository.
     #[serde(default)]
     pub viewer_permission: Option<String>,
+    /// Issue author login.
+    #[serde(default)]
+    pub author: Option<String>,
+    /// Issue creation timestamp.
+    #[serde(default)]
+    pub created_at: Option<String>,
+    /// Issue last update timestamp.
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 /// A comment on an issue.
