@@ -7,7 +7,9 @@ pub mod types;
 
 use crate::error::AptuFfiError;
 use crate::keychain::KeychainProviderRef;
-use crate::types::{FfiAiModel, FfiCuratedRepo, FfiIssueNode, FfiTokenStatus, FfiTriageResponse};
+use crate::types::{
+    FfiAiModel, FfiApplyResult, FfiCuratedRepo, FfiIssueNode, FfiTokenStatus, FfiTriageResponse,
+};
 use tokio::runtime::Runtime;
 
 lazy_static::lazy_static! {
@@ -340,6 +342,197 @@ pub fn list_providers() -> Vec<String> {
         .iter()
         .map(|p| p.name.to_string())
         .collect()
+}
+
+/// Fetch an issue for triage analysis.
+///
+/// Parses the issue reference, fetches issue details including labels, milestones,
+/// and repository context (related issues, file tree).
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `reference` - Issue reference (URL, owner/repo#number, or bare number)
+/// * `repo_context` - Optional repository context for bare numbers
+///
+/// # Returns
+///
+/// Issue details including title, body, labels, comments, and available labels/milestones.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available in keychain
+/// - Issue reference cannot be parsed
+/// - GitHub API call fails
+#[uniffi::export]
+pub fn fetch_issue_for_triage(
+    keychain: KeychainProviderRef,
+    reference: String,
+    repo_context: Option<String>,
+) -> Result<crate::types::FfiIssueDetails, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        match aptu_core::fetch_issue_for_triage(&provider, &reference, repo_context.as_deref())
+            .await
+        {
+            Ok(issue_details) => {
+                let ffi_issue = crate::types::FfiIssueDetails {
+                    number: issue_details.number,
+                    title: issue_details.title,
+                    body: issue_details.body,
+                    labels: issue_details.labels,
+                    url: issue_details.url,
+                    author: String::new(),
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                    comments_count: 0,
+                };
+                Ok(ffi_issue)
+            }
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
+/// Post a triage comment to GitHub.
+///
+/// Renders the triage response as markdown and posts it as a comment on the issue.
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `number` - Issue number
+/// * `triage` - Triage response to post
+///
+/// # Returns
+///
+/// The URL of the posted comment.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available in keychain
+/// - GitHub API call fails
+#[uniffi::export]
+pub fn post_triage_comment(
+    keychain: KeychainProviderRef,
+    owner: String,
+    repo: String,
+    number: u64,
+    triage: FfiTriageResponse,
+) -> Result<String, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        // Convert FfiTriageResponse back to core TriageResponse
+        let core_triage = aptu_core::ai::types::TriageResponse {
+            summary: triage.summary,
+            suggested_labels: triage.suggested_labels,
+            clarifying_questions: triage.clarifying_questions,
+            potential_duplicates: triage.potential_duplicates,
+            implementation_approach: None,
+            related_issues: vec![],
+            suggested_milestone: None,
+            status_note: None,
+            contributor_guidance: None,
+        };
+
+        // Create minimal IssueDetails for the facade call
+        let issue_details = aptu_core::ai::types::IssueDetails::builder()
+            .owner(owner)
+            .repo(repo)
+            .number(number)
+            .title(String::new())
+            .body(String::new())
+            .labels(vec![])
+            .comments(vec![])
+            .url(String::new())
+            .build();
+
+        match aptu_core::post_triage_comment(&provider, &issue_details, &core_triage).await {
+            Ok(comment_url) => Ok(comment_url),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
+/// Apply AI-suggested labels and milestone to an issue.
+///
+/// Labels are applied additively: existing labels are preserved and AI-suggested labels
+/// are merged in. Priority labels defer to existing human judgment.
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `number` - Issue number
+/// * `current_labels` - Current labels on the issue
+/// * `triage` - AI triage response with suggestions
+///
+/// # Returns
+///
+/// Result of applying labels and milestone.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available in keychain
+/// - GitHub API call fails
+#[uniffi::export]
+pub fn apply_triage_labels(
+    keychain: KeychainProviderRef,
+    owner: String,
+    repo: String,
+    number: u64,
+    current_labels: Vec<String>,
+    triage: FfiTriageResponse,
+) -> Result<FfiApplyResult, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        // Convert FfiTriageResponse back to core TriageResponse
+        let core_triage = aptu_core::ai::types::TriageResponse {
+            summary: triage.summary,
+            suggested_labels: triage.suggested_labels,
+            clarifying_questions: triage.clarifying_questions,
+            potential_duplicates: triage.potential_duplicates,
+            implementation_approach: None,
+            related_issues: vec![],
+            suggested_milestone: None,
+            status_note: None,
+            contributor_guidance: None,
+        };
+
+        // Create minimal IssueDetails for the facade call
+        let issue_details = aptu_core::ai::types::IssueDetails::builder()
+            .owner(owner)
+            .repo(repo)
+            .number(number)
+            .title(String::new())
+            .body(String::new())
+            .labels(current_labels)
+            .comments(vec![])
+            .url(String::new())
+            .available_labels(vec![])
+            .available_milestones(vec![])
+            .build();
+
+        match aptu_core::apply_triage_labels(&provider, &issue_details, &core_triage).await {
+            Ok(result) => Ok(FfiApplyResult::from(result)),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
 }
 
 uniffi::setup_scaffolding!();

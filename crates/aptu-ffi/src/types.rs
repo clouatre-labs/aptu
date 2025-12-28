@@ -133,3 +133,20 @@ impl From<aptu_core::ai::models::AiModel> for FfiAiModel {
         }
     }
 }
+
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiApplyResult {
+    pub applied_labels: Vec<String>,
+    pub applied_milestone: Option<String>,
+    pub warnings: Vec<String>,
+}
+
+impl From<aptu_core::ApplyResult> for FfiApplyResult {
+    fn from(result: aptu_core::ApplyResult) -> Self {
+        FfiApplyResult {
+            applied_labels: result.applied_labels,
+            applied_milestone: result.applied_milestone,
+            warnings: result.warnings,
+        }
+    }
+}

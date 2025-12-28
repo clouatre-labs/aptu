@@ -1,65 +1,45 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use aptu_core::triage::APTU_SIGNATURE;
+use aptu_core::triage::render_triage_markdown;
 use console::style;
 use std::io::{self, Write};
 
 use crate::cli::OutputContext;
 use crate::commands::types::TriageResult;
 
-use super::{OutputMode, Renderable};
+use super::Renderable;
 
-/// Renders a labeled list section.
+/// Renders a labeled list section for terminal output.
 pub fn render_list_section(
     title: &str,
     items: &[String],
     empty_msg: &str,
-    mode: &OutputMode,
     numbered: bool,
 ) -> String {
     use std::fmt::Write;
 
     let mut output = String::new();
 
-    match mode {
-        OutputMode::Terminal => {
-            let _ = writeln!(output, "{}", style(title).cyan().bold());
-            if items.is_empty() {
-                let _ = writeln!(output, "  {}", style(empty_msg).dim());
-            } else if numbered {
-                for (i, item) in items.iter().enumerate() {
-                    let _ = writeln!(output, "  {}. {}", i + 1, item);
-                }
-            } else {
-                for item in items {
-                    let _ = writeln!(output, "  {} {}", style("-").dim(), item);
-                }
-            }
+    let _ = writeln!(output, "{}", style(title).cyan().bold());
+    if items.is_empty() {
+        let _ = writeln!(output, "  {}", style(empty_msg).dim());
+    } else if numbered {
+        for (i, item) in items.iter().enumerate() {
+            let _ = writeln!(output, "  {}. {}", i + 1, item);
         }
-        OutputMode::Markdown => {
-            let _ = writeln!(output, "### {title}\n");
-            if items.is_empty() {
-                let _ = writeln!(output, "{empty_msg}");
-            } else if numbered {
-                for (i, item) in items.iter().enumerate() {
-                    let _ = writeln!(output, "{}. {}", i + 1, item);
-                }
-            } else {
-                for item in items {
-                    let _ = writeln!(output, "- {item}");
-                }
-            }
+    } else {
+        for item in items {
+            let _ = writeln!(output, "  {} {}", style("-").dim(), item);
         }
     }
     output.push('\n');
     output
 }
 
-/// Renders the full triage output as a string.
+/// Renders the full triage output as a string for terminal display.
 #[allow(clippy::too_many_lines)]
 pub fn render_triage_content(
     triage: &aptu_core::ai::types::TriageResponse,
-    mode: &OutputMode,
     title: Option<(&str, u64)>,
     is_maintainer: bool,
 ) -> String {
@@ -68,42 +48,24 @@ pub fn render_triage_content(
     let mut output = String::new();
 
     // Header
-    match mode {
-        OutputMode::Terminal => {
-            if let Some((issue_title, number)) = title {
-                let _ = writeln!(
-                    output,
-                    "{}\n",
-                    style(format!("Triage for #{number}: {issue_title}"))
-                        .bold()
-                        .underlined()
-                );
-            }
-            let _ = writeln!(output, "{}", style("Summary").cyan().bold());
-            let _ = writeln!(output, "  {}\n", triage.summary);
-        }
-        OutputMode::Markdown => {
-            output.push_str("## Triage Summary\n\n");
-            output.push_str(&triage.summary);
-            output.push_str("\n\n");
-        }
+    if let Some((issue_title, number)) = title {
+        let _ = writeln!(
+            output,
+            "{}\n",
+            style(format!("Triage for #{number}: {issue_title}"))
+                .bold()
+                .underlined()
+        );
     }
+    let _ = writeln!(output, "{}", style("Summary").cyan().bold());
+    let _ = writeln!(output, "  {}\n", triage.summary);
 
     // Labels - only show if maintainer
     if is_maintainer {
-        let labels: Vec<String> = match mode {
-            OutputMode::Terminal => triage.suggested_labels.clone(),
-            OutputMode::Markdown => triage
-                .suggested_labels
-                .iter()
-                .map(|l| format!("`{l}`"))
-                .collect(),
-        };
         output.push_str(&render_list_section(
             "Suggested Labels",
-            &labels,
+            &triage.suggested_labels,
             "None",
-            mode,
             false,
         ));
     }
@@ -113,17 +75,8 @@ pub fn render_triage_content(
         && let Some(milestone) = &triage.suggested_milestone
         && !milestone.is_empty()
     {
-        match mode {
-            OutputMode::Terminal => {
-                let _ = writeln!(output, "{}", style("Suggested Milestone").cyan().bold());
-                let _ = writeln!(output, "  {milestone}\n");
-            }
-            OutputMode::Markdown => {
-                output.push_str("### Suggested Milestone\n\n");
-                output.push_str(milestone);
-                output.push_str("\n\n");
-            }
-        }
+        let _ = writeln!(output, "{}", style("Suggested Milestone").cyan().bold());
+        let _ = writeln!(output, "  {milestone}\n");
     }
 
     // Questions
@@ -131,7 +84,6 @@ pub fn render_triage_content(
         "Clarifying Questions",
         &triage.clarifying_questions,
         "None needed",
-        mode,
         true,
     ));
 
@@ -140,29 +92,17 @@ pub fn render_triage_content(
         "Potential Duplicates",
         &triage.potential_duplicates,
         "None found",
-        mode,
         false,
     ));
 
     // Related issues
     if !triage.related_issues.is_empty() {
-        match mode {
-            OutputMode::Terminal => {
-                let _ = writeln!(output, "{}", style("Related Issues").cyan().bold());
-                for issue in &triage.related_issues {
-                    let _ = writeln!(output, "  #{} - {}", issue.number, issue.title);
-                    let _ = writeln!(output, "    {}", style(&issue.reason).dim());
-                }
-                output.push('\n');
-            }
-            OutputMode::Markdown => {
-                output.push_str("### Related Issues\n\n");
-                for issue in &triage.related_issues {
-                    let _ = writeln!(output, "- **#{}** - {}", issue.number, issue.title);
-                    let _ = writeln!(output, "  > {}\n", issue.reason);
-                }
-            }
+        let _ = writeln!(output, "{}", style("Related Issues").cyan().bold());
+        for issue in &triage.related_issues {
+            let _ = writeln!(output, "  #{} - {}", issue.number, issue.title);
+            let _ = writeln!(output, "    {}", style(&issue.reason).dim());
         }
+        output.push('\n');
     }
 
     // Status note (if present)
@@ -173,62 +113,31 @@ pub fn render_triage_content(
             "Status",
             std::slice::from_ref(status_note),
             "",
-            mode,
             false,
         ));
     }
 
     // Contributor guidance (if present)
     if let Some(guidance) = &triage.contributor_guidance {
-        match mode {
-            OutputMode::Terminal => {
-                let _ = writeln!(output, "{}", style("Contributor Guidance").cyan().bold());
-                let beginner_label = if guidance.beginner_friendly {
-                    style("Beginner-friendly").green()
-                } else {
-                    style("Advanced").yellow()
-                };
-                let _ = writeln!(output, "  {beginner_label}");
-                let _ = writeln!(output, "  {}\n", guidance.reasoning);
-            }
-            OutputMode::Markdown => {
-                output.push_str("### Contributor Guidance\n\n");
-                let beginner_label = if guidance.beginner_friendly {
-                    "**Beginner-friendly**"
-                } else {
-                    "**Advanced**"
-                };
-                let _ = writeln!(output, "{beginner_label}\n");
-                let _ = writeln!(output, "{}\n", guidance.reasoning);
-            }
-        }
+        let _ = writeln!(output, "{}", style("Contributor Guidance").cyan().bold());
+        let beginner_label = if guidance.beginner_friendly {
+            style("Beginner-friendly").green()
+        } else {
+            style("Advanced").yellow()
+        };
+        let _ = writeln!(output, "  {beginner_label}");
+        let _ = writeln!(output, "  {}\n", guidance.reasoning);
     }
 
     // Implementation approach (if present)
     if let Some(approach) = &triage.implementation_approach
         && !approach.is_empty()
     {
-        match mode {
-            OutputMode::Terminal => {
-                let _ = writeln!(output, "{}", style("Implementation Approach").cyan().bold());
-                for line in approach.lines() {
-                    let _ = writeln!(output, "  {line}");
-                }
-                output.push('\n');
-            }
-            OutputMode::Markdown => {
-                output.push_str("### Implementation Approach\n\n");
-                let _ = writeln!(output, "{approach}\n");
-            }
+        let _ = writeln!(output, "{}", style("Implementation Approach").cyan().bold());
+        for line in approach.lines() {
+            let _ = writeln!(output, "  {line}");
         }
-    }
-
-    // Attribution (markdown only)
-    if matches!(mode, OutputMode::Markdown) {
-        output.push_str("---\n");
-        output.push('*');
-        output.push_str(APTU_SIGNATURE);
-        output.push_str(" - AI-assisted OSS triage*\n");
+        output.push('\n');
     }
 
     output
@@ -242,7 +151,6 @@ impl Renderable for TriageResult {
             "{}",
             render_triage_content(
                 &self.triage,
-                &OutputMode::Terminal,
                 Some((&self.issue_title, self.issue_number)),
                 self.is_maintainer
             )
@@ -293,23 +201,9 @@ impl Renderable for TriageResult {
             "## Triage for #{}: {}\n",
             self.issue_number, self.issue_title
         )?;
-        write!(
-            w,
-            "{}",
-            render_triage_content(
-                &self.triage,
-                &OutputMode::Markdown,
-                None,
-                self.is_maintainer
-            )
-        )?;
+        write!(w, "{}", render_triage_markdown(&self.triage))?;
         Ok(())
     }
-}
-
-/// Generates markdown content for posting to GitHub.
-pub fn render_triage_markdown(triage: &aptu_core::ai::types::TriageResponse) -> String {
-    render_triage_content(triage, &OutputMode::Markdown, None, true)
 }
 
 #[cfg(test)]
@@ -324,7 +218,7 @@ mod tests {
             ..Default::default()
         };
 
-        let output = render_triage_content(&triage, &OutputMode::Terminal, None, false);
+        let output = render_triage_content(&triage, None, false);
 
         // Verify each line of implementation_approach is prefixed with 2 spaces
         let lines: Vec<&str> = output.lines().collect();

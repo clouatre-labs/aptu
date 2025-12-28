@@ -8,10 +8,10 @@
 //! functions with their own credential source.
 
 use chrono::Duration;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 use crate::ai::provider::MAX_LABELS;
-use crate::ai::types::{PrDetails, ReviewEvent};
+use crate::ai::types::{PrDetails, ReviewEvent, TriageResponse};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
@@ -582,4 +582,279 @@ pub async fn label_pr(
     }
 
     Ok((number, pr_details.title, pr_details.url, labels))
+}
+
+/// Fetches an issue for triage analysis.
+///
+/// Parses the issue reference, checks authentication, and fetches issue details
+/// including labels, milestones, and repository context.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `reference` - Issue reference (URL, owner/repo#number, or bare number)
+/// * `repo_context` - Optional repository context for bare numbers
+///
+/// # Returns
+///
+/// Issue details including title, body, labels, comments, and available labels/milestones.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available from the provider
+/// - Issue reference cannot be parsed
+/// - GitHub API call fails
+#[allow(clippy::too_many_lines)]
+#[instrument(skip(provider), fields(reference = %reference))]
+pub async fn fetch_issue_for_triage(
+    provider: &dyn TokenProvider,
+    reference: &str,
+    repo_context: Option<&str>,
+) -> crate::Result<IssueDetails> {
+    // Get GitHub token from provider
+    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
+
+    // Parse the issue reference
+    let (owner, repo, number) =
+        crate::github::issues::parse_issue_reference(reference, repo_context).map_err(|e| {
+            AptuError::GitHub {
+                message: e.to_string(),
+            }
+        })?;
+
+    // Create GitHub client with the provided token
+    let token = SecretString::from(github_token);
+    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
+        message: e.to_string(),
+    })?;
+
+    // Fetch issue with repository context (labels, milestones) in a single GraphQL call
+    let (issue_node, repo_data) = fetch_issue_with_repo_context(&client, &owner, &repo, number)
+        .await
+        .map_err(|e| AptuError::GitHub {
+            message: e.to_string(),
+        })?;
+
+    // Convert GraphQL response to IssueDetails
+    let labels: Vec<String> = issue_node
+        .labels
+        .nodes
+        .iter()
+        .map(|label| label.name.clone())
+        .collect();
+
+    let comments: Vec<crate::ai::types::IssueComment> = issue_node
+        .comments
+        .nodes
+        .iter()
+        .map(|comment| crate::ai::types::IssueComment {
+            author: comment.author.login.clone(),
+            body: comment.body.clone(),
+        })
+        .collect();
+
+    let available_labels: Vec<crate::ai::types::RepoLabel> = repo_data
+        .labels
+        .nodes
+        .iter()
+        .map(|label| crate::ai::types::RepoLabel {
+            name: label.name.clone(),
+            description: String::new(),
+            color: String::new(),
+        })
+        .collect();
+
+    let available_milestones: Vec<crate::ai::types::RepoMilestone> = repo_data
+        .milestones
+        .nodes
+        .iter()
+        .map(|milestone| crate::ai::types::RepoMilestone {
+            number: milestone.number,
+            title: milestone.title.clone(),
+            description: String::new(),
+        })
+        .collect();
+
+    let mut issue_details = IssueDetails::builder()
+        .owner(owner.clone())
+        .repo(repo.clone())
+        .number(number)
+        .title(issue_node.title.clone())
+        .body(issue_node.body.clone().unwrap_or_default())
+        .labels(labels)
+        .comments(comments)
+        .url(issue_node.url.clone())
+        .available_labels(available_labels)
+        .available_milestones(available_milestones)
+        .build();
+
+    // Extract keywords and language for parallel calls
+    let keywords = crate::github::issues::extract_keywords(&issue_details.title);
+    let language = repo_data
+        .primary_language
+        .as_ref()
+        .map_or("unknown", |l| l.name.as_str())
+        .to_string();
+
+    // Run search and tree fetch in parallel
+    let (search_result, tree_result) = tokio::join!(
+        crate::github::issues::search_related_issues(
+            &client,
+            &owner,
+            &repo,
+            &issue_details.title,
+            number
+        ),
+        crate::github::issues::fetch_repo_tree(&client, &owner, &repo, &language, &keywords)
+    );
+
+    // Handle search results
+    match search_result {
+        Ok(related) => {
+            issue_details.repo_context = related;
+            debug!(
+                related_count = issue_details.repo_context.len(),
+                "Found related issues"
+            );
+        }
+        Err(e) => {
+            debug!(error = %e, "Failed to search for related issues, continuing without context");
+        }
+    }
+
+    // Handle tree results
+    match tree_result {
+        Ok(tree) => {
+            issue_details.repo_tree = tree;
+            debug!(
+                tree_count = issue_details.repo_tree.len(),
+                "Fetched repository tree"
+            );
+        }
+        Err(e) => {
+            debug!(error = %e, "Failed to fetch repository tree, continuing without context");
+        }
+    }
+
+    debug!(issue_number = number, "Issue fetched successfully");
+    Ok(issue_details)
+}
+
+/// Posts a triage comment to GitHub.
+///
+/// Renders the triage response as markdown and posts it as a comment on the issue.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `issue_details` - Issue details (owner, repo, number)
+/// * `triage` - Triage response to post
+///
+/// # Returns
+///
+/// The URL of the posted comment.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available from the provider
+/// - GitHub API call fails
+#[instrument(skip(provider, triage), fields(owner = %issue_details.owner, repo = %issue_details.repo, number = issue_details.number))]
+pub async fn post_triage_comment(
+    provider: &dyn TokenProvider,
+    issue_details: &IssueDetails,
+    triage: &TriageResponse,
+) -> crate::Result<String> {
+    // Get GitHub token from provider
+    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
+
+    // Create GitHub client with the provided token
+    let token = SecretString::from(github_token);
+    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
+        message: e.to_string(),
+    })?;
+
+    // Render markdown and post comment
+    let comment_body = crate::triage::render_triage_markdown(triage);
+    let comment_url = crate::github::issues::post_comment(
+        &client,
+        &issue_details.owner,
+        &issue_details.repo,
+        issue_details.number,
+        &comment_body,
+    )
+    .await
+    .map_err(|e| AptuError::GitHub {
+        message: e.to_string(),
+    })?;
+
+    debug!(comment_url = %comment_url, "Triage comment posted");
+    Ok(comment_url)
+}
+
+/// Applies AI-suggested labels and milestone to an issue.
+///
+/// Labels are applied additively: existing labels are preserved and AI-suggested labels
+/// are merged in. Priority labels (p1/p2/p3) defer to existing human judgment.
+/// Milestones are only set if the issue doesn't already have one.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `issue_details` - Issue details including available labels and milestones
+/// * `triage` - AI triage response with suggestions
+///
+/// # Returns
+///
+/// Result of applying labels and milestone.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available from the provider
+/// - GitHub API call fails
+#[instrument(skip(provider, triage), fields(owner = %issue_details.owner, repo = %issue_details.repo, number = issue_details.number))]
+pub async fn apply_triage_labels(
+    provider: &dyn TokenProvider,
+    issue_details: &IssueDetails,
+    triage: &TriageResponse,
+) -> crate::Result<crate::github::issues::ApplyResult> {
+    debug!("Applying labels and milestone to issue");
+
+    // Get GitHub token from provider
+    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
+
+    // Create GitHub client with the provided token
+    let token = SecretString::from(github_token);
+    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
+        message: e.to_string(),
+    })?;
+
+    // Call the update function with validation
+    let result = crate::github::issues::update_issue_labels_and_milestone(
+        &client,
+        &issue_details.owner,
+        &issue_details.repo,
+        issue_details.number,
+        &issue_details.labels,
+        &triage.suggested_labels,
+        issue_details.milestone.as_deref(),
+        triage.suggested_milestone.as_deref(),
+        &issue_details.available_labels,
+        &issue_details.available_milestones,
+    )
+    .await
+    .map_err(|e| AptuError::GitHub {
+        message: e.to_string(),
+    })?;
+
+    info!(
+        labels = ?result.applied_labels,
+        milestone = ?result.applied_milestone,
+        warnings = ?result.warnings,
+        "Labels and milestone applied"
+    );
+
+    Ok(result)
 }

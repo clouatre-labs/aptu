@@ -98,9 +98,11 @@ pub use utils::{
 // ============================================================================
 
 pub use facade::{
-    add_custom_repo, analyze_issue, fetch_issues, label_pr, list_curated_repos, list_repos,
-    post_pr_review, remove_custom_repo, review_pr,
+    add_custom_repo, analyze_issue, apply_triage_labels, fetch_issue_for_triage, fetch_issues,
+    label_pr, list_curated_repos, list_repos, post_pr_review, post_triage_comment,
+    remove_custom_repo, review_pr,
 };
+pub use github::issues::ApplyResult;
 
 // ============================================================================
 // Modules
