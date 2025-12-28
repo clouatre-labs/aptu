@@ -16,7 +16,7 @@
 //!
 //! // Get all providers
 //! let providers = all_providers();
-//! assert_eq!(providers.len(), 4);
+//! assert_eq!(providers.len(), 6);
 //! ```
 
 /// Metadata for a single AI model.
@@ -98,6 +98,30 @@ const CEREBRAS_MODELS: &[ModelInfo] = &[ModelInfo {
     context_window: 128_000,
 }];
 
+/// `Zenmux` models
+const ZENMUX_MODELS: &[ModelInfo] = &[ModelInfo {
+    display_name: "Grok Code Fast 1",
+    identifier: "x-ai/grok-code-fast-1",
+    is_free: true,
+    context_window: 256_000,
+}];
+
+/// `Z.AI` models
+const ZAI_MODELS: &[ModelInfo] = &[
+    ModelInfo {
+        display_name: "GLM-4.5 Air",
+        identifier: "glm-4.5-air",
+        is_free: true,
+        context_window: 128_000,
+    },
+    ModelInfo {
+        display_name: "GLM-4.6",
+        identifier: "glm-4.6",
+        is_free: false,
+        context_window: 128_000,
+    },
+];
+
 // ============================================================================
 // Provider Registry
 // ============================================================================
@@ -131,6 +155,20 @@ pub static PROVIDERS: &[ProviderConfig] = &[
         api_url: "https://api.cerebras.ai/v1/chat/completions",
         api_key_env: "CEREBRAS_API_KEY",
         models: CEREBRAS_MODELS,
+    },
+    ProviderConfig {
+        name: "zenmux",
+        display_name: "Zenmux",
+        api_url: "https://zenmux.ai/api/v1/chat/completions",
+        api_key_env: "ZENMUX_API_KEY",
+        models: ZENMUX_MODELS,
+    },
+    ProviderConfig {
+        name: "zai",
+        display_name: "Z.AI (Zhipu)",
+        api_url: "https://api.z.ai/api/paas/v4/chat/completions",
+        api_key_env: "ZAI_API_KEY",
+        models: ZAI_MODELS,
     },
 ];
 
@@ -170,7 +208,7 @@ pub fn get_provider(name: &str) -> Option<&'static ProviderConfig> {
 /// use aptu_core::ai::registry::all_providers;
 ///
 /// let providers = all_providers();
-/// assert_eq!(providers.len(), 4);
+/// assert_eq!(providers.len(), 6);
 /// ```
 #[must_use]
 pub fn all_providers() -> &'static [ProviderConfig] {
@@ -239,7 +277,7 @@ mod tests {
     #[test]
     fn test_all_providers_count() {
         let providers = all_providers();
-        assert_eq!(providers.len(), 4, "Should have exactly 4 providers");
+        assert_eq!(providers.len(), 6, "Should have exactly 6 providers");
     }
 
     #[test]
@@ -300,6 +338,48 @@ mod tests {
     fn test_cerebras_models() {
         let provider = get_provider("cerebras").unwrap();
         assert!(!provider.models.is_empty());
+    }
+
+    #[test]
+    fn test_get_provider_zenmux() {
+        let provider = get_provider("zenmux");
+        assert!(provider.is_some());
+        let provider = provider.unwrap();
+        assert_eq!(provider.display_name, "Zenmux");
+        assert_eq!(provider.api_key_env, "ZENMUX_API_KEY");
+        assert!(!provider.models.is_empty());
+    }
+
+    #[test]
+    fn test_get_provider_zai() {
+        let provider = get_provider("zai");
+        assert!(provider.is_some());
+        let provider = provider.unwrap();
+        assert_eq!(provider.display_name, "Z.AI (Zhipu)");
+        assert_eq!(provider.api_key_env, "ZAI_API_KEY");
+        assert!(!provider.models.is_empty());
+    }
+
+    #[test]
+    fn test_zenmux_models() {
+        let provider = get_provider("zenmux").unwrap();
+        assert_eq!(provider.models.len(), 1);
+        let model = &provider.models[0];
+        assert_eq!(model.identifier, "x-ai/grok-code-fast-1");
+        assert!(model.is_free);
+        assert_eq!(model.context_window, 256_000);
+    }
+
+    #[test]
+    fn test_zai_models() {
+        let provider = get_provider("zai").unwrap();
+        assert_eq!(provider.models.len(), 2);
+        let air_model = &provider.models[0];
+        assert_eq!(air_model.identifier, "glm-4.5-air");
+        assert!(air_model.is_free);
+        let model_46 = &provider.models[1];
+        assert_eq!(model_46.identifier, "glm-4.6");
+        assert!(!model_46.is_free);
     }
 
     #[test]
