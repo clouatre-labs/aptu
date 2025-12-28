@@ -502,14 +502,14 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "0.14.1"
+version = "0.15.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68578f196d2a33ff61b27fae256c3164f65e36382648e30666dde05b8cc9dfdf"
+checksum = "b30fa8254caad766fc03cb0ccae691e14bf3bd72bfff27f72802ce729551b3d6"
 dependencies = [
- "nom",
  "pathdiff",
- "serde",
- "toml 0.8.23",
+ "serde_core",
+ "toml 0.9.10+spec-1.1.0",
+ "winnow",
 ]
 
 [[package]]
