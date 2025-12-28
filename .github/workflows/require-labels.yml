@@ -4,10 +4,14 @@ on:
   pull_request:
     types: [opened, labeled, unlabeled]
 
+permissions: {}
+
 jobs:
   check-labels:
     name: Check Labels
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
     steps:
       - name: Verify PR has at least one label
         uses: mheap/github-action-required-labels@8afbe8ae6ab7647d0c9f0cfa7c2f939650d22509 # v5
