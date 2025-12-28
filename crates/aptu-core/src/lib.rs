@@ -1,58 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![warn(missing_docs)]
-
-//! # Aptu Core
-//!
-//! Core library for the Aptu CLI - AI-powered OSS issue triage.
-//!
-//! This crate provides reusable components for:
-//! - GitHub API integration (authentication, issues, GraphQL)
-//! - AI-assisted issue triage via `OpenRouter`
-//! - Configuration management
-//! - Contribution history tracking
-//! - Curated repository discovery
-//!
-//! ## Quick Start
-//!
-//! ```rust,no_run
-//! use aptu_core::{load_config, AiClient, IssueDetails, ai::AiProvider};
-//! use anyhow::Result;
-//!
-//! # async fn example() -> Result<()> {
-//! // Load configuration
-//! let config = load_config()?;
-//!
-//! // Create AI client (reuse for multiple requests)
-//! let client = AiClient::new(&config.ai.provider, &config.ai)?;
-//!
-//! // Create issue details
-//! let issue = IssueDetails::builder()
-//!     .owner("block".to_string())
-//!     .repo("goose".to_string())
-//!     .number(123)
-//!     .title("Example issue".to_string())
-//!     .body("Issue description...".to_string())
-//!     .labels(vec![])
-//!     .comments(vec![])
-//!     .url("https://github.com/block/goose/issues/123".to_string())
-//!     .build();
-//!
-//! // Analyze with AI
-//! let ai_response = client.analyze_issue(&issue).await?;
-//! println!("Summary: {}", ai_response.triage.summary);
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## Modules
-//!
-//! - [`ai`] - AI integration (`OpenRouter` API, triage analysis)
-//! - [`config`] - Configuration loading and paths
-//! - [`error`] - Error types
-//! - [`github`] - GitHub API (auth, issues, GraphQL)
-//! - [`history`] - Contribution history tracking
-//! - [`repos`] - Curated repository list
+#![doc = include_str!("../README.md")]
 
 // ============================================================================
 // Authentication
