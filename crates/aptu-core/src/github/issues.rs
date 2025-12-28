@@ -14,6 +14,7 @@ use tracing::{debug, instrument};
 use super::{ReferenceKind, parse_github_reference};
 use crate::ai::types::{IssueComment, IssueDetails, RepoIssueContext};
 use crate::retry::retry_backoff;
+use crate::utils::is_priority_label;
 
 /// A GitHub issue without labels (untriaged).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -400,28 +401,16 @@ const MAINTAINER_ONLY_LABELS: &[&str] = &["good first issue", "help wanted"];
 ///
 /// Merged label list with duplicates removed (case-insensitive)
 fn merge_labels(existing_labels: &[String], suggested_labels: &[String]) -> Vec<String> {
-    // Check if existing labels contain a priority label (p[0-9])
-    let has_priority = existing_labels.iter().any(|label| {
-        let lower = label.to_lowercase();
-        lower.len() == 2
-            && lower.starts_with('p')
-            && lower.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
-    });
+    // Check if existing labels contain a priority label
+    let has_priority = existing_labels.iter().any(|label| is_priority_label(label));
 
     // Start with existing labels
     let mut merged = existing_labels.to_vec();
 
     // Add suggested labels, filtering out priority labels if existing has one
     for suggested in suggested_labels {
-        let is_priority = {
-            let lower = suggested.to_lowercase();
-            lower.len() == 2
-                && lower.starts_with('p')
-                && lower.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
-        };
-
         // Skip priority labels if existing already has one
-        if is_priority && has_priority {
+        if is_priority_label(suggested) && has_priority {
             continue;
         }
 
@@ -1431,6 +1420,30 @@ mod merge_labels_tests {
         assert!(merged.contains(&"enhancement".to_string()));
         assert!(!merged.contains(&"Good First Issue".to_string()));
         assert!(!merged.contains(&"HELP WANTED".to_string()));
+    }
+
+    #[test]
+    fn skips_priority_prefix_when_existing_has_one() {
+        // priority: high exists, priority: medium suggested - should keep priority: high, skip priority: medium, add bug
+        let existing = vec!["priority: high".to_string()];
+        let suggested = vec!["priority: medium".to_string(), "bug".to_string()];
+        let merged = merge_labels(&existing, &suggested);
+        assert_eq!(merged.len(), 2);
+        assert!(merged.contains(&"priority: high".to_string()));
+        assert!(merged.contains(&"bug".to_string()));
+        assert!(!merged.contains(&"priority: medium".to_string()));
+    }
+
+    #[test]
+    fn skips_mixed_priority_formats_when_existing_has_one() {
+        // p1 exists, priority: high suggested - should keep p1, skip priority: high, add bug
+        let existing = vec!["p1".to_string()];
+        let suggested = vec!["priority: high".to_string(), "bug".to_string()];
+        let merged = merge_labels(&existing, &suggested);
+        assert_eq!(merged.len(), 2);
+        assert!(merged.contains(&"p1".to_string()));
+        assert!(merged.contains(&"bug".to_string()));
+        assert!(!merged.contains(&"priority: high".to_string()));
     }
 }
 
