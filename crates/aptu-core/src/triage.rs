@@ -5,7 +5,8 @@
 //! This module provides utilities to check whether an issue has already been triaged,
 //! either through labels or Aptu-generated comments.
 
-use crate::ai::types::IssueDetails;
+use crate::ai::types::{IssueDetails, TriageResponse};
+use std::fmt::Write;
 use tracing::debug;
 
 /// Signature string used to identify Aptu-generated triage comments
@@ -86,6 +87,140 @@ fn is_priority_label(label: &str) -> bool {
     }
 
     false
+}
+
+/// Renders a labeled list section in markdown format.
+fn render_list_section_markdown(
+    title: &str,
+    items: &[String],
+    empty_msg: &str,
+    numbered: bool,
+) -> String {
+    let mut output = String::new();
+    let _ = writeln!(output, "### {title}\n");
+    if items.is_empty() {
+        let _ = writeln!(output, "{empty_msg}");
+    } else if numbered {
+        for (i, item) in items.iter().enumerate() {
+            let _ = writeln!(output, "{}. {}", i + 1, item);
+        }
+    } else {
+        for item in items {
+            let _ = writeln!(output, "- {item}");
+        }
+    }
+    output.push('\n');
+    output
+}
+
+/// Renders triage response as markdown for posting to GitHub.
+///
+/// Generates pure markdown without terminal colors. This is the core rendering
+/// function used by both CLI and FFI layers.
+///
+/// # Arguments
+///
+/// * `triage` - The triage response to render
+///
+/// # Returns
+///
+/// A markdown string suitable for posting as a GitHub comment.
+#[must_use]
+pub fn render_triage_markdown(triage: &TriageResponse) -> String {
+    let mut output = String::new();
+
+    // Header
+    output.push_str("## Triage Summary\n\n");
+    output.push_str(&triage.summary);
+    output.push_str("\n\n");
+
+    // Labels (always show in markdown for maintainers)
+    let labels: Vec<String> = triage
+        .suggested_labels
+        .iter()
+        .map(|l| format!("`{l}`"))
+        .collect();
+    output.push_str(&render_list_section_markdown(
+        "Suggested Labels",
+        &labels,
+        "None",
+        false,
+    ));
+
+    // Suggested Milestone
+    if let Some(milestone) = &triage.suggested_milestone
+        && !milestone.is_empty()
+    {
+        output.push_str("### Suggested Milestone\n\n");
+        output.push_str(milestone);
+        output.push_str("\n\n");
+    }
+
+    // Questions
+    output.push_str(&render_list_section_markdown(
+        "Clarifying Questions",
+        &triage.clarifying_questions,
+        "None needed",
+        true,
+    ));
+
+    // Duplicates
+    output.push_str(&render_list_section_markdown(
+        "Potential Duplicates",
+        &triage.potential_duplicates,
+        "None found",
+        false,
+    ));
+
+    // Related issues with reason blockquote
+    if !triage.related_issues.is_empty() {
+        output.push_str("### Related Issues\n\n");
+        for issue in &triage.related_issues {
+            let _ = writeln!(output, "- **#{}** - {}", issue.number, issue.title);
+            let _ = writeln!(output, "  > {}\n", issue.reason);
+        }
+    }
+
+    // Status note (if present)
+    if let Some(status_note) = &triage.status_note
+        && !status_note.is_empty()
+    {
+        output.push_str("### Status\n\n");
+        output.push_str(status_note);
+        output.push_str("\n\n");
+    }
+
+    // Contributor guidance (if present)
+    if let Some(guidance) = &triage.contributor_guidance {
+        output.push_str("### Contributor Guidance\n\n");
+        let beginner_label = if guidance.beginner_friendly {
+            "**Beginner-friendly**"
+        } else {
+            "**Advanced**"
+        };
+        let _ = writeln!(output, "{beginner_label}\n");
+        let _ = writeln!(output, "{}\n", guidance.reasoning);
+    }
+
+    // Implementation approach
+    if let Some(approach) = &triage.implementation_approach
+        && !approach.is_empty()
+    {
+        output.push_str("### Implementation Approach\n\n");
+        for line in approach.lines() {
+            let _ = writeln!(output, "  {line}");
+        }
+        output.push('\n');
+    }
+
+    // Signature
+    output.push_str("---\n");
+    output.push('*');
+    output.push_str(APTU_SIGNATURE);
+    output.push('*');
+    output.push('\n');
+
+    output
 }
 
 /// Check if an issue has already been triaged.
@@ -274,5 +409,68 @@ mod tests {
         let status = check_already_triaged(&issue);
         assert!(status.is_triaged());
         assert!(status.has_priority_label);
+    }
+
+    #[test]
+    fn test_render_triage_markdown_basic() {
+        let triage = TriageResponse {
+            summary: "This is a test summary".to_string(),
+            implementation_approach: None,
+            clarifying_questions: vec!["Question 1?".to_string()],
+            potential_duplicates: vec![],
+            related_issues: vec![],
+            suggested_labels: vec!["bug".to_string()],
+            suggested_milestone: None,
+            status_note: None,
+            contributor_guidance: None,
+        };
+
+        let markdown = render_triage_markdown(&triage);
+        assert!(markdown.contains("## Triage Summary"));
+        assert!(markdown.contains("This is a test summary"));
+        assert!(markdown.contains("### Clarifying Questions"));
+        assert!(markdown.contains("1. Question 1?"));
+        assert!(markdown.contains(APTU_SIGNATURE));
+    }
+
+    #[test]
+    fn test_render_triage_markdown_with_labels() {
+        let triage = TriageResponse {
+            summary: "Summary".to_string(),
+            implementation_approach: None,
+            clarifying_questions: vec![],
+            potential_duplicates: vec![],
+            related_issues: vec![],
+            suggested_labels: vec!["bug".to_string(), "p1".to_string()],
+            suggested_milestone: None,
+            status_note: None,
+            contributor_guidance: None,
+        };
+
+        let markdown = render_triage_markdown(&triage);
+        assert!(markdown.contains("### Suggested Labels"));
+        assert!(markdown.contains("`bug`"));
+        assert!(markdown.contains("`p1`"));
+    }
+
+    #[test]
+    fn test_render_triage_markdown_multiline_approach() {
+        let triage = TriageResponse {
+            summary: "Summary".to_string(),
+            implementation_approach: Some("Line 1\nLine 2\nLine 3".to_string()),
+            clarifying_questions: vec![],
+            potential_duplicates: vec![],
+            related_issues: vec![],
+            suggested_labels: vec![],
+            suggested_milestone: None,
+            status_note: None,
+            contributor_guidance: None,
+        };
+
+        let markdown = render_triage_markdown(&triage);
+        assert!(markdown.contains("### Implementation Approach"));
+        assert!(markdown.contains("Line 1"));
+        assert!(markdown.contains("Line 2"));
+        assert!(markdown.contains("Line 3"));
     }
 }

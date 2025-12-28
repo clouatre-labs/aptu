@@ -6,15 +6,12 @@
 //! a comment to GitHub. Split into `fetch()` and `analyze()` for proper
 //! confirmation flow (render issue before asking).
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use aptu_core::ai::AiResponse;
-use aptu_core::ai::types::{IssueComment, RepoLabel, RepoMilestone};
-use aptu_core::error::AptuError;
-use aptu_core::github::{auth, graphql, issues};
 use aptu_core::{IssueDetails, TriageResponse, history::AiStats};
 use tracing::{debug, info, instrument};
 
-use crate::output::render_triage_markdown;
+use crate::provider::CliTokenProvider;
 
 /// Intermediate result from analysis (before posting decision).
 pub struct AnalyzeResult {
@@ -39,110 +36,17 @@ pub struct AnalyzeResult {
 /// * `repo_context` - Optional repository context for bare numbers
 #[instrument(skip_all, fields(reference = %reference))]
 pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueDetails> {
-    // Check authentication
-    if !auth::is_authenticated() {
-        return Err(AptuError::NotAuthenticated.into());
-    }
+    // Create CLI token provider
+    let provider = CliTokenProvider;
 
-    // Parse the issue reference
-    let (owner, repo, number) = issues::parse_issue_reference(reference, repo_context)?;
+    // Call facade to fetch issue
+    let issue_details =
+        aptu_core::fetch_issue_for_triage(&provider, reference, repo_context).await?;
 
-    // Create authenticated client
-    let client = auth::create_client().context("Failed to create GitHub client")?;
-
-    // Fetch issue with repository context (labels, milestones) in a single GraphQL call
-    let (issue_node, repo_data) =
-        graphql::fetch_issue_with_repo_context(&client, &owner, &repo, number).await?;
-
-    // Convert GraphQL response to IssueDetails
-    let labels: Vec<String> = issue_node
-        .labels
-        .nodes
-        .iter()
-        .map(|l| l.name.clone())
-        .collect();
-
-    let comments: Vec<IssueComment> = issue_node
-        .comments
-        .nodes
-        .iter()
-        .map(|c| c.clone().into())
-        .collect();
-
-    // Convert repository labels to our type
-    let available_labels: Vec<RepoLabel> = repo_data
-        .labels
-        .nodes
-        .iter()
-        .map(|l| l.clone().into())
-        .collect();
-
-    // Convert repository milestones to our type
-    let available_milestones: Vec<RepoMilestone> = repo_data
-        .milestones
-        .nodes
-        .iter()
-        .map(|m| m.clone().into())
-        .collect();
-
-    let mut issue_details = IssueDetails::builder()
-        .owner(owner.clone())
-        .repo(repo.clone())
-        .number(number)
-        .title(issue_node.title)
-        .body(issue_node.body.unwrap_or_default())
-        .labels(labels)
-        .comments(comments)
-        .url(issue_node.url)
-        .available_labels(available_labels)
-        .available_milestones(available_milestones)
-        .build();
-
-    // Extract keywords and language for parallel calls
-    let keywords = issues::extract_keywords(&issue_details.title);
-    let language = repo_data
-        .primary_language
-        .as_ref()
-        .map_or("unknown", |l| l.name.as_str())
-        .to_string();
-
-    // Run search and tree fetch in parallel - both depend on GraphQL results but not each other
-    let (search_result, tree_result) = tokio::join!(
-        issues::search_related_issues(&client, &owner, &repo, &issue_details.title, number),
-        issues::fetch_repo_tree(&client, &owner, &repo, &language, &keywords)
+    debug!(
+        issue_number = issue_details.number,
+        "Issue fetched successfully"
     );
-
-    // Handle search results
-    match search_result {
-        Ok(related) => {
-            issue_details.repo_context = related;
-            debug!(
-                related_count = issue_details.repo_context.len(),
-                "Found related issues"
-            );
-        }
-        Err(e) => {
-            // Log but don't fail - related issues are optional context
-            debug!(error = %e, "Failed to search for related issues, continuing without context");
-        }
-    }
-
-    // Handle tree results
-    match tree_result {
-        Ok(tree) => {
-            issue_details.repo_tree = tree;
-            debug!(
-                tree_count = issue_details.repo_tree.len(),
-                "Fetched repository tree"
-            );
-        }
-        Err(e) => {
-            // Log but don't fail - repo tree is optional context
-            debug!(error = %e, "Failed to fetch repository tree, continuing without context");
-        }
-    }
-
-    debug!(issue_number = number, "Issue fetched successfully");
     Ok(issue_details)
 }
 
@@ -161,7 +65,7 @@ pub async fn analyze(
     ai_config: &aptu_core::AiConfig,
 ) -> Result<AiResponse> {
     // Create CLI token provider
-    let provider = crate::provider::CliTokenProvider;
+    let provider = CliTokenProvider;
 
     // Call facade for analysis
     let ai_response = aptu_core::analyze_issue(&provider, issue_details, ai_config).await?;
@@ -173,17 +77,14 @@ pub async fn analyze(
 /// Post a triage comment to GitHub.
 #[instrument(skip_all, fields(issue_number = analyze_result.issue_details.number))]
 pub async fn post(analyze_result: &AnalyzeResult) -> Result<String> {
-    // Create authenticated client
-    let client = auth::create_client().context("Failed to create GitHub client")?;
+    // Create CLI token provider
+    let provider = CliTokenProvider;
 
-    // Post the comment
-    let comment_body = render_triage_markdown(&analyze_result.triage);
-    let comment_url = issues::post_comment(
-        &client,
-        &analyze_result.issue_details.owner,
-        &analyze_result.issue_details.repo,
-        analyze_result.issue_details.number,
-        &comment_body,
+    // Call facade to post comment
+    let comment_url = aptu_core::post_triage_comment(
+        &provider,
+        &analyze_result.issue_details,
+        &analyze_result.triage,
     )
     .await?;
 
@@ -212,31 +113,14 @@ pub async fn post(analyze_result: &AnalyzeResult) -> Result<String> {
 pub async fn apply(
     issue_details: &IssueDetails,
     triage: &TriageResponse,
-) -> Result<issues::ApplyResult> {
+) -> Result<aptu_core::github::issues::ApplyResult> {
+    // Create CLI token provider
+    let provider = CliTokenProvider;
+
     debug!("Applying labels and milestone to issue");
 
-    // Check authentication
-    if !auth::is_authenticated() {
-        return Err(AptuError::NotAuthenticated.into());
-    }
-
-    // Create authenticated client
-    let client = auth::create_client()?;
-
-    // Call the update function with validation
-    let result = issues::update_issue_labels_and_milestone(
-        &client,
-        &issue_details.owner,
-        &issue_details.repo,
-        issue_details.number,
-        &issue_details.labels,
-        &triage.suggested_labels,
-        issue_details.milestone.as_deref(),
-        triage.suggested_milestone.as_deref(),
-        &issue_details.available_labels,
-        &issue_details.available_milestones,
-    )
-    .await?;
+    // Call facade to apply labels
+    let result = aptu_core::apply_triage_labels(&provider, issue_details, triage).await?;
 
     info!(
         labels = ?result.applied_labels,

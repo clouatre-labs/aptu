@@ -49,17 +49,6 @@ pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) {
     }
 }
 
-/// Output mode for triage rendering.
-pub enum OutputMode {
-    /// Terminal output with colors.
-    Terminal,
-    /// Markdown for GitHub comments.
-    Markdown,
-}
-
-// Re-export implementations
-pub use self::triage::render_triage_markdown;
-
 mod auth;
 mod bulk;
 mod create;
