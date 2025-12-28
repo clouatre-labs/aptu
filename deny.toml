@@ -6,7 +6,14 @@
 
 [advisories]
 version = 2
-ignore = []
+ignore = [
+    # RUSTSEC-2023-0071: rsa crate timing sidechannel (Marvin Attack)
+    # No upstream fix available. Acceptable risk for aptu: JWT signing is a local
+    # operation, not exposed to network timing attacks. The advisory explicitly
+    # notes "local use on a non-compromised computer is fine."
+    # Tracking: https://github.com/RustCrypto/RSA/issues/19
+    "RUSTSEC-2023-0071",
+]
 
 [licenses]
 version = 2
