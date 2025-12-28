@@ -40,6 +40,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - name: Install cosign
+        uses: sigstore/cosign-installer@4d14d7f17e7112af04ea6108fbb4bfc714c00390 # v3
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561 # stable
         with:
@@ -85,11 +87,37 @@ jobs:
           if [ -n "$DEB_FILE" ]; then
             gh release upload ${{ github.ref_name }} "$DEB_FILE" --clobber
           fi
+      - name: Sign tarball with cosign
+        if: ${{ !inputs.dry_run }}
+        run: |
+          cosign sign-blob --yes --bundle "${{ steps.upload.outputs.tar }}.bundle" "${{ steps.upload.outputs.tar }}"
+      - name: Upload tarball .bundle to release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} "${{ steps.upload.outputs.tar }}.bundle" --clobber
       - name: Attest build provenance (tarball)
         if: ${{ !inputs.dry_run }}
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: ${{ steps.upload.outputs.tar }}
+      - name: Sign .deb with cosign
+        if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
+        run: |
+          DEB_FILE=$(find target/${{ inputs.target }}/debian -name "*.deb" -type f)
+          if [ -n "$DEB_FILE" ]; then
+            cosign sign-blob --yes --bundle "$DEB_FILE.bundle" "$DEB_FILE"
+          fi
+      - name: Upload .deb .bundle to release
+        if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DEB_FILE=$(find target/${{ inputs.target }}/debian -name "*.deb" -type f)
+          if [ -n "$DEB_FILE" ]; then
+            gh release upload ${{ github.ref_name }} "$DEB_FILE.bundle" --clobber
+          fi
       - name: Attest build provenance (.deb)
         if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
