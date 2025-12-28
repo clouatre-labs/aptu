@@ -31,3 +31,13 @@ gh attestation verify aptu-<target>.tar.gz --owner clouatre-labs
 - **SHA-pinned Actions** - All GitHub Actions pinned to commit SHA
 - **Renovate** - Automated dependency updates with security alerts
 - **REUSE/SPDX** - Every file has explicit license metadata
+
+### Artifact Signing
+
+All release artifacts (tarballs and .deb packages) are signed with cosign using keyless signing via Sigstore. Verify signatures with:
+
+```bash
+cosign verify-blob --bundle aptu-<target>.tar.gz.bundle --certificate-identity-regexp "https://github.com/clouatre-labs/project-aptu" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+```
+
+This provides cryptographic proof that artifacts were built by the official CI/CD pipeline without requiring key management.

@@ -209,7 +209,7 @@ Releases are automated via GitHub Actions. Maintainers with push access:
 4. Push: `git push origin main --tags`
 5. Edit the release to add highlights (see below)
 
-The workflow builds binaries (macOS ARM64, Linux ARM64/x86_64), generates SLSA attestations, creates a GitHub release with auto-generated notes, publishes to crates.io, and updates the Homebrew formula.
+The workflow builds binaries (macOS ARM64, Linux ARM64/x86_64), signs artifacts with cosign, generates SLSA attestations, creates a GitHub release with auto-generated notes, publishes to crates.io, and updates the Homebrew formula.
 
 ### Release Notes
 
