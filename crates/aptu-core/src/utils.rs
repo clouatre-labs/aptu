@@ -128,6 +128,53 @@ pub fn parse_and_format_relative_time(timestamp: &str) -> String {
     }
 }
 
+/// Check if a label is a priority label (p0-p4 or priority: high/medium/low).
+///
+/// Recognizes two priority label patterns:
+/// - Numeric: `p0`, `p1`, `p2`, `p3`, `p4` (case-insensitive)
+/// - Named: `priority: high`, `priority: medium`, `priority: low` (case-insensitive)
+///
+/// # Examples
+///
+/// ```
+/// use aptu_core::utils::is_priority_label;
+///
+/// // Numeric priority labels
+/// assert!(is_priority_label("p0"));
+/// assert!(is_priority_label("P3"));
+/// assert!(is_priority_label("p4"));
+///
+/// // Named priority labels
+/// assert!(is_priority_label("priority: high"));
+/// assert!(is_priority_label("Priority: Medium"));
+/// assert!(is_priority_label("PRIORITY: LOW"));
+///
+/// // Non-priority labels
+/// assert!(!is_priority_label("bug"));
+/// assert!(!is_priority_label("enhancement"));
+/// assert!(!is_priority_label("priority: urgent"));
+/// ```
+#[must_use]
+pub fn is_priority_label(label: &str) -> bool {
+    let lower = label.to_lowercase();
+
+    // Check for p[0-9] pattern (e.g., p0, p1, p2, p3, p4)
+    if lower.len() == 2
+        && lower.starts_with('p')
+        && lower.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
+    {
+        return true;
+    }
+
+    // Check for priority: prefix (e.g., priority: high, priority: medium, priority: low)
+    if lower.starts_with("priority:") {
+        let suffix = lower.strip_prefix("priority:").unwrap_or("").trim();
+        return matches!(suffix, "high" | "medium" | "low");
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -258,5 +305,80 @@ mod tests {
     fn parse_invalid_timestamp_returns_original() {
         let invalid = "not-a-valid-timestamp";
         assert_eq!(parse_and_format_relative_time(invalid), invalid);
+    }
+
+    // ========================================================================
+    // is_priority_label() tests
+    // ========================================================================
+
+    #[test]
+    fn is_priority_label_numeric_lowercase() {
+        assert!(is_priority_label("p0"));
+        assert!(is_priority_label("p1"));
+        assert!(is_priority_label("p2"));
+        assert!(is_priority_label("p3"));
+        assert!(is_priority_label("p4"));
+    }
+
+    #[test]
+    fn is_priority_label_numeric_uppercase() {
+        assert!(is_priority_label("P0"));
+        assert!(is_priority_label("P1"));
+        assert!(is_priority_label("P2"));
+        assert!(is_priority_label("P3"));
+        assert!(is_priority_label("P4"));
+    }
+
+    #[test]
+    fn is_priority_label_named_high() {
+        assert!(is_priority_label("priority: high"));
+        assert!(is_priority_label("Priority: High"));
+        assert!(is_priority_label("PRIORITY: HIGH"));
+    }
+
+    #[test]
+    fn is_priority_label_named_medium() {
+        assert!(is_priority_label("priority: medium"));
+        assert!(is_priority_label("Priority: Medium"));
+        assert!(is_priority_label("PRIORITY: MEDIUM"));
+    }
+
+    #[test]
+    fn is_priority_label_named_low() {
+        assert!(is_priority_label("priority: low"));
+        assert!(is_priority_label("Priority: Low"));
+        assert!(is_priority_label("PRIORITY: LOW"));
+    }
+
+    #[test]
+    fn is_priority_label_named_with_extra_spaces() {
+        assert!(is_priority_label("priority:  high"));
+        assert!(is_priority_label("priority: high  "));
+        assert!(is_priority_label("priority:   medium   "));
+    }
+
+    #[test]
+    fn is_priority_label_not_priority_invalid_numeric() {
+        assert!(!is_priority_label("p"));
+        assert!(!is_priority_label("p10"));
+        assert!(!is_priority_label("pa"));
+        assert!(!is_priority_label("p-1"));
+    }
+
+    #[test]
+    fn is_priority_label_not_priority_invalid_named() {
+        assert!(!is_priority_label("priority: urgent"));
+        assert!(!is_priority_label("priority: critical"));
+        assert!(!is_priority_label("priority:"));
+        assert!(!is_priority_label("priority: "));
+    }
+
+    #[test]
+    fn is_priority_label_not_priority_other_labels() {
+        assert!(!is_priority_label("bug"));
+        assert!(!is_priority_label("enhancement"));
+        assert!(!is_priority_label("documentation"));
+        assert!(!is_priority_label("help wanted"));
+        assert!(!is_priority_label("good first issue"));
     }
 }

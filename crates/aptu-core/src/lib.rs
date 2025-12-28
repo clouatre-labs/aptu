@@ -90,7 +90,8 @@ pub use retry::{is_retryable_anyhow, is_retryable_http, retry_backoff};
 // ============================================================================
 
 pub use utils::{
-    format_relative_time, parse_and_format_relative_time, truncate, truncate_with_suffix,
+    format_relative_time, is_priority_label, parse_and_format_relative_time, truncate,
+    truncate_with_suffix,
 };
 
 // ============================================================================

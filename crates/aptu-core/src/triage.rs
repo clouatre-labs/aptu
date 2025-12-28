@@ -6,6 +6,7 @@
 //! either through labels or Aptu-generated comments.
 
 use crate::ai::types::{IssueDetails, TriageResponse};
+use crate::utils::is_priority_label;
 use std::fmt::Write;
 use tracing::debug;
 
@@ -66,27 +67,6 @@ fn is_type_label(label: &str) -> bool {
         "status: triaged",
     ];
     TYPE_LABELS.contains(&label)
-}
-
-/// Check if a label is a priority label (p0-p4 or priority: high/medium/low).
-fn is_priority_label(label: &str) -> bool {
-    let lower = label.to_lowercase();
-
-    // Check for p[0-9] pattern (e.g., p0, p1, p2, p3, p4)
-    if lower.len() == 2
-        && lower.starts_with('p')
-        && lower.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
-    {
-        return true;
-    }
-
-    // Check for priority: prefix (e.g., priority: high, priority: medium, priority: low)
-    if lower.starts_with("priority:") {
-        let suffix = lower.strip_prefix("priority:").unwrap_or("").trim();
-        return matches!(suffix, "high" | "medium" | "low");
-    }
-
-    false
 }
 
 /// Renders a labeled list section in markdown format.
