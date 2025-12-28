@@ -8,6 +8,7 @@ pub mod create;
 pub mod history;
 pub mod issue;
 pub mod pr;
+pub mod release;
 pub mod repo;
 pub mod triage;
 pub mod types;
@@ -24,7 +25,7 @@ use tracing::debug;
 
 use crate::cli::{
     AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
-    OutputFormat, PrCommand, RepoCommand,
+    OutputFormat, PrCommand, ReleaseCommand, RepoCommand,
 };
 use crate::output;
 use aptu_core::{AppConfig, State, check_already_triaged, is_retryable_anyhow, retry_backoff};
@@ -585,6 +586,30 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
 
                 let spinner = maybe_spinner(&ctx, "Fetching PR and extracting labels...");
                 let result = pr::run_label(&reference, repo_context, dry_run, &config.ai).await?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
+                output::render(&result, &ctx);
+                Ok(())
+            }
+        },
+
+        Commands::Release(release_cmd) => match release_cmd {
+            ReleaseCommand::Notes {
+                repo,
+                from,
+                to,
+                dry_run,
+            } => {
+                let spinner = maybe_spinner(&ctx, "Generating release notes...");
+                let result = release::run_generate(
+                    repo.as_deref(),
+                    from.as_deref(),
+                    to.as_deref(),
+                    dry_run,
+                    &ctx,
+                )
+                .await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }

@@ -52,9 +52,12 @@ pub struct ChatCompletionRequest {
 /// Response format specification for structured output.
 #[derive(Debug, Serialize)]
 pub struct ResponseFormat {
-    /// Type of response format ("`json_object`" for structured output).
+    /// Type of response format ("`json_object`" or "`json_schema`" for structured output).
     #[serde(rename = "type")]
     pub format_type: String,
+    /// JSON schema for structured output (optional, used with `json_schema` type).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub json_schema: Option<serde_json::Value>,
 }
 
 /// Response from `OpenRouter` chat completions API.
@@ -353,4 +356,42 @@ impl std::fmt::Display for ReviewEvent {
 pub struct PrLabelResponse {
     /// Suggested labels for the PR.
     pub suggested_labels: Vec<String>,
+}
+
+/// Summary of a PR for release notes context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrSummary {
+    /// PR number.
+    pub number: u64,
+    /// PR title.
+    pub title: String,
+    /// PR description/body.
+    pub body: String,
+    /// Author login.
+    pub author: String,
+    /// Merged at timestamp.
+    pub merged_at: Option<String>,
+}
+
+/// Structured release notes response from AI.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ReleaseNotesResponse {
+    /// Release theme/title.
+    pub theme: String,
+    /// 1-2 sentence narrative.
+    pub narrative: String,
+    /// Highlighted features.
+    pub highlights: Vec<String>,
+    /// Features section.
+    pub features: Vec<String>,
+    /// Fixes section.
+    pub fixes: Vec<String>,
+    /// Improvements section.
+    pub improvements: Vec<String>,
+    /// Documentation section.
+    pub documentation: Vec<String>,
+    /// Maintenance section.
+    pub maintenance: Vec<String>,
+    /// Contributor list.
+    pub contributors: Vec<String>,
 }

@@ -821,3 +821,109 @@ pub async fn apply_triage_labels(
 
     Ok(result)
 }
+
+/// Generate AI-curated release notes from PRs between git tags.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `from_tag` - Starting tag (or None for latest)
+/// * `to_tag` - Ending tag (or None for HEAD)
+///
+/// # Returns
+///
+/// Structured release notes with theme, highlights, and categorized changes.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available
+/// - GitHub API calls fail
+/// - AI response parsing fails
+#[instrument(skip(provider))]
+pub async fn generate_release_notes(
+    provider: &dyn TokenProvider,
+    owner: &str,
+    repo: &str,
+    from_tag: Option<&str>,
+    to_tag: Option<&str>,
+) -> Result<crate::ai::types::ReleaseNotesResponse, AptuError> {
+    let token = provider.github_token().ok_or_else(|| AptuError::GitHub {
+        message: "GitHub token not available".to_string(),
+    })?;
+
+    let gh_client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
+        message: e.to_string(),
+    })?;
+
+    // Load AI config
+    let config = load_config().map_err(|e| AptuError::Config {
+        message: e.to_string(),
+    })?;
+
+    // Create AI client
+    let ai_client = AiClient::new(&config.ai.provider, &config.ai).map_err(|e| AptuError::AI {
+        message: e.to_string(),
+        status: None,
+    })?;
+
+    // Determine tags to use
+    let (from_ref, to_ref) = if let (Some(from), Some(to)) = (from_tag, to_tag) {
+        (from.to_string(), to.to_string())
+    } else if let Some(to) = to_tag {
+        // Get latest tag as from_ref
+        let (latest_tag, _) = crate::github::releases::get_latest_tag(&gh_client, owner, repo)
+            .await
+            .map_err(|e| AptuError::GitHub {
+                message: e.to_string(),
+            })?;
+        (latest_tag, to.to_string())
+    } else if let Some(from) = from_tag {
+        // Use HEAD as to_ref
+        (from.to_string(), "HEAD".to_string())
+    } else {
+        // Get latest tag and use HEAD
+        let (latest_tag, _) = crate::github::releases::get_latest_tag(&gh_client, owner, repo)
+            .await
+            .map_err(|e| AptuError::GitHub {
+                message: e.to_string(),
+            })?;
+        (latest_tag, "HEAD".to_string())
+    };
+
+    // Fetch PRs between tags
+    let prs = crate::github::releases::fetch_prs_between_refs(
+        &gh_client, owner, repo, &from_ref, &to_ref,
+    )
+    .await
+    .map_err(|e| AptuError::GitHub {
+        message: e.to_string(),
+    })?;
+
+    if prs.is_empty() {
+        return Err(AptuError::GitHub {
+            message: "No merged PRs found between the specified tags".to_string(),
+        });
+    }
+
+    // Generate release notes via AI
+    let version = crate::github::releases::parse_tag_reference(&to_ref);
+    let response: crate::ai::types::ReleaseNotesResponse = ai_client
+        .generate_release_notes(prs, &version)
+        .await
+        .map_err(|e: anyhow::Error| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+        })?;
+
+    info!(
+        theme = ?response.theme,
+        highlights_count = response.highlights.len(),
+        contributors_count = response.contributors.len(),
+        "Release notes generated"
+    );
+
+    Ok(response)
+}
