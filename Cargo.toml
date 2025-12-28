@@ -44,7 +44,7 @@ dirs = "5"
 # User experience
 indicatif = "0.18"
 dialoguer = "0.12"
-console = "0.15"
+console = "0.16"
 comfy-table = "7"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
