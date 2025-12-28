@@ -76,6 +76,23 @@ cargo clippy -- -D warnings
 cargo test
 ```
 
+## Fuzzing
+
+Aptu includes cargo-fuzz targets to test parser robustness. Fuzzing requires Rust nightly:
+
+```bash
+# List available fuzz targets
+cargo +nightly fuzz list
+
+# Run the TOML parser fuzz target
+cargo +nightly fuzz run parse_toml
+
+# Run with a specific timeout (in seconds)
+cargo +nightly fuzz run parse_toml -- -max_total_time=60
+```
+
+Fuzz targets are located in `fuzz/fuzz_targets/` and are independent from the main workspace.
+
 ## Commit Message Format
 
 We follow [Conventional Commits](https://www.conventionalcommits.org/) to enable automated semantic versioning and changelog generation. All commits must follow this format:
