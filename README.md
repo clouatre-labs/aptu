@@ -26,7 +26,7 @@ Aptu is a context-engineering experiment: instead of throwing big models at prob
 - **Issue Discovery** - Find good-first-issues from curated repositories
 - **PR Analysis** - AI-powered pull request review and feedback
 - **GitHub Action** - Auto-triage incoming issues with labels and comments
-- **Multiple Providers** - Gemini, OpenRouter, Groq, and Cerebras
+- **Multiple Providers** - Gemini (default), Cerebras, Groq, OpenRouter, Z.AI, and ZenMux
 - **Local History** - Track your contributions offline
 - **Multiple Outputs** - Text, JSON, YAML, and Markdown
 
@@ -59,7 +59,7 @@ aptu history                                                       # View your c
 
 ## GitHub Action
 
-Auto-triage new issues with AI. Supports Gemini, OpenRouter, Groq, and Cerebras.
+Auto-triage new issues with AI using any supported provider.
 
 ```yaml
 - uses: clouatre-labs/aptu@v0

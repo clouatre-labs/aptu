@@ -4,7 +4,7 @@ Config file: `~/.config/aptu/config.toml`
 
 ```toml
 [ai]
-provider = "gemini"  # or "openrouter", "groq", "cerebras"
+provider = "gemini"  # or "cerebras", "groq", "openrouter", "zai", "zenmux"
 model = "gemini-3-flash-preview"
 allow_paid_models = false  # default: blocks paid OpenRouter models
 
@@ -42,21 +42,21 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 **Free Tier:** 15 requests/minute, 1M+ tokens/day, 1M token context window
 
-### OpenRouter
+### Cerebras
 
-1. Get an API key from [OpenRouter](https://openrouter.ai/keys)
+1. Get an API key from [Cerebras Console](https://console.cerebras.ai/keys)
 2. Set the environment variable:
    ```bash
-   export OPENROUTER_API_KEY="sk-or-..."
+   export CEREBRAS_API_KEY="your-api-key-here"
    ```
 3. Configure in `~/.config/aptu/config.toml`:
    ```toml
    [ai]
-   provider = "openrouter"
-   model = "mistralai/devstral-2512:free"
+   provider = "cerebras"
+   model = "qwen-3-32b"
    ```
 
-**Free Models:** Look for models with `:free` suffix on OpenRouter
+**Free Tier:** Available with Cerebras API account
 
 ### Groq
 
@@ -74,37 +74,21 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 **Free Tier:** Generous rate limits, fast inference with Groq's LPU technology
 
-### Cerebras
+### OpenRouter
 
-1. Get an API key from [Cerebras Console](https://console.cerebras.ai/keys)
+1. Get an API key from [OpenRouter](https://openrouter.ai/keys)
 2. Set the environment variable:
    ```bash
-   export CEREBRAS_API_KEY="your-api-key-here"
+   export OPENROUTER_API_KEY="sk-or-..."
    ```
 3. Configure in `~/.config/aptu/config.toml`:
    ```toml
    [ai]
-   provider = "cerebras"
-   model = "qwen-3-32b"
+   provider = "openrouter"
+   model = "mistralai/devstral-2512:free"
    ```
 
-**Free Tier:** Available with Cerebras API account
-
-### Zenmux
-
-1. Get an API key from [Zenmux](https://zenmux.ai)
-2. Set the environment variable:
-   ```bash
-   export ZENMUX_API_KEY="your-api-key-here"
-   ```
-3. Configure in `~/.config/aptu/config.toml`:
-   ```toml
-   [ai]
-   provider = "zenmux"
-   model = "x-ai/grok-code-fast-1"
-   ```
-
-**Free Tier:** x-ai/grok-code-fast-1 with 256K context window
+**Free Models:** Look for models with `:free` suffix on OpenRouter
 
 ### Z.AI (Zhipu)
 
@@ -121,3 +105,19 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```
 
 **Budget Tier:** glm-4.5-air with 128K context window ($0.20/$1.10 per 1M tokens)
+
+### ZenMux
+
+1. Get an API key from [ZenMux](https://zenmux.ai)
+2. Set the environment variable:
+   ```bash
+   export ZENMUX_API_KEY="your-api-key-here"
+   ```
+3. Configure in `~/.config/aptu/config.toml`:
+   ```toml
+   [ai]
+   provider = "zenmux"
+   model = "x-ai/grok-code-fast-1"
+   ```
+
+**Free Tier:** x-ai/grok-code-fast-1 with 256K context window
