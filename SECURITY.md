@@ -35,6 +35,7 @@ gh attestation verify aptu-<target>.tar.gz --owner clouatre-labs
 - **SHA-pinned Actions** - All GitHub Actions pinned to commit SHA
 - **Renovate** - Automated dependency updates with security alerts
 - **REUSE/SPDX** - Every file has explicit license metadata
+- **Fuzzing** - cargo-fuzz targets for parser testing
 
 ### Repository Security
 

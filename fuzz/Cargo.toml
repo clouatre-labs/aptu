@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 Aptu Contributors
+
+[workspace]
+members = []
+
+[package]
+name = "aptu-fuzz"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+aptu-core = { path = "../crates/aptu-core" }
+toml = "0.9"
+
+[[bin]]
+name = "parse_toml"
+path = "fuzz_targets/parse_toml.rs"
