@@ -10,6 +10,7 @@
   <a href="https://github.com/clouatre-labs/aptu/actions?query=branch%3Amain"><img alt="build status" src="https://img.shields.io/github/actions/workflow/status/clouatre-labs/aptu/ci.yml?branch=main&style=for-the-badge" height="20"></a>
   <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img alt="REUSE" src="https://api.reuse.software/badge/github.com/clouatre-labs/aptu" height="20"></a>
   <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://slsa.dev/images/gh-badge-level3.svg" height="20"></a>
+  <a href="https://www.bestpractices.dev/projects/11662"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/11662/badge" height="20"></a>
 </p>
 
 <p align="center"><strong>AI-Powered Triage Utility</strong> - A CLI for OSS issue triage with AI assistance.</p>
