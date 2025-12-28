@@ -276,6 +276,9 @@ pub struct Author {
 /// Comments connection from GraphQL.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CommentsConnection {
+    /// Total count of comments.
+    #[serde(rename = "totalCount")]
+    pub total_count: u32,
     /// List of comment nodes.
     pub nodes: Vec<IssueCommentNode>,
 }
@@ -295,6 +298,14 @@ pub struct IssueNodeDetailed {
     pub labels: Labels,
     /// Issue comments.
     pub comments: CommentsConnection,
+    /// Issue author.
+    pub author: Option<Author>,
+    /// Issue creation timestamp (ISO 8601).
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    /// Issue last update timestamp (ISO 8601).
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
 }
 
 /// Repository data from GraphQL response for triage.
@@ -341,12 +352,18 @@ fn build_issue_with_repo_context_query(owner: &str, repo: &str, number: u64) -> 
                     title
                     body
                     url
+                    author {{
+                        login
+                    }}
+                    createdAt
+                    updatedAt
                     labels(first: 10) {{
                         nodes {{
                             name
                         }}
                     }}
                     comments(first: 5) {{
+                        totalCount
                         nodes {{
                             author {{
                                 login
