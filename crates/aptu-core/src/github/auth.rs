@@ -369,6 +369,41 @@ pub fn create_client_with_token(token: &SecretString) -> Result<Octocrab> {
     Ok(client)
 }
 
+/// Creates a GitHub client from a `TokenProvider`.
+///
+/// This is a convenience function that extracts the token from a provider
+/// and creates an authenticated Octocrab client. It standardizes error handling
+/// across the facade layer.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider that supplies the GitHub token
+///
+/// # Returns
+///
+/// Returns `Ok(Octocrab)` if successful, or an `AptuError::GitHub` if:
+/// - The provider has no token available
+/// - The GitHub client fails to build
+///
+/// # Example
+///
+/// ```ignore
+/// let client = create_client_from_provider(provider)?;
+/// ```
+#[instrument(skip(provider))]
+pub fn create_client_from_provider(
+    provider: &dyn crate::auth::TokenProvider,
+) -> crate::Result<Octocrab> {
+    let github_token = provider
+        .github_token()
+        .ok_or(crate::error::AptuError::NotAuthenticated)?;
+
+    let token = SecretString::from(github_token);
+    create_client_with_token(&token).map_err(|e| crate::error::AptuError::GitHub {
+        message: format!("Failed to create GitHub client: {e}"),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
