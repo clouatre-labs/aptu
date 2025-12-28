@@ -89,3 +89,35 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```
 
 **Free Tier:** Available with Cerebras API account
+
+### Zenmux
+
+1. Get an API key from [Zenmux](https://zenmux.ai)
+2. Set the environment variable:
+   ```bash
+   export ZENMUX_API_KEY="your-api-key-here"
+   ```
+3. Configure in `~/.config/aptu/config.toml`:
+   ```toml
+   [ai]
+   provider = "zenmux"
+   model = "x-ai/grok-code-fast-1"
+   ```
+
+**Free Tier:** x-ai/grok-code-fast-1 with 256K context window
+
+### Z.AI (Zhipu)
+
+1. Get an API key from [Z.AI](https://z.ai)
+2. Set the environment variable:
+   ```bash
+   export ZAI_API_KEY="your-api-key-here"
+   ```
+3. Configure in `~/.config/aptu/config.toml`:
+   ```toml
+   [ai]
+   provider = "zai"
+   model = "glm-4.5-air"
+   ```
+
+**Free Tier:** glm-4.5-air with 128K context window. Paid tier: glm-4.6 with 128K context window
