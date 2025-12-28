@@ -384,10 +384,10 @@ pub fn fetch_issue_for_triage(
                     body: issue_details.body,
                     labels: issue_details.labels,
                     url: issue_details.url,
-                    author: String::new(),
-                    created_at: String::new(),
-                    updated_at: String::new(),
-                    comments_count: 0,
+                    author: issue_details.author.unwrap_or_default(),
+                    created_at: issue_details.created_at.unwrap_or_default(),
+                    updated_at: issue_details.updated_at.unwrap_or_default(),
+                    comments_count: issue_details.comments.len() as u32,
                 };
                 Ok(ffi_issue)
             }
@@ -431,17 +431,7 @@ pub fn post_triage_comment(
         let provider = auth::FfiTokenProvider::new(keychain);
 
         // Convert FfiTriageResponse back to core TriageResponse
-        let core_triage = aptu_core::ai::types::TriageResponse {
-            summary: triage.summary,
-            suggested_labels: triage.suggested_labels,
-            clarifying_questions: triage.clarifying_questions,
-            potential_duplicates: triage.potential_duplicates,
-            implementation_approach: None,
-            related_issues: vec![],
-            suggested_milestone: None,
-            status_note: None,
-            contributor_guidance: None,
-        };
+        let core_triage: aptu_core::ai::types::TriageResponse = triage.into();
 
         // Create minimal IssueDetails for the facade call
         let issue_details = aptu_core::ai::types::IssueDetails::builder()
@@ -500,17 +490,7 @@ pub fn apply_triage_labels(
         let provider = auth::FfiTokenProvider::new(keychain);
 
         // Convert FfiTriageResponse back to core TriageResponse
-        let core_triage = aptu_core::ai::types::TriageResponse {
-            summary: triage.summary,
-            suggested_labels: triage.suggested_labels,
-            clarifying_questions: triage.clarifying_questions,
-            potential_duplicates: triage.potential_duplicates,
-            implementation_approach: None,
-            related_issues: vec![],
-            suggested_milestone: None,
-            status_note: None,
-            contributor_guidance: None,
-        };
+        let core_triage: aptu_core::ai::types::TriageResponse = triage.into();
 
         // Create minimal IssueDetails for the facade call
         let issue_details = aptu_core::ai::types::IssueDetails::builder()

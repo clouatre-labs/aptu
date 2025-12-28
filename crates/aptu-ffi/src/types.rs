@@ -71,11 +71,48 @@ pub struct FfiIssueDetails {
 }
 
 #[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiRelatedIssue {
+    pub number: u64,
+    pub title: String,
+    pub reason: String,
+}
+
+impl From<aptu_core::ai::types::RelatedIssue> for FfiRelatedIssue {
+    fn from(issue: aptu_core::ai::types::RelatedIssue) -> Self {
+        FfiRelatedIssue {
+            number: issue.number,
+            title: issue.title,
+            reason: issue.reason,
+        }
+    }
+}
+
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiContributorGuidance {
+    pub beginner_friendly: bool,
+    pub reasoning: String,
+}
+
+impl From<aptu_core::ai::types::ContributorGuidance> for FfiContributorGuidance {
+    fn from(guidance: aptu_core::ai::types::ContributorGuidance) -> Self {
+        FfiContributorGuidance {
+            beginner_friendly: guidance.beginner_friendly,
+            reasoning: guidance.reasoning,
+        }
+    }
+}
+
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
 pub struct FfiTriageResponse {
     pub summary: String,
     pub suggested_labels: Vec<String>,
     pub clarifying_questions: Vec<String>,
     pub potential_duplicates: Vec<String>,
+    pub related_issues: Vec<FfiRelatedIssue>,
+    pub status_note: Option<String>,
+    pub contributor_guidance: Option<FfiContributorGuidance>,
+    pub implementation_approach: Option<String>,
+    pub suggested_milestone: Option<String>,
 }
 
 impl From<aptu_core::ai::types::TriageResponse> for FfiTriageResponse {
@@ -85,6 +122,46 @@ impl From<aptu_core::ai::types::TriageResponse> for FfiTriageResponse {
             suggested_labels: triage.suggested_labels,
             clarifying_questions: triage.clarifying_questions,
             potential_duplicates: triage.potential_duplicates,
+            related_issues: triage
+                .related_issues
+                .into_iter()
+                .map(FfiRelatedIssue::from)
+                .collect(),
+            status_note: triage.status_note,
+            contributor_guidance: triage
+                .contributor_guidance
+                .map(FfiContributorGuidance::from),
+            implementation_approach: triage.implementation_approach,
+            suggested_milestone: triage.suggested_milestone,
+        }
+    }
+}
+
+impl From<FfiTriageResponse> for aptu_core::ai::types::TriageResponse {
+    fn from(ffi_triage: FfiTriageResponse) -> Self {
+        aptu_core::ai::types::TriageResponse {
+            summary: ffi_triage.summary,
+            suggested_labels: ffi_triage.suggested_labels,
+            clarifying_questions: ffi_triage.clarifying_questions,
+            potential_duplicates: ffi_triage.potential_duplicates,
+            related_issues: ffi_triage
+                .related_issues
+                .into_iter()
+                .map(|issue| aptu_core::ai::types::RelatedIssue {
+                    number: issue.number,
+                    title: issue.title,
+                    reason: issue.reason,
+                })
+                .collect(),
+            status_note: ffi_triage.status_note,
+            contributor_guidance: ffi_triage.contributor_guidance.map(|guidance| {
+                aptu_core::ai::types::ContributorGuidance {
+                    beginner_friendly: guidance.beginner_friendly,
+                    reasoning: guidance.reasoning,
+                }
+            }),
+            implementation_approach: ffi_triage.implementation_approach,
+            suggested_milestone: ffi_triage.suggested_milestone,
         }
     }
 }
