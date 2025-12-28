@@ -36,6 +36,12 @@ gh attestation verify aptu-<target>.tar.gz --owner clouatre-labs
 - **Renovate** - Automated dependency updates with security alerts
 - **REUSE/SPDX** - Every file has explicit license metadata
 
+### Repository Security
+
+- **Secret scanning** - Detects accidentally committed credentials
+- **Push protection** - Blocks commits containing secrets
+- **Validity checks** - Verifies if detected secrets are active
+
 ### Artifact Signing
 
 All release artifacts (tarballs and .deb packages) are signed with cosign using keyless signing via Sigstore. Verify signatures with:
