@@ -13,8 +13,8 @@ use dialoguer::Input;
 use tracing::{debug, info, instrument};
 
 use super::types::CreateResult;
-use aptu_core::github::auth;
 use aptu_core::github::issues as gh_issues;
+use aptu_core::github::{auth, parse_owner_repo};
 
 /// Create a GitHub issue with AI assistance.
 ///
@@ -37,7 +37,7 @@ pub async fn run(
     dry_run: bool,
 ) -> Result<CreateResult> {
     // Parse owner/repo
-    let (owner, repo_name) = gh_issues::parse_owner_repo(&repo)?;
+    let (owner, repo_name) = parse_owner_repo(&repo)?;
     debug!(owner = %owner, repo = %repo_name, "Parsed repository");
 
     // Get title and body
