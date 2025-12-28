@@ -17,7 +17,7 @@ use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
 use crate::config::{AiConfig, load_config};
 use crate::error::AptuError;
-use crate::github::auth::create_client_with_token;
+use crate::github::auth::{create_client_from_provider, create_client_with_token};
 use crate::github::graphql::{
     IssueNode, fetch_issue_with_repo_context, fetch_issues as gh_fetch_issues,
 };
@@ -53,14 +53,8 @@ pub async fn fetch_issues(
     repo_filter: Option<&str>,
     use_cache: bool,
 ) -> crate::Result<Vec<(String, Vec<IssueNode>)>> {
-    // Get GitHub token from provider
-    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
-
-    // Create GitHub client with the provided token
-    let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
-        message: format!("Failed to create GitHub client: {e}"),
-    })?;
+    // Create GitHub client from provider
+    let client = create_client_from_provider(provider)?;
 
     // Get curated repos, optionally filtered
     let all_repos = repos::fetch().await?;
@@ -379,20 +373,14 @@ pub async fn review_pr(
 )> {
     use crate::github::pulls::parse_pr_reference;
 
-    // Get GitHub token from provider
-    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
-
     // Parse PR reference
     let (owner, repo, number) =
         parse_pr_reference(reference, repo_context).map_err(|e| AptuError::GitHub {
             message: e.to_string(),
         })?;
 
-    // Create GitHub client with the provided token
-    let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
-        message: format!("Failed to create GitHub client: {e}"),
-    })?;
+    // Create GitHub client from provider
+    let client = create_client_from_provider(provider)?;
 
     // Fetch PR details
     let pr_details = fetch_pr_details(&client, &owner, &repo, number)
@@ -461,20 +449,14 @@ pub async fn post_pr_review(
 ) -> crate::Result<u64> {
     use crate::github::pulls::parse_pr_reference;
 
-    // Get GitHub token from provider
-    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
-
     // Parse PR reference
     let (owner, repo, number) =
         parse_pr_reference(reference, repo_context).map_err(|e| AptuError::GitHub {
             message: e.to_string(),
         })?;
 
-    // Create GitHub client with the provided token
-    let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
-        message: format!("Failed to create GitHub client: {e}"),
-    })?;
+    // Create GitHub client from provider
+    let client = create_client_from_provider(provider)?;
 
     // Post the review
     gh_post_pr_review(&client, &owner, &repo, number, body, event)
@@ -517,20 +499,14 @@ pub async fn label_pr(
     use crate::github::issues::apply_labels_to_number;
     use crate::github::pulls::{fetch_pr_details, labels_from_pr_metadata, parse_pr_reference};
 
-    // Get GitHub token from provider
-    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
-
     // Parse PR reference
     let (owner, repo, number) =
         parse_pr_reference(reference, repo_context).map_err(|e| AptuError::GitHub {
             message: e.to_string(),
         })?;
 
-    // Create GitHub client with the provided token
-    let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
-        message: format!("Failed to create GitHub client: {e}"),
-    })?;
+    // Create GitHub client from provider
+    let client = create_client_from_provider(provider)?;
 
     // Fetch PR details
     let pr_details = fetch_pr_details(&client, &owner, &repo, number)
@@ -612,9 +588,6 @@ pub async fn fetch_issue_for_triage(
     reference: &str,
     repo_context: Option<&str>,
 ) -> crate::Result<IssueDetails> {
-    // Get GitHub token from provider
-    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
-
     // Parse the issue reference
     let (owner, repo, number) =
         crate::github::issues::parse_issue_reference(reference, repo_context).map_err(|e| {
@@ -623,11 +596,8 @@ pub async fn fetch_issue_for_triage(
             }
         })?;
 
-    // Create GitHub client with the provided token
-    let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
-        message: e.to_string(),
-    })?;
+    // Create GitHub client from provider
+    let client = create_client_from_provider(provider)?;
 
     // Fetch issue with repository context (labels, milestones) in a single GraphQL call
     let (issue_node, repo_data) = fetch_issue_with_repo_context(&client, &owner, &repo, number)
@@ -771,14 +741,8 @@ pub async fn post_triage_comment(
     issue_details: &IssueDetails,
     triage: &TriageResponse,
 ) -> crate::Result<String> {
-    // Get GitHub token from provider
-    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
-
-    // Create GitHub client with the provided token
-    let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
-        message: e.to_string(),
-    })?;
+    // Create GitHub client from provider
+    let client = create_client_from_provider(provider)?;
 
     // Render markdown and post comment
     let comment_body = crate::triage::render_triage_markdown(triage);
@@ -827,14 +791,8 @@ pub async fn apply_triage_labels(
 ) -> crate::Result<crate::github::issues::ApplyResult> {
     debug!("Applying labels and milestone to issue");
 
-    // Get GitHub token from provider
-    let github_token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
-
-    // Create GitHub client with the provided token
-    let token = SecretString::from(github_token);
-    let client = create_client_with_token(&token).map_err(|e| AptuError::GitHub {
-        message: e.to_string(),
-    })?;
+    // Create GitHub client from provider
+    let client = create_client_from_provider(provider)?;
 
     // Call the update function with validation
     let result = crate::github::issues::update_issue_labels_and_milestone(
