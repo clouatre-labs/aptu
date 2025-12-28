@@ -40,7 +40,8 @@ pub use cache::CacheEntry;
 // ============================================================================
 
 pub use ai::types::{
-    IssueComment, IssueDetails, PrDetails, PrFile, PrReviewResponse, ReviewEvent, TriageResponse,
+    IssueComment, IssueDetails, PrDetails, PrFile, PrReviewResponse, PrSummary,
+    ReleaseNotesResponse, ReviewEvent, TriageResponse,
 };
 pub use ai::{
     AiClient, AiModel, ModelInfo, ModelProvider, ProviderConfig, all_providers, get_provider,
@@ -100,8 +101,8 @@ pub use utils::{
 
 pub use facade::{
     add_custom_repo, analyze_issue, apply_triage_labels, fetch_issue_for_triage, fetch_issues,
-    label_pr, list_curated_repos, list_repos, post_pr_review, post_triage_comment,
-    remove_custom_repo, review_pr,
+    generate_release_notes, label_pr, list_curated_repos, list_repos, post_pr_review,
+    post_triage_comment, remove_custom_repo, review_pr,
 };
 pub use github::issues::ApplyResult;
 

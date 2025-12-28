@@ -287,6 +287,7 @@ pub trait AiProvider: Send + Sync {
             ],
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
+                json_schema: None,
             }),
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
@@ -357,6 +358,7 @@ pub trait AiProvider: Send + Sync {
             ],
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
+                json_schema: None,
             }),
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
@@ -603,6 +605,7 @@ Be professional but friendly. Maintain the user's intent while improving clarity
             ],
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
+                json_schema: None,
             }),
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
@@ -667,6 +670,7 @@ Be professional but friendly. Maintain the user's intent while improving clarity
             ],
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
+                json_schema: None,
             }),
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
@@ -884,6 +888,99 @@ Be concise and practical."#.to_string()
         prompt.push_str("</pull_request>");
 
         prompt
+    }
+
+    /// Generate release notes from PR summaries.
+    ///
+    /// # Arguments
+    ///
+    /// * `prs` - List of PR summaries to synthesize
+    /// * `version` - Version being released
+    ///
+    /// # Returns
+    ///
+    /// Structured release notes with theme, highlights, and categorized changes.
+    #[instrument(skip(self, prs))]
+    async fn generate_release_notes(
+        &self,
+        prs: Vec<super::types::PrSummary>,
+        version: &str,
+    ) -> Result<super::types::ReleaseNotesResponse> {
+        let prompt = Self::build_release_notes_prompt(&prs, version);
+        let request = ChatCompletionRequest {
+            model: self.model().to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: prompt,
+            }],
+            response_format: Some(ResponseFormat {
+                format_type: "json_object".to_string(),
+                json_schema: None,
+            }),
+            temperature: Some(0.7),
+            max_tokens: Some(4000),
+        };
+
+        let response = self.send_request(&request).await?;
+        let content = response
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .context("No response from AI model")?;
+        let parsed: super::types::ReleaseNotesResponse =
+            serde_json::from_str(&content).context("Failed to parse release notes")?;
+        Ok(parsed)
+    }
+
+    /// Build the user prompt for release notes generation.
+    #[must_use]
+    fn build_release_notes_prompt(prs: &[super::types::PrSummary], version: &str) -> String {
+        let pr_list = prs
+            .iter()
+            .map(|pr| {
+                format!(
+                    "- #{}: {} (by @{})\n  {}",
+                    pr.number,
+                    pr.title,
+                    pr.author,
+                    pr.body.lines().next().unwrap_or("")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        format!(
+            r#"Generate release notes for version {version} based on these merged PRs:
+
+{pr_list}
+
+Create a curated release notes document with:
+1. A theme/title that captures the essence of this release
+2. A 1-2 sentence narrative about the release
+3. 3-5 highlighted features
+4. Categorized changes: Features, Fixes, Improvements, Documentation, Maintenance
+5. List of contributors
+
+Follow these conventions:
+- No emojis
+- Bold feature names with dash separator
+- Include PR numbers in parentheses
+- Group by user impact, not just commit type
+- Filter CI/deps under Maintenance
+
+Your response MUST be valid JSON with this exact schema:
+{{
+  "theme": "Release theme title",
+  "narrative": "1-2 sentence summary",
+  "highlights": ["highlight1", "highlight2"],
+  "features": ["feature1", "feature2"],
+  "fixes": ["fix1", "fix2"],
+  "improvements": ["improvement1"],
+  "documentation": ["doc change1"],
+  "maintenance": ["maintenance1"],
+  "contributors": ["@author1", "@author2"]
+}}"#
+        )
     }
 }
 

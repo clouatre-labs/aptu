@@ -12,6 +12,7 @@ pub mod graphql;
 pub mod issues;
 pub mod pulls;
 pub mod ratelimit;
+pub mod releases;
 
 /// OAuth Client ID for Aptu CLI (safe to embed per RFC 8252).
 ///

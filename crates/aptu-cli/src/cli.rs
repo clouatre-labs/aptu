@@ -188,6 +188,10 @@ pub enum Commands {
     #[command(subcommand)]
     Pr(PrCommand),
 
+    /// Generate release notes
+    #[command(subcommand)]
+    Release(ReleaseCommand),
+
     /// Show your contribution history
     History,
 
@@ -378,6 +382,29 @@ pub enum PrCommand {
         repo: Option<String>,
 
         /// Preview labels without applying
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+/// Release subcommands
+#[derive(Subcommand)]
+pub enum ReleaseCommand {
+    /// Generate AI-curated release notes from PRs between tags
+    Notes {
+        /// Repository in owner/repo format (inferred from git if not provided)
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// Starting tag (defaults to previous tag)
+        #[arg(long)]
+        from: Option<String>,
+
+        /// Ending tag (defaults to HEAD)
+        #[arg(long)]
+        to: Option<String>,
+
+        /// Preview release notes without posting
         #[arg(long)]
         dry_run: bool,
     },

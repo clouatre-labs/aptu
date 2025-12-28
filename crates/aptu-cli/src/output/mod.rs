@@ -55,5 +55,6 @@ mod create;
 mod history;
 mod issues;
 mod pr;
+mod release;
 mod repos;
 mod triage;
