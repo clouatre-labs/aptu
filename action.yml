@@ -123,8 +123,8 @@ runs:
       run: |
         set -e
         
-        # Get latest v0.x.x release from GitHub API
-        APTU_VERSION=$(curl -sL https://api.github.com/repos/clouatre-labs/aptu/releases | jq -r '[.[] | select(.tag_name | startswith("v0."))] | first | .tag_name' | sed 's/^v//')
+        # Get latest v0.x.x release from GitHub API (authenticated to avoid rate limits)
+        APTU_VERSION=$(gh api repos/clouatre-labs/aptu/releases --jq '[.[] | select(.tag_name | startswith("v0."))] | first | .tag_name' | sed 's/^v//')
         echo "Latest aptu v0.x version: $APTU_VERSION"
         
         BINARY_URL="https://github.com/clouatre-labs/aptu/releases/download/v${APTU_VERSION}/aptu-${APTU_VERSION}-x86_64-unknown-linux-musl.tar.gz"
