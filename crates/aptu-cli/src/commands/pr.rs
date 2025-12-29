@@ -47,7 +47,7 @@ pub async fn run(
     // If review type is specified, handle posting workflow
     if let Some(event) = review_type {
         let review_body = format!(
-            "## AI Review\n\n{}\n\n**Verdict:** {}\n\n",
+            "## Aptu Review\n\n{}\n\n**Verdict:** {}\n\n",
             review.summary, review.verdict
         );
 
