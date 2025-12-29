@@ -13,8 +13,6 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::config::data_dir;
-
 /// A cached entry with metadata.
 ///
 /// Wraps cached data with timestamp and optional etag for validation.
@@ -65,12 +63,14 @@ impl<T> CacheEntry<T> {
 
 /// Returns the cache directory.
 ///
-/// - Linux: `~/.local/share/aptu/cache`
-/// - macOS: `~/Library/Application Support/aptu/cache`
-/// - Windows: `C:\Users\<User>\AppData\Local\aptu\cache`
+/// - Linux: `~/.cache/aptu`
+/// - macOS: `~/Library/Caches/aptu`
+/// - Windows: `C:\Users\<User>\AppData\Local\aptu`
 #[must_use]
 pub fn cache_dir() -> PathBuf {
-    data_dir().join("cache")
+    dirs::cache_dir()
+        .expect("Failed to determine cache directory")
+        .join("aptu")
 }
 
 /// Generate a cache key for an issue list.
@@ -239,7 +239,7 @@ mod tests {
     #[test]
     fn test_cache_dir_path() {
         let dir = cache_dir();
-        assert!(dir.ends_with("cache"));
+        assert!(dir.ends_with("aptu"));
     }
 
     #[test]
