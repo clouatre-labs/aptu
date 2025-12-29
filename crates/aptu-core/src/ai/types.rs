@@ -279,6 +279,9 @@ pub struct PrDetails {
     pub files: Vec<PrFile>,
     /// Pull request URL.
     pub url: String,
+    /// Labels applied to the PR.
+    #[serde(default)]
+    pub labels: Vec<String>,
 }
 
 /// A file changed in a pull request.

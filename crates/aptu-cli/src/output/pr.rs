@@ -11,7 +11,7 @@ use crate::commands::types::{PrLabelResult, PrReviewResult};
 use crate::output::Renderable;
 
 impl Renderable for PrReviewResult {
-    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+    fn render_text(&self, w: &mut dyn Write, ctx: &OutputContext) -> io::Result<()> {
         // Header
         writeln!(w)?;
         writeln!(
@@ -88,20 +88,22 @@ impl Renderable for PrReviewResult {
             writeln!(w)?;
         }
 
-        // AI Stats
-        writeln!(w, "{}", style("AI Stats").dim().bold())?;
-        writeln!(
-            w,
-            "  Model: {} | Tokens: {} in, {} out | Duration: {}ms",
-            self.ai_stats.model,
-            self.ai_stats.input_tokens,
-            self.ai_stats.output_tokens,
-            self.ai_stats.duration_ms
-        )?;
-        if let Some(cost) = self.ai_stats.cost_usd {
-            writeln!(w, "  Cost: ${cost:.6}")?;
+        // AI Stats (verbose only)
+        if ctx.is_verbose() {
+            writeln!(w, "{}", style("AI Stats").dim().bold())?;
+            writeln!(
+                w,
+                "  Model: {} | Tokens: {} in, {} out | Duration: {}ms",
+                self.ai_stats.model,
+                self.ai_stats.input_tokens,
+                self.ai_stats.output_tokens,
+                self.ai_stats.duration_ms
+            )?;
+            if let Some(cost) = self.ai_stats.cost_usd {
+                writeln!(w, "  Cost: ${cost:.6}")?;
+            }
+            writeln!(w)?;
         }
-        writeln!(w)?;
 
         Ok(())
     }
