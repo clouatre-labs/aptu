@@ -72,7 +72,7 @@ pub async fn run(
     debug!(title = %final_title, body_len = final_body.len(), "Collected issue content");
 
     // Format title and body with AI
-    let ai_response = aptu_core::ai::create_issue(&final_title, &final_body, &repo)
+    let (ai_response, _ai_stats) = aptu_core::ai::create_issue(&final_title, &final_body, &repo)
         .await
         .context("Failed to format issue with AI")?;
 

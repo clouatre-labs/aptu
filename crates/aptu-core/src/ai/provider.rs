@@ -294,105 +294,6 @@ pub trait AiProvider: Send + Sync {
         Ok((parsed, ai_stats))
     }
 
-    /// Sends a chat completion request to the provider's API with retry logic.
-    ///
-    /// Public wrapper for backward compatibility. Retries HTTP requests only.
-    /// For parsing JSON responses with retry, use `send_and_parse()` instead.
-    async fn send_request(
-        &self,
-        request: &ChatCompletionRequest,
-    ) -> Result<ChatCompletionResponse> {
-        use backon::Retryable;
-        use tracing::warn;
-
-        use crate::error::AptuError;
-        use crate::retry::{is_retryable_anyhow, retry_backoff};
-
-        // Check circuit breaker before attempting request
-        if let Some(cb) = self.circuit_breaker()
-            && cb.is_open()
-        {
-            return Err(AptuError::CircuitOpen.into());
-        }
-
-        let completion: ChatCompletionResponse =
-            (|| async { self.send_request_inner(request).await })
-                .retry(retry_backoff())
-                .when(is_retryable_anyhow)
-                .notify(|err, dur| warn!(error = %err, delay = ?dur, "Retrying after error"))
-                .await?;
-
-        // Record success in circuit breaker
-        if let Some(cb) = self.circuit_breaker() {
-            cb.record_success();
-        }
-
-        Ok(completion)
-    }
-
-    /// Helper method to send a request and extract stats from the response.
-    ///
-    /// This method encapsulates the common pattern of:
-    /// 1. Sending a request with retry logic
-    /// 2. Extracting the message content
-    /// 3. Building `AiStats` from the response usage info
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - The chat completion request to send
-    ///
-    /// # Returns
-    ///
-    /// A tuple of (`String`, `AiStats`) extracted from the response
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - API request fails (network, timeout, rate limit)
-    /// - Response contains no message content
-    async fn send_request_with_stats(
-        &self,
-        request: &ChatCompletionRequest,
-    ) -> Result<(String, AiStats)> {
-        // Start timing (outside retry loop to measure total time including retries)
-        let start = std::time::Instant::now();
-
-        // Make API request with retry logic
-        let completion = self.send_request(request).await?;
-
-        // Calculate duration (total time including any retries)
-        #[allow(clippy::cast_possible_truncation)]
-        let duration_ms = start.elapsed().as_millis() as u64;
-
-        // Extract message content
-        let content = completion
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .context("No response from AI model")?;
-
-        debug!(response_length = content.len(), "Received AI response");
-
-        // Build AI stats from usage info (trust API's cost field)
-        let (input_tokens, output_tokens, cost_usd) = if let Some(usage) = completion.usage {
-            (usage.prompt_tokens, usage.completion_tokens, usage.cost)
-        } else {
-            // If no usage info, default to 0
-            debug!("No usage information in API response");
-            (0, 0, None)
-        };
-
-        let ai_stats = AiStats {
-            model: self.model().to_string(),
-            input_tokens,
-            output_tokens,
-            duration_ms,
-            cost_usd,
-        };
-
-        Ok((content, ai_stats))
-    }
-
     /// Analyzes a GitHub issue using the provider's API.
     ///
     /// Returns a structured triage response with summary, labels, questions, duplicates, and usage stats.
@@ -470,11 +371,8 @@ pub trait AiProvider: Send + Sync {
         title: &str,
         body: &str,
         repo: &str,
-    ) -> Result<super::types::CreateIssueResponse> {
+    ) -> Result<(super::types::CreateIssueResponse, AiStats)> {
         debug!(model = %self.model(), "Calling {} API for issue creation", self.name());
-
-        // Start timing
-        let start = std::time::Instant::now();
 
         // Build request
         let request = ChatCompletionRequest {
@@ -497,35 +395,22 @@ pub trait AiProvider: Send + Sync {
             temperature: Some(self.temperature()),
         };
 
-        // Make API request with retry logic
-        let completion = self.send_request(&request).await?;
-
-        // Extract message content
-        let content = completion
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .context("No response from AI model")?;
-
-        debug!(response_length = content.len(), "Received AI response");
-
-        // Parse JSON response
-        let create_response: super::types::CreateIssueResponse = serde_json::from_str(&content)
-            .with_context(|| {
-                format!("Failed to parse AI response as JSON. Raw response:\n{content}")
-            })?;
-
-        #[allow(clippy::cast_possible_truncation)]
-        let _duration_ms = start.elapsed().as_millis() as u64;
+        // Send request and parse JSON with retry logic
+        let (create_response, ai_stats) = self
+            .send_and_parse::<super::types::CreateIssueResponse>(&request)
+            .await?;
 
         debug!(
             title_len = create_response.formatted_title.len(),
             body_len = create_response.formatted_body.len(),
             labels = create_response.suggested_labels.len(),
-            "Issue formatting complete"
+            input_tokens = ai_stats.input_tokens,
+            output_tokens = ai_stats.output_tokens,
+            duration_ms = ai_stats.duration_ms,
+            "Issue formatting complete with stats"
         );
 
-        Ok(create_response)
+        Ok((create_response, ai_stats))
     }
 
     /// Builds the system prompt for issue triage.
@@ -1030,7 +915,7 @@ Be concise and practical."#.to_string()
         &self,
         prs: Vec<super::types::PrSummary>,
         version: &str,
-    ) -> Result<super::types::ReleaseNotesResponse> {
+    ) -> Result<(super::types::ReleaseNotesResponse, AiStats)> {
         let prompt = Self::build_release_notes_prompt(&prs, version);
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
@@ -1046,15 +931,18 @@ Be concise and practical."#.to_string()
             max_tokens: Some(self.max_tokens()),
         };
 
-        let response = self.send_request(&request).await?;
-        let content = response
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .context("No response from AI model")?;
-        let parsed: super::types::ReleaseNotesResponse =
-            serde_json::from_str(&content).context("Failed to parse release notes")?;
-        Ok(parsed)
+        let (parsed, ai_stats) = self
+            .send_and_parse::<super::types::ReleaseNotesResponse>(&request)
+            .await?;
+
+        debug!(
+            input_tokens = ai_stats.input_tokens,
+            output_tokens = ai_stats.output_tokens,
+            duration_ms = ai_stats.duration_ms,
+            "Release notes generation complete with stats"
+        );
+
+        Ok((parsed, ai_stats))
     }
 
     /// Build the user prompt for release notes generation.
