@@ -12,6 +12,7 @@
 //! - Responsive (maintainers reply within 1 week)
 
 pub mod custom;
+pub mod discovery;
 
 use chrono::Duration;
 use serde::{Deserialize, Serialize};

@@ -254,6 +254,35 @@ pub async fn list_repos(filter: repos::RepoFilter) -> crate::Result<Vec<CuratedR
     repos::fetch_all(filter).await
 }
 
+/// Discovers repositories matching a filter via GitHub Search API.
+///
+/// Searches GitHub for welcoming repositories with good first issue or help wanted labels.
+/// Results are scored client-side and cached with 24-hour TTL.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `filter` - Discovery filter (language, `min_stars`, `limit`)
+///
+/// # Returns
+///
+/// A vector of discovered repositories, sorted by relevance score.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available from the provider
+/// - GitHub API call fails
+#[instrument(skip(provider), fields(language = ?filter.language, min_stars = filter.min_stars, limit = filter.limit))]
+pub async fn discover_repos(
+    provider: &dyn TokenProvider,
+    filter: repos::discovery::DiscoveryFilter,
+) -> crate::Result<Vec<repos::discovery::DiscoveredRepo>> {
+    let token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
+    let token = SecretString::from(token);
+    repos::discovery::search_repositories(&token, &filter).await
+}
+
 /// Analyzes a GitHub issue and generates triage suggestions.
 ///
 /// This function abstracts the credential resolution and API client creation,
