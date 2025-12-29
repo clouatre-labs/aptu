@@ -28,8 +28,30 @@ env:
   DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
 
 jobs:
+  verify-tag-signature:
+    name: Verify Tag Signature
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify tag is signed
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Verifying signature for tag: $TAG"
+          if ! git tag -v "$TAG" 2>&1; then
+            echo "ERROR: Tag $TAG is not signed or signature is invalid"
+            exit 1
+          fi
+
   create-release:
     name: Create Release
+    needs: [verify-tag-signature]
+    if: always() && (needs.verify-tag-signature.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: write
