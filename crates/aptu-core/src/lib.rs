@@ -104,7 +104,7 @@ pub use facade::{
     add_custom_repo, analyze_issue, analyze_pr, apply_triage_labels, discover_repos,
     fetch_issue_for_triage, fetch_issues, fetch_pr_for_review, generate_release_notes, label_pr,
     list_curated_repos, list_repos, post_pr_review, post_release_notes, post_triage_comment,
-    remove_custom_repo, review_pr,
+    remove_custom_repo,
 };
 pub use github::issues::ApplyResult;
 

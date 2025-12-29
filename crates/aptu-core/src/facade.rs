@@ -484,48 +484,6 @@ pub async fn analyze_pr(
         })
 }
 
-/// Reviews a PR with AI analysis (convenience wrapper).
-///
-/// This is a convenience function that combines `fetch_pr_for_review()` and `analyze_pr()`.
-/// For more control over display feedback, use the split functions directly.
-///
-/// # Arguments
-///
-/// * `provider` - Token provider for GitHub and AI credentials
-/// * `reference` - PR reference (URL, owner/repo#number, or number)
-/// * `repo_context` - Optional repository context for bare numbers
-/// * `ai_config` - AI configuration
-///
-/// # Returns
-///
-/// Tuple of (PR details, review response, AI stats).
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - GitHub or AI provider token is not available from the provider
-/// - PR cannot be fetched
-/// - AI API call fails
-#[instrument(skip(provider), fields(reference = %reference))]
-pub async fn review_pr(
-    provider: &dyn TokenProvider,
-    reference: &str,
-    repo_context: Option<&str>,
-    ai_config: &AiConfig,
-) -> crate::Result<(
-    PrDetails,
-    crate::ai::types::PrReviewResponse,
-    crate::history::AiStats,
-)> {
-    // Fetch PR details
-    let pr_details = fetch_pr_for_review(provider, reference, repo_context).await?;
-
-    // Analyze with AI
-    let (review, ai_stats) = analyze_pr(provider, &pr_details, ai_config).await?;
-
-    Ok((pr_details, review, ai_stats))
-}
-
 /// Posts a PR review to GitHub.
 ///
 /// This function abstracts the credential resolution and API client creation,

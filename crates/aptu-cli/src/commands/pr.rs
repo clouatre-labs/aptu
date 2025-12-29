@@ -11,7 +11,7 @@ use anyhow::Result;
 use aptu_core::{PrDetails, PrReviewResponse, history::AiStats};
 use tracing::{debug, info, instrument};
 
-use super::types::{PrLabelResult, PrReviewResult};
+use super::types::PrLabelResult;
 use crate::provider::CliTokenProvider;
 
 /// Intermediate result from analysis (before posting decision).
@@ -122,69 +122,6 @@ pub async fn post(
     }
 
     Ok(())
-}
-
-/// Review a pull request with AI assistance (convenience wrapper).
-///
-/// Combines `fetch()` and `analyze()` for backward compatibility.
-/// For more control over display feedback, use the split functions directly.
-///
-/// # Arguments
-///
-/// * `reference` - PR reference (URL, owner/repo#number, or bare number)
-/// * `repo_context` - Optional repository context for bare numbers
-/// * `review_type` - Optional review type (comment, approve, or `request_changes`)
-/// * `dry_run` - If true, preview without posting
-/// * `skip_confirm` - If true, skip confirmation prompt
-/// * `ai_config` - AI configuration
-#[allow(dead_code)]
-#[instrument(skip_all, fields(reference = %reference, review_type = ?review_type))]
-pub async fn run(
-    reference: &str,
-    repo_context: Option<&str>,
-    review_type: Option<aptu_core::ReviewEvent>,
-    dry_run: bool,
-    skip_confirm: bool,
-    ai_config: &aptu_core::AiConfig,
-) -> Result<PrReviewResult> {
-    // Create CLI token provider
-    let provider = CliTokenProvider;
-
-    // Call facade for PR review
-    let (pr_details, review, ai_stats) =
-        aptu_core::review_pr(&provider, reference, repo_context, ai_config).await?;
-
-    debug!(
-        pr_number = pr_details.number,
-        verdict = %review.verdict,
-        "PR review complete"
-    );
-
-    // If review type is specified, handle posting workflow
-    if let Some(event) = review_type {
-        let analyze_result = AnalyzeResult {
-            pr_details: pr_details.clone(),
-            review: review.clone(),
-            ai_stats: ai_stats.clone(),
-        };
-        post(
-            &analyze_result,
-            reference,
-            repo_context,
-            event,
-            dry_run,
-            skip_confirm,
-        )
-        .await?;
-    }
-
-    Ok(PrReviewResult {
-        pr_title: pr_details.title,
-        pr_number: pr_details.number,
-        pr_url: pr_details.url,
-        review,
-        ai_stats,
-    })
 }
 
 /// Auto-label a pull request based on conventional commit prefix and file paths.
