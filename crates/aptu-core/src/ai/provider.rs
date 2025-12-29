@@ -19,6 +19,40 @@ use super::types::{
 };
 use crate::history::AiStats;
 
+/// Parses JSON response from AI provider, detecting truncated responses.
+///
+/// If the JSON parsing fails with an EOF error (indicating the response was cut off),
+/// returns a `TruncatedResponse` error that can be retried. Other JSON errors are
+/// wrapped as `InvalidAIResponse`.
+///
+/// # Arguments
+///
+/// * `text` - The JSON text to parse
+/// * `provider` - The name of the AI provider (for error context)
+///
+/// # Returns
+///
+/// Parsed value of type T, or an error if parsing fails
+fn parse_ai_json<T: serde::de::DeserializeOwned>(text: &str, provider: &str) -> Result<T> {
+    match serde_json::from_str::<T>(text) {
+        Ok(value) => Ok(value),
+        Err(e) => {
+            // Check if this is an EOF error (truncated response)
+            if e.is_eof() {
+                Err(anyhow::anyhow!(
+                    crate::error::AptuError::TruncatedResponse {
+                        provider: provider.to_string(),
+                    }
+                ))
+            } else {
+                Err(anyhow::anyhow!(crate::error::AptuError::InvalidAIResponse(
+                    e
+                )))
+            }
+        }
+    }
+}
+
 /// Maximum length for issue body to stay within token limits.
 pub const MAX_BODY_LENGTH: usize = 4000;
 
@@ -297,9 +331,7 @@ pub trait AiProvider: Send + Sync {
         let (content, ai_stats) = self.send_request_with_stats(&request).await?;
 
         // Parse JSON response
-        let triage: TriageResponse = serde_json::from_str(&content).with_context(|| {
-            format!("Failed to parse AI response as JSON. Raw response:\n{content}")
-        })?;
+        let triage: TriageResponse = parse_ai_json(&content, self.name())?;
 
         debug!(
             input_tokens = ai_stats.input_tokens,
@@ -615,10 +647,7 @@ Be professional but friendly. Maintain the user's intent while improving clarity
         let (content, ai_stats) = self.send_request_with_stats(&request).await?;
 
         // Parse JSON response
-        let review: super::types::PrReviewResponse =
-            serde_json::from_str(&content).with_context(|| {
-                format!("Failed to parse AI response as JSON. Raw response:\n{content}")
-            })?;
+        let review: super::types::PrReviewResponse = parse_ai_json(&content, self.name())?;
 
         debug!(
             verdict = %review.verdict,
@@ -680,10 +709,7 @@ Be professional but friendly. Maintain the user's intent while improving clarity
         let (content, ai_stats) = self.send_request_with_stats(&request).await?;
 
         // Parse JSON response
-        let response: super::types::PrLabelResponse =
-            serde_json::from_str(&content).with_context(|| {
-                format!("Failed to parse AI response as JSON. Raw response:\n{content}")
-            })?;
+        let response: super::types::PrLabelResponse = parse_ai_json(&content, self.name())?;
 
         debug!(
             label_count = response.suggested_labels.len(),
@@ -1280,5 +1306,50 @@ mod tests {
         assert!(prompt.contains("Title: test"));
         assert!(prompt.contains("Description:\ntest"));
         assert!(!prompt.contains("Files Changed:"));
+    }
+
+    #[test]
+    fn test_parse_ai_json_with_valid_json() {
+        #[derive(serde::Deserialize)]
+        struct TestResponse {
+            message: String,
+        }
+
+        let json = r#"{"message": "hello"}"#;
+        let result: Result<TestResponse> = parse_ai_json(json, "test-provider");
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert_eq!(response.message, "hello");
+    }
+
+    #[test]
+    fn test_parse_ai_json_with_truncated_json() {
+        #[derive(Debug, serde::Deserialize)]
+        struct TestResponse {
+            message: String,
+        }
+
+        let json = r#"{"message": "hello"#;
+        let result: Result<TestResponse> = parse_ai_json(json, "test-provider");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Truncated response from test-provider")
+        );
+    }
+
+    #[test]
+    fn test_parse_ai_json_with_malformed_json() {
+        #[derive(Debug, serde::Deserialize)]
+        struct TestResponse {
+            message: String,
+        }
+
+        let json = r#"{"message": invalid}"#;
+        let result: Result<TestResponse> = parse_ai_json(json, "test-provider");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Invalid JSON response from AI"));
     }
 }

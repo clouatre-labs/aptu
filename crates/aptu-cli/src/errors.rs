@@ -82,6 +82,11 @@ pub fn format_error(error: &Error) -> String {
                     "{aptu_err}\n\nTip: The AI provider is temporarily unavailable. Please try again in a moment."
                 )
             }
+            AptuError::TruncatedResponse { provider } => {
+                format!(
+                    "{aptu_err}\n\nTip: The {provider} AI provider returned an incomplete response. This may be due to token limits. Try again in a moment."
+                )
+            }
         }
     } else {
         // Not an AptuError, return the original error chain
