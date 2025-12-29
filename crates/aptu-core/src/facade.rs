@@ -387,21 +387,32 @@ pub async fn analyze_issue(
 ///
 /// # Errors
 ///
+/// Fetches PR details for review without AI analysis.
+///
+/// This function handles credential resolution and GitHub API calls,
+/// allowing platforms to display PR metadata before starting AI analysis.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `reference` - PR reference (URL, owner/repo#number, or number)
+/// * `repo_context` - Optional repository context for bare numbers
+///
+/// # Returns
+///
+/// PR details including title, body, files, and labels.
+///
+/// # Errors
+///
 /// Returns an error if:
-/// - GitHub or AI provider token is not available from the provider
+/// - GitHub token is not available from the provider
 /// - PR cannot be fetched
-/// - AI API call fails
 #[instrument(skip(provider), fields(reference = %reference))]
-pub async fn review_pr(
+pub async fn fetch_pr_for_review(
     provider: &dyn TokenProvider,
     reference: &str,
     repo_context: Option<&str>,
-    ai_config: &AiConfig,
-) -> crate::Result<(
-    PrDetails,
-    crate::ai::types::PrReviewResponse,
-    crate::history::AiStats,
-)> {
+) -> crate::Result<PrDetails> {
     use crate::github::pulls::parse_pr_reference;
 
     // Parse PR reference
@@ -414,12 +425,39 @@ pub async fn review_pr(
     let client = create_client_from_provider(provider)?;
 
     // Fetch PR details
-    let pr_details = fetch_pr_details(&client, &owner, &repo, number)
+    fetch_pr_details(&client, &owner, &repo, number)
         .await
         .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
-        })?;
+        })
+}
 
+/// Analyzes PR details with AI to generate a review.
+///
+/// This function takes pre-fetched PR details and performs AI analysis.
+/// It should be called after `fetch_pr_for_review()` to allow intermediate display.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for AI credentials
+/// * `pr_details` - PR details from `fetch_pr_for_review()`
+/// * `ai_config` - AI configuration
+///
+/// # Returns
+///
+/// Tuple of (review response, AI stats).
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - AI provider token is not available from the provider
+/// - AI API call fails
+#[instrument(skip(provider, pr_details), fields(number = pr_details.number))]
+pub async fn analyze_pr(
+    provider: &dyn TokenProvider,
+    pr_details: &PrDetails,
+    ai_config: &AiConfig,
+) -> crate::Result<(crate::ai::types::PrReviewResponse, crate::history::AiStats)> {
     // Get API key from provider using the configured provider name
     let api_key = provider
         .ai_api_key(&ai_config.provider)
@@ -436,14 +474,54 @@ pub async fn review_pr(
         })?;
 
     // Review PR with AI (timing and stats are captured in provider)
-    let (review, ai_stats) = ai_client
-        .review_pr(&pr_details)
+    ai_client
+        .review_pr(pr_details)
         .await
         .map_err(|e| AptuError::AI {
             message: e.to_string(),
             status: None,
             provider: ai_config.provider.clone(),
-        })?;
+        })
+}
+
+/// Reviews a PR with AI analysis (convenience wrapper).
+///
+/// This is a convenience function that combines `fetch_pr_for_review()` and `analyze_pr()`.
+/// For more control over display feedback, use the split functions directly.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub and AI credentials
+/// * `reference` - PR reference (URL, owner/repo#number, or number)
+/// * `repo_context` - Optional repository context for bare numbers
+/// * `ai_config` - AI configuration
+///
+/// # Returns
+///
+/// Tuple of (PR details, review response, AI stats).
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub or AI provider token is not available from the provider
+/// - PR cannot be fetched
+/// - AI API call fails
+#[instrument(skip(provider), fields(reference = %reference))]
+pub async fn review_pr(
+    provider: &dyn TokenProvider,
+    reference: &str,
+    repo_context: Option<&str>,
+    ai_config: &AiConfig,
+) -> crate::Result<(
+    PrDetails,
+    crate::ai::types::PrReviewResponse,
+    crate::history::AiStats,
+)> {
+    // Fetch PR details
+    let pr_details = fetch_pr_for_review(provider, reference, repo_context).await?;
+
+    // Analyze with AI
+    let (review, ai_stats) = analyze_pr(provider, &pr_details, ai_config).await?;
 
     Ok((pr_details, review, ai_stats))
 }

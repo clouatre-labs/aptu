@@ -27,6 +27,7 @@ use crate::cli::{
     AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
     OutputFormat, PrCommand, RepoCommand,
 };
+use crate::commands::types::PrReviewResult;
 use crate::output;
 use aptu_core::{AppConfig, State, check_already_triaged, is_retryable_anyhow, retry_backoff};
 
@@ -574,19 +575,50 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     None
                 };
 
-                let spinner = maybe_spinner(&ctx, "Fetching PR and analyzing...");
-                let result = pr::run(
-                    &reference,
-                    repo_context,
-                    review_type,
-                    dry_run,
-                    yes,
-                    &config.ai,
-                )
-                .await?;
+                // Fetch PR details first (without spinner for immediate feedback)
+                let pr_details = pr::fetch(&reference, repo_context).await?;
+
+                // Display PR title and labels
+                eprintln!("PR #{}: {}", pr_details.number, pr_details.title);
+                if !pr_details.labels.is_empty() {
+                    eprintln!("Labels: {}", pr_details.labels.join(", "));
+                }
+
+                // Now analyze with AI (with spinner)
+                let spinner = maybe_spinner(&ctx, "Analyzing with AI...");
+                let (review, ai_stats) = pr::analyze(&pr_details, &config.ai).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
+
+                // Build result
+                let analyze_result = pr::AnalyzeResult {
+                    pr_details: pr_details.clone(),
+                    review: review.clone(),
+                    ai_stats: ai_stats.clone(),
+                };
+
+                // Handle posting if review type specified
+                if let Some(event) = review_type {
+                    pr::post(
+                        &analyze_result,
+                        &reference,
+                        repo_context,
+                        event,
+                        dry_run,
+                        yes,
+                    )
+                    .await?;
+                }
+
+                // Render output
+                let result = PrReviewResult {
+                    pr_title: pr_details.title,
+                    pr_number: pr_details.number,
+                    pr_url: pr_details.url,
+                    review,
+                    ai_stats,
+                };
                 output::render(&result, &ctx);
                 Ok(())
             }

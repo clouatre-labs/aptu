@@ -4,16 +4,130 @@
 //!
 //! Fetches a pull request, analyzes it with AI, and displays
 //! structured review feedback locally. Optionally posts the review to GitHub.
+//! Split into `fetch()` and `analyze()` for proper display flow (show PR details
+//! before AI spinner).
 
 use anyhow::Result;
-use tracing::{debug, instrument};
+use aptu_core::{PrDetails, PrReviewResponse, history::AiStats};
+use tracing::{debug, info, instrument};
 
 use super::types::{PrLabelResult, PrReviewResult};
+use crate::provider::CliTokenProvider;
 
-/// Review a pull request with AI assistance.
+/// Intermediate result from analysis (before posting decision).
+pub struct AnalyzeResult {
+    /// PR details (title, body, labels, files).
+    pub pr_details: PrDetails,
+    /// AI review analysis.
+    pub review: PrReviewResponse,
+    /// AI usage statistics.
+    #[allow(dead_code)]
+    pub ai_stats: AiStats,
+}
+
+/// Fetch a pull request from GitHub.
 ///
-/// Fetches PR details and file diffs, then analyzes with AI.
-/// Optionally posts the review to GitHub if a review type flag is provided.
+/// Parses the PR reference, checks authentication, and fetches PR details
+/// including file diffs. Does not perform AI analysis.
+///
+/// # Arguments
+///
+/// * `reference` - PR reference (URL, owner/repo#number, or bare number)
+/// * `repo_context` - Optional repository context for bare numbers
+#[instrument(skip_all, fields(reference = %reference))]
+pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<PrDetails> {
+    // Create CLI token provider
+    let provider = CliTokenProvider;
+
+    // Call facade to fetch PR
+    let pr_details = aptu_core::fetch_pr_for_review(&provider, reference, repo_context).await?;
+
+    debug!(pr_number = pr_details.number, "PR fetched successfully");
+    Ok(pr_details)
+}
+
+/// Analyze a pull request with AI assistance.
+///
+/// Takes fetched PR details and runs AI analysis via the facade layer.
+/// Returns both review response and AI usage statistics.
+/// Does not post anything.
+///
+/// # Arguments
+///
+/// * `pr_details` - Fetched PR details from `fetch()`
+/// * `ai_config` - AI configuration
+#[instrument(skip_all, fields(pr_number = pr_details.number))]
+pub async fn analyze(
+    pr_details: &PrDetails,
+    ai_config: &aptu_core::AiConfig,
+) -> Result<(PrReviewResponse, aptu_core::history::AiStats)> {
+    // Create CLI token provider
+    let provider = CliTokenProvider;
+
+    // Call facade for analysis
+    let (review, ai_stats) = aptu_core::analyze_pr(&provider, pr_details, ai_config).await?;
+
+    debug!("PR analyzed successfully");
+    Ok((review, ai_stats))
+}
+
+/// Post a PR review to GitHub.
+#[instrument(skip_all, fields(pr_number = analyze_result.pr_details.number))]
+pub async fn post(
+    analyze_result: &AnalyzeResult,
+    reference: &str,
+    repo_context: Option<&str>,
+    event: aptu_core::ReviewEvent,
+    dry_run: bool,
+    skip_confirm: bool,
+) -> Result<()> {
+    // Create CLI token provider
+    let provider = CliTokenProvider;
+
+    let review_body = format!(
+        "## Aptu Review\n\n{}\n\n**Verdict:** {}\n\n",
+        analyze_result.review.summary, analyze_result.review.verdict
+    );
+
+    if dry_run {
+        debug!("Dry-run mode: skipping post");
+        eprintln!(
+            "Dry-run: Would post {} review to PR #{}",
+            event, analyze_result.pr_details.number
+        );
+        eprintln!("Review body:\n{review_body}");
+    } else {
+        // Confirm before posting unless --yes flag is set
+        if !skip_confirm {
+            eprintln!(
+                "About to post {} review to PR #{}",
+                event, analyze_result.pr_details.number
+            );
+            eprintln!("Continue? (y/n) ");
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            if !input.trim().eq_ignore_ascii_case("y") {
+                debug!("User cancelled review posting");
+                return Ok(());
+            }
+        }
+
+        // Post the review
+        let review_id =
+            aptu_core::post_pr_review(&provider, reference, repo_context, &review_body, event)
+                .await?;
+
+        info!(review_id = review_id, "Review posted successfully");
+        eprintln!("Review posted successfully (ID: {review_id})");
+    }
+
+    Ok(())
+}
+
+/// Review a pull request with AI assistance (convenience wrapper).
+///
+/// Combines `fetch()` and `analyze()` for backward compatibility.
+/// For more control over display feedback, use the split functions directly.
 ///
 /// # Arguments
 ///
@@ -22,6 +136,8 @@ use super::types::{PrLabelResult, PrReviewResult};
 /// * `review_type` - Optional review type (comment, approve, or `request_changes`)
 /// * `dry_run` - If true, preview without posting
 /// * `skip_confirm` - If true, skip confirmation prompt
+/// * `ai_config` - AI configuration
+#[allow(dead_code)]
 #[instrument(skip_all, fields(reference = %reference, review_type = ?review_type))]
 pub async fn run(
     reference: &str,
@@ -32,7 +148,7 @@ pub async fn run(
     ai_config: &aptu_core::AiConfig,
 ) -> Result<PrReviewResult> {
     // Create CLI token provider
-    let provider = crate::provider::CliTokenProvider;
+    let provider = CliTokenProvider;
 
     // Call facade for PR review
     let (pr_details, review, ai_stats) =
@@ -46,48 +162,20 @@ pub async fn run(
 
     // If review type is specified, handle posting workflow
     if let Some(event) = review_type {
-        let review_body = format!(
-            "## Aptu Review\n\n{}\n\n**Verdict:** {}\n\n",
-            review.summary, review.verdict
-        );
-
-        if dry_run {
-            debug!("Dry-run mode: skipping post");
-            eprintln!(
-                "Dry-run: Would post {} review to PR #{}",
-                event, pr_details.number
-            );
-            eprintln!("Review body:\n{review_body}");
-        } else {
-            // Confirm before posting unless --yes flag is set
-            if !skip_confirm {
-                eprintln!(
-                    "About to post {} review to PR #{}",
-                    event, pr_details.number
-                );
-                eprintln!("Continue? (y/n) ");
-                let mut input = String::new();
-                std::io::stdin().read_line(&mut input)?;
-                if !input.trim().eq_ignore_ascii_case("y") {
-                    debug!("User cancelled review posting");
-                    return Ok(PrReviewResult {
-                        pr_title: pr_details.title,
-                        pr_number: pr_details.number,
-                        pr_url: pr_details.url,
-                        review,
-                        ai_stats,
-                    });
-                }
-            }
-
-            // Post the review
-            let review_id =
-                aptu_core::post_pr_review(&provider, reference, repo_context, &review_body, event)
-                    .await?;
-
-            debug!(review_id = review_id, "Review posted successfully");
-            eprintln!("Review posted successfully (ID: {review_id})");
-        }
+        let analyze_result = AnalyzeResult {
+            pr_details: pr_details.clone(),
+            review: review.clone(),
+            ai_stats: ai_stats.clone(),
+        };
+        post(
+            &analyze_result,
+            reference,
+            repo_context,
+            event,
+            dry_run,
+            skip_confirm,
+        )
+        .await?;
     }
 
     Ok(PrReviewResult {

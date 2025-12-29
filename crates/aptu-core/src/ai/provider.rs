@@ -1150,6 +1150,7 @@ mod tests {
             base_branch: "main".to_string(),
             url: "https://github.com/test/repo/pull/1".to_string(),
             files,
+            labels: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr);
@@ -1193,6 +1194,7 @@ mod tests {
             base_branch: "main".to_string(),
             url: "https://github.com/test/repo/pull/1".to_string(),
             files,
+            labels: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr);
@@ -1226,6 +1228,7 @@ mod tests {
             base_branch: "main".to_string(),
             url: "https://github.com/test/repo/pull/1".to_string(),
             files,
+            labels: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr);

@@ -104,6 +104,12 @@ pub async fn fetch_pr_details(
         })
         .collect();
 
+    let labels: Vec<String> = pr
+        .labels
+        .iter()
+        .flat_map(|labels_vec| labels_vec.iter().map(|l| l.name.clone()))
+        .collect();
+
     let details = PrDetails {
         owner: owner.to_string(),
         repo: repo.to_string(),
@@ -114,6 +120,7 @@ pub async fn fetch_pr_details(
         head_branch: pr.head.ref_field,
         files: pr_files,
         url: pr.html_url.map_or_else(String::new, |u| u.to_string()),
+        labels,
     };
 
     debug!(
