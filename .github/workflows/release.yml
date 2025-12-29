@@ -40,13 +40,33 @@ jobs:
           fetch-tags: true
 
       - name: Verify tag is signed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Verifying signature for tag: $TAG"
-          if ! git tag -v "$TAG" 2>&1; then
-            echo "ERROR: Tag $TAG is not signed or signature is invalid"
+          
+          # Get tag ref to find the tag object SHA
+          TAG_SHA=$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" --jq '.object.sha')
+          TAG_TYPE=$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" --jq '.object.type')
+          
+          if [ "$TAG_TYPE" != "tag" ]; then
+            echo "ERROR: $TAG is a lightweight tag (type: $TAG_TYPE), not an annotated/signed tag"
             exit 1
           fi
+          
+          # Verify the tag signature via GitHub API
+          VERIFIED=$(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA" --jq '.verification.verified')
+          REASON=$(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA" --jq '.verification.reason')
+          
+          echo "Tag verification: verified=$VERIFIED, reason=$REASON"
+          
+          if [ "$VERIFIED" != "true" ]; then
+            echo "ERROR: Tag $TAG signature is not valid (reason: $REASON)"
+            exit 1
+          fi
+          
+          echo "Tag $TAG is signed and verified by GitHub"
 
   create-release:
     name: Create Release
