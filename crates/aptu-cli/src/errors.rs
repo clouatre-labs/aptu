@@ -35,12 +35,24 @@ pub fn format_error(error: &Error) -> String {
             AptuError::NotAuthenticated => {
                 "Authentication required - run `aptu auth login` first".to_string()
             }
-            AptuError::AI { message, status } => {
+            AptuError::AI {
+                message,
+                status,
+                provider,
+            } => {
                 let mut msg = format!("AI provider error: {message}");
                 if let Some(code) = status {
                     let _ = write!(msg, " (HTTP {code})");
                 }
-                msg.push_str("\n\nTip: Check your OPENROUTER_API_KEY environment variable.");
+
+                // Use registry to get provider-specific API key hint
+                let api_key_env = aptu_core::ai::registry::get_provider(provider)
+                    .map_or("OPENROUTER_API_KEY", |p| p.api_key_env);
+
+                let _ = write!(
+                    msg,
+                    "\n\nTip: Check your {api_key_env} environment variable."
+                );
                 msg
             }
             AptuError::Config { message: _ } => {
@@ -145,6 +157,7 @@ mod tests {
         let error = AptuError::AI {
             message: "Invalid request".to_string(),
             status: Some(400),
+            provider: "openrouter".to_string(),
         };
         let anyhow_err = anyhow::Error::new(error);
         let formatted = format_error(&anyhow_err);
@@ -160,6 +173,7 @@ mod tests {
         let error = AptuError::AI {
             message: "Connection timeout".to_string(),
             status: None,
+            provider: "ollama".to_string(),
         };
         let anyhow_err = anyhow::Error::new(error);
         let formatted = format_error(&anyhow_err);

@@ -24,6 +24,8 @@ pub enum AptuError {
         message: String,
         /// Optional HTTP status code from the provider.
         status: Option<u16>,
+        /// Name of the AI provider (e.g., `OpenRouter`, `Ollama`).
+        provider: String,
     },
 
     /// User is not authenticated - needs to run `aptu auth login`.

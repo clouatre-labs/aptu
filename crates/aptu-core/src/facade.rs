@@ -355,6 +355,7 @@ pub async fn analyze_issue(
             AptuError::AI {
                 message: e.to_string(),
                 status: None,
+                provider: ai_config.provider.clone(),
             }
         })?;
 
@@ -364,6 +365,7 @@ pub async fn analyze_issue(
         .map_err(|e| AptuError::AI {
             message: e.to_string(),
             status: None,
+            provider: ai_config.provider.clone(),
         })
 }
 
@@ -429,6 +431,7 @@ pub async fn review_pr(
             AptuError::AI {
                 message: e.to_string(),
                 status: None,
+                provider: ai_config.provider.clone(),
             }
         })?;
 
@@ -439,6 +442,7 @@ pub async fn review_pr(
         .map_err(|e| AptuError::AI {
             message: e.to_string(),
             status: None,
+            provider: ai_config.provider.clone(),
         })?;
 
     Ok((pr_details, review, ai_stats))
@@ -959,6 +963,7 @@ pub async fn generate_release_notes(
     let ai_client = AiClient::new(&config.ai.provider, &config.ai).map_err(|e| AptuError::AI {
         message: e.to_string(),
         status: None,
+        provider: config.ai.provider.clone(),
     })?;
 
     // Determine tags to use
@@ -1000,6 +1005,7 @@ pub async fn generate_release_notes(
         .map_err(|e: anyhow::Error| AptuError::AI {
             message: e.to_string(),
             status: None,
+            provider: config.ai.provider.clone(),
         })?;
 
     info!(
