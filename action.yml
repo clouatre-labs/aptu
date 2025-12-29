@@ -85,6 +85,38 @@ runs:
         fi
         echo "skip=false" >> $GITHUB_OUTPUT
 
+    - name: Set environment variables
+      if: steps.check-skip.outputs.skip != 'true'
+      shell: bash
+      env:
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        INPUT_OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        INPUT_GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        INPUT_CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        INPUT_ZAI_API_KEY: ${{ inputs.zai-api-key }}
+        INPUT_ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_PROVIDER: ${{ inputs.provider }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        INPUT_APPLY_LABELS: ${{ inputs.apply-labels }}
+        INPUT_NO_COMMENT: ${{ inputs.no-comment }}
+      run: |
+        # Set shared environment variables for subsequent steps
+        # Values from inputs (originally secrets) are auto-masked by GitHub
+        echo "GITHUB_TOKEN=$INPUT_GITHUB_TOKEN" >> "$GITHUB_ENV"
+        echo "GEMINI_API_KEY=$INPUT_GEMINI_API_KEY" >> "$GITHUB_ENV"
+        echo "OPENROUTER_API_KEY=$INPUT_OPENROUTER_API_KEY" >> "$GITHUB_ENV"
+        echo "GROQ_API_KEY=$INPUT_GROQ_API_KEY" >> "$GITHUB_ENV"
+        echo "CEREBRAS_API_KEY=$INPUT_CEREBRAS_API_KEY" >> "$GITHUB_ENV"
+        echo "ZAI_API_KEY=$INPUT_ZAI_API_KEY" >> "$GITHUB_ENV"
+        echo "ZENMUX_API_KEY=$INPUT_ZENMUX_API_KEY" >> "$GITHUB_ENV"
+        echo "APTU_AI__MODEL=$INPUT_MODEL" >> "$GITHUB_ENV"
+        echo "APTU_AI__PROVIDER=$INPUT_PROVIDER" >> "$GITHUB_ENV"
+        echo "DRY_RUN=$INPUT_DRY_RUN" >> "$GITHUB_ENV"
+        echo "APPLY_LABELS=$INPUT_APPLY_LABELS" >> "$GITHUB_ENV"
+        echo "NO_COMMENT=$INPUT_NO_COMMENT" >> "$GITHUB_ENV"
+
     - name: Download aptu binary
       if: steps.check-skip.outputs.skip != 'true'
       shell: bash
@@ -115,18 +147,6 @@ runs:
       if: github.event_name == 'issues' && steps.check-skip.outputs.skip != 'true'
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
-        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
-        ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
-        APTU_AI__MODEL: ${{ inputs.model }}
-        APTU_AI__PROVIDER: ${{ inputs.provider }}
-        DRY_RUN: ${{ inputs.dry-run }}
-        APPLY_LABELS: ${{ inputs.apply-labels }}
-        NO_COMMENT: ${{ inputs.no-comment }}
         ISSUE_NUMBER: ${{ github.event.issue.number }}
         REPO: ${{ github.repository }}
       run: |
@@ -154,8 +174,6 @@ runs:
       if: github.event_name == 'pull_request'
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-        DRY_RUN: ${{ inputs.dry-run }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO: ${{ github.repository }}
       run: |
