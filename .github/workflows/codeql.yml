@@ -28,6 +28,7 @@ jobs:
         with:
           languages: rust
           build-mode: none
+          dependency-caching: true
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4
