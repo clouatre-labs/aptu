@@ -41,6 +41,8 @@ The action supports all providers available in the CLI. Provide **one** API key:
 | OpenRouter | `openrouter-api-key` | `mistralai/devstral-2512:free` |
 | Groq | `groq-api-key` | `llama-3.3-70b-versatile` |
 | Cerebras | `cerebras-api-key` | `qwen-3-32b` |
+| Z.AI | `zai-api-key` | `glm-4.5-air` |
+| ZenMux | `zenmux-api-key` | `x-ai/grok-code-fast-1` |
 
 For detailed provider setup and model options, see [Configuration](CONFIGURATION.md).
 
@@ -53,8 +55,10 @@ For detailed provider setup and model options, see [Configuration](CONFIGURATION
 | `openrouter-api-key` | No | - | OpenRouter API key |
 | `groq-api-key` | No | - | Groq API key |
 | `cerebras-api-key` | No | - | Cerebras API key |
+| `zai-api-key` | No | - | Z.AI API key |
+| `zenmux-api-key` | No | - | ZenMux API key |
 | `model` | No | Provider default | Model to use (provider-specific) |
-| `provider` | No | - | AI provider to use (gemini, openrouter, groq, cerebras) |
+| `provider` | No | - | AI provider to use (gemini, openrouter, groq, cerebras, zai, zenmux) |
 | `skip-labeled` | No | `false` | Skip triage if issue already has both type and priority labels |
 | `dry-run` | No | `false` | Run without making changes |
 | `apply-labels` | No | `true` | Apply AI-suggested labels and milestone |
