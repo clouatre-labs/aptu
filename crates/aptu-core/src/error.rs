@@ -43,6 +43,13 @@ pub enum AptuError {
         retry_after: u64,
     },
 
+    /// AI response was truncated (incomplete JSON due to EOF).
+    #[error("Truncated response from {provider} - response ended prematurely")]
+    TruncatedResponse {
+        /// Name of the AI provider that returned truncated response.
+        provider: String,
+    },
+
     /// Configuration file error.
     #[error("Configuration error: {message}")]
     Config {

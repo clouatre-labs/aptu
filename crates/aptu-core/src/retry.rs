@@ -89,11 +89,13 @@ pub fn is_retryable_anyhow(e: &anyhow::Error) -> bool {
         }
     }
 
-    // Check if it's our AptuError with RateLimited
-    if let Some(aptu_err) = e.downcast_ref::<crate::error::AptuError>()
-        && matches!(aptu_err, crate::error::AptuError::RateLimited { .. })
-    {
-        return true;
+    // Check if it's our AptuError with RateLimited or TruncatedResponse
+    if let Some(aptu_err) = e.downcast_ref::<crate::error::AptuError>() {
+        return matches!(
+            aptu_err,
+            crate::error::AptuError::RateLimited { .. }
+                | crate::error::AptuError::TruncatedResponse { .. }
+        );
     }
 
     false
@@ -188,5 +190,22 @@ mod tests {
         assert!(!is_retryable_http(404));
         assert!(!is_retryable_http(200));
         assert!(!is_retryable_http(201));
+    }
+
+    #[test]
+    fn test_is_retryable_anyhow_with_truncated_response() {
+        let err = anyhow::anyhow!(crate::error::AptuError::TruncatedResponse {
+            provider: "OpenRouter".to_string(),
+        });
+        assert!(is_retryable_anyhow(&err));
+    }
+
+    #[test]
+    fn test_is_retryable_anyhow_with_rate_limited() {
+        let err = anyhow::anyhow!(crate::error::AptuError::RateLimited {
+            provider: "OpenRouter".to_string(),
+            retry_after: 60,
+        });
+        assert!(is_retryable_anyhow(&err));
     }
 }
