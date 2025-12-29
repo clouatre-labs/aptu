@@ -1,5 +1,5 @@
 name: Aptu Triage
-description: Automatically triage GitHub issues using AI-powered analysis with aptu
+description: Automatically triage GitHub issues and generate release notes using AI-powered analysis with aptu
 author: Aptu Contributors
 
 branding:
@@ -188,3 +188,21 @@ runs:
         
         echo "Running: aptu pr label $ARGS $PR_REF"
         aptu pr label $ARGS "$PR_REF"
+
+    - name: Run aptu release
+      if: github.event_name == 'release'
+      shell: bash
+      env:
+        TAG: ${{ github.event.release.tag_name }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -e
+        
+        ARGS="--repo --update"
+        
+        if [[ "$DRY_RUN" == "true" ]]; then
+          ARGS="$ARGS --dry-run"
+        fi
+        
+        echo "Running: aptu release $ARGS $TAG"
+        aptu release $ARGS "$TAG"

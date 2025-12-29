@@ -1,6 +1,6 @@
 # Aptu GitHub Action
 
-Automatically triage new issues in your repository using the Aptu GitHub Action. The action runs when issues are opened and posts AI-powered analysis and suggestions.
+Automatically triage new issues, label pull requests, and generate AI-curated release notes in your repository using the Aptu GitHub Action. The action runs on issues, pull requests, and releases to provide AI-powered analysis and suggestions.
 
 ## Setup
 
@@ -128,9 +128,38 @@ For detailed provider setup and model options, see [Configuration](CONFIGURATION
     model: gemini-3-flash-preview
 ```
 
+## Release Workflow
+
+To generate AI-curated release notes automatically:
+
+```yaml
+name: Generate Release Notes
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Generate Release Notes
+        uses: clouatre-labs/aptu@v0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+```
+
+The release step automatically triggers on release events and uses the tag from `github.event.release.tag_name` to generate release notes with `aptu release --repo --update`.
+
 ## Permissions
 
 The action requires the following permissions:
 
-- `issues: write` - To post comments and apply labels
+- `issues: write` - To post comments and apply labels (for issue triage)
+- `contents: write` - To update release notes (for release workflow)
 - `contents: read` - To read repository contents
