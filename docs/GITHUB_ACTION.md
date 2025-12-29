@@ -1,39 +1,86 @@
 # Aptu GitHub Action
 
-Automatically triage new issues, label pull requests, and generate AI-curated release notes in your repository using the Aptu GitHub Action. The action runs on issues, pull requests, and releases to provide AI-powered analysis and suggestions.
+AI-powered automation for GitHub issues, pull requests, and releases.
 
-## Setup
-
-1. Create a workflow file in your repository (`.github/workflows/triage.yml`):
+## Quick Start
 
 ```yaml
-name: Triage New Issues
+name: Aptu
 
 on:
   issues:
     types: [opened]
+  pull_request:
+    types: [opened, synchronize]
+  release:
+    types: [published]
 
 jobs:
-  triage:
+  aptu:
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       issues: write
-      contents: read
+      pull-requests: write
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
-      - name: Run Aptu Triage
+      - name: Run Aptu
         uses: clouatre-labs/aptu@v0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
 ```
 
-2. Add your AI provider API key as a repository secret (e.g., `GEMINI_API_KEY`)
+Add your AI provider API key as a repository secret (e.g., `GEMINI_API_KEY`).
+
+## Features
+
+The action auto-detects the event type and runs the appropriate command:
+
+| Event | Command | Description |
+|-------|---------|-------------|
+| `issues` | `aptu issue triage` | Analyze issue, suggest labels and milestone, post comment |
+| `pull_request` | `aptu pr label` | Classify PR type and apply conventional label |
+| `release` | `aptu release --repo --update` | Generate AI-curated release notes |
+
+### Feature-Specific Workflows
+
+For granular control, create separate workflow files:
+
+**Issue triage only** (`.github/workflows/issue-triage.yml`):
+```yaml
+on:
+  issues:
+    types: [opened]
+permissions:
+  issues: write
+  contents: read
+```
+
+**PR labeling only** (`.github/workflows/pr-label.yml`):
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  pull-requests: write
+  contents: read
+```
+
+**Release notes only** (`.github/workflows/release-notes.yml`):
+```yaml
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+```
 
 ## AI Providers
 
-The action supports all providers available in the CLI. Provide **one** API key:
+Provide **one** API key. The action auto-detects the provider:
 
 | Provider | Input | Default Model |
 |----------|-------|---------------|
@@ -44,7 +91,7 @@ The action supports all providers available in the CLI. Provide **one** API key:
 | Z.AI | `zai-api-key` | `glm-4.5-air` |
 | ZenMux | `zenmux-api-key` | `x-ai/grok-code-fast-1` |
 
-For detailed provider setup and model options, see [Configuration](CONFIGURATION.md).
+Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.md) for details.
 
 ## Inputs
 
@@ -57,109 +104,18 @@ For detailed provider setup and model options, see [Configuration](CONFIGURATION
 | `cerebras-api-key` | No | - | Cerebras API key |
 | `zai-api-key` | No | - | Z.AI API key |
 | `zenmux-api-key` | No | - | ZenMux API key |
-| `model` | No | Provider default | Model to use (provider-specific) |
-| `provider` | No | - | AI provider to use (gemini, openrouter, groq, cerebras, zai, zenmux) |
-| `skip-labeled` | No | `false` | Skip triage if issue already has both type and priority labels |
-| `dry-run` | No | `false` | Run without making changes |
-| `apply-labels` | No | `true` | Apply AI-suggested labels and milestone |
-| `no-comment` | No | `false` | Skip posting triage comment |
-
-> **Note:** At least one API key is required.
-
-## Examples
-
-### Google Gemini (Recommended)
-
-```yaml
-- uses: clouatre-labs/aptu@v0
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
-```
-
-### OpenRouter with Custom Model
-
-```yaml
-- uses: clouatre-labs/aptu@v0
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-    model: google/gemini-3-flash-preview
-```
-
-### Dry Run (Preview Only)
-
-```yaml
-- uses: clouatre-labs/aptu@v0
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
-    dry-run: 'true'
-```
-
-### Labels Only (No Comment)
-
-```yaml
-- uses: clouatre-labs/aptu@v0
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
-    no-comment: 'true'
-```
-
-### Triage All Issues (Including Already-Labeled)
-
-```yaml
-- uses: clouatre-labs/aptu@v0
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
-    skip-labeled: 'false'
-```
-
-### Explicit Provider and Model Selection
-
-```yaml
-- uses: clouatre-labs/aptu@v0
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
-    provider: gemini
-    model: gemini-3-flash-preview
-```
-
-## Release Workflow
-
-To generate AI-curated release notes automatically:
-
-```yaml
-name: Generate Release Notes
-
-on:
-  release:
-    types: [published]
-
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
-      - name: Generate Release Notes
-        uses: clouatre-labs/aptu@v0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
-```
-
-The release step automatically triggers on release events and uses the tag from `github.event.release.tag_name` to generate release notes with `aptu release --repo --update`.
+| `model` | No | Provider default | Model to use |
+| `provider` | No | Auto-detect | Force specific provider |
+| `dry-run` | No | `false` | Preview without changes |
+| `skip-labeled` | No | `false` | Skip issues with existing labels |
+| `apply-labels` | No | `true` | Apply suggested labels (issues) |
+| `no-comment` | No | `false` | Skip posting comment (issues) |
 
 ## Permissions
 
-The action requires the following permissions:
-
-- `issues: write` - To post comments and apply labels (for issue triage)
-- `contents: write` - To update release notes (for release workflow)
-- `contents: read` - To read repository contents
+| Permission | Required For |
+|------------|--------------|
+| `issues: write` | Issue triage (comments, labels) |
+| `pull-requests: write` | PR labeling (comments, labels) |
+| `contents: write` | Release notes (update release body) |
+| `contents: read` | Repository context (all features) |
