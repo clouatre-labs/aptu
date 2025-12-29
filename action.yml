@@ -189,6 +189,26 @@ runs:
         echo "Running: aptu pr label $ARGS $PR_REF"
         aptu pr label $ARGS "$PR_REF"
 
+    - name: Run aptu PR review
+      if: github.event_name == 'pull_request'
+      continue-on-error: true  # Non-blocking - AI review is advisory
+      shell: bash
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -e
+        
+        PR_REF="${REPO}#${PR_NUMBER}"
+        ARGS="--comment --yes"
+        
+        if [[ "$DRY_RUN" == "true" ]]; then
+          ARGS="$ARGS --dry-run"
+        fi
+        
+        echo "Running: aptu pr review $ARGS $PR_REF"
+        aptu pr review $ARGS "$PR_REF"
+
     - name: Run aptu release
       if: github.event_name == 'release'
       shell: bash
