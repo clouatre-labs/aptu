@@ -555,7 +555,7 @@ pub async fn apply_labels_to_number(
         return Ok(Vec::new());
     }
 
-    let route = format!("repos/{owner}/{repo}/issues/{number}/labels");
+    let route = format!("/repos/{owner}/{repo}/issues/{number}/labels");
     let payload = serde_json::json!({ "labels": labels });
 
     client

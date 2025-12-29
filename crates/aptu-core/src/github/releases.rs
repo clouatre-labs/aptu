@@ -150,7 +150,7 @@ async fn is_commit_between(
 ) -> Result<bool> {
     // Use GitHub Compare API to get commits between two refs
     // GET /repos/{owner}/{repo}/compare/{base}...{head}
-    let route = format!("repos/{owner}/{repo}/compare/{from_sha}...{to_sha}");
+    let route = format!("/repos/{owner}/{repo}/compare/{from_sha}...{to_sha}");
 
     #[derive(serde::Deserialize)]
     struct CompareResponse {
@@ -246,7 +246,7 @@ pub async fn get_root_commit(
     // Use compare endpoint to get all commits from empty tree to HEAD
     // This returns commits in chronological order (oldest first)
     // GET /repos/{owner}/{repo}/compare/{base}...{head}
-    let route = format!("repos/{owner}/{repo}/compare/{EMPTY_TREE_SHA}...HEAD");
+    let route = format!("/repos/{owner}/{repo}/compare/{EMPTY_TREE_SHA}...HEAD");
 
     #[derive(serde::Deserialize)]
     struct CompareResponse {

@@ -144,7 +144,7 @@ pub async fn post_pr_review(
 ) -> Result<u64> {
     debug!("Posting PR review");
 
-    let route = format!("repos/{owner}/{repo}/pulls/{number}/reviews");
+    let route = format!("/repos/{owner}/{repo}/pulls/{number}/reviews");
 
     let payload = serde_json::json!({
         "body": body,
