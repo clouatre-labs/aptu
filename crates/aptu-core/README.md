@@ -14,6 +14,7 @@ Core library for Aptu - AI-Powered Triage Utility.
 
 - **AI Triage** - Analyze issues with summaries, labels, and contributor guidance
 - **PR Review** - AI-powered pull request analysis and feedback
+- **Release Notes** - AI-generated release notes from PRs between tags
 - **Multiple Providers** - Gemini (default), Cerebras, Groq, `OpenRouter`, `Z.AI`, and `ZenMux`
 - **GitHub Integration** - Auth, issues, PRs, and GraphQL queries
 - **Resilient** - Exponential backoff, circuit breaker, rate limit handling
