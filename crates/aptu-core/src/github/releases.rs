@@ -5,6 +5,7 @@
 //! Provides functions for fetching PRs between git tags and parsing tag references.
 
 use anyhow::{Context, Result};
+use std::collections::HashSet;
 use tracing::instrument;
 
 use crate::ai::types::PrSummary;
@@ -34,6 +35,9 @@ pub async fn fetch_prs_between_refs(
     let from_sha = resolve_ref_to_sha(client, owner, repo, from_ref).await?;
     let to_sha = resolve_ref_to_sha(client, owner, repo, to_ref).await?;
 
+    // Fetch all commits between refs upfront using Compare API with pagination
+    let commit_shas = fetch_commits_between_refs(client, owner, repo, &from_sha, &to_sha).await?;
+
     // Fetch all merged PRs
     let mut prs = Vec::new();
     let mut page = 1u32;
@@ -59,9 +63,9 @@ pub async fn fetch_prs_between_refs(
                 continue;
             }
 
-            // Check if PR is between the two refs
+            // Check if PR is between the two refs using local HashSet lookup
             if let Some(merge_commit) = &pr.merge_commit_sha
-                && is_commit_between(client, owner, repo, &from_sha, &to_sha, merge_commit).await?
+                && commit_shas.contains(merge_commit)
             {
                 prs.push(PrSummary {
                     number: pr.number,
@@ -116,7 +120,7 @@ async fn resolve_ref_to_sha(
     }
 }
 
-/// Check if a commit is between two references using GitHub Compare API.
+/// Fetch all commits between two references using GitHub Compare API with pagination.
 ///
 /// # Arguments
 ///
@@ -125,24 +129,18 @@ async fn resolve_ref_to_sha(
 /// * `repo` - Repository name
 /// * `from_sha` - Starting commit SHA
 /// * `to_sha` - Ending commit SHA
-/// * `commit_sha` - Commit SHA to check
 ///
 /// # Returns
 ///
-/// True if the commit is between the two references.
+/// `HashSet` of commit SHAs between the two references.
 #[instrument(skip(client))]
-async fn is_commit_between(
+async fn fetch_commits_between_refs(
     client: &octocrab::Octocrab,
     owner: &str,
     repo: &str,
     from_sha: &str,
     to_sha: &str,
-    commit_sha: &str,
-) -> Result<bool> {
-    // Use GitHub Compare API to get commits between two refs
-    // GET /repos/{owner}/{repo}/compare/{base}...{head}
-    let route = format!("/repos/{owner}/{repo}/compare/{from_sha}...{to_sha}");
-
+) -> Result<HashSet<String>> {
     #[derive(serde::Deserialize)]
     struct CompareResponse {
         commits: Vec<CommitInfo>,
@@ -153,13 +151,32 @@ async fn is_commit_between(
         sha: String,
     }
 
-    let comparison: CompareResponse = client
-        .get(&route, None::<&()>)
-        .await
-        .context("Failed to compare commits")?;
+    let mut commit_shas = HashSet::new();
+    let mut page = 1u32;
 
-    // Check if the commit is in the list of commits between the refs
-    Ok(comparison.commits.iter().any(|c| c.sha == commit_sha))
+    loop {
+        // Use GitHub Compare API to get commits between two refs with pagination
+        // GET /repos/{owner}/{repo}/compare/{base}...{head}?per_page=100&page={page}
+        let route =
+            format!("/repos/{owner}/{repo}/compare/{from_sha}...{to_sha}?per_page=100&page={page}");
+
+        let comparison: CompareResponse = client
+            .get(&route, None::<&()>)
+            .await
+            .context("Failed to compare commits")?;
+
+        let count = comparison.commits.len();
+        commit_shas.extend(comparison.commits.into_iter().map(|c| c.sha));
+
+        // Check if there are more pages
+        if count < 100 {
+            break;
+        }
+
+        page += 1;
+    }
+
+    Ok(commit_shas)
 }
 
 /// Get the latest tag in a repository.
