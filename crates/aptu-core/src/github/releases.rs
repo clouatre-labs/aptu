@@ -5,7 +5,6 @@
 //! Provides functions for fetching PRs between git tags and parsing tag references.
 
 use anyhow::{Context, Result};
-use octocrab::params::repos::Reference;
 use tracing::instrument;
 
 use crate::ai::types::PrSummary;
@@ -107,18 +106,10 @@ async fn resolve_ref_to_sha(
     repo: &str,
     ref_name: &str,
 ) -> Result<String> {
-    // Try to get the reference as a tag first
-    let tag_ref = Reference::Tag(ref_name.to_string());
-    match client.repos(owner, repo).get_ref(&tag_ref).await {
-        Ok(git_ref) => {
-            // Extract SHA from the ref object
-            if let octocrab::models::repos::Object::Commit { sha, .. } = git_ref.object {
-                Ok(sha)
-            } else {
-                Err(anyhow::anyhow!("Expected commit object for tag {ref_name}"))
-            }
-        }
-        Err(_) => {
+    // Try to resolve as a tag using GraphQL first
+    match super::graphql::resolve_tag_to_commit_sha(client, owner, repo, ref_name).await? {
+        Some(sha) => Ok(sha),
+        None => {
             // If tag not found, assume it's a commit SHA and return as-is
             Ok(ref_name.to_string())
         }
@@ -204,20 +195,11 @@ pub async fn get_latest_tag(
     let latest = &releases.items[0];
     let tag_name = latest.tag_name.clone();
 
-    // Get the commit SHA for the tag
-    let tag_ref = Reference::Tag(tag_name.clone());
-    let git_ref = client
-        .repos(owner, repo)
-        .get_ref(&tag_ref)
-        .await
-        .context(format!("Failed to get tag reference: {tag_name}"))?;
-
-    // Extract SHA from the ref object
-    let octocrab::models::repos::Object::Commit { sha, .. } = git_ref.object else {
-        anyhow::bail!("Expected commit object for tag {tag_name}")
-    };
-
-    Ok(Some((tag_name, sha)))
+    // Get the commit SHA for the tag using GraphQL
+    match super::graphql::resolve_tag_to_commit_sha(client, owner, repo, &tag_name).await? {
+        Some(sha) => Ok(Some((tag_name, sha))),
+        None => anyhow::bail!("Failed to resolve tag {tag_name} to commit SHA"),
+    }
 }
 
 /// Get the root (oldest) commit in a repository.
