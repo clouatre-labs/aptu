@@ -494,3 +494,127 @@ mod tests {
         assert_eq!(query_str, "query {  }");
     }
 }
+
+/// Target of a reference (either a Tag or Commit).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum RefTarget {
+    /// A tag object.
+    Tag(TagTarget),
+    /// A commit object.
+    Commit(CommitTarget),
+}
+
+/// A tag object from the GraphQL response.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TagTarget {
+    /// The commit that this tag points to.
+    pub target: CommitTarget,
+}
+
+/// A commit object from the GraphQL response.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CommitTarget {
+    /// The commit SHA.
+    pub oid: String,
+}
+
+/// Build a GraphQL query to resolve a tag to its commit SHA.
+///
+/// Uses inline fragments to handle both Tag and Commit target types.
+fn build_tag_resolution_query(owner: &str, repo: &str, ref_name: &str) -> Value {
+    let query = format!(
+        r#"query {{
+  repository(owner: "{owner}", name: "{repo}") {{
+    ref(qualifiedName: "refs/tags/{ref_name}") {{
+      target {{
+        ... on Tag {{
+          target {{
+            oid
+          }}
+        }}
+        ... on Commit {{
+          oid
+        }}
+      }}
+    }}
+  }}
+}}"#
+    );
+
+    json!({
+        "query": query,
+    })
+}
+
+/// Resolve a tag to its commit SHA using GraphQL.
+///
+/// Handles both lightweight tags (which point directly to commits) and
+/// annotated tags (which have a Tag object that points to a commit).
+///
+/// # Arguments
+///
+/// * `client` - Octocrab GitHub client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `tag_name` - Tag name to resolve
+///
+/// # Returns
+///
+/// The commit SHA for the tag, or None if the tag doesn't exist.
+#[instrument(skip(client))]
+pub async fn resolve_tag_to_commit_sha(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    tag_name: &str,
+) -> Result<Option<String>> {
+    let query = build_tag_resolution_query(owner, repo, tag_name);
+
+    let response = (|| async {
+        client
+            .graphql::<serde_json::Value>(&query)
+            .await
+            .context("GraphQL query failed")
+    })
+    .retry(&retry_backoff())
+    .await?;
+
+    debug!("GraphQL response: {:?}", response);
+
+    // Extract the target from the response
+    let target = response
+        .get("data")
+        .and_then(|data| data.get("repository"))
+        .and_then(|repo| repo.get("ref"))
+        .and_then(|ref_obj| ref_obj.get("target"));
+
+    match target {
+        Some(target_value) => {
+            // Try to deserialize as RefTarget to handle both Tag and Commit cases
+            match serde_json::from_value::<RefTarget>(target_value.clone()) {
+                Ok(RefTarget::Tag(tag)) => Ok(Some(tag.target.oid)),
+                Ok(RefTarget::Commit(commit)) => Ok(Some(commit.oid)),
+                Err(_) => Ok(None),
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod tag_resolution_tests {
+    use super::*;
+
+    #[test]
+    fn build_tag_resolution_query_correct_syntax() {
+        let query = build_tag_resolution_query("owner", "repo", "v1.0.0");
+        let query_str = query["query"].as_str().unwrap();
+
+        assert!(query_str.contains("repository(owner: \"owner\", name: \"repo\")"));
+        assert!(query_str.contains("ref(qualifiedName: \"refs/tags/v1.0.0\")"));
+        assert!(query_str.contains("... on Tag"));
+        assert!(query_str.contains("... on Commit"));
+        assert!(query_str.contains("oid"));
+    }
+}
