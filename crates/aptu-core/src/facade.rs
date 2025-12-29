@@ -1035,7 +1035,7 @@ pub async fn generate_release_notes(
 
     // Generate release notes via AI
     let version = crate::github::releases::parse_tag_reference(&to_ref);
-    let response: crate::ai::types::ReleaseNotesResponse = ai_client
+    let (response, _ai_stats) = ai_client
         .generate_release_notes(prs, &version)
         .await
         .map_err(|e: anyhow::Error| AptuError::AI {

@@ -79,7 +79,7 @@ pub async fn create_issue(
     title: &str,
     body: &str,
     repo: &str,
-) -> anyhow::Result<CreateIssueResponse> {
+) -> anyhow::Result<(CreateIssueResponse, AiStats)> {
     let config = crate::config::load_config()?;
 
     // Create generic client for the configured provider

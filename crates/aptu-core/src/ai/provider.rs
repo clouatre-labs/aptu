@@ -129,16 +129,104 @@ pub trait AiProvider: Send + Sync {
         Ok(())
     }
 
-    /// Sends a chat completion request to the provider's API with retry logic.
+    /// Sends a chat completion request to the provider's API (HTTP-only, no retry).
     ///
-    /// Default implementation handles HTTP headers, error responses (401, 429),
-    /// and automatic retries with exponential backoff.
-    async fn send_request(
+    /// Default implementation handles HTTP headers, error responses (401, 429).
+    /// Does not include retry logic - use `send_and_parse()` for retry behavior.
+    async fn send_request_inner(
         &self,
         request: &ChatCompletionRequest,
     ) -> Result<ChatCompletionResponse> {
-        use backon::Retryable;
         use secrecy::ExposeSecret;
+        use tracing::warn;
+
+        use crate::error::AptuError;
+
+        let mut req = self.http_client().post(self.api_url());
+
+        // Add Authorization header
+        req = req.header(
+            "Authorization",
+            format!("Bearer {}", self.api_key().expose_secret()),
+        );
+
+        // Add custom headers from provider
+        for (key, value) in &self.build_headers() {
+            req = req.header(key.clone(), value.clone());
+        }
+
+        let response = req
+            .json(request)
+            .send()
+            .await
+            .context(format!("Failed to send request to {} API", self.name()))?;
+
+        // Check for HTTP errors
+        let status = response.status();
+        if !status.is_success() {
+            if status.as_u16() == 401 {
+                anyhow::bail!(
+                    "Invalid {} API key. Check your {} environment variable.",
+                    self.name(),
+                    self.api_key_env()
+                );
+            } else if status.as_u16() == 429 {
+                warn!("Rate limited by {} API", self.name());
+                // Parse Retry-After header (seconds), default to 0 if not present
+                let retry_after = response
+                    .headers()
+                    .get("Retry-After")
+                    .and_then(|h| h.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(0);
+                debug!(retry_after, "Parsed Retry-After header");
+                return Err(AptuError::RateLimited {
+                    provider: self.name().to_string(),
+                    retry_after,
+                }
+                .into());
+            }
+            let error_body = response.text().await.unwrap_or_default();
+            anyhow::bail!(
+                "{} API error (HTTP {}): {}",
+                self.name(),
+                status.as_u16(),
+                error_body
+            );
+        }
+
+        // Parse response
+        let completion: ChatCompletionResponse = response
+            .json()
+            .await
+            .context(format!("Failed to parse {} API response", self.name()))?;
+
+        Ok(completion)
+    }
+
+    /// Sends a chat completion request and parses the response with retry logic.
+    ///
+    /// This method wraps both HTTP request and JSON parsing in a single retry loop,
+    /// allowing truncated responses to be retried. Includes circuit breaker handling.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - The chat completion request to send
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (parsed response, stats) extracted from the API response
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - API request fails (network, timeout, rate limit)
+    /// - Response cannot be parsed as valid JSON (including truncated responses)
+    async fn send_and_parse<T: serde::de::DeserializeOwned>(
+        &self,
+        request: &ChatCompletionRequest,
+    ) -> Result<(T, AiStats)> {
+        use backon::Retryable;
         use tracing::warn;
 
         use crate::error::AptuError;
@@ -151,67 +239,26 @@ pub trait AiProvider: Send + Sync {
             return Err(AptuError::CircuitOpen.into());
         }
 
-        let completion: ChatCompletionResponse = (|| async {
-            let mut req = self.http_client().post(self.api_url());
+        // Start timing (outside retry loop to measure total time including retries)
+        let start = std::time::Instant::now();
 
-            // Add Authorization header
-            req = req.header(
-                "Authorization",
-                format!("Bearer {}", self.api_key().expose_secret()),
-            );
+        let (parsed, completion): (T, ChatCompletionResponse) = (|| async {
+            // Send HTTP request
+            let completion = self.send_request_inner(request).await?;
 
-            // Add custom headers from provider
-            for (key, value) in &self.build_headers() {
-                req = req.header(key.clone(), value.clone());
-            }
+            // Extract message content
+            let content = completion
+                .choices
+                .first()
+                .map(|c| c.message.content.clone())
+                .context("No response from AI model")?;
 
-            let response = req
-                .json(request)
-                .send()
-                .await
-                .context(format!("Failed to send request to {} API", self.name()))?;
+            debug!(response_length = content.len(), "Received AI response");
 
-            // Check for HTTP errors
-            let status = response.status();
-            if !status.is_success() {
-                if status.as_u16() == 401 {
-                    anyhow::bail!(
-                        "Invalid {} API key. Check your {} environment variable.",
-                        self.name(),
-                        self.api_key_env()
-                    );
-                } else if status.as_u16() == 429 {
-                    warn!("Rate limited by {} API", self.name());
-                    // Parse Retry-After header (seconds), default to 0 if not present
-                    let retry_after = response
-                        .headers()
-                        .get("Retry-After")
-                        .and_then(|h| h.to_str().ok())
-                        .and_then(|s| s.parse::<u64>().ok())
-                        .unwrap_or(0);
-                    debug!(retry_after, "Parsed Retry-After header");
-                    return Err(AptuError::RateLimited {
-                        provider: self.name().to_string(),
-                        retry_after,
-                    }
-                    .into());
-                }
-                let error_body = response.text().await.unwrap_or_default();
-                anyhow::bail!(
-                    "{} API error (HTTP {}): {}",
-                    self.name(),
-                    status.as_u16(),
-                    error_body
-                );
-            }
+            // Parse JSON response (inside retry loop, so truncated responses are retried)
+            let parsed: T = parse_ai_json(&content, self.name())?;
 
-            // Parse response
-            let completion: ChatCompletionResponse = response
-                .json()
-                .await
-                .context(format!("Failed to parse {} API response", self.name()))?;
-
-            Ok(completion)
+            Ok((parsed, completion))
         })
         .retry(retry_backoff())
         .when(is_retryable_anyhow)
@@ -223,51 +270,9 @@ pub trait AiProvider: Send + Sync {
             cb.record_success();
         }
 
-        Ok(completion)
-    }
-
-    /// Helper method to send a request and extract stats from the response.
-    ///
-    /// This method encapsulates the common pattern of:
-    /// 1. Sending a request with retry logic
-    /// 2. Extracting the message content
-    /// 3. Building `AiStats` from the response usage info
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - The chat completion request to send
-    ///
-    /// # Returns
-    ///
-    /// A tuple of (`String`, `AiStats`) extracted from the response
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - API request fails (network, timeout, rate limit)
-    /// - Response contains no message content
-    async fn send_request_with_stats(
-        &self,
-        request: &ChatCompletionRequest,
-    ) -> Result<(String, AiStats)> {
-        // Start timing (outside retry loop to measure total time including retries)
-        let start = std::time::Instant::now();
-
-        // Make API request with retry logic
-        let completion = self.send_request(request).await?;
-
         // Calculate duration (total time including any retries)
         #[allow(clippy::cast_possible_truncation)]
         let duration_ms = start.elapsed().as_millis() as u64;
-
-        // Extract message content
-        let content = completion
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .context("No response from AI model")?;
-
-        debug!(response_length = content.len(), "Received AI response");
 
         // Build AI stats from usage info (trust API's cost field)
         let (input_tokens, output_tokens, cost_usd) = if let Some(usage) = completion.usage {
@@ -286,7 +291,7 @@ pub trait AiProvider: Send + Sync {
             cost_usd,
         };
 
-        Ok((content, ai_stats))
+        Ok((parsed, ai_stats))
     }
 
     /// Analyzes a GitHub issue using the provider's API.
@@ -327,11 +332,8 @@ pub trait AiProvider: Send + Sync {
             temperature: Some(self.temperature()),
         };
 
-        // Send request and extract stats
-        let (content, ai_stats) = self.send_request_with_stats(&request).await?;
-
-        // Parse JSON response
-        let triage: TriageResponse = parse_ai_json(&content, self.name())?;
+        // Send request and parse JSON with retry logic
+        let (triage, ai_stats) = self.send_and_parse::<TriageResponse>(&request).await?;
 
         debug!(
             input_tokens = ai_stats.input_tokens,
@@ -369,11 +371,8 @@ pub trait AiProvider: Send + Sync {
         title: &str,
         body: &str,
         repo: &str,
-    ) -> Result<super::types::CreateIssueResponse> {
+    ) -> Result<(super::types::CreateIssueResponse, AiStats)> {
         debug!(model = %self.model(), "Calling {} API for issue creation", self.name());
-
-        // Start timing
-        let start = std::time::Instant::now();
 
         // Build request
         let request = ChatCompletionRequest {
@@ -396,35 +395,22 @@ pub trait AiProvider: Send + Sync {
             temperature: Some(self.temperature()),
         };
 
-        // Make API request with retry logic
-        let completion = self.send_request(&request).await?;
-
-        // Extract message content
-        let content = completion
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .context("No response from AI model")?;
-
-        debug!(response_length = content.len(), "Received AI response");
-
-        // Parse JSON response
-        let create_response: super::types::CreateIssueResponse = serde_json::from_str(&content)
-            .with_context(|| {
-                format!("Failed to parse AI response as JSON. Raw response:\n{content}")
-            })?;
-
-        #[allow(clippy::cast_possible_truncation)]
-        let _duration_ms = start.elapsed().as_millis() as u64;
+        // Send request and parse JSON with retry logic
+        let (create_response, ai_stats) = self
+            .send_and_parse::<super::types::CreateIssueResponse>(&request)
+            .await?;
 
         debug!(
             title_len = create_response.formatted_title.len(),
             body_len = create_response.formatted_body.len(),
             labels = create_response.suggested_labels.len(),
-            "Issue formatting complete"
+            input_tokens = ai_stats.input_tokens,
+            output_tokens = ai_stats.output_tokens,
+            duration_ms = ai_stats.duration_ms,
+            "Issue formatting complete with stats"
         );
 
-        Ok(create_response)
+        Ok((create_response, ai_stats))
     }
 
     /// Builds the system prompt for issue triage.
@@ -643,11 +629,10 @@ Be professional but friendly. Maintain the user's intent while improving clarity
             temperature: Some(self.temperature()),
         };
 
-        // Send request and extract stats
-        let (content, ai_stats) = self.send_request_with_stats(&request).await?;
-
-        // Parse JSON response
-        let review: super::types::PrReviewResponse = parse_ai_json(&content, self.name())?;
+        // Send request and parse JSON with retry logic
+        let (review, ai_stats) = self
+            .send_and_parse::<super::types::PrReviewResponse>(&request)
+            .await?;
 
         debug!(
             verdict = %review.verdict,
@@ -705,11 +690,10 @@ Be professional but friendly. Maintain the user's intent while improving clarity
             temperature: Some(self.temperature()),
         };
 
-        // Send request and extract stats
-        let (content, ai_stats) = self.send_request_with_stats(&request).await?;
-
-        // Parse JSON response
-        let response: super::types::PrLabelResponse = parse_ai_json(&content, self.name())?;
+        // Send request and parse JSON with retry logic
+        let (response, ai_stats) = self
+            .send_and_parse::<super::types::PrLabelResponse>(&request)
+            .await?;
 
         debug!(
             label_count = response.suggested_labels.len(),
@@ -931,7 +915,7 @@ Be concise and practical."#.to_string()
         &self,
         prs: Vec<super::types::PrSummary>,
         version: &str,
-    ) -> Result<super::types::ReleaseNotesResponse> {
+    ) -> Result<(super::types::ReleaseNotesResponse, AiStats)> {
         let prompt = Self::build_release_notes_prompt(&prs, version);
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
@@ -947,15 +931,18 @@ Be concise and practical."#.to_string()
             max_tokens: Some(self.max_tokens()),
         };
 
-        let response = self.send_request(&request).await?;
-        let content = response
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .context("No response from AI model")?;
-        let parsed: super::types::ReleaseNotesResponse =
-            serde_json::from_str(&content).context("Failed to parse release notes")?;
-        Ok(parsed)
+        let (parsed, ai_stats) = self
+            .send_and_parse::<super::types::ReleaseNotesResponse>(&request)
+            .await?;
+
+        debug!(
+            input_tokens = ai_stats.input_tokens,
+            output_tokens = ai_stats.output_tokens,
+            duration_ms = ai_stats.duration_ms,
+            "Release notes generation complete with stats"
+        );
+
+        Ok((parsed, ai_stats))
     }
 
     /// Build the user prompt for release notes generation.
