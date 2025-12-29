@@ -181,7 +181,7 @@ pub async fn post_pr_review(
 /// Vector of label names to apply
 #[must_use]
 pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String> {
-    let mut labels = Vec::new();
+    let mut labels = std::collections::HashSet::new();
 
     // Extract conventional commit prefix from title
     // Handle both "feat: ..." and "feat(scope): ..." formats
@@ -204,12 +204,10 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
     };
 
     if let Some(label) = type_label {
-        labels.push(label.to_string());
+        labels.insert(label.to_string());
     }
 
     // Map file paths to scope labels
-    let mut scope_labels = std::collections::HashSet::new();
-
     for path in file_paths {
         let scope = if path.starts_with("crates/aptu-cli/") {
             Some("cli")
@@ -224,12 +222,11 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
         };
 
         if let Some(label) = scope {
-            scope_labels.insert(label.to_string());
+            labels.insert(label.to_string());
         }
     }
 
-    labels.extend(scope_labels);
-    labels
+    labels.into_iter().collect()
 }
 
 #[cfg(test)]
@@ -408,6 +405,20 @@ mod tests {
         assert!(
             labels.contains(&"enhancement".to_string()),
             "scoped prefix should extract type from feat(cli)"
+        );
+    }
+
+    #[test]
+    fn test_duplicate_labels_deduplicated() {
+        let labels = labels_from_pr_metadata("docs: update", &["docs/README.md".to_string()]);
+        assert_eq!(
+            labels.len(),
+            1,
+            "should have exactly one label when title and path both map to documentation"
+        );
+        assert!(
+            labels.contains(&"documentation".to_string()),
+            "should contain documentation label"
         );
     }
 }
