@@ -181,13 +181,13 @@ async fn is_commit_between(
 ///
 /// # Returns
 ///
-/// The latest tag name and its SHA.
+/// The latest tag name and its SHA, or None if no releases exist.
 #[instrument(skip(client))]
 pub async fn get_latest_tag(
     client: &octocrab::Octocrab,
     owner: &str,
     repo: &str,
-) -> Result<(String, String)> {
+) -> Result<Option<(String, String)>> {
     let releases = client
         .repos(owner, repo)
         .releases()
@@ -198,7 +198,7 @@ pub async fn get_latest_tag(
         .context("Failed to fetch releases from GitHub")?;
 
     if releases.items.is_empty() {
-        anyhow::bail!("No releases found in repository");
+        return Ok(None);
     }
 
     let latest = &releases.items[0];
@@ -217,7 +217,59 @@ pub async fn get_latest_tag(
         anyhow::bail!("Expected commit object for tag {tag_name}")
     };
 
-    Ok((tag_name, sha))
+    Ok(Some((tag_name, sha)))
+}
+
+/// Get the root (oldest) commit in a repository.
+///
+/// Uses the GitHub API compare endpoint with the empty tree SHA to fetch all commits
+/// in reverse chronological order, then returns the oldest (last) commit.
+///
+/// # Arguments
+///
+/// * `client` - Octocrab GitHub client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+///
+/// # Returns
+///
+/// The SHA of the root commit.
+#[instrument(skip(client))]
+pub async fn get_root_commit(
+    client: &octocrab::Octocrab,
+    owner: &str,
+    repo: &str,
+) -> Result<String> {
+    // Empty tree SHA - represents the initial state before any commits
+    const EMPTY_TREE_SHA: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+    // Use compare endpoint to get all commits from empty tree to HEAD
+    // This returns commits in chronological order (oldest first)
+    // GET /repos/{owner}/{repo}/compare/{base}...{head}
+    let route = format!("repos/{owner}/{repo}/compare/{EMPTY_TREE_SHA}...HEAD");
+
+    #[derive(serde::Deserialize)]
+    struct CompareResponse {
+        commits: Vec<CommitInfo>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct CommitInfo {
+        sha: String,
+    }
+
+    let comparison: CompareResponse = client
+        .get(&route, None::<&()>)
+        .await
+        .context("Failed to fetch commits from GitHub")?;
+
+    if comparison.commits.is_empty() {
+        anyhow::bail!("Repository has no commits");
+    }
+
+    // The first commit in the list is the oldest (root) commit
+    let root_commit = &comparison.commits[0];
+    Ok(root_commit.sha.clone())
 }
 
 /// Parse a tag reference to extract the version.
