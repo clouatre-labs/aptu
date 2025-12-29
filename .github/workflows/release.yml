@@ -233,7 +233,7 @@ jobs:
 
   publish-snap:
     name: Publish to Snap Store (${{ matrix.arch }})
-    needs: build-and-attest
+    needs: create-release
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     strategy:
       fail-fast: false
@@ -268,7 +268,7 @@ jobs:
 
   publish:
     name: Publish to crates.io
-    needs: build-and-attest
+    needs: create-release
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     runs-on: ubuntu-latest
     steps:
