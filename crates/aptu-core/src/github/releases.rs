@@ -244,7 +244,7 @@ pub async fn get_root_commit(
     const EMPTY_TREE_SHA: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
     // Use compare endpoint to get all commits from empty tree to HEAD
-    // This returns commits in reverse chronological order (newest first)
+    // This returns commits in chronological order (oldest first)
     // GET /repos/{owner}/{repo}/compare/{base}...{head}
     let route = format!("repos/{owner}/{repo}/compare/{EMPTY_TREE_SHA}...HEAD");
 
@@ -267,9 +267,8 @@ pub async fn get_root_commit(
         anyhow::bail!("Repository has no commits");
     }
 
-    // The last commit in the list is the oldest (root) commit
-    // since GitHub returns commits in reverse chronological order (newest first)
-    let root_commit = &comparison.commits[comparison.commits.len() - 1];
+    // The first commit in the list is the oldest (root) commit
+    let root_commit = &comparison.commits[0];
     Ok(root_commit.sha.clone())
 }
 
@@ -369,38 +368,5 @@ mod tests {
     #[test]
     fn test_parse_tag_reference_no_prefix() {
         assert_eq!(parse_tag_reference("1.0.0"), "1.0.0");
-    }
-
-    #[tokio::test]
-    async fn test_get_root_commit_valid_sha_format() {
-        // This test verifies that get_root_commit returns a valid 40-character SHA
-        // In a real scenario, this would be tested against a mock client
-        // For now, we verify the function signature and error handling logic
-
-        // The function should return a Result<String> where the string is a valid SHA
-        // A valid git SHA is 40 hexadecimal characters
-        let valid_sha = "abc123def456abc123def456abc123def456abc1";
-        assert_eq!(valid_sha.len(), 40);
-        assert!(valid_sha.chars().all(|c| c.is_ascii_hexdigit()));
-    }
-
-    #[test]
-    fn test_get_latest_tag_none_case() {
-        // This test verifies the logic for handling the None case
-        // when no releases exist in a repository
-
-        // The function signature is:
-        // pub async fn get_latest_tag(...) -> Result<Option<(String, String)>>
-
-        // When no releases exist, it should return Ok(None)
-        // This is verified in the implementation at line 201:
-        // if releases.items.is_empty() {
-        //     return Ok(None);
-        // }
-
-        // The test confirms the expected behavior is implemented
-        let none_result: Result<Option<(String, String)>> = Ok(None);
-        assert!(none_result.is_ok());
-        assert!(none_result.unwrap().is_none());
     }
 }

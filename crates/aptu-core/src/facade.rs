@@ -842,6 +842,69 @@ pub async fn apply_triage_labels(
 /// - GitHub token is not available
 /// - GitHub API calls fail
 /// - AI response parsing fails
+///
+/// Helper to get a reference from the latest tag or fall back to root commit.
+///
+/// This helper encapsulates the common pattern of trying to get the latest tag,
+/// and if no tags exist, falling back to the root commit for first release scenarios.
+///
+/// # Arguments
+///
+/// * `gh_client` - Octocrab GitHub client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+///
+/// # Returns
+///
+/// A commit SHA or tag name to use as a reference.
+///
+/// # Errors
+///
+/// Returns an error if both tag and root commit fetches fail.
+async fn get_from_ref_or_root(
+    gh_client: &octocrab::Octocrab,
+    owner: &str,
+    repo: &str,
+) -> Result<String, AptuError> {
+    let latest_tag_opt = crate::github::releases::get_latest_tag(gh_client, owner, repo)
+        .await
+        .map_err(|e| AptuError::GitHub {
+            message: e.to_string(),
+        })?;
+
+    if let Some((tag, _)) = latest_tag_opt {
+        Ok(tag)
+    } else {
+        // No tags exist, use root commit for first release
+        tracing::info!("No tags found, using root commit for first release");
+        crate::github::releases::get_root_commit(gh_client, owner, repo)
+            .await
+            .map_err(|e| AptuError::GitHub {
+                message: e.to_string(),
+            })
+    }
+}
+
+/// Generate AI-curated release notes from PRs between git tags.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for GitHub credentials
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `from_tag` - Starting tag (or None for latest)
+/// * `to_tag` - Ending tag (or None for HEAD)
+///
+/// # Returns
+///
+/// Structured release notes with theme, highlights, and categorized changes.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available
+/// - GitHub API calls fail
+/// - AI response parsing fails
 #[instrument(skip(provider))]
 pub async fn generate_release_notes(
     provider: &dyn TokenProvider,
@@ -873,45 +936,15 @@ pub async fn generate_release_notes(
     let (from_ref, to_ref) = if let (Some(from), Some(to)) = (from_tag, to_tag) {
         (from.to_string(), to.to_string())
     } else if let Some(to) = to_tag {
-        // Get latest tag as from_ref
-        let latest_tag_opt = crate::github::releases::get_latest_tag(&gh_client, owner, repo)
-            .await
-            .map_err(|e| AptuError::GitHub {
-                message: e.to_string(),
-            })?;
-        let from_ref = if let Some((tag, _)) = latest_tag_opt {
-            tag
-        } else {
-            // No tags exist, use root commit for first release
-            tracing::info!("No tags found, using root commit for first release");
-            crate::github::releases::get_root_commit(&gh_client, owner, repo)
-                .await
-                .map_err(|e| AptuError::GitHub {
-                    message: e.to_string(),
-                })?
-        };
+        // Get latest tag as from_ref, or root commit if no tags exist
+        let from_ref = get_from_ref_or_root(&gh_client, owner, repo).await?;
         (from_ref, to.to_string())
     } else if let Some(from) = from_tag {
         // Use HEAD as to_ref
         (from.to_string(), "HEAD".to_string())
     } else {
-        // Get latest tag and use HEAD
-        let latest_tag_opt = crate::github::releases::get_latest_tag(&gh_client, owner, repo)
-            .await
-            .map_err(|e| AptuError::GitHub {
-                message: e.to_string(),
-            })?;
-        let from_ref = if let Some((tag, _)) = latest_tag_opt {
-            tag
-        } else {
-            // No tags exist, use root commit for first release
-            tracing::info!("No tags found, using root commit for first release");
-            crate::github::releases::get_root_commit(&gh_client, owner, repo)
-                .await
-                .map_err(|e| AptuError::GitHub {
-                    message: e.to_string(),
-                })?
-        };
+        // Get latest tag and use HEAD, or root commit if no tags exist
+        let from_ref = get_from_ref_or_root(&gh_client, owner, repo).await?;
         (from_ref, "HEAD".to_string())
     };
 
