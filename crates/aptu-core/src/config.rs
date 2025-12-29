@@ -80,7 +80,7 @@ impl Default for AiConfig {
             model: "gemini-3-flash-preview".to_string(),
             timeout_seconds: 30,
             allow_paid_models: false,
-            max_tokens: 2048,
+            max_tokens: 4096,
             temperature: 0.3,
             circuit_breaker_threshold: 3,
             circuit_breaker_reset_seconds: 60,
@@ -234,7 +234,7 @@ mod tests {
         assert_eq!(config.ai.provider, "gemini");
         assert_eq!(config.ai.model, "gemini-3-flash-preview");
         assert_eq!(config.ai.timeout_seconds, 30);
-        assert_eq!(config.ai.max_tokens, 2048);
+        assert_eq!(config.ai.max_tokens, 4096);
         assert_eq!(config.ai.temperature, 0.3);
         assert_eq!(config.github.api_timeout_seconds, 10);
         assert!(config.ui.color);
