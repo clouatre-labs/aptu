@@ -220,6 +220,22 @@ These protections ensure code quality and maintain a clean history. Make sure yo
 
 Releases are automated via GitHub Actions. Maintainers with push access:
 
+### GPG Setup
+
+Configure a GPG key for signing commits and tags:
+
+1. **Generate a key** (if needed): `gpg --full-generate-key`
+2. **Configure Git**:
+   ```bash
+   gpg --list-secret-keys --keyid-format=long  # Find your KEY_ID
+   git config --global user.signingkey <KEY_ID>
+   git config --global commit.gpgsign true
+   git config --global tag.gpgsign true
+   ```
+3. **Add to GitHub**: `gpg --armor --export <KEY_ID> | pbcopy` (Linux: `xclip -selection clipboard`) and paste at [GitHub Settings](https://github.com/settings/keys)
+
+### Release Steps
+
 1. Update version in `Cargo.toml`
 2. Commit: `git commit -S -s -m "chore: bump version to X.Y.Z"`
 3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
