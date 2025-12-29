@@ -221,7 +221,7 @@ impl AiProvider for AiClient {
 
         // OpenRouter-specific headers
         if self.provider.name == "openrouter" {
-            if let Ok(val) = "https://github.com/clouatre-labs/project-aptu".parse() {
+            if let Ok(val) = "https://github.com/clouatre-labs/aptu".parse() {
                 headers.insert("HTTP-Referer", val);
             }
             if let Ok(val) = "Aptu CLI".parse() {
