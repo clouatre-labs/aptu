@@ -27,6 +27,7 @@ Aptu is a context-engineering experiment: instead of throwing big models at prob
 - **AI Triage** - Summaries, suggested labels, clarifying questions, and contributor guidance
 - **Issue Discovery** - Find good-first-issues from curated repositories
 - **PR Analysis** - AI-powered pull request review and feedback
+- **Release Notes** - AI-curated changelogs from merged PRs
 - **GitHub Action** - Auto-triage incoming issues with labels and comments
 - **Multiple Providers** - Gemini (default), Cerebras, Groq, OpenRouter, Z.AI, and ZenMux
 - **Local History** - Track your contributions offline
