@@ -43,6 +43,10 @@ gh attestation verify aptu-<target>.tar.gz --owner clouatre-labs
 - **Push protection** - Blocks commits containing secrets
 - **Validity checks** - Verifies if detected secrets are active
 
+### Branch Protection
+
+Rulesets enforce signed commits, required status checks, CODEOWNERS review, and merge queue. As a solo-maintained project, multi-reviewer requirements are not practical, which limits the OpenSSF Scorecard Branch-Protection score.
+
 ### Artifact Signing
 
 All release artifacts (tarballs and .deb packages) are signed with cosign using keyless signing via Sigstore. Verify signatures with:
