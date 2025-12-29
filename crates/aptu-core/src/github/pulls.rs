@@ -66,11 +66,23 @@ pub async fn fetch_pr_details(
     debug!("Fetching PR details");
 
     // Fetch PR metadata
-    let pr = client
-        .pulls(owner, repo)
-        .get(number)
-        .await
-        .with_context(|| format!("Failed to fetch PR #{number} from {owner}/{repo}"))?;
+    let pr = match client.pulls(owner, repo).get(number).await {
+        Ok(pr) => pr,
+        Err(e) => {
+            // Check if this is a 404 error and if an issue exists instead
+            if let octocrab::Error::GitHub { source, .. } = &e
+                && source.status_code == 404
+            {
+                // Try to fetch as an issue to provide a better error message
+                if (client.issues(owner, repo).get(number).await).is_ok() {
+                    return Err(anyhow::anyhow!("#{number} is an issue, not a pull request"));
+                }
+                // Issue check failed, fall back to original error
+            }
+            return Err(e)
+                .with_context(|| format!("Failed to fetch PR #{number} from {owner}/{repo}"));
+        }
+    };
 
     // Fetch PR files (diffs)
     let files = client
