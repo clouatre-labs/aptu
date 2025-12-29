@@ -944,7 +944,7 @@ Be concise and practical."#.to_string()
                 json_schema: None,
             }),
             temperature: Some(0.7),
-            max_tokens: Some(4000),
+            max_tokens: Some(self.max_tokens()),
         };
 
         let response = self.send_request(&request).await?;
