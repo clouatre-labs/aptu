@@ -874,23 +874,45 @@ pub async fn generate_release_notes(
         (from.to_string(), to.to_string())
     } else if let Some(to) = to_tag {
         // Get latest tag as from_ref
-        let (latest_tag, _) = crate::github::releases::get_latest_tag(&gh_client, owner, repo)
+        let latest_tag_opt = crate::github::releases::get_latest_tag(&gh_client, owner, repo)
             .await
             .map_err(|e| AptuError::GitHub {
                 message: e.to_string(),
             })?;
-        (latest_tag, to.to_string())
+        let from_ref = if let Some((tag, _)) = latest_tag_opt {
+            tag
+        } else {
+            // No tags exist, use root commit for first release
+            tracing::info!("No tags found, using root commit for first release");
+            crate::github::releases::get_root_commit(&gh_client, owner, repo)
+                .await
+                .map_err(|e| AptuError::GitHub {
+                    message: e.to_string(),
+                })?
+        };
+        (from_ref, to.to_string())
     } else if let Some(from) = from_tag {
         // Use HEAD as to_ref
         (from.to_string(), "HEAD".to_string())
     } else {
         // Get latest tag and use HEAD
-        let (latest_tag, _) = crate::github::releases::get_latest_tag(&gh_client, owner, repo)
+        let latest_tag_opt = crate::github::releases::get_latest_tag(&gh_client, owner, repo)
             .await
             .map_err(|e| AptuError::GitHub {
                 message: e.to_string(),
             })?;
-        (latest_tag, "HEAD".to_string())
+        let from_ref = if let Some((tag, _)) = latest_tag_opt {
+            tag
+        } else {
+            // No tags exist, use root commit for first release
+            tracing::info!("No tags found, using root commit for first release");
+            crate::github::releases::get_root_commit(&gh_client, owner, repo)
+                .await
+                .map_err(|e| AptuError::GitHub {
+                    message: e.to_string(),
+                })?
+        };
+        (from_ref, "HEAD".to_string())
     };
 
     // Fetch PRs between tags
