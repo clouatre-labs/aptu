@@ -253,6 +253,21 @@ pub enum RepoCommand {
         custom: bool,
     },
 
+    /// Discover welcoming repositories on GitHub
+    Discover {
+        /// Programming language to filter by (e.g., Rust, Python)
+        #[arg(long)]
+        language: Option<String>,
+
+        /// Minimum number of stars
+        #[arg(long, default_value = "10")]
+        min_stars: u32,
+
+        /// Maximum number of results to return
+        #[arg(long, default_value = "20")]
+        limit: u32,
+    },
+
     /// Add a custom repository
     Add {
         /// Repository in owner/name format

@@ -288,6 +288,19 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 result.render_with_context(&ctx);
                 Ok(())
             }
+            RepoCommand::Discover {
+                language,
+                min_stars,
+                limit,
+            } => {
+                let spinner = maybe_spinner(&ctx, "Discovering repositories...");
+                let result = repo::run_discover(language, min_stars, limit).await?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
+                result.render_with_context(&ctx);
+                Ok(())
+            }
             RepoCommand::Add { repo } => {
                 let spinner = maybe_spinner(&ctx, "Adding repository...");
                 let result = repo::run_add(&repo).await?;

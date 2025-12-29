@@ -3,9 +3,12 @@
 //! Repository management commands.
 
 use anyhow::Result;
-use aptu_core::{RepoFilter, add_custom_repo, list_repos, remove_custom_repo};
+use aptu_core::{
+    DiscoveryFilter, RepoFilter, add_custom_repo, discover_repos, list_repos, remove_custom_repo,
+};
 
-use super::types::ReposResult;
+use super::types::{DiscoverResult, ReposResult};
+use crate::provider::CliTokenProvider;
 
 /// List repositories available for contribution.
 pub async fn run_list(curated: bool, custom: bool) -> Result<ReposResult> {
@@ -17,6 +20,22 @@ pub async fn run_list(curated: bool, custom: bool) -> Result<ReposResult> {
 
     let repos = list_repos(filter).await?;
     Ok(ReposResult { repos })
+}
+
+/// Discover welcoming repositories on GitHub.
+pub async fn run_discover(
+    language: Option<String>,
+    min_stars: u32,
+    limit: u32,
+) -> Result<DiscoverResult> {
+    let filter = DiscoveryFilter {
+        language,
+        min_stars,
+        limit,
+    };
+
+    let discovered = discover_repos(&CliTokenProvider, filter).await?;
+    Ok(DiscoverResult { repos: discovered })
 }
 
 /// Add a custom repository.

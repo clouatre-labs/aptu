@@ -72,6 +72,7 @@ pub use history::{Contribution, ContributionStatus, HistoryData};
 // Repository Discovery
 // ============================================================================
 
+pub use repos::discovery::{DiscoveredRepo, DiscoveryFilter, search_repositories};
 pub use repos::{CuratedRepo, RepoFilter};
 
 // ============================================================================
@@ -100,8 +101,8 @@ pub use utils::{
 // ============================================================================
 
 pub use facade::{
-    add_custom_repo, analyze_issue, apply_triage_labels, fetch_issue_for_triage, fetch_issues,
-    generate_release_notes, label_pr, list_curated_repos, list_repos, post_pr_review,
+    add_custom_repo, analyze_issue, apply_triage_labels, discover_repos, fetch_issue_for_triage,
+    fetch_issues, generate_release_notes, label_pr, list_curated_repos, list_repos, post_pr_review,
     post_release_notes, post_triage_comment, remove_custom_repo, review_pr,
 };
 pub use github::issues::ApplyResult;

@@ -5,6 +5,7 @@
 //! These types allow command handlers to return data instead of printing
 //! directly, improving testability and separation of concerns.
 
+use aptu_core::DiscoveredRepo;
 use aptu_core::ai::types::TriageResponse;
 use aptu_core::github::auth::TokenSource;
 use aptu_core::github::graphql::IssueNode;
@@ -171,4 +172,11 @@ pub struct PrLabelResult {
     pub labels: Vec<String>,
     /// Whether this was a dry run.
     pub dry_run: bool,
+}
+
+/// Result from the discover command.
+#[derive(Debug, Clone, Serialize)]
+pub struct DiscoverResult {
+    /// List of discovered repositories.
+    pub repos: Vec<DiscoveredRepo>,
 }
