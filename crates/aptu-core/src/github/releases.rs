@@ -5,6 +5,7 @@
 //! Provides functions for fetching PRs between git tags and parsing tag references.
 
 use anyhow::{Context, Result};
+use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
 use std::collections::HashSet;
 use tracing::instrument;
 
@@ -17,6 +18,18 @@ struct RefResponse {
 
 #[derive(serde::Deserialize)]
 struct RefObject {
+    sha: String,
+    #[serde(rename = "type")]
+    r#type: String,
+}
+
+#[derive(serde::Deserialize)]
+struct TagObject {
+    object: GitObject,
+}
+
+#[derive(serde::Deserialize)]
+struct GitObject {
     sha: String,
 }
 
@@ -156,14 +169,32 @@ async fn resolve_tag_via_rest(
     repo: &str,
     tag_name: &str,
 ) -> Result<String> {
-    let route = format!("/repos/{owner}/{repo}/git/refs/tags/{tag_name}");
+    // URL-encode the tag name to handle special characters like '/', '?', '+', etc.
+    let encoded_tag = percent_encode(tag_name.as_bytes(), NON_ALPHANUMERIC).to_string();
+    let route = format!("/repos/{owner}/{repo}/git/refs/tags/{encoded_tag}");
 
     let response: RefResponse = client
         .get::<RefResponse, &str, ()>(&route, None::<&()>)
         .await
         .context(format!("Failed to resolve tag {tag_name} via REST API"))?;
 
-    Ok(response.object.sha)
+    // Check if this is an annotated tag (type == "tag") or a lightweight tag (type == "commit")
+    if response.object.r#type == "tag" {
+        // For annotated tags, we need to dereference to get the commit SHA
+        // Make a second REST call to get the tag object and extract the commit SHA
+        let tag_route = format!("/repos/{owner}/{repo}/git/tags/{}", response.object.sha);
+        let tag_obj: TagObject = client
+            .get::<TagObject, &str, ()>(&tag_route, None::<&()>)
+            .await
+            .context(format!(
+                "Failed to dereference annotated tag {tag_name} to commit SHA"
+            ))?;
+
+        Ok(tag_obj.object.sha)
+    } else {
+        // For lightweight tags, the SHA is already the commit SHA
+        Ok(response.object.sha)
+    }
 }
 
 /// Fetch all commits between two references using GitHub Compare API with pagination.
