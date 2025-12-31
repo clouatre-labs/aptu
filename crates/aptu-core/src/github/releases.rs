@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
 use std::collections::HashSet;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use crate::ai::types::PrSummary;
 
@@ -141,8 +141,13 @@ async fn resolve_ref_to_sha(
             // This handles cases where tags are recreated and GraphQL cache is stale
             match resolve_tag_via_rest(client, owner, repo, ref_name).await {
                 Ok(sha) => Ok(sha),
-                Err(_) => {
+                Err(e) => {
                     // If both GraphQL and REST API fail, assume it's a commit SHA
+                    debug!(
+                        error = ?e,
+                        tag = %ref_name,
+                        "REST API fallback failed, treating input as literal SHA"
+                    );
                     Ok(ref_name.to_string())
                 }
             }
