@@ -48,6 +48,9 @@ bon = { workspace = true }
 # Regex for git URL parsing
 regex = "1"
 
+# URL encoding for tag names with special characters
+percent-encoding = "2"
+
 [features]
 default = []
 # Enable system keyring for secure token storage
