@@ -49,6 +49,48 @@ All task-specific overrides are optional. If not specified, the default `provide
   - `provider`: Optional provider override
   - `model`: Optional model override
 
+## AI Provider Fallback Chain
+
+Configure a fallback chain to automatically try alternative providers when the primary provider fails with a non-retryable error:
+
+```toml
+[ai]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+
+# Fallback chain: try these providers in order if primary fails
+[ai.fallback]
+chain = ["cerebras", "groq"]
+```
+
+Each fallback entry can optionally override the model for that specific provider:
+
+```toml
+[ai]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+
+[ai.fallback]
+chain = [
+  { provider = "cerebras", model = "qwen-3-32b" },
+  { provider = "groq", model = "llama-3.3-70b-versatile" }
+]
+```
+
+When the primary provider fails with a non-retryable error (after retry exhaustion), Aptu will automatically try each provider in the fallback chain. If a fallback entry specifies a model override, that model is used; otherwise, the primary model is used. Rate limit and circuit breaker errors are not retried via fallback.
+
+**Use Cases:**
+- Resilience against provider outages
+- Automatic failover for quota exhaustion
+- Multi-provider redundancy for critical workflows
+- Per-provider model optimization
+
+**Notes:**
+- Fallback only triggers for non-retryable errors
+- Each fallback provider must have a valid API key configured
+- Model overrides are optional; if not specified, the primary model is used
+- Fallback attempts are logged with `warn` level tracing
+
 ## CLI Overrides
 
 Override the configured provider and model with global flags:

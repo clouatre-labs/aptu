@@ -289,6 +289,7 @@ pub trait AiProvider: Send + Sync {
             output_tokens,
             duration_ms,
             cost_usd,
+            fallback_provider: None,
         };
 
         Ok((parsed, ai_stats))

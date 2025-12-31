@@ -29,6 +29,9 @@ pub struct AiStats {
     /// Cost in USD (from `OpenRouter` API, `None` if not reported).
     #[serde(default)]
     pub cost_usd: Option<f64>,
+    /// Fallback provider used if primary failed (None if primary succeeded).
+    #[serde(default)]
+    pub fallback_provider: Option<String>,
 }
 
 /// Status of a contribution.
@@ -270,6 +273,7 @@ mod tests {
             output_tokens: 500,
             duration_ms: 1500,
             cost_usd: Some(0.0),
+            fallback_provider: None,
         };
 
         let json = serde_json::to_string(&stats).expect("serialize");
@@ -287,6 +291,7 @@ mod tests {
             output_tokens: 500,
             duration_ms: 1500,
             cost_usd: Some(0.0),
+            fallback_provider: None,
         });
 
         let json = serde_json::to_string(&contribution).expect("serialize");
@@ -326,6 +331,7 @@ mod tests {
             output_tokens: 50,
             duration_ms: 1000,
             cost_usd: Some(0.01),
+            fallback_provider: None,
         });
 
         let mut c2 = test_contribution();
@@ -335,6 +341,7 @@ mod tests {
             output_tokens: 100,
             duration_ms: 2000,
             cost_usd: Some(0.02),
+            fallback_provider: None,
         });
 
         data.contributions.push(c1);
@@ -355,6 +362,7 @@ mod tests {
             output_tokens: 50,
             duration_ms: 1000,
             cost_usd: Some(0.01),
+            fallback_provider: None,
         });
 
         let mut c2 = test_contribution();
@@ -364,6 +372,7 @@ mod tests {
             output_tokens: 100,
             duration_ms: 2000,
             cost_usd: Some(0.02),
+            fallback_provider: None,
         });
 
         data.contributions.push(c1);
@@ -383,6 +392,7 @@ mod tests {
             output_tokens: 50,
             duration_ms: 1000,
             cost_usd: Some(0.01),
+            fallback_provider: None,
         });
 
         let mut c2 = test_contribution();
@@ -392,6 +402,7 @@ mod tests {
             output_tokens: 100,
             duration_ms: 2000,
             cost_usd: Some(0.02),
+            fallback_provider: None,
         });
 
         data.contributions.push(c1);
@@ -417,6 +428,7 @@ mod tests {
             output_tokens: 50,
             duration_ms: 1000,
             cost_usd: Some(0.01),
+            fallback_provider: None,
         });
 
         let mut c2 = test_contribution();
@@ -426,6 +438,7 @@ mod tests {
             output_tokens: 100,
             duration_ms: 2000,
             cost_usd: Some(0.02),
+            fallback_provider: None,
         });
 
         let mut c3 = test_contribution();
@@ -435,6 +448,7 @@ mod tests {
             output_tokens: 75,
             duration_ms: 1500,
             cost_usd: Some(0.015),
+            fallback_provider: None,
         });
 
         data.contributions.push(c1);
