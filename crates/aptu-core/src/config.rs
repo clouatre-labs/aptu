@@ -51,6 +51,28 @@ pub struct UserConfig {
     pub default_repo: Option<String>,
 }
 
+/// Task-specific AI model override.
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+pub struct TaskOverride {
+    /// Optional provider override for this task.
+    pub provider: Option<String>,
+    /// Optional model override for this task.
+    pub model: Option<String>,
+}
+
+/// Task-specific AI configuration.
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+pub struct TasksConfig {
+    /// Triage task configuration.
+    pub triage: Option<TaskOverride>,
+    /// Review task configuration.
+    pub review: Option<TaskOverride>,
+    /// Create task configuration.
+    pub create: Option<TaskOverride>,
+}
+
 /// AI provider settings.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
@@ -71,6 +93,8 @@ pub struct AiConfig {
     pub circuit_breaker_threshold: u32,
     /// Circuit breaker reset timeout in seconds (default: 60).
     pub circuit_breaker_reset_seconds: u64,
+    /// Task-specific model overrides.
+    pub tasks: Option<TasksConfig>,
 }
 
 impl Default for AiConfig {
@@ -84,6 +108,7 @@ impl Default for AiConfig {
             temperature: 0.3,
             circuit_breaker_threshold: 3,
             circuit_breaker_reset_seconds: 60,
+            tasks: None,
         }
     }
 }
@@ -258,5 +283,139 @@ mod tests {
     fn test_config_file_path() {
         let path = config_file_path();
         assert!(path.ends_with("config.toml"));
+    }
+
+    #[test]
+    fn test_config_with_task_triage_override() {
+        // Test that config with [ai.tasks.triage] parses correctly
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "gpt-4"
+
+[ai.tasks.triage]
+provider = "ollama"
+model = "mistral"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        assert_eq!(app_config.ai.provider, "openrouter");
+        assert_eq!(app_config.ai.model, "gpt-4");
+        assert!(app_config.ai.tasks.is_some());
+
+        let tasks = app_config.ai.tasks.unwrap();
+        assert!(tasks.triage.is_some());
+        assert!(tasks.review.is_none());
+        assert!(tasks.create.is_none());
+
+        let triage = tasks.triage.unwrap();
+        assert_eq!(triage.provider, Some("ollama".to_string()));
+        assert_eq!(triage.model, Some("mistral".to_string()));
+    }
+
+    #[test]
+    fn test_config_with_multiple_task_overrides() {
+        // Test that config with multiple task overrides parses correctly
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "gpt-4"
+
+[ai.tasks.triage]
+model = "claude-3-haiku"
+
+[ai.tasks.review]
+provider = "ollama"
+model = "mistral"
+
+[ai.tasks.create]
+model = "gpt-4-turbo"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let tasks = app_config.ai.tasks.expect("tasks should exist");
+
+        // Triage: only model override
+        let triage = tasks.triage.expect("triage should exist");
+        assert_eq!(triage.provider, None);
+        assert_eq!(triage.model, Some("claude-3-haiku".to_string()));
+
+        // Review: both provider and model override
+        let review = tasks.review.expect("review should exist");
+        assert_eq!(review.provider, Some("ollama".to_string()));
+        assert_eq!(review.model, Some("mistral".to_string()));
+
+        // Create: only model override
+        let create = tasks.create.expect("create should exist");
+        assert_eq!(create.provider, None);
+        assert_eq!(create.model, Some("gpt-4-turbo".to_string()));
+    }
+
+    #[test]
+    fn test_config_with_partial_task_overrides() {
+        // Test that partial task configs (only provider or only model) parse correctly
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "gpt-4"
+
+[ai.tasks.triage]
+provider = "ollama"
+
+[ai.tasks.review]
+model = "claude-3-sonnet"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let tasks = app_config.ai.tasks.expect("tasks should exist");
+
+        // Triage: only provider
+        let triage = tasks.triage.expect("triage should exist");
+        assert_eq!(triage.provider, Some("ollama".to_string()));
+        assert_eq!(triage.model, None);
+
+        // Review: only model
+        let review = tasks.review.expect("review should exist");
+        assert_eq!(review.provider, None);
+        assert_eq!(review.model, Some("claude-3-sonnet".to_string()));
+    }
+
+    #[test]
+    fn test_config_without_tasks_section() {
+        // Test that default config loads without tasks section
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "gpt-4"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        assert_eq!(app_config.ai.provider, "openrouter");
+        assert_eq!(app_config.ai.model, "gpt-4");
+        assert!(app_config.ai.tasks.is_none());
     }
 }
