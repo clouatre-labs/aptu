@@ -30,7 +30,7 @@ allow = [
     "Zlib",
 ]
 exceptions = [
-    { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
+    { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
     { allow = ["LGPL-2.1-or-later"], crate = "r-efi" },
 ]
 
