@@ -11,6 +11,7 @@ use tracing::{debug, instrument};
 
 use super::{ReferenceKind, parse_github_reference};
 use crate::ai::types::{PrDetails, PrFile, ReviewEvent};
+use crate::error::{AptuError, ResourceType};
 
 /// Parses a PR reference into (owner, repo, number).
 ///
@@ -75,7 +76,12 @@ pub async fn fetch_pr_details(
             {
                 // Try to fetch as an issue to provide a better error message
                 if (client.issues(owner, repo).get(number).await).is_ok() {
-                    return Err(anyhow::anyhow!("#{number} is an issue, not a pull request"));
+                    return Err(AptuError::TypeMismatch {
+                        number,
+                        expected: ResourceType::PullRequest,
+                        actual: ResourceType::Issue,
+                    }
+                    .into());
                 }
                 // Issue check failed, fall back to original error
             }

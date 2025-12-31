@@ -73,6 +73,35 @@ pub enum AptuError {
     /// Circuit breaker is open - AI provider is unavailable.
     #[error("Circuit breaker is open - AI provider is temporarily unavailable")]
     CircuitOpen,
+
+    /// Type mismatch: reference is a different type than expected.
+    #[error("#{number} is {actual}, not {expected}")]
+    TypeMismatch {
+        /// The issue/PR number.
+        number: u64,
+        /// Expected type.
+        expected: ResourceType,
+        /// Actual type.
+        actual: ResourceType,
+    },
+}
+
+/// GitHub resource type for type mismatch errors.
+#[derive(Debug, Clone, Copy)]
+pub enum ResourceType {
+    /// GitHub issue.
+    Issue,
+    /// GitHub pull request.
+    PullRequest,
+}
+
+impl std::fmt::Display for ResourceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResourceType::Issue => write!(f, "issue"),
+            ResourceType::PullRequest => write!(f, "pull request"),
+        }
+    }
 }
 
 impl From<octocrab::Error> for AptuError {

@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use tracing::{debug, instrument};
 
 use crate::ai::types::{IssueComment, RepoLabel, RepoMilestone};
+use crate::error::{AptuError, ResourceType};
 use crate::retry::retry_backoff;
 
 /// Viewer permission level on a repository.
@@ -405,6 +406,7 @@ fn build_issue_with_repo_context_query(owner: &str, repo: &str, number: u64) -> 
 /// # Errors
 ///
 /// Returns an error if the GraphQL query fails or the issue is not found.
+/// If the issue is not found but a PR with the same number exists, returns a `TypeMismatch` error.
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
 pub async fn fetch_issue_with_repo_context(
     client: &Octocrab,
@@ -425,6 +427,19 @@ pub async fn fetch_issue_with_repo_context(
     // Check for GraphQL errors
     if let Some(errors) = response.get("errors") {
         let error_msg = serde_json::to_string_pretty(errors).unwrap_or_default();
+        debug!("GraphQL error occurred, attempting to detect type mismatch");
+
+        // Try to fetch as a PR to provide a better error message
+        if (client.pulls(owner, repo).get(number).await).is_ok() {
+            return Err(AptuError::TypeMismatch {
+                number,
+                expected: ResourceType::Issue,
+                actual: ResourceType::PullRequest,
+            }
+            .into());
+        }
+
+        // Not a PR, return the original GraphQL error
         anyhow::bail!("GraphQL error: {error_msg}");
     }
 
@@ -433,13 +448,28 @@ pub async fn fetch_issue_with_repo_context(
         .context("Missing 'data' field in GraphQL response")?;
 
     // Extract issue from nested structure
-    let issue_data = data
-        .get("issue")
-        .and_then(|v| v.get("issue"))
-        .context("Issue not found in GraphQL response")?;
+    let issue_data = data.get("issue").and_then(|v| v.get("issue"));
 
-    let issue: IssueNodeDetailed =
-        serde_json::from_value(issue_data.clone()).context("Failed to parse issue data")?;
+    // Check if issue is null (not found)
+    if issue_data.is_none() || issue_data.is_some_and(serde_json::Value::is_null) {
+        debug!("Issue not found in GraphQL response, attempting to detect type mismatch");
+
+        // Try to fetch as a PR to provide a better error message
+        if (client.pulls(owner, repo).get(number).await).is_ok() {
+            return Err(AptuError::TypeMismatch {
+                number,
+                expected: ResourceType::Issue,
+                actual: ResourceType::PullRequest,
+            }
+            .into());
+        }
+
+        // Not a PR, return the original error
+        anyhow::bail!("Issue not found in GraphQL response");
+    }
+
+    let issue: IssueNodeDetailed = serde_json::from_value(issue_data.unwrap().clone())
+        .context("Failed to parse issue data")?;
 
     let repo_data = data
         .get("repository")
