@@ -23,14 +23,14 @@ model = "mistralai/devstral-2512:free"  # default model for all tasks
 
 # Override models for specific tasks
 [ai.tasks.triage]
-model = "mistralai/mistral-tiny:free"  # fast and cheap for triage
+model = "mistralai/devstral-2512:free"  # fast and cheap for triage
 
 [ai.tasks.review]
 provider = "openrouter"
-model = "anthropic/claude-3-haiku:free"  # balanced for review
+model = "anthropic/claude-haiku-4.5"  # balanced for review
 
 [ai.tasks.create]
-model = "anthropic/claude-3-sonnet:free"  # more capable for code creation
+model = "anthropic/claude-sonnet-4.5"  # more capable for code creation
 ```
 
 All task-specific overrides are optional. If not specified, the default `provider` and `model` are used.

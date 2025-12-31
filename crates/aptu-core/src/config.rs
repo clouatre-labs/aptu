@@ -290,12 +290,11 @@ mod tests {
         // Test that config with [ai.tasks.triage] parses correctly
         let config_str = r#"
 [ai]
-provider = "openrouter"
-model = "gpt-4"
+provider = "gemini"
+model = "gemini-3-flash-preview"
 
 [ai.tasks.triage]
-provider = "ollama"
-model = "mistral"
+model = "gemini-2.5-flash-lite-preview-09-2025"
 "#;
 
         let config = Config::builder()
@@ -305,8 +304,8 @@ model = "mistral"
 
         let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
 
-        assert_eq!(app_config.ai.provider, "openrouter");
-        assert_eq!(app_config.ai.model, "gpt-4");
+        assert_eq!(app_config.ai.provider, "gemini");
+        assert_eq!(app_config.ai.model, "gemini-3-flash-preview");
         assert!(app_config.ai.tasks.is_some());
 
         let tasks = app_config.ai.tasks.unwrap();
@@ -315,8 +314,11 @@ model = "mistral"
         assert!(tasks.create.is_none());
 
         let triage = tasks.triage.unwrap();
-        assert_eq!(triage.provider, Some("ollama".to_string()));
-        assert_eq!(triage.model, Some("mistral".to_string()));
+        assert_eq!(triage.provider, None);
+        assert_eq!(
+            triage.model,
+            Some("gemini-2.5-flash-lite-preview-09-2025".to_string())
+        );
     }
 
     #[test]
@@ -325,17 +327,17 @@ model = "mistral"
         let config_str = r#"
 [ai]
 provider = "openrouter"
-model = "gpt-4"
+model = "mistralai/devstral-2512:free"
 
 [ai.tasks.triage]
-model = "claude-3-haiku"
+model = "mistralai/devstral-2512:free"
 
 [ai.tasks.review]
-provider = "ollama"
-model = "mistral"
+provider = "openrouter"
+model = "anthropic/claude-haiku-4.5"
 
 [ai.tasks.create]
-model = "gpt-4-turbo"
+model = "anthropic/claude-sonnet-4.5"
 "#;
 
         let config = Config::builder()
@@ -350,17 +352,23 @@ model = "gpt-4-turbo"
         // Triage: only model override
         let triage = tasks.triage.expect("triage should exist");
         assert_eq!(triage.provider, None);
-        assert_eq!(triage.model, Some("claude-3-haiku".to_string()));
+        assert_eq!(
+            triage.model,
+            Some("mistralai/devstral-2512:free".to_string())
+        );
 
         // Review: both provider and model override
         let review = tasks.review.expect("review should exist");
-        assert_eq!(review.provider, Some("ollama".to_string()));
-        assert_eq!(review.model, Some("mistral".to_string()));
+        assert_eq!(review.provider, Some("openrouter".to_string()));
+        assert_eq!(review.model, Some("anthropic/claude-haiku-4.5".to_string()));
 
         // Create: only model override
         let create = tasks.create.expect("create should exist");
         assert_eq!(create.provider, None);
-        assert_eq!(create.model, Some("gpt-4-turbo".to_string()));
+        assert_eq!(
+            create.model,
+            Some("anthropic/claude-sonnet-4.5".to_string())
+        );
     }
 
     #[test]
@@ -368,14 +376,14 @@ model = "gpt-4-turbo"
         // Test that partial task configs (only provider or only model) parse correctly
         let config_str = r#"
 [ai]
-provider = "openrouter"
-model = "gpt-4"
+provider = "gemini"
+model = "gemini-3-flash-preview"
 
 [ai.tasks.triage]
-provider = "ollama"
+provider = "gemini"
 
 [ai.tasks.review]
-model = "claude-3-sonnet"
+model = "gemini-3-pro-preview"
 "#;
 
         let config = Config::builder()
@@ -389,13 +397,13 @@ model = "claude-3-sonnet"
 
         // Triage: only provider
         let triage = tasks.triage.expect("triage should exist");
-        assert_eq!(triage.provider, Some("ollama".to_string()));
+        assert_eq!(triage.provider, Some("gemini".to_string()));
         assert_eq!(triage.model, None);
 
         // Review: only model
         let review = tasks.review.expect("review should exist");
         assert_eq!(review.provider, None);
-        assert_eq!(review.model, Some("claude-3-sonnet".to_string()));
+        assert_eq!(review.model, Some("gemini-3-pro-preview".to_string()));
     }
 
     #[test]
@@ -403,8 +411,8 @@ model = "claude-3-sonnet"
         // Test that default config loads without tasks section
         let config_str = r#"
 [ai]
-provider = "openrouter"
-model = "gpt-4"
+provider = "gemini"
+model = "gemini-3-flash-preview"
 "#;
 
         let config = Config::builder()
@@ -414,8 +422,8 @@ model = "gpt-4"
 
         let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
 
-        assert_eq!(app_config.ai.provider, "openrouter");
-        assert_eq!(app_config.ai.model, "gpt-4");
+        assert_eq!(app_config.ai.provider, "gemini");
+        assert_eq!(app_config.ai.model, "gemini-3-flash-preview");
         assert!(app_config.ai.tasks.is_none());
     }
 }
