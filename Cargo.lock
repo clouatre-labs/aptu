@@ -117,6 +117,7 @@ dependencies = [
  "futures",
  "indicatif",
  "predicates",
+ "rustls",
  "secrecy",
  "serde",
  "serde-saphyr",

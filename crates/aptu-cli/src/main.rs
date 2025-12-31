@@ -24,6 +24,11 @@ use crate::cli::{Cli, OutputContext};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize rustls crypto provider globally (required for rustls-no-provider feature)
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     let cli = Cli::parse();
     logging::init_logging(cli.quiet, cli.verbose);
 

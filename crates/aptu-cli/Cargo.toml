@@ -23,6 +23,9 @@ clap_complete = { workspace = true }
 # Async runtime
 tokio = { workspace = true }
 
+# TLS
+rustls = { workspace = true }
+
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -18,14 +18,6 @@ use super::provider::AiProvider;
 use super::registry::{ProviderConfig, get_provider};
 use crate::config::AiConfig;
 
-// Initialize rustls crypto provider at module load time
-// This is required because rustls 0.23 with ring feature needs explicit initialization
-// when using rustls-no-provider feature in reqwest
-#[allow(dead_code)]
-fn init_rustls_crypto() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-}
-
 /// Generic AI client for all providers.
 ///
 /// Holds HTTP client, API key, and model configuration for reuse across multiple requests.
@@ -247,6 +239,17 @@ impl AiProvider for AiClient {
 mod tests {
     use super::super::registry::all_providers;
     use super::*;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    fn init_crypto() {
+        INIT.call_once(|| {
+            rustls::crypto::ring::default_provider()
+                .install_default()
+                .expect("Failed to install rustls crypto provider");
+        });
+    }
 
     fn test_config() -> AiConfig {
         AiConfig {
@@ -264,9 +267,7 @@ mod tests {
 
     #[test]
     fn test_with_api_key_all_providers() {
-        // Initialize rustls crypto provider for this test
-        init_rustls_crypto();
-
+        init_crypto();
         let config = test_config();
         for provider_config in all_providers() {
             let result = AiClient::with_api_key(
