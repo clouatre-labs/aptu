@@ -15,7 +15,7 @@ use crate::ai::types::{PrDetails, ReviewEvent, TriageResponse};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
 use crate::cache::{self, CacheEntry};
-use crate::config::{AiConfig, load_config};
+use crate::config::{AiConfig, TaskType, load_config};
 use crate::error::AptuError;
 use crate::github::auth::{create_client_from_provider, create_client_with_token};
 use crate::github::graphql::{
@@ -344,18 +344,21 @@ pub async fn analyze_issue(
             filter_labels_by_relevance(&issue_mut.available_labels, MAX_LABELS);
     }
 
-    // Get API key from provider using the configured provider name
+    // Resolve task-specific provider and model
+    let (provider_name, _model_name) = ai_config.resolve_for_task(TaskType::Triage);
+
+    // Get API key from provider using the resolved provider name
     let api_key = provider
-        .ai_api_key(&ai_config.provider)
+        .ai_api_key(&provider_name)
         .ok_or(AptuError::NotAuthenticated)?;
 
-    // Create generic AI client with provided API key
+    // Create AI client with resolved provider and model
     let ai_client =
-        AiClient::with_api_key(&ai_config.provider, api_key, ai_config).map_err(|e| {
+        AiClient::with_api_key(&provider_name, api_key, ai_config).map_err(|e| {
             AptuError::AI {
                 message: e.to_string(),
                 status: None,
-                provider: ai_config.provider.clone(),
+                provider: provider_name.clone(),
             }
         })?;
 
@@ -365,7 +368,7 @@ pub async fn analyze_issue(
         .map_err(|e| AptuError::AI {
             message: e.to_string(),
             status: None,
-            provider: ai_config.provider.clone(),
+            provider: provider_name.clone(),
         })
 }
 
@@ -458,18 +461,21 @@ pub async fn analyze_pr(
     pr_details: &PrDetails,
     ai_config: &AiConfig,
 ) -> crate::Result<(crate::ai::types::PrReviewResponse, crate::history::AiStats)> {
-    // Get API key from provider using the configured provider name
+    // Resolve task-specific provider and model
+    let (provider_name, _model_name) = ai_config.resolve_for_task(TaskType::Review);
+
+    // Get API key from provider using the resolved provider name
     let api_key = provider
-        .ai_api_key(&ai_config.provider)
+        .ai_api_key(&provider_name)
         .ok_or(AptuError::NotAuthenticated)?;
 
-    // Create generic AI client with provided API key
+    // Create AI client with resolved provider and model
     let ai_client =
-        AiClient::with_api_key(&ai_config.provider, api_key, ai_config).map_err(|e| {
+        AiClient::with_api_key(&provider_name, api_key, ai_config).map_err(|e| {
             AptuError::AI {
                 message: e.to_string(),
                 status: None,
-                provider: ai_config.provider.clone(),
+                provider: provider_name.clone(),
             }
         })?;
 
@@ -480,7 +486,7 @@ pub async fn analyze_pr(
         .map_err(|e| AptuError::AI {
             message: e.to_string(),
             status: None,
-            provider: ai_config.provider.clone(),
+            provider: provider_name.clone(),
         })
 }
 
@@ -594,11 +600,14 @@ pub async fn label_pr(
 
     // If no labels found, try AI fallback
     if labels.is_empty() {
-        // Get API key from provider using the configured provider name
-        if let Some(api_key) = provider.ai_api_key(&ai_config.provider) {
-            // Create AI client with provided API key
+        // Resolve task-specific provider and model for Create task
+        let (provider_name, _model_name) = ai_config.resolve_for_task(TaskType::Create);
+
+        // Get API key from provider using the resolved provider name
+        if let Some(api_key) = provider.ai_api_key(&provider_name) {
+            // Create AI client with resolved provider and model
             if let Ok(ai_client) =
-                crate::ai::AiClient::with_api_key(&ai_config.provider, api_key, ai_config)
+                crate::ai::AiClient::with_api_key(&provider_name, api_key, ai_config)
             {
                 match ai_client
                     .suggest_pr_labels(&pr_details.title, &pr_details.body, &file_paths)
