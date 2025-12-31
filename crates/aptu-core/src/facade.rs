@@ -8,7 +8,7 @@
 //! functions with their own credential source.
 
 use chrono::Duration;
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, warn};
 
 use crate::ai::provider::MAX_LABELS;
 use crate::ai::types::{PrDetails, ReviewEvent, TriageResponse};
@@ -24,6 +24,7 @@ use crate::github::graphql::{
 use crate::github::issues::filter_labels_by_relevance;
 use crate::github::pulls::{fetch_pr_details, post_pr_review as gh_post_pr_review};
 use crate::repos::{self, CuratedRepo};
+use crate::retry::is_retryable_anyhow;
 use secrecy::SecretString;
 
 /// Fetches "good first issue" issues from curated repositories.
@@ -283,6 +284,121 @@ pub async fn discover_repos(
     repos::discovery::search_repositories(&token, &filter).await
 }
 
+/// Generic helper function to try AI operations with fallback chain.
+///
+/// Attempts an AI operation with the primary provider first. If the primary
+/// provider fails with a non-retryable error, iterates through the fallback chain.
+///
+/// # Arguments
+///
+/// * `provider` - Token provider for AI credentials
+/// * `primary_provider` - Primary AI provider name
+/// * `model_name` - Model name to use
+/// * `ai_config` - AI configuration including fallback chain
+/// * `operation` - Async closure that performs the AI operation
+///
+/// # Returns
+///
+/// Result of the AI operation, or error if all providers fail.
+async fn try_with_fallback<T, F, Fut>(
+    provider: &dyn TokenProvider,
+    primary_provider: &str,
+    model_name: &str,
+    ai_config: &AiConfig,
+    operation: F,
+) -> crate::Result<T>
+where
+    F: Fn(AiClient) -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    // Try primary provider first
+    let api_key = provider
+        .ai_api_key(primary_provider)
+        .ok_or(AptuError::NotAuthenticated)?;
+
+    let ai_client = AiClient::with_api_key(primary_provider, api_key, model_name, ai_config)
+        .map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+            provider: primary_provider.to_string(),
+        })?;
+
+    match operation(ai_client).await {
+        Ok(response) => return Ok(response),
+        Err(e) => {
+            // Check if error is retryable using is_retryable_anyhow
+            if is_retryable_anyhow(&e) {
+                // Retryable error, don't try fallback
+                return Err(AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                    provider: primary_provider.to_string(),
+                });
+            }
+
+            // Non-retryable error, try fallback chain
+            warn!(
+                primary_provider = primary_provider,
+                error = %e,
+                "Primary provider failed with non-retryable error, trying fallback chain"
+            );
+        }
+    }
+
+    // Try fallback chain
+    if let Some(fallback_config) = &ai_config.fallback {
+        for entry in &fallback_config.chain {
+            warn!(
+                fallback_provider = entry.provider,
+                "Attempting fallback provider"
+            );
+
+            let Some(api_key) = provider.ai_api_key(&entry.provider) else {
+                warn!(
+                    fallback_provider = entry.provider,
+                    "No API key available for fallback provider"
+                );
+                continue;
+            };
+
+            let fallback_model = entry.model.as_deref().unwrap_or(model_name);
+            let Ok(ai_client) =
+                AiClient::with_api_key(&entry.provider, api_key, fallback_model, ai_config)
+            else {
+                warn!(
+                    fallback_provider = entry.provider,
+                    "Failed to create AI client for fallback provider"
+                );
+                continue;
+            };
+
+            match operation(ai_client).await {
+                Ok(response) => {
+                    info!(
+                        fallback_provider = entry.provider,
+                        "Successfully completed operation with fallback provider"
+                    );
+                    return Ok(response);
+                }
+                Err(e) => {
+                    warn!(
+                        fallback_provider = entry.provider,
+                        error = %e,
+                        "Fallback provider failed"
+                    );
+                }
+            }
+        }
+    }
+
+    // All providers failed
+    Err(AptuError::AI {
+        message: "All AI providers failed (primary and fallback chain)".to_string(),
+        status: None,
+        provider: primary_provider.to_string(),
+    })
+}
+
 /// Analyzes a GitHub issue and generates triage suggestions.
 ///
 /// This function abstracts the credential resolution and API client creation,
@@ -347,27 +463,12 @@ pub async fn analyze_issue(
     // Resolve task-specific provider and model
     let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Triage);
 
-    // Get API key from provider using the resolved provider name
-    let api_key = provider
-        .ai_api_key(&provider_name)
-        .ok_or(AptuError::NotAuthenticated)?;
-
-    // Create AI client with resolved provider and model
-    let ai_client = AiClient::with_api_key(&provider_name, api_key, &model_name, ai_config)
-        .map_err(|e| AptuError::AI {
-            message: e.to_string(),
-            status: None,
-            provider: provider_name.clone(),
-        })?;
-
-    ai_client
-        .analyze_issue(&issue_mut)
-        .await
-        .map_err(|e| AptuError::AI {
-            message: e.to_string(),
-            status: None,
-            provider: provider_name.clone(),
-        })
+    // Use fallback chain if configured
+    try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
+        let issue = issue_mut.clone();
+        async move { client.analyze_issue(&issue).await }
+    })
+    .await
 }
 
 /// Reviews a pull request and generates AI feedback.
@@ -462,28 +563,12 @@ pub async fn analyze_pr(
     // Resolve task-specific provider and model
     let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Review);
 
-    // Get API key from provider using the resolved provider name
-    let api_key = provider
-        .ai_api_key(&provider_name)
-        .ok_or(AptuError::NotAuthenticated)?;
-
-    // Create AI client with resolved provider and model
-    let ai_client = AiClient::with_api_key(&provider_name, api_key, &model_name, ai_config)
-        .map_err(|e| AptuError::AI {
-            message: e.to_string(),
-            status: None,
-            provider: provider_name.clone(),
-        })?;
-
-    // Review PR with AI (timing and stats are captured in provider)
-    ai_client
-        .review_pr(pr_details)
-        .await
-        .map_err(|e| AptuError::AI {
-            message: e.to_string(),
-            status: None,
-            provider: provider_name.clone(),
-        })
+    // Use fallback chain if configured
+    try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
+        let pr = pr_details.clone();
+        async move { client.review_pr(&pr).await }
+    })
+    .await
 }
 
 /// Posts a PR review to GitHub.
@@ -1102,4 +1187,57 @@ pub async fn post_release_notes(
         .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::{FallbackConfig, FallbackEntry};
+
+    #[test]
+    fn test_fallback_chain_config_structure() {
+        // Test that fallback chain config structure is correct
+        let fallback_config = FallbackConfig {
+            chain: vec![
+                FallbackEntry {
+                    provider: "openrouter".to_string(),
+                    model: None,
+                },
+                FallbackEntry {
+                    provider: "anthropic".to_string(),
+                    model: Some("claude-haiku-4.5".to_string()),
+                },
+            ],
+        };
+
+        assert_eq!(fallback_config.chain.len(), 2);
+        assert_eq!(fallback_config.chain[0].provider, "openrouter");
+        assert_eq!(fallback_config.chain[0].model, None);
+        assert_eq!(fallback_config.chain[1].provider, "anthropic");
+        assert_eq!(
+            fallback_config.chain[1].model,
+            Some("claude-haiku-4.5".to_string())
+        );
+    }
+
+    #[test]
+    fn test_fallback_chain_empty() {
+        // Test that empty fallback chain is valid
+        let fallback_config = FallbackConfig { chain: vec![] };
+
+        assert_eq!(fallback_config.chain.len(), 0);
+    }
+
+    #[test]
+    fn test_fallback_chain_single_provider() {
+        // Test that single provider fallback chain is valid
+        let fallback_config = FallbackConfig {
+            chain: vec![FallbackEntry {
+                provider: "openrouter".to_string(),
+                model: None,
+            }],
+        };
+
+        assert_eq!(fallback_config.chain.len(), 1);
+        assert_eq!(fallback_config.chain[0].provider, "openrouter");
+    }
 }

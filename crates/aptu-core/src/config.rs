@@ -84,6 +84,48 @@ pub struct TasksConfig {
     pub create: Option<TaskOverride>,
 }
 
+/// Single entry in the fallback provider chain.
+#[derive(Debug, Clone)]
+pub struct FallbackEntry {
+    /// Provider name (e.g., "openrouter", "anthropic", "gemini").
+    pub provider: String,
+    /// Optional model override for this specific provider.
+    pub model: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for FallbackEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum EntryVariant {
+            String(String),
+            Struct {
+                provider: String,
+                model: Option<String>,
+            },
+        }
+
+        match EntryVariant::deserialize(deserializer)? {
+            EntryVariant::String(provider) => Ok(FallbackEntry {
+                provider,
+                model: None,
+            }),
+            EntryVariant::Struct { provider, model } => Ok(FallbackEntry { provider, model }),
+        }
+    }
+}
+
+/// Fallback provider chain configuration.
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct FallbackConfig {
+    /// Chain of fallback entries to try in order when primary fails.
+    pub chain: Vec<FallbackEntry>,
+}
+
 /// AI provider settings.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
@@ -106,6 +148,8 @@ pub struct AiConfig {
     pub circuit_breaker_reset_seconds: u64,
     /// Task-specific model overrides.
     pub tasks: Option<TasksConfig>,
+    /// Fallback provider chain for resilience.
+    pub fallback: Option<FallbackConfig>,
 }
 
 impl Default for AiConfig {
@@ -120,6 +164,7 @@ impl Default for AiConfig {
             circuit_breaker_threshold: 3,
             circuit_breaker_reset_seconds: 60,
             tasks: None,
+            fallback: None,
         }
     }
 }
@@ -639,5 +684,109 @@ provider = "openrouter"
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, "mistralai/devstral-2512:free");
+    }
+
+    #[test]
+    fn test_fallback_config_toml_parsing() {
+        // Test that FallbackConfig deserializes from TOML correctly
+        let config_str = r#"
+[ai]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+
+[ai.fallback]
+chain = ["openrouter", "anthropic"]
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        assert_eq!(app_config.ai.provider, "gemini");
+        assert_eq!(app_config.ai.model, "gemini-3-flash-preview");
+        assert!(app_config.ai.fallback.is_some());
+
+        let fallback = app_config.ai.fallback.unwrap();
+        assert_eq!(fallback.chain.len(), 2);
+        assert_eq!(fallback.chain[0].provider, "openrouter");
+        assert_eq!(fallback.chain[1].provider, "anthropic");
+    }
+
+    #[test]
+    fn test_fallback_config_empty_chain() {
+        // Test that FallbackConfig with empty chain parses correctly
+        let config_str = r#"
+[ai]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+
+[ai.fallback]
+chain = []
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        assert!(app_config.ai.fallback.is_some());
+        let fallback = app_config.ai.fallback.unwrap();
+        assert_eq!(fallback.chain.len(), 0);
+    }
+
+    #[test]
+    fn test_fallback_config_single_provider() {
+        // Test that FallbackConfig with single provider parses correctly
+        let config_str = r#"
+[ai]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+
+[ai.fallback]
+chain = ["openrouter"]
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        assert!(app_config.ai.fallback.is_some());
+        let fallback = app_config.ai.fallback.unwrap();
+        assert_eq!(fallback.chain.len(), 1);
+        assert_eq!(fallback.chain[0].provider, "openrouter");
+    }
+
+    #[test]
+    fn test_fallback_config_without_fallback_section() {
+        // Test that config without fallback section has None
+        let config_str = r#"
+[ai]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        assert!(app_config.ai.fallback.is_none());
+    }
+
+    #[test]
+    fn test_fallback_config_default() {
+        // Test that AiConfig::default() has fallback: None
+        let ai_config = AiConfig::default();
+        assert!(ai_config.fallback.is_none());
     }
 }
