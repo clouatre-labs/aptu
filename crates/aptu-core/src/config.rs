@@ -3,12 +3,12 @@
 //! Configuration management for the Aptu CLI.
 //!
 //! Provides layered configuration from files and environment variables.
-//! Uses XDG-compliant paths via the `dirs` crate.
+//! Uses XDG-compliant paths with environment variable support.
 //!
 //! # Configuration Sources (in priority order)
 //!
 //! 1. Environment variables (prefix: `APTU_`)
-//! 2. Config file: `~/.config/aptu/config.toml` (or platform equivalent)
+//! 2. Config file: `~/.config/aptu/config.toml`
 //! 3. Built-in defaults
 //!
 //! # Examples
@@ -235,25 +235,36 @@ impl Default for ReposConfig {
 
 /// Returns the Aptu configuration directory.
 ///
-/// - Linux: `~/.config/aptu`
-/// - macOS: `~/Library/Application Support/aptu`
-/// - Windows: `C:\Users\<User>\AppData\Roaming\aptu`
+/// Respects the `XDG_CONFIG_HOME` environment variable if set,
+/// otherwise defaults to `~/.config/aptu`.
 #[must_use]
 pub fn config_dir() -> PathBuf {
-    dirs::config_dir()
-        .expect("Could not determine config directory - is HOME set?")
+    if let Ok(xdg_config) = std::env::var("XDG_CONFIG_HOME")
+        && !xdg_config.is_empty()
+    {
+        return PathBuf::from(xdg_config).join("aptu");
+    }
+    dirs::home_dir()
+        .expect("Could not determine home directory - is HOME set?")
+        .join(".config")
         .join("aptu")
 }
 
 /// Returns the Aptu data directory.
 ///
-/// - Linux: `~/.local/share/aptu`
-/// - macOS: `~/Library/Application Support/aptu`
-/// - Windows: `C:\Users\<User>\AppData\Local\aptu`
+/// Respects the `XDG_DATA_HOME` environment variable if set,
+/// otherwise defaults to `~/.local/share/aptu`.
 #[must_use]
 pub fn data_dir() -> PathBuf {
-    dirs::data_dir()
-        .expect("Could not determine data directory - is HOME set?")
+    if let Ok(xdg_data) = std::env::var("XDG_DATA_HOME")
+        && !xdg_data.is_empty()
+    {
+        return PathBuf::from(xdg_data).join("aptu");
+    }
+    dirs::home_dir()
+        .expect("Could not determine home directory - is HOME set?")
+        .join(".local")
+        .join("share")
         .join("aptu")
 }
 
@@ -639,5 +650,85 @@ provider = "openrouter"
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, "mistralai/devstral-2512:free");
+    }
+
+    #[test]
+    fn test_config_dir_respects_xdg_config_home() {
+        // Test that config_dir respects XDG_CONFIG_HOME when set
+        let original = std::env::var("XDG_CONFIG_HOME").ok();
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", "/custom/config");
+        }
+
+        let dir = config_dir();
+        assert_eq!(dir, PathBuf::from("/custom/config/aptu"));
+
+        // Cleanup
+        unsafe {
+            match original {
+                Some(val) => std::env::set_var("XDG_CONFIG_HOME", val),
+                None => std::env::remove_var("XDG_CONFIG_HOME"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_config_dir_ignores_empty_xdg_config_home() {
+        // Test that config_dir ignores empty XDG_CONFIG_HOME
+        let original = std::env::var("XDG_CONFIG_HOME").ok();
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", "");
+        }
+
+        let dir = config_dir();
+        assert!(dir.ends_with("aptu"));
+
+        // Cleanup
+        unsafe {
+            match original {
+                Some(val) => std::env::set_var("XDG_CONFIG_HOME", val),
+                None => std::env::remove_var("XDG_CONFIG_HOME"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_data_dir_respects_xdg_data_home() {
+        // Test that data_dir respects XDG_DATA_HOME when set
+        let original = std::env::var("XDG_DATA_HOME").ok();
+        unsafe {
+            std::env::set_var("XDG_DATA_HOME", "/custom/data");
+        }
+
+        let dir = data_dir();
+        assert_eq!(dir, PathBuf::from("/custom/data/aptu"));
+
+        // Cleanup
+        unsafe {
+            match original {
+                Some(val) => std::env::set_var("XDG_DATA_HOME", val),
+                None => std::env::remove_var("XDG_DATA_HOME"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_data_dir_ignores_empty_xdg_data_home() {
+        // Test that data_dir ignores empty XDG_DATA_HOME
+        let original = std::env::var("XDG_DATA_HOME").ok();
+        unsafe {
+            std::env::set_var("XDG_DATA_HOME", "");
+        }
+
+        let dir = data_dir();
+        assert!(dir.ends_with("aptu"));
+
+        // Cleanup
+        unsafe {
+            match original {
+                Some(val) => std::env::set_var("XDG_DATA_HOME", val),
+                None => std::env::remove_var("XDG_DATA_HOME"),
+            }
+        }
     }
 }
