@@ -10,6 +10,16 @@ use tracing::instrument;
 
 use crate::ai::types::PrSummary;
 
+#[derive(serde::Deserialize)]
+struct RefResponse {
+    object: RefObject,
+}
+
+#[derive(serde::Deserialize)]
+struct RefObject {
+    sha: String,
+}
+
 /// Fetch merged PRs between two git references.
 ///
 /// # Arguments
@@ -114,10 +124,46 @@ async fn resolve_ref_to_sha(
     match super::graphql::resolve_tag_to_commit_sha(client, owner, repo, ref_name).await? {
         Some(sha) => Ok(sha),
         None => {
-            // If tag not found, assume it's a commit SHA and return as-is
-            Ok(ref_name.to_string())
+            // If GraphQL returns None, try REST API as fallback
+            // This handles cases where tags are recreated and GraphQL cache is stale
+            match resolve_tag_via_rest(client, owner, repo, ref_name).await {
+                Ok(sha) => Ok(sha),
+                Err(_) => {
+                    // If both GraphQL and REST API fail, assume it's a commit SHA
+                    Ok(ref_name.to_string())
+                }
+            }
         }
     }
+}
+
+/// Resolve a tag to its commit SHA using the REST API.
+///
+/// # Arguments
+///
+/// * `client` - Octocrab GitHub client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `tag_name` - Tag name to resolve
+///
+/// # Returns
+///
+/// The commit SHA for the tag, or an error if the tag doesn't exist.
+#[instrument(skip(client))]
+async fn resolve_tag_via_rest(
+    client: &octocrab::Octocrab,
+    owner: &str,
+    repo: &str,
+    tag_name: &str,
+) -> Result<String> {
+    let route = format!("/repos/{owner}/{repo}/git/refs/tags/{tag_name}");
+
+    let response: RefResponse = client
+        .get::<RefResponse, &str, ()>(&route, None::<&()>)
+        .await
+        .context(format!("Failed to resolve tag {tag_name} via REST API"))?;
+
+    Ok(response.object.sha)
 }
 
 /// Fetch all commits between two references using GitHub Compare API with pagination.
