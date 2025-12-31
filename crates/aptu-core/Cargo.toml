@@ -20,6 +20,7 @@ toml = "0.9"
 
 # HTTP/API
 reqwest = { workspace = true }
+rustls = { workspace = true }
 octocrab = { workspace = true }
 secrecy = { workspace = true }
 backon = { workspace = true }
