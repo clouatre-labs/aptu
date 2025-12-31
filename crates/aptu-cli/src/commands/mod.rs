@@ -155,7 +155,7 @@ async fn triage_single_issue(
     };
 
     // Render triage FIRST (before asking for confirmation)
-    output::render(&result, ctx);
+    output::render(&result, ctx)?;
 
     // Handle dry-run - already rendered, just exit
     if dry_run {
@@ -274,7 +274,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             AuthCommand::Logout => auth::run_logout(),
             AuthCommand::Status => {
                 let result = auth::run_status().await?;
-                output::render(&result, &ctx);
+                output::render(&result, &ctx)?;
                 Ok(())
             }
         },
@@ -286,7 +286,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
-                result.render_with_context(&ctx);
+                result.render_with_context(&ctx)?;
                 Ok(())
             }
             RepoCommand::Discover {
@@ -299,7 +299,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
-                result.render_with_context(&ctx);
+                result.render_with_context(&ctx)?;
                 Ok(())
             }
             RepoCommand::Add { repo } => {
@@ -333,7 +333,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
-                result.render_with_context(&ctx);
+                result.render_with_context(&ctx)?;
                 Ok(())
             }
             IssueCommand::Triage {
@@ -524,7 +524,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
 
                 // Render bulk summary (only for multiple issues)
                 if issue_refs.len() > 1 {
-                    output::render(&bulk_result, &ctx);
+                    output::render(&bulk_result, &ctx)?;
                 }
 
                 Ok(())
@@ -541,14 +541,14 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
-                output::render(&result, &ctx);
+                output::render(&result, &ctx)?;
                 Ok(())
             }
         },
 
         Commands::History => {
             let result = history::run()?;
-            output::render(&result, &ctx);
+            output::render(&result, &ctx)?;
             Ok(())
         }
 
@@ -619,7 +619,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     review,
                     ai_stats,
                 };
-                output::render(&result, &ctx);
+                output::render(&result, &ctx)?;
                 Ok(())
             }
             PrCommand::Label {
@@ -634,7 +634,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
-                output::render(&result, &ctx);
+                output::render(&result, &ctx)?;
                 Ok(())
             }
         },
@@ -663,7 +663,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             if let Some(s) = spinner {
                 s.finish_and_clear();
             }
-            output::render(&result, &ctx);
+            output::render(&result, &ctx)?;
             Ok(())
         }
 
