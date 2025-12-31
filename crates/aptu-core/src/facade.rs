@@ -345,7 +345,7 @@ pub async fn analyze_issue(
     }
 
     // Resolve task-specific provider and model
-    let (provider_name, _model_name) = ai_config.resolve_for_task(TaskType::Triage);
+    let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Triage);
 
     // Get API key from provider using the resolved provider name
     let api_key = provider
@@ -353,8 +353,8 @@ pub async fn analyze_issue(
         .ok_or(AptuError::NotAuthenticated)?;
 
     // Create AI client with resolved provider and model
-    let ai_client =
-        AiClient::with_api_key(&provider_name, api_key, ai_config).map_err(|e| AptuError::AI {
+    let ai_client = AiClient::with_api_key(&provider_name, api_key, &model_name, ai_config)
+        .map_err(|e| AptuError::AI {
             message: e.to_string(),
             status: None,
             provider: provider_name.clone(),
@@ -460,7 +460,7 @@ pub async fn analyze_pr(
     ai_config: &AiConfig,
 ) -> crate::Result<(crate::ai::types::PrReviewResponse, crate::history::AiStats)> {
     // Resolve task-specific provider and model
-    let (provider_name, _model_name) = ai_config.resolve_for_task(TaskType::Review);
+    let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Review);
 
     // Get API key from provider using the resolved provider name
     let api_key = provider
@@ -468,8 +468,8 @@ pub async fn analyze_pr(
         .ok_or(AptuError::NotAuthenticated)?;
 
     // Create AI client with resolved provider and model
-    let ai_client =
-        AiClient::with_api_key(&provider_name, api_key, ai_config).map_err(|e| AptuError::AI {
+    let ai_client = AiClient::with_api_key(&provider_name, api_key, &model_name, ai_config)
+        .map_err(|e| AptuError::AI {
             message: e.to_string(),
             status: None,
             provider: provider_name.clone(),
@@ -597,13 +597,13 @@ pub async fn label_pr(
     // If no labels found, try AI fallback
     if labels.is_empty() {
         // Resolve task-specific provider and model for Create task
-        let (provider_name, _model_name) = ai_config.resolve_for_task(TaskType::Create);
+        let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Create);
 
         // Get API key from provider using the resolved provider name
         if let Some(api_key) = provider.ai_api_key(&provider_name) {
             // Create AI client with resolved provider and model
             if let Ok(ai_client) =
-                crate::ai::AiClient::with_api_key(&provider_name, api_key, ai_config)
+                crate::ai::AiClient::with_api_key(&provider_name, api_key, &model_name, ai_config)
             {
                 match ai_client
                     .suggest_pr_labels(&pr_details.title, &pr_details.body, &file_paths)
