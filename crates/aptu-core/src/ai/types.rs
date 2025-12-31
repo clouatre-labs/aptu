@@ -117,6 +117,26 @@ pub struct RelatedIssue {
 /// Structured triage response from AI.
 ///
 /// This is the expected JSON structure in the AI's response content.
+///
+/// # JSON Output
+///
+/// When using `--output json`, commands return this structure:
+///
+/// ```json
+/// {
+///   "summary": "Brief 2-3 sentence overview",
+///   "suggested_labels": ["bug", "needs-triage"],
+///   "clarifying_questions": ["What version?"],
+///   "potential_duplicates": [123, 456],
+///   "related_issues": [
+///     {"number": 789, "title": "Similar issue", "reason": "Same component"}
+///   ],
+///   "contributor_guidance": {
+///     "beginner_friendly": true,
+///     "reasoning": "Well-scoped with clear requirements"
+///   }
+/// }
+/// ```
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct TriageResponse {
     /// 2-3 sentence summary of the issue.
