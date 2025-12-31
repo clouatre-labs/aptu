@@ -1002,16 +1002,18 @@ pub async fn apply_triage_labels(
 /// - GitHub API calls fail
 /// - AI response parsing fails
 ///
-/// Helper to get a reference from the latest tag or fall back to root commit.
+/// Helper to get a reference from the previous tag or fall back to root commit.
 ///
-/// This helper encapsulates the common pattern of trying to get the latest tag,
-/// and if no tags exist, falling back to the root commit for first release scenarios.
+/// This helper encapsulates the common pattern of trying to get the previous tag
+/// (before the target tag), and if no previous tag exists, falling back to the root
+/// commit for first release scenarios.
 ///
 /// # Arguments
 ///
 /// * `gh_client` - Octocrab GitHub client
 /// * `owner` - Repository owner
 /// * `repo` - Repository name
+/// * `to_ref` - The target tag to find the predecessor for
 ///
 /// # Returns
 ///
@@ -1024,18 +1026,24 @@ async fn get_from_ref_or_root(
     gh_client: &octocrab::Octocrab,
     owner: &str,
     repo: &str,
+    to_ref: &str,
 ) -> Result<String, AptuError> {
-    let latest_tag_opt = crate::github::releases::get_latest_tag(gh_client, owner, repo)
-        .await
-        .map_err(|e| AptuError::GitHub {
-            message: e.to_string(),
-        })?;
+    // Try to find the previous tag before the target tag
+    let previous_tag_opt =
+        crate::github::releases::get_previous_tag(gh_client, owner, repo, to_ref)
+            .await
+            .map_err(|e| AptuError::GitHub {
+                message: e.to_string(),
+            })?;
 
-    if let Some((tag, _)) = latest_tag_opt {
+    if let Some((tag, _)) = previous_tag_opt {
         Ok(tag)
     } else {
-        // No tags exist, use root commit for first release
-        tracing::info!("No tags found, using root commit for first release");
+        // No previous tag exists, use root commit for first release
+        tracing::info!(
+            "No previous tag found before {}, using root commit for first release",
+            to_ref
+        );
         crate::github::releases::get_root_commit(gh_client, owner, repo)
             .await
             .map_err(|e| AptuError::GitHub {
@@ -1096,16 +1104,29 @@ pub async fn generate_release_notes(
     let (from_ref, to_ref) = if let (Some(from), Some(to)) = (from_tag, to_tag) {
         (from.to_string(), to.to_string())
     } else if let Some(to) = to_tag {
-        // Get latest tag as from_ref, or root commit if no tags exist
-        let from_ref = get_from_ref_or_root(&gh_client, owner, repo).await?;
+        // Get previous tag before to_ref, or root commit if no previous tag exists
+        let from_ref = get_from_ref_or_root(&gh_client, owner, repo, to).await?;
         (from_ref, to.to_string())
     } else if let Some(from) = from_tag {
         // Use HEAD as to_ref
         (from.to_string(), "HEAD".to_string())
     } else {
         // Get latest tag and use HEAD, or root commit if no tags exist
-        let from_ref = get_from_ref_or_root(&gh_client, owner, repo).await?;
-        (from_ref, "HEAD".to_string())
+        // For this case, we need to get the latest tag first, then find its predecessor
+        let latest_tag_opt = crate::github::releases::get_latest_tag(&gh_client, owner, repo)
+            .await
+            .map_err(|e| AptuError::GitHub {
+                message: e.to_string(),
+            })?;
+
+        let to_ref = if let Some((tag, _)) = latest_tag_opt {
+            tag
+        } else {
+            "HEAD".to_string()
+        };
+
+        let from_ref = get_from_ref_or_root(&gh_client, owner, repo, &to_ref).await?;
+        (from_ref, to_ref)
     };
 
     // Fetch PRs between tags
