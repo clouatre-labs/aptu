@@ -354,12 +354,10 @@ pub async fn analyze_issue(
 
     // Create AI client with resolved provider and model
     let ai_client =
-        AiClient::with_api_key(&provider_name, api_key, ai_config).map_err(|e| {
-            AptuError::AI {
-                message: e.to_string(),
-                status: None,
-                provider: provider_name.clone(),
-            }
+        AiClient::with_api_key(&provider_name, api_key, ai_config).map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+            provider: provider_name.clone(),
         })?;
 
     ai_client
@@ -471,12 +469,10 @@ pub async fn analyze_pr(
 
     // Create AI client with resolved provider and model
     let ai_client =
-        AiClient::with_api_key(&provider_name, api_key, ai_config).map_err(|e| {
-            AptuError::AI {
-                message: e.to_string(),
-                status: None,
-                provider: provider_name.clone(),
-            }
+        AiClient::with_api_key(&provider_name, api_key, ai_config).map_err(|e| AptuError::AI {
+            message: e.to_string(),
+            status: None,
+            provider: provider_name.clone(),
         })?;
 
     // Review PR with AI (timing and stats are captured in provider)
