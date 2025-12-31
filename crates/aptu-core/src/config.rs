@@ -8,7 +8,7 @@
 //! # Configuration Sources (in priority order)
 //!
 //! 1. Environment variables (prefix: `APTU_`)
-//! 2. Config file: `~/.config/aptu/config.toml` (or platform equivalent)
+//! 2. Config file: `~/.config/aptu/config.toml`
 //! 3. Built-in defaults
 //!
 //! # Examples
@@ -280,25 +280,36 @@ impl Default for ReposConfig {
 
 /// Returns the Aptu configuration directory.
 ///
-/// - Linux: `~/.config/aptu`
-/// - macOS: `~/Library/Application Support/aptu`
-/// - Windows: `C:\Users\<User>\AppData\Roaming\aptu`
+/// Respects the `XDG_CONFIG_HOME` environment variable if set,
+/// otherwise defaults to `~/.config/aptu`.
 #[must_use]
 pub fn config_dir() -> PathBuf {
-    dirs::config_dir()
-        .expect("Could not determine config directory - is HOME set?")
+    if let Ok(xdg_config) = std::env::var("XDG_CONFIG_HOME")
+        && !xdg_config.is_empty()
+    {
+        return PathBuf::from(xdg_config).join("aptu");
+    }
+    dirs::home_dir()
+        .expect("Could not determine home directory - is HOME set?")
+        .join(".config")
         .join("aptu")
 }
 
 /// Returns the Aptu data directory.
 ///
-/// - Linux: `~/.local/share/aptu`
-/// - macOS: `~/Library/Application Support/aptu`
-/// - Windows: `C:\Users\<User>\AppData\Local\aptu`
+/// Respects the `XDG_DATA_HOME` environment variable if set,
+/// otherwise defaults to `~/.local/share/aptu`.
 #[must_use]
 pub fn data_dir() -> PathBuf {
-    dirs::data_dir()
-        .expect("Could not determine data directory - is HOME set?")
+    if let Ok(xdg_data) = std::env::var("XDG_DATA_HOME")
+        && !xdg_data.is_empty()
+    {
+        return PathBuf::from(xdg_data).join("aptu");
+    }
+    dirs::home_dir()
+        .expect("Could not determine home directory - is HOME set?")
+        .join(".local")
+        .join("share")
         .join("aptu")
 }
 
