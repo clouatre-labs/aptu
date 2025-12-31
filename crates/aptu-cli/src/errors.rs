@@ -87,6 +87,14 @@ pub fn format_error(error: &Error) -> String {
                     "{aptu_err}\n\nTip: The {provider} AI provider returned an incomplete response. This may be due to token limits. Try again in a moment."
                 )
             }
+            AptuError::TypeMismatch {
+                number: _,
+                expected: _,
+                actual: _,
+            } => {
+                // Type mismatch errors are clear and actionable - no tip needed
+                aptu_err.to_string()
+            }
         }
     } else {
         // Not an AptuError, return the original error chain
