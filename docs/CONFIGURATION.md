@@ -12,6 +12,43 @@ allow_paid_models = false  # default: blocks paid OpenRouter models
 confirm_before_post = true
 ```
 
+## Task-Specific Model Configuration
+
+Configure different AI models for different operations (triage, review, create) to optimize for speed, cost, or reasoning depth:
+
+```toml
+[ai]
+provider = "openrouter"
+model = "mistralai/devstral-2512:free"  # default model for all tasks
+
+# Override models for specific tasks
+[ai.tasks.triage]
+model = "mistralai/devstral-2512:free"  # fast and cheap for triage
+
+[ai.tasks.review]
+provider = "openrouter"
+model = "anthropic/claude-haiku-4.5"  # balanced for review
+
+[ai.tasks.create]
+model = "anthropic/claude-sonnet-4.5"  # more capable for code creation
+```
+
+All task-specific overrides are optional. If not specified, the default `provider` and `model` are used.
+
+### Task Configuration Options
+
+- **`[ai.tasks.triage]`**: Configuration for issue triage operations
+  - `provider`: Optional provider override
+  - `model`: Optional model override
+
+- **`[ai.tasks.review]`**: Configuration for code review operations
+  - `provider`: Optional provider override
+  - `model`: Optional model override
+
+- **`[ai.tasks.create]`**: Configuration for code creation operations
+  - `provider`: Optional provider override
+  - `model`: Optional model override
+
 ## CLI Overrides
 
 Override the configured provider and model with global flags:

@@ -248,6 +248,7 @@ mod tests {
             allow_paid_models: false,
             circuit_breaker_threshold: 3,
             circuit_breaker_reset_seconds: 60,
+            tasks: None,
         }
     }
 
