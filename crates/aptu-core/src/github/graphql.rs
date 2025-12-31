@@ -401,6 +401,19 @@ fn build_issue_with_repo_context_query(owner: &str, repo: &str, number: u64) -> 
     json!({ "query": query })
 }
 
+/// Checks if any error in the GraphQL errors array has type=`NOT_FOUND`.
+fn is_not_found_error(errors: &Value) -> bool {
+    if let Some(arr) = errors.as_array() {
+        arr.iter().any(|err| {
+            err.get("type")
+                .and_then(|t| t.as_str())
+                .is_some_and(|t| t == "NOT_FOUND")
+        })
+    } else {
+        false
+    }
+}
+
 /// Fetches an issue with repository context (labels, milestones) in a single GraphQL call.
 ///
 /// # Errors
@@ -427,19 +440,23 @@ pub async fn fetch_issue_with_repo_context(
     // Check for GraphQL errors
     if let Some(errors) = response.get("errors") {
         let error_msg = serde_json::to_string_pretty(errors).unwrap_or_default();
-        debug!("GraphQL error occurred, attempting to detect type mismatch");
 
-        // Try to fetch as a PR to provide a better error message
-        if (client.pulls(owner, repo).get(number).await).is_ok() {
-            return Err(AptuError::TypeMismatch {
-                number,
-                expected: ResourceType::Issue,
-                actual: ResourceType::PullRequest,
+        // Only attempt fallback for NOT_FOUND errors to avoid unnecessary API calls
+        if is_not_found_error(errors) {
+            debug!("GraphQL NOT_FOUND error, checking if reference is a PR");
+
+            // Try to fetch as a PR to provide a better error message
+            if (client.pulls(owner, repo).get(number).await).is_ok() {
+                return Err(AptuError::TypeMismatch {
+                    number,
+                    expected: ResourceType::Issue,
+                    actual: ResourceType::PullRequest,
+                }
+                .into());
             }
-            .into());
         }
 
-        // Not a PR, return the original GraphQL error
+        // Not a PR or not a NOT_FOUND error, return the original GraphQL error
         anyhow::bail!("GraphQL error: {error_msg}");
     }
 
@@ -452,7 +469,7 @@ pub async fn fetch_issue_with_repo_context(
 
     // Check if issue is null (not found)
     if issue_data.is_none() || issue_data.is_some_and(serde_json::Value::is_null) {
-        debug!("Issue not found in GraphQL response, attempting to detect type mismatch");
+        debug!("Issue not found in GraphQL response, checking if reference is a PR");
 
         // Try to fetch as a PR to provide a better error message
         if (client.pulls(owner, repo).get(number).await).is_ok() {
