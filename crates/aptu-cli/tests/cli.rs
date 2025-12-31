@@ -266,9 +266,8 @@ fn test_issue_list_json_output() {
         .arg("json")
         .output()
         .unwrap();
-
     let stdout = String::from_utf8(output.stdout).unwrap();
-    
+
     // If authentication fails, the command will exit with error
     // In that case, we just verify the test runs without panic
     if !stdout.is_empty() {
@@ -291,9 +290,8 @@ fn test_repo_discover_json_output() {
         .arg("json")
         .output()
         .unwrap();
-
     let stdout = String::from_utf8(output.stdout).unwrap();
-    
+
     // If authentication fails, the command will exit with error
     // In that case, we just verify the test runs without panic
     if !stdout.is_empty() {
