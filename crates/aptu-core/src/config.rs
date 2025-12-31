@@ -25,6 +25,17 @@ use serde::Deserialize;
 
 use crate::error::AptuError;
 
+/// Task type for model selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskType {
+    /// Issue triage task.
+    Triage,
+    /// Pull request review task.
+    Review,
+    /// Label creation task.
+    Create,
+}
+
 /// Application configuration.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
@@ -110,6 +121,39 @@ impl Default for AiConfig {
             circuit_breaker_reset_seconds: 60,
             tasks: None,
         }
+    }
+}
+
+impl AiConfig {
+    /// Resolve provider and model for a specific task type.
+    ///
+    /// Returns a tuple of (provider, model) by checking task-specific overrides first,
+    /// then falling back to the default provider and model.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The task type to resolve configuration for
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (`provider_name`, `model_name`) strings
+    #[must_use]
+    pub fn resolve_for_task(&self, task: TaskType) -> (String, String) {
+        let task_override = match task {
+            TaskType::Triage => self.tasks.as_ref().and_then(|t| t.triage.as_ref()),
+            TaskType::Review => self.tasks.as_ref().and_then(|t| t.review.as_ref()),
+            TaskType::Create => self.tasks.as_ref().and_then(|t| t.create.as_ref()),
+        };
+
+        let provider = task_override
+            .and_then(|o| o.provider.clone())
+            .unwrap_or_else(|| self.provider.clone());
+
+        let model = task_override
+            .and_then(|o| o.model.clone())
+            .unwrap_or_else(|| self.model.clone());
+
+        (provider, model)
     }
 }
 
@@ -425,5 +469,175 @@ model = "gemini-3-flash-preview"
         assert_eq!(app_config.ai.provider, "gemini");
         assert_eq!(app_config.ai.model, "gemini-3-flash-preview");
         assert!(app_config.ai.tasks.is_none());
+    }
+
+    #[test]
+    fn test_resolve_for_task_no_overrides() {
+        // Test that resolve_for_task returns defaults when no task overrides exist
+        let ai_config = AiConfig::default();
+
+        let (provider, model) = ai_config.resolve_for_task(TaskType::Triage);
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3-flash-preview");
+
+        let (provider, model) = ai_config.resolve_for_task(TaskType::Review);
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3-flash-preview");
+
+        let (provider, model) = ai_config.resolve_for_task(TaskType::Create);
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3-flash-preview");
+    }
+
+    #[test]
+    fn test_resolve_for_task_with_triage_override() {
+        // Test that resolve_for_task returns triage override when present
+        let config_str = r#"
+[ai]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+
+[ai.tasks.triage]
+model = "gemini-2.5-flash-lite-preview-09-2025"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        // Triage should use override
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Triage);
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-2.5-flash-lite-preview-09-2025");
+
+        // Review and Create should use defaults
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3-flash-preview");
+
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3-flash-preview");
+    }
+
+    #[test]
+    fn test_resolve_for_task_with_provider_override() {
+        // Test that resolve_for_task returns provider override when present
+        let config_str = r#"
+[ai]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+
+[ai.tasks.review]
+provider = "openrouter"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        // Review should use provider override but default model
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "gemini-3-flash-preview");
+
+        // Triage and Create should use defaults
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Triage);
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3-flash-preview");
+
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3-flash-preview");
+    }
+
+    #[test]
+    fn test_resolve_for_task_with_full_overrides() {
+        // Test that resolve_for_task returns both provider and model overrides
+        let config_str = r#"
+[ai]
+provider = "gemini"
+model = "gemini-3-flash-preview"
+
+[ai.tasks.triage]
+provider = "openrouter"
+model = "mistralai/devstral-2512:free"
+
+[ai.tasks.review]
+provider = "openrouter"
+model = "anthropic/claude-haiku-4.5"
+
+[ai.tasks.create]
+provider = "gemini"
+model = "gemini-3-pro-preview"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        // Triage
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Triage);
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistralai/devstral-2512:free");
+
+        // Review
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "anthropic/claude-haiku-4.5");
+
+        // Create
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3-pro-preview");
+    }
+
+    #[test]
+    fn test_resolve_for_task_partial_overrides() {
+        // Test that resolve_for_task handles partial overrides correctly
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "mistralai/devstral-2512:free"
+
+[ai.tasks.triage]
+model = "mistralai/devstral-2512:free"
+
+[ai.tasks.review]
+provider = "openrouter"
+
+[ai.tasks.create]
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        // Triage: model override, provider from default
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Triage);
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistralai/devstral-2512:free");
+
+        // Review: provider override, model from default
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistralai/devstral-2512:free");
+
+        // Create: empty override, both from default
+        let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistralai/devstral-2512:free");
     }
 }

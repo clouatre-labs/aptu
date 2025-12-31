@@ -116,7 +116,8 @@ impl AiClient {
     ///
     /// * `provider_name` - Name of the provider (e.g., "openrouter", "gemini")
     /// * `api_key` - API key as a `SecretString`
-    /// * `config` - AI configuration with model, timeout, and cost control settings
+    /// * `model_name` - Model name to use (e.g., "gemini-3-flash-preview")
+    /// * `config` - AI configuration with timeout and cost control settings
     ///
     /// # Errors
     ///
@@ -127,6 +128,7 @@ impl AiClient {
     pub fn with_api_key(
         provider_name: &str,
         api_key: SecretString,
+        model_name: &str,
         config: &AiConfig,
     ) -> Result<Self> {
         // Look up provider in registry
@@ -136,14 +138,14 @@ impl AiClient {
         // Validate model against cost control (OpenRouter-specific)
         if provider_name == "openrouter"
             && !config.allow_paid_models
-            && !super::is_free_model(&config.model)
+            && !super::is_free_model(model_name)
         {
             anyhow::bail!(
                 "Model '{}' is not in the free tier.\n\
                  To use paid models, set `allow_paid_models = true` in your config file:\n\
                  {}\n\n\
                  Or use a free model like: mistralai/devstral-2512:free",
-                config.model,
+                model_name,
                 crate::config::config_file_path().display()
             );
         }
@@ -158,7 +160,7 @@ impl AiClient {
             provider,
             http,
             api_key,
-            model: config.model.clone(),
+            model: model_name.to_string(),
             max_tokens: config.max_tokens,
             temperature: config.temperature,
             circuit_breaker: CircuitBreaker::new(
@@ -259,6 +261,7 @@ mod tests {
             let result = AiClient::with_api_key(
                 provider_config.name,
                 SecretString::from("test_key"),
+                "test-model:free",
                 &config,
             );
             assert!(
@@ -272,7 +275,12 @@ mod tests {
     #[test]
     fn test_unknown_provider_error() {
         let config = test_config();
-        let result = AiClient::with_api_key("nonexistent", SecretString::from("key"), &config);
+        let result = AiClient::with_api_key(
+            "nonexistent",
+            SecretString::from("key"),
+            "test-model",
+            &config,
+        );
         assert!(result.is_err());
     }
 
@@ -281,7 +289,12 @@ mod tests {
         let mut config = test_config();
         config.model = "anthropic/claude-3".to_string();
         config.allow_paid_models = false;
-        let result = AiClient::with_api_key("openrouter", SecretString::from("key"), &config);
+        let result = AiClient::with_api_key(
+            "openrouter",
+            SecretString::from("key"),
+            "anthropic/claude-3",
+            &config,
+        );
         assert!(result.is_err());
     }
 }
