@@ -5,10 +5,33 @@
 //! Provides functions for fetching PRs between git tags and parsing tag references.
 
 use anyhow::{Context, Result};
+use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
 use std::collections::HashSet;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use crate::ai::types::PrSummary;
+
+#[derive(serde::Deserialize)]
+struct RefResponse {
+    object: RefObject,
+}
+
+#[derive(serde::Deserialize)]
+struct RefObject {
+    sha: String,
+    #[serde(rename = "type")]
+    r#type: String,
+}
+
+#[derive(serde::Deserialize)]
+struct TagObject {
+    object: GitObject,
+}
+
+#[derive(serde::Deserialize)]
+struct GitObject {
+    sha: String,
+}
 
 /// Fetch merged PRs between two git references.
 ///
@@ -114,9 +137,68 @@ async fn resolve_ref_to_sha(
     match super::graphql::resolve_tag_to_commit_sha(client, owner, repo, ref_name).await? {
         Some(sha) => Ok(sha),
         None => {
-            // If tag not found, assume it's a commit SHA and return as-is
-            Ok(ref_name.to_string())
+            // If GraphQL returns None, try REST API as fallback
+            // This handles cases where tags are recreated and GraphQL cache is stale
+            match resolve_tag_via_rest(client, owner, repo, ref_name).await {
+                Ok(sha) => Ok(sha),
+                Err(e) => {
+                    // If both GraphQL and REST API fail, assume it's a commit SHA
+                    debug!(
+                        error = ?e,
+                        tag = %ref_name,
+                        "REST API fallback failed, treating input as literal SHA"
+                    );
+                    Ok(ref_name.to_string())
+                }
+            }
         }
+    }
+}
+
+/// Resolve a tag to its commit SHA using the REST API.
+///
+/// # Arguments
+///
+/// * `client` - Octocrab GitHub client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `tag_name` - Tag name to resolve
+///
+/// # Returns
+///
+/// The commit SHA for the tag, or an error if the tag doesn't exist.
+#[instrument(skip(client))]
+async fn resolve_tag_via_rest(
+    client: &octocrab::Octocrab,
+    owner: &str,
+    repo: &str,
+    tag_name: &str,
+) -> Result<String> {
+    // URL-encode the tag name to handle special characters like '/', '?', '+', etc.
+    let encoded_tag = percent_encode(tag_name.as_bytes(), NON_ALPHANUMERIC).to_string();
+    let route = format!("/repos/{owner}/{repo}/git/refs/tags/{encoded_tag}");
+
+    let response: RefResponse = client
+        .get::<RefResponse, &str, ()>(&route, None::<&()>)
+        .await
+        .context(format!("Failed to resolve tag {tag_name} via REST API"))?;
+
+    // Check if this is an annotated tag (type == "tag") or a lightweight tag (type == "commit")
+    if response.object.r#type == "tag" {
+        // For annotated tags, we need to dereference to get the commit SHA
+        // Make a second REST call to get the tag object and extract the commit SHA
+        let tag_route = format!("/repos/{owner}/{repo}/git/tags/{}", response.object.sha);
+        let tag_obj: TagObject = client
+            .get::<TagObject, &str, ()>(&tag_route, None::<&()>)
+            .await
+            .context(format!(
+                "Failed to dereference annotated tag {tag_name} to commit SHA"
+            ))?;
+
+        Ok(tag_obj.object.sha)
+    } else {
+        // For lightweight tags, the SHA is already the commit SHA
+        Ok(response.object.sha)
     }
 }
 
