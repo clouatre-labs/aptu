@@ -117,6 +117,22 @@ pub struct RelatedIssue {
 /// Structured triage response from AI.
 ///
 /// This is the expected JSON structure in the AI's response content.
+///
+/// # Example
+///
+/// ```json
+/// {
+///   "summary": "User reports that the login button is unresponsive on mobile devices.",
+///   "suggested_labels": ["bug", "mobile"],
+///   "clarifying_questions": ["What mobile OS and browser are you using?"],
+///   "potential_duplicates": [],
+///   "related_issues": [],
+///   "contributor_guidance": {
+///     "beginner_friendly": true,
+///     "reasoning": "Requires basic JavaScript debugging and CSS media query knowledge."
+///   }
+/// }
+/// ```
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct TriageResponse {
     /// 2-3 sentence summary of the issue.

@@ -77,16 +77,7 @@ See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for setup and examples.
 
 ## Configuration
 
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for AI provider setup.
-
-## Security
-
-- **SLSA Level 3** - Provenance attestations for all releases
-- **REUSE/SPDX** - License compliance for all files
-- **Signed Commits** - GPG-signed commits required
-- **Dependency Scanning** - Automated updates via Renovate
-
-See [SECURITY.md](SECURITY.md) for reporting and verification.
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed AI provider setup and configuration options.
 
 ## Contributing
 
