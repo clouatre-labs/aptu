@@ -5,6 +5,10 @@
 //! This module provides a static registry of all AI providers supported by Aptu,
 //! including their metadata, API endpoints, and available models.
 //!
+//! It also provides runtime model validation infrastructure via the `ModelRegistry` trait
+//! and `CachedModelRegistry` implementation for fetching and caching model lists from
+//! provider APIs.
+//!
 //! # Examples
 //!
 //! ```
@@ -18,6 +22,12 @@
 //! let providers = all_providers();
 //! assert_eq!(providers.len(), 6);
 //! ```
+
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+use thiserror::Error;
 
 /// Metadata for a single AI model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -205,6 +215,290 @@ pub fn get_provider(name: &str) -> Option<&'static ProviderConfig> {
 #[must_use]
 pub fn all_providers() -> &'static [ProviderConfig] {
     PROVIDERS
+}
+
+// ============================================================================
+// Runtime Model Validation
+// ============================================================================
+
+/// Error type for model registry operations.
+#[derive(Debug, Error)]
+pub enum RegistryError {
+    /// HTTP request failed.
+    #[error("HTTP request failed: {0}")]
+    HttpError(String),
+
+    /// Failed to parse API response.
+    #[error("Failed to parse API response: {0}")]
+    ParseError(String),
+
+    /// Provider not found.
+    #[error("Provider not found: {0}")]
+    ProviderNotFound(String),
+
+    /// Cache error.
+    #[error("Cache error: {0}")]
+    CacheError(String),
+
+    /// IO error.
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+}
+
+/// Cached model information from API responses.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CachedModel {
+    /// Model identifier from the provider API.
+    pub id: String,
+    /// Human-readable model name.
+    pub name: Option<String>,
+    /// Whether the model is free to use.
+    pub is_free: Option<bool>,
+    /// Maximum context window size in tokens.
+    pub context_window: Option<u32>,
+}
+
+/// Cache metadata for TTL validation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CacheMetadata {
+    /// Unix timestamp when the cache entry was created.
+    pub timestamp: u64,
+    /// Time-to-live in seconds.
+    pub ttl_seconds: u64,
+}
+
+/// Trait for runtime model validation and listing.
+#[async_trait]
+pub trait ModelRegistry: Send + Sync {
+    /// List all available models for a provider.
+    async fn list_models(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError>;
+
+    /// Check if a model exists for a provider.
+    async fn model_exists(&self, provider: &str, model_id: &str) -> Result<bool, RegistryError>;
+
+    /// Suggest similar models when a model is not found.
+    async fn suggest_similar(
+        &self,
+        provider: &str,
+        model_id: &str,
+    ) -> Result<Vec<String>, RegistryError>;
+}
+
+/// Cached model registry with HTTP client and TTL support.
+pub struct CachedModelRegistry {
+    cache_dir: PathBuf,
+    ttl_seconds: u64,
+    client: reqwest::Client,
+}
+
+impl CachedModelRegistry {
+    /// Create a new cached model registry.
+    ///
+    /// # Arguments
+    ///
+    /// * `cache_dir` - Directory for storing cached model lists
+    /// * `ttl_seconds` - Time-to-live for cache entries (default: 86400 = 24 hours)
+    pub fn new(cache_dir: PathBuf, ttl_seconds: u64) -> Self {
+        Self {
+            cache_dir,
+            ttl_seconds,
+            client: reqwest::Client::new(),
+        }
+    }
+
+    /// Get the cache file path for a provider.
+    fn cache_path(&self, provider: &str) -> PathBuf {
+        self.cache_dir.join(format!("models_{}.json", provider))
+    }
+
+    /// Check if cache is still valid.
+    fn is_cache_valid(&self, metadata: &CacheMetadata) -> bool {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        now < metadata.timestamp + metadata.ttl_seconds
+    }
+
+    /// Load models from cache.
+    fn load_from_cache(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
+        let path = self.cache_path(provider);
+        if !path.exists() {
+            return Err(RegistryError::CacheError("Cache file not found".to_string()));
+        }
+
+        let content = std::fs::read_to_string(&path)?;
+        let data: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| RegistryError::ParseError(e.to_string()))?;
+
+        // Check TTL
+        if let Some(metadata) = data.get("metadata").and_then(|m| {
+            serde_json::from_value::<CacheMetadata>(m.clone()).ok()
+        }) {
+            if !self.is_cache_valid(&metadata) {
+                return Err(RegistryError::CacheError("Cache expired".to_string()));
+            }
+        }
+
+        // Extract models
+        data.get("models")
+            .and_then(|m| serde_json::from_value::<Vec<CachedModel>>(m.clone()).ok())
+            .ok_or_else(|| RegistryError::ParseError("Invalid cache format".to_string()))
+    }
+
+    /// Save models to cache.
+    fn save_to_cache(&self, provider: &str, models: &[CachedModel]) -> Result<(), RegistryError> {
+        std::fs::create_dir_all(&self.cache_dir)?;
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let cache_data = serde_json::json!({
+            "metadata": {
+                "timestamp": now,
+                "ttl_seconds": self.ttl_seconds,
+            },
+            "models": models,
+        });
+
+        let path = self.cache_path(provider);
+        std::fs::write(&path, cache_data.to_string())?;
+        Ok(())
+    }
+
+    /// Fetch models from provider API.
+    async fn fetch_from_api(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
+        let url = match provider {
+            "openrouter" => "https://openrouter.ai/api/v1/models",
+            "gemini" => "https://generativelanguage.googleapis.com/v1beta/models",
+            "groq" => "https://api.groq.com/openai/v1/models",
+            "cerebras" => "https://api.cerebras.ai/v1/models",
+            _ => return Err(RegistryError::ProviderNotFound(provider.to_string())),
+        };
+
+        let response = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| RegistryError::HttpError(e.to_string()))?;
+
+        let data = response
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|e| RegistryError::HttpError(e.to_string()))?;
+
+        // Parse based on provider API format
+        let models = match provider {
+            "openrouter" => {
+                data.get("data")
+                    .and_then(|d| d.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|m| {
+                                Some(CachedModel {
+                                    id: m.get("id")?.as_str()?.to_string(),
+                                    name: m.get("name").and_then(|n| n.as_str()).map(String::from),
+                                    is_free: m
+                                        .get("pricing")
+                                        .and_then(|p| p.get("prompt"))
+                                        .and_then(|p| p.as_str())
+                                        .map(|p| p == "0"),
+                                    context_window: m
+                                        .get("context_length")
+                                        .and_then(|c| c.as_u64())
+                                        .map(|c| c as u32),
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            }
+            "gemini" => {
+                data.get("models")
+                    .and_then(|d| d.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|m| {
+                                Some(CachedModel {
+                                    id: m.get("name")?.as_str()?.to_string(),
+                                    name: m.get("displayName").and_then(|n| n.as_str()).map(String::from),
+                                    is_free: None,
+                                    context_window: m
+                                        .get("inputTokenLimit")
+                                        .and_then(|c| c.as_u64())
+                                        .map(|c| c as u32),
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            }
+            "groq" | "cerebras" => {
+                data.get("data")
+                    .and_then(|d| d.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|m| {
+                                Some(CachedModel {
+                                    id: m.get("id")?.as_str()?.to_string(),
+                                    name: None,
+                                    is_free: None,
+                                    context_window: None,
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            }
+            _ => vec![],
+        };
+
+        Ok(models)
+    }
+}
+
+#[async_trait]
+impl ModelRegistry for CachedModelRegistry {
+    async fn list_models(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
+        // Try cache first
+        if let Ok(models) = self.load_from_cache(provider) {
+            return Ok(models);
+        }
+
+        // Fetch from API
+        let models = self.fetch_from_api(provider).await?;
+
+        // Save to cache (ignore errors)
+        let _ = self.save_to_cache(provider, &models);
+
+        Ok(models)
+    }
+
+    async fn model_exists(&self, provider: &str, model_id: &str) -> Result<bool, RegistryError> {
+        let models = self.list_models(provider).await?;
+        Ok(models.iter().any(|m| m.id == model_id))
+    }
+
+    async fn suggest_similar(
+        &self,
+        provider: &str,
+        model_id: &str,
+    ) -> Result<Vec<String>, RegistryError> {
+        let models = self.list_models(provider).await?;
+        let mut suggestions: Vec<_> = models
+            .iter()
+            .filter(|m| {
+                m.id.contains(&model_id.split('/').last().unwrap_or(&model_id))
+                    || model_id.contains(&m.id)
+            })
+            .map(|m| m.id.clone())
+            .collect();
+        suggestions.truncate(5);
+        Ok(suggestions)
+    }
 }
 
 #[cfg(test)]

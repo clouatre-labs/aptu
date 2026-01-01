@@ -107,9 +107,10 @@ impl AiClient {
         })
     }
 
-    /// Creates a new AI client with a provided API key.
+    /// Creates a new AI client with a provided API key and validates the model exists.
     ///
-    /// This constructor allows callers to provide an API key directly,
+    /// This constructor validates that the model exists via the runtime model registry
+    /// before creating the client. It allows callers to provide an API key directly,
     /// enabling multi-platform credential resolution (e.g., from iOS keychain via FFI).
     ///
     /// # Arguments

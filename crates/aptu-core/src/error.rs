@@ -84,6 +84,13 @@ pub enum AptuError {
         /// Actual type.
         actual: ResourceType,
     },
+
+    /// Model registry error (runtime model validation).
+    #[error("Model registry error: {message}")]
+    ModelRegistry {
+        /// Error message.
+        message: String,
+    },
 }
 
 /// GitHub resource type for type mismatch errors.
