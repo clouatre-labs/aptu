@@ -150,6 +150,12 @@ pub struct AiConfig {
     pub tasks: Option<TasksConfig>,
     /// Fallback provider chain for resilience.
     pub fallback: Option<FallbackConfig>,
+    /// Custom guidance to override or extend default best practices.
+    ///
+    /// Allows users to provide project-specific tooling recommendations
+    /// that will be appended to the default best practices context.
+    /// Useful for enforcing project-specific choices (e.g., poetry instead of uv).
+    pub custom_guidance: Option<String>,
 }
 
 impl Default for AiConfig {
@@ -165,6 +171,7 @@ impl Default for AiConfig {
             circuit_breaker_reset_seconds: 60,
             tasks: None,
             fallback: None,
+            custom_guidance: None,
         }
     }
 }

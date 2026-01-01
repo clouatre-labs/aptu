@@ -318,7 +318,7 @@ pub trait AiProvider: Send + Sync {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: Self::build_system_prompt(),
+                    content: Self::build_system_prompt(None),
                 },
                 ChatMessage {
                     role: "user".to_string(),
@@ -381,7 +381,7 @@ pub trait AiProvider: Send + Sync {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: Self::build_create_system_prompt(),
+                    content: Self::build_create_system_prompt(None),
                 },
                 ChatMessage {
                     role: "user".to_string(),
@@ -416,43 +416,26 @@ pub trait AiProvider: Send + Sync {
 
     /// Builds the system prompt for issue triage.
     #[must_use]
-    fn build_system_prompt() -> String {
-        r##"You are an OSS issue triage assistant. Analyze the provided GitHub issue and provide structured triage information.
-
-Your response MUST be valid JSON with this exact schema:
-{
-  "summary": "A 2-3 sentence summary of what the issue is about and its impact",
-  "suggested_labels": ["label1", "label2"],
-  "clarifying_questions": ["question1", "question2"],
-  "potential_duplicates": ["#123", "#456"],
-  "related_issues": [
-    {
-      "number": 789,
-      "title": "Related issue title",
-      "reason": "Brief explanation of why this is related"
-    }
-  ],
-  "status_note": "Optional note about issue status (e.g., claimed, in-progress)",
-  "contributor_guidance": {
-    "beginner_friendly": true,
-    "reasoning": "1-2 sentence explanation of beginner-friendliness assessment"
-  },
-  "implementation_approach": "Optional suggestions for implementation based on repository structure",
-  "suggested_milestone": "Optional milestone title for the issue"
-}
-
-Guidelines:
-- summary: Concise explanation of the problem/request and why it matters
-- suggested_labels: Prefer labels from the Available Labels list provided. Choose from: bug, enhancement, documentation, question, duplicate, invalid, wontfix. If a more specific label exists in the repository, use it instead of generic ones.
-- clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear. Skip questions already answered in comments.
-- potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none. A duplicate is an issue that describes the exact same problem.
-- related_issues: Include issues from the search results that are contextually related but NOT duplicates. Provide brief reasoning for each. Leave empty array if none are relevant.
-- status_note: Detect if someone has claimed the issue or is working on it. Look for patterns like "I'd like to work on this", "I'll submit a PR", "working on this", or "@user I've assigned you". If claimed, set status_note to a brief description (e.g., "Issue claimed by @username"). If not claimed, leave as null or empty string.
-- contributor_guidance: Assess whether the issue is suitable for beginners. Consider: scope (small, well-defined), file count (few files to modify), required knowledge (no deep expertise needed), clarity (clear problem statement). Set beginner_friendly to true if all factors are favorable. Provide 1-2 sentence reasoning explaining the assessment.
-- implementation_approach: Based on the repository structure provided, suggest specific files or modules to modify. Reference the file paths from the repository structure. Be concrete and actionable. Leave as null or empty string if no specific guidance can be provided.
-- suggested_milestone: If applicable, suggest a milestone title from the Available Milestones list. Only include if a milestone is clearly relevant to the issue. Leave as null or empty string if no milestone is appropriate.
-
-Be helpful, concise, and actionable. Focus on what a maintainer needs to know."##.to_string()
+    fn build_system_prompt(custom_guidance: Option<&str>) -> String {
+        let context = super::context::load_custom_guidance(custom_guidance);
+        let schema = "{\n  \"summary\": \"A 2-3 sentence summary of what the issue is about and its impact\",\n  \"suggested_labels\": [\"label1\", \"label2\"],\n  \"clarifying_questions\": [\"question1\", \"question2\"],\n  \"potential_duplicates\": [\"#123\", \"#456\"],\n  \"related_issues\": [\n    {\n      \"number\": 789,\n      \"title\": \"Related issue title\",\n      \"reason\": \"Brief explanation of why this is related\"\n    }\n  ],\n  \"status_note\": \"Optional note about issue status (e.g., claimed, in-progress)\",\n  \"contributor_guidance\": {\n    \"beginner_friendly\": true,\n    \"reasoning\": \"1-2 sentence explanation of beginner-friendliness assessment\"\n  },\n  \"implementation_approach\": \"Optional suggestions for implementation based on repository structure\",\n  \"suggested_milestone\": \"Optional milestone title for the issue\"\n}";
+        let guidelines = "Guidelines:\n\
+- summary: Concise explanation of the problem/request and why it matters\n\
+- suggested_labels: Prefer labels from the Available Labels list provided. Choose from: bug, enhancement, documentation, question, duplicate, invalid, wontfix. If a more specific label exists in the repository, use it instead of generic ones.\n\
+- clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear. Skip questions already answered in comments.\n\
+- potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none. A duplicate is an issue that describes the exact same problem.\n\
+- related_issues: Include issues from the search results that are contextually related but NOT duplicates. Provide brief reasoning for each. Leave empty array if none are relevant.\n\
+- status_note: Detect if someone has claimed the issue or is working on it. Look for patterns like \"I'd like to work on this\", \"I'll submit a PR\", \"working on this\", or \"@user I've assigned you\". If claimed, set status_note to a brief description (e.g., \"Issue claimed by @username\"). If not claimed, leave as null or empty string.\n\
+- contributor_guidance: Assess whether the issue is suitable for beginners. Consider: scope (small, well-defined), file count (few files to modify), required knowledge (no deep expertise needed), clarity (clear problem statement). Set beginner_friendly to true if all factors are favorable. Provide 1-2 sentence reasoning explaining the assessment.\n\
+- implementation_approach: Based on the repository structure provided, suggest specific files or modules to modify. Reference the file paths from the repository structure. Be concrete and actionable. Leave as null or empty string if no specific guidance can be provided.\n\
+- suggested_milestone: If applicable, suggest a milestone title from the Available Milestones list. Only include if a milestone is clearly relevant to the issue. Leave as null or empty string if no milestone is appropriate.\n\
+\n\
+Be helpful, concise, and actionable. Focus on what a maintainer needs to know.";
+        format!(
+            "You are an OSS issue triage assistant. Analyze the provided GitHub issue and \
+             provide structured triage information.\n\n{context}\n\nYour response MUST be valid \
+             JSON with this exact schema:\n{schema}\n\n{guidelines}"
+        )
     }
 
     /// Builds the user prompt containing the issue details.
@@ -559,15 +542,19 @@ Be helpful, concise, and actionable. Focus on what a maintainer needs to know."#
 
     /// Builds the system prompt for issue creation/formatting.
     #[must_use]
-    fn build_create_system_prompt() -> String {
-        r#"You are a GitHub issue formatting assistant. Your job is to take a raw issue title and body from a user and format them professionally for a GitHub repository.
+    fn build_create_system_prompt(custom_guidance: Option<&str>) -> String {
+        let context = super::context::load_custom_guidance(custom_guidance);
+        format!(
+            r#"You are a GitHub issue formatting assistant. Your job is to take a raw issue title and body from a user and format them professionally for a GitHub repository.
+
+{context}
 
 Your response MUST be valid JSON with this exact schema:
-{
+{{
   "formatted_title": "Well-formatted issue title following conventional commit style",
   "formatted_body": "Professionally formatted issue body with clear sections",
   "suggested_labels": ["label1", "label2"]
-}
+}}
 
 Guidelines:
 - formatted_title: Use conventional commit style (e.g., "feat: add search functionality", "fix: resolve memory leak in parser"). Keep it concise (under 72 characters). No period at the end.
@@ -580,7 +567,8 @@ Guidelines:
   * Add relevant context if missing
 - suggested_labels: Suggest up to 3 relevant GitHub labels. Common ones: bug, enhancement, documentation, question, duplicate, invalid, wontfix. Choose based on the issue content.
 
-Be professional but friendly. Maintain the user's intent while improving clarity and structure."#.to_string()
+Be professional but friendly. Maintain the user's intent while improving clarity and structure."#
+        )
     }
 
     /// Builds the user prompt for issue creation/formatting.
@@ -615,7 +603,7 @@ Be professional but friendly. Maintain the user's intent while improving clarity
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: Self::build_pr_review_system_prompt(),
+                    content: Self::build_pr_review_system_prompt(None),
                 },
                 ChatMessage {
                     role: "user".to_string(),
@@ -676,7 +664,7 @@ Be professional but friendly. Maintain the user's intent while improving clarity
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: Self::build_pr_label_system_prompt(),
+                    content: Self::build_pr_label_system_prompt(None),
                 },
                 ChatMessage {
                     role: "user".to_string(),
@@ -709,25 +697,29 @@ Be professional but friendly. Maintain the user's intent while improving clarity
 
     /// Builds the system prompt for PR review.
     #[must_use]
-    fn build_pr_review_system_prompt() -> String {
-        r#"You are a code review assistant. Analyze the provided pull request and provide structured review feedback.
+    fn build_pr_review_system_prompt(custom_guidance: Option<&str>) -> String {
+        let context = super::context::load_custom_guidance(custom_guidance);
+        format!(
+            r#"You are a code review assistant. Analyze the provided pull request and provide structured review feedback.
+
+{context}
 
 Your response MUST be valid JSON with this exact schema:
-{
+{{
   "summary": "A 2-3 sentence summary of what the PR does and its impact",
   "verdict": "approve|request_changes|comment",
   "strengths": ["strength1", "strength2"],
   "concerns": ["concern1", "concern2"],
   "comments": [
-    {
+    {{
       "file": "path/to/file.rs",
       "line": 42,
       "comment": "Specific feedback about this line",
       "severity": "info|suggestion|warning|issue"
-    }
+    }}
   ],
   "suggestions": ["suggestion1", "suggestion2"]
-}
+}}
 
 Guidelines:
 - summary: Concise explanation of the changes and their purpose
@@ -748,7 +740,8 @@ Focus on:
 4. Maintainability: Is the code clear and well-structured?
 5. Testing: Are changes adequately tested?
 
-Be constructive and specific. Explain why something is an issue and how to fix it."#.to_string()
+Be constructive and specific. Explain why something is an issue and how to fix it."#
+        )
     }
 
     /// Builds the user prompt for PR review.
@@ -841,13 +834,17 @@ Be constructive and specific. Explain why something is an issue and how to fix i
 
     /// Builds the system prompt for PR label suggestion.
     #[must_use]
-    fn build_pr_label_system_prompt() -> String {
-        r#"You are a GitHub label suggestion assistant. Analyze the provided pull request and suggest relevant labels.
+    fn build_pr_label_system_prompt(custom_guidance: Option<&str>) -> String {
+        let context = super::context::load_custom_guidance(custom_guidance);
+        format!(
+            r#"You are a GitHub label suggestion assistant. Analyze the provided pull request and suggest relevant labels.
+
+{context}
 
 Your response MUST be valid JSON with this exact schema:
-{
+{{
   "suggested_labels": ["label1", "label2", "label3"]
-}
+}}
 
 Response format: json_object
 
@@ -857,7 +854,8 @@ Guidelines:
 - Prefer specific labels over generic ones when possible.
 - Only suggest labels that are commonly used in GitHub repositories.
 
-Be concise and practical."#.to_string()
+Be concise and practical."#
+        )
     }
 
     /// Builds the user prompt for PR label suggestion.
@@ -1040,7 +1038,7 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_contains_json_schema() {
-        let prompt = TestProvider::build_system_prompt();
+        let prompt = TestProvider::build_system_prompt(None);
         assert!(prompt.contains("summary"));
         assert!(prompt.contains("suggested_labels"));
         assert!(prompt.contains("clarifying_questions"));
@@ -1107,7 +1105,7 @@ mod tests {
 
     #[test]
     fn test_build_create_system_prompt_contains_json_schema() {
-        let prompt = TestProvider::build_create_system_prompt();
+        let prompt = TestProvider::build_create_system_prompt(None);
         assert!(prompt.contains("formatted_title"));
         assert!(prompt.contains("formatted_body"));
         assert!(prompt.contains("suggested_labels"));
@@ -1227,7 +1225,7 @@ mod tests {
 
     #[test]
     fn test_build_pr_label_system_prompt_contains_json_schema() {
-        let prompt = TestProvider::build_pr_label_system_prompt();
+        let prompt = TestProvider::build_pr_label_system_prompt(None);
         assert!(prompt.contains("suggested_labels"));
         assert!(prompt.contains("json_object"));
         assert!(prompt.contains("bug"));

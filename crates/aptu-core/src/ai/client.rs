@@ -252,6 +252,7 @@ mod tests {
             circuit_breaker_reset_seconds: 60,
             tasks: None,
             fallback: None,
+            custom_guidance: None,
         }
     }
 
