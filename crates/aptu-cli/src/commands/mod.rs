@@ -576,14 +576,27 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     None
                 };
 
+                // Display progress indicator
+                eprintln!("{}", style("[1/1] Reviewing").cyan().bold());
+
                 // Fetch PR details first (without spinner for immediate feedback)
                 let pr_details = pr::fetch(&reference, repo_context).await?;
 
-                // Display PR title and labels
-                eprintln!("PR #{}: {}", pr_details.number, pr_details.title);
+                // Display styled PR preview matching triage pattern
+                eprintln!();
+                eprintln!(
+                    "{} #{}: {}",
+                    style("PR").cyan().bold(),
+                    pr_details.number,
+                    style(&pr_details.title).bold()
+                );
                 if !pr_details.labels.is_empty() {
-                    eprintln!("Labels: {}", pr_details.labels.join(", "));
+                    eprintln!(
+                        "{}",
+                        style(format!("Labels: {}", pr_details.labels.join(", "))).dim()
+                    );
                 }
+                eprintln!();
 
                 // Now analyze with AI (with spinner)
                 let spinner = maybe_spinner(&ctx, "Analyzing with AI...");
@@ -619,6 +632,8 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     pr_url: pr_details.url,
                     review,
                     ai_stats,
+                    dry_run,
+                    labels: pr_details.labels,
                 };
                 output::render(&result, &ctx)?;
                 Ok(())

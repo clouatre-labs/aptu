@@ -166,6 +166,10 @@ pub struct PrReviewResult {
     pub review: aptu_core::ai::types::PrReviewResponse,
     /// AI usage statistics.
     pub ai_stats: aptu_core::history::AiStats,
+    /// Whether this was a dry run.
+    pub dry_run: bool,
+    /// PR labels.
+    pub labels: Vec<String>,
 }
 
 /// Result from the PR label command.

@@ -12,18 +12,6 @@ use crate::output::Renderable;
 
 impl Renderable for PrReviewResult {
     fn render_text(&self, w: &mut dyn Write, ctx: &OutputContext) -> io::Result<()> {
-        // Header
-        writeln!(w)?;
-        writeln!(
-            w,
-            "{} #{}: {}",
-            style("PR").cyan().bold(),
-            self.pr_number,
-            style(&self.pr_title).bold()
-        )?;
-        writeln!(w, "{}", style(&self.pr_url).dim())?;
-        writeln!(w)?;
-
         // Verdict
         let verdict_style = match self.review.verdict.as_str() {
             "approve" => style(&self.review.verdict).green().bold(),
@@ -103,6 +91,11 @@ impl Renderable for PrReviewResult {
                 writeln!(w, "  Cost: ${cost:.6}")?;
             }
             writeln!(w)?;
+        }
+
+        // Dry-run message
+        if self.dry_run {
+            writeln!(w, "{}", style("DRY RUN MODE").yellow().bold())?;
         }
 
         Ok(())
