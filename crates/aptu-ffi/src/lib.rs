@@ -8,7 +8,8 @@ pub mod types;
 use crate::error::AptuFfiError;
 use crate::keychain::KeychainProviderRef;
 use crate::types::{
-    FfiAiModel, FfiApplyResult, FfiCuratedRepo, FfiIssueNode, FfiTokenStatus, FfiTriageResponse,
+    FfiAiModel, FfiApplyResult, FfiCuratedRepo, FfiIssueNode, FfiReleaseNotesResponse,
+    FfiTokenStatus, FfiTriageResponse,
 };
 use tokio::runtime::Runtime;
 
@@ -508,6 +509,102 @@ pub fn apply_triage_labels(
 
         match aptu_core::apply_triage_labels(&provider, &issue_details, &core_triage).await {
             Ok(result) => Ok(FfiApplyResult::from(result)),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
+/// Generate AI-curated release notes from PRs between git tags.
+///
+/// This function wires the FFI layer to the core facade by:
+/// 1. Creating an FfiTokenProvider from the iOS keychain
+/// 2. Calling the core facade generate_release_notes() function
+/// 3. Converting ReleaseNotesResponse to FfiReleaseNotesResponse using From trait
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `from_tag` - Starting git tag (optional, defaults to previous release)
+/// * `to_tag` - Ending git tag (optional, defaults to HEAD)
+///
+/// # Returns
+///
+/// Structured release notes with theme, narrative, and categorized changes.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub or OpenRouter token is not available in keychain
+/// - Git tags cannot be found or parsed
+/// - AI API call fails
+/// - Response parsing fails
+#[uniffi::export]
+pub fn generate_release_notes(
+    keychain: KeychainProviderRef,
+    owner: String,
+    repo: String,
+    from_tag: Option<String>,
+    to_tag: Option<String>,
+) -> Result<FfiReleaseNotesResponse, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        match aptu_core::generate_release_notes(
+            &provider,
+            &owner,
+            &repo,
+            from_tag.as_deref(),
+            to_tag.as_deref(),
+        )
+        .await
+        {
+            Ok(response) => Ok(FfiReleaseNotesResponse::from(response)),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
+/// Post release notes to GitHub as a release.
+///
+/// Creates or updates a GitHub release with the provided release notes body.
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `tag` - Git tag for the release
+/// * `body` - Release notes body (markdown)
+///
+/// # Returns
+///
+/// The URL of the created/updated release.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available in keychain
+/// - User lacks write access to the repository
+/// - GitHub API call fails
+#[uniffi::export]
+pub fn post_release_notes(
+    keychain: KeychainProviderRef,
+    owner: String,
+    repo: String,
+    tag: String,
+    body: String,
+) -> Result<String, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        match aptu_core::post_release_notes(&provider, &owner, &repo, &tag, &body).await {
+            Ok(url) => Ok(url),
             Err(e) => Err(AptuFfiError::InternalError {
                 message: e.to_string(),
             }),

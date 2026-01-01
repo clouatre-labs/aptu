@@ -227,3 +227,32 @@ impl From<aptu_core::ApplyResult> for FfiApplyResult {
         }
     }
 }
+
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiReleaseNotesResponse {
+    pub theme: String,
+    pub narrative: String,
+    pub highlights: Vec<String>,
+    pub features: Vec<String>,
+    pub fixes: Vec<String>,
+    pub improvements: Vec<String>,
+    pub documentation: Vec<String>,
+    pub maintenance: Vec<String>,
+    pub contributors: Vec<String>,
+}
+
+impl From<aptu_core::ai::types::ReleaseNotesResponse> for FfiReleaseNotesResponse {
+    fn from(response: aptu_core::ai::types::ReleaseNotesResponse) -> Self {
+        FfiReleaseNotesResponse {
+            theme: response.theme,
+            narrative: response.narrative,
+            highlights: response.highlights,
+            features: response.features,
+            fixes: response.fixes,
+            improvements: response.improvements,
+            documentation: response.documentation,
+            maintenance: response.maintenance,
+            contributors: response.contributors,
+        }
+    }
+}
