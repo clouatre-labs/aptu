@@ -6,6 +6,7 @@
 
 pub mod circuit_breaker;
 pub mod client;
+pub mod context;
 pub mod models;
 pub mod provider;
 pub mod registry;
