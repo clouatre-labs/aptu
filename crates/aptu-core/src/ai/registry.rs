@@ -5,6 +5,9 @@
 //! This module provides a static registry of all AI providers supported by Aptu,
 //! including their metadata, API endpoints, and available models.
 //!
+//! It also provides runtime model validation infrastructure via the `ModelRegistry` trait
+//! and `CachedModelRegistry` implementation for fetching live model lists from provider APIs.
+//!
 //! # Examples
 //!
 //! ```
@@ -18,6 +21,12 @@
 //! let providers = all_providers();
 //! assert_eq!(providers.len(), 6);
 //! ```
+
+use std::path::PathBuf;
+
+use anyhow::Result;
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 /// Metadata for a single AI model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -205,6 +214,96 @@ pub fn get_provider(name: &str) -> Option<&'static ProviderConfig> {
 #[must_use]
 pub fn all_providers() -> &'static [ProviderConfig] {
     PROVIDERS
+}
+
+// ============================================================================
+// Runtime Model Registry
+// ============================================================================
+
+/// A model from a provider's API response.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RuntimeModel {
+    /// Provider-specific model identifier
+    pub id: String,
+    /// Human-readable model name
+    pub name: String,
+    /// Whether this model is free to use
+    pub is_free: bool,
+    /// Maximum context window size in tokens (if available)
+    pub context_window: Option<u32>,
+}
+
+/// Trait for runtime model validation and discovery.
+///
+/// Provides methods to fetch live model lists from provider APIs,
+/// validate model existence, and suggest similar models.
+#[async_trait]
+pub trait ModelRegistry: Send + Sync {
+    /// Fetch all available models from the provider.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - Provider name (e.g., "openrouter", "gemini")
+    ///
+    /// # Returns
+    ///
+    /// A vector of available models, or an error if the API call fails.
+    async fn list_models(&self, provider: &str) -> Result<Vec<RuntimeModel>>;
+
+    /// Check if a model exists for the given provider.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - Provider name
+    /// * `model_id` - Model identifier to check
+    ///
+    /// # Returns
+    ///
+    /// `true` if the model exists, `false` otherwise.
+    async fn model_exists(&self, provider: &str, model_id: &str) -> Result<bool>;
+
+    /// Suggest similar models based on a partial identifier.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - Provider name
+    /// * `partial_id` - Partial model identifier to match
+    ///
+    /// # Returns
+    ///
+    /// A vector of matching models, or an error if the API call fails.
+    async fn suggest_similar(&self, provider: &str, partial_id: &str) -> Result<Vec<RuntimeModel>>;
+}
+
+/// Cached model registry with TTL-based expiration.
+///
+/// Fetches model lists from provider APIs and caches them locally
+/// with a configurable TTL (default 24 hours).
+pub struct CachedModelRegistry {
+    /// Cache directory path
+    cache_dir: PathBuf,
+    /// TTL in seconds (default 86400 = 24 hours)
+    ttl_seconds: u64,
+}
+
+impl CachedModelRegistry {
+    /// Create a new cached model registry.
+    ///
+    /// # Arguments
+    ///
+    /// * `cache_dir` - Directory to store cached model lists
+    /// * `ttl_seconds` - Time-to-live for cache entries in seconds
+    pub fn new(cache_dir: PathBuf, ttl_seconds: u64) -> Self {
+        Self {
+            cache_dir,
+            ttl_seconds,
+        }
+    }
+
+    /// Create a new cached model registry with default TTL (24 hours).
+    pub fn with_default_ttl(cache_dir: PathBuf) -> Self {
+        Self::new(cache_dir, 86400)
+    }
 }
 
 #[cfg(test)]

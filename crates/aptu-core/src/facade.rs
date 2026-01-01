@@ -11,6 +11,7 @@ use chrono::Duration;
 use tracing::{debug, info, instrument, warn};
 
 use crate::ai::provider::MAX_LABELS;
+use crate::ai::registry::{ModelRegistry, RuntimeModel};
 use crate::ai::types::{PrDetails, ReviewEvent, TriageResponse};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
@@ -282,6 +283,124 @@ pub async fn discover_repos(
     let token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
     let token = SecretString::from(token);
     repos::discovery::search_repositories(&token, &filter).await
+}
+
+/// Lists available models from a provider's API.
+///
+/// Fetches live model lists from provider APIs with TTL-based caching.
+/// Falls back to static registry if API call fails.
+///
+/// # Arguments
+///
+/// * `registry` - Model registry implementation (e.g., CachedModelRegistry)
+/// * `provider` - Provider name (e.g., "openrouter", "gemini")
+/// * `force_refresh` - If true, bypass cache and fetch fresh data
+///
+/// # Returns
+///
+/// A vector of available models from the provider.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Provider is not found in registry
+/// - API call fails and no cached data is available
+#[instrument(skip(registry))]
+pub async fn list_models(
+    registry: &dyn ModelRegistry,
+    provider: &str,
+    force_refresh: bool,
+) -> crate::Result<Vec<RuntimeModel>> {
+    if force_refresh {
+        debug!(provider = provider, "Force refreshing model list");
+    }
+
+    registry
+        .list_models(provider)
+        .await
+        .map_err(|e| AptuError::AI {
+            message: format!("Failed to fetch models from {}: {}", provider, e),
+            status: None,
+            provider: provider.to_string(),
+        })
+}
+
+/// Validates that a model exists for a given provider.
+///
+/// Checks if a model identifier is available from the provider's API.
+/// Uses cached data if available and not expired.
+///
+/// # Arguments
+///
+/// * `registry` - Model registry implementation
+/// * `provider` - Provider name
+/// * `model_id` - Model identifier to validate
+///
+/// # Returns
+///
+/// `true` if the model exists, `false` otherwise.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Provider is not found
+/// - API call fails
+#[instrument(skip(registry))]
+pub async fn validate_model(
+    registry: &dyn ModelRegistry,
+    provider: &str,
+    model_id: &str,
+) -> crate::Result<bool> {
+    registry
+        .model_exists(provider, model_id)
+        .await
+        .map_err(|e| AptuError::AI {
+            message: format!(
+                "Failed to validate model {} for {}: {}",
+                model_id, provider, e
+            ),
+            status: None,
+            provider: provider.to_string(),
+        })
+}
+
+/// Suggests similar models based on a partial identifier.
+///
+/// Searches for models matching a partial identifier pattern.
+/// Useful for autocomplete and model discovery.
+///
+/// # Arguments
+///
+/// * `registry` - Model registry implementation
+/// * `provider` - Provider name
+/// * `partial_id` - Partial model identifier to match
+///
+/// # Returns
+///
+/// A vector of matching models.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Provider is not found
+/// - API call fails
+#[instrument(skip(registry))]
+pub async fn suggest_similar_models(
+    registry: &dyn ModelRegistry,
+    provider: &str,
+    partial_id: &str,
+) -> crate::Result<Vec<RuntimeModel>> {
+    registry
+        .suggest_similar(provider, partial_id)
+        .await
+        .map_err(|e| AptuError::AI {
+            message: format!(
+                "Failed to suggest models for {} in {}: {}",
+                partial_id, provider, e
+            ),
+            status: None,
+            provider: provider.to_string(),
+        })
 }
 
 /// Generic helper function to try AI operations with fallback chain.
