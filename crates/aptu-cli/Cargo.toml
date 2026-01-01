@@ -55,7 +55,6 @@ backon = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }
-wiremock = { workspace = true }
 assert_cmd = { workspace = true }
 predicates = "=3.1.3"
 
