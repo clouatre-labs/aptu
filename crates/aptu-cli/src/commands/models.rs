@@ -33,18 +33,13 @@ pub struct SerializableModelInfo {
 ///
 /// * `provider` - Provider name (e.g., "openrouter", "openai")
 /// * `free_only` - If true, filter to only free models
-/// * `refresh` - If true, force cache refresh (ignore 24h TTL)
 ///
 /// # Returns
 ///
 /// A `ModelsResult` containing the list of models
-pub async fn run_list(
-    provider: &str,
-    free_only: bool,
-    refresh: bool,
-) -> anyhow::Result<ModelsResult> {
+pub async fn run_list(provider: &str, free_only: bool) -> anyhow::Result<ModelsResult> {
     let token_provider = CliTokenProvider;
-    let models = aptu_core::list_models(&token_provider, provider, refresh).await?;
+    let models = aptu_core::list_models(&token_provider, provider).await?;
 
     let mut serializable_models: Vec<SerializableModelInfo> = models
         .into_iter()

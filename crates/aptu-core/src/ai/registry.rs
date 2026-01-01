@@ -321,7 +321,7 @@ impl CachedModelRegistry {
         now < metadata.timestamp + metadata.ttl_seconds
     }
 
-    /// Load models from cache.
+    /// Load models from cache, respecting TTL.
     fn load_from_cache(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         let path = self.cache_path(provider);
         if !path.exists() {
@@ -349,6 +349,25 @@ impl CachedModelRegistry {
         }
 
         // Extract models if no metadata
+        data.get("models")
+            .and_then(|m| serde_json::from_value::<Vec<CachedModel>>(m.clone()).ok())
+            .ok_or_else(|| RegistryError::ParseError("Invalid cache format".to_string()))
+    }
+
+    /// Load models from cache regardless of TTL (stale fallback).
+    fn load_stale_cache(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
+        let path = self.cache_path(provider);
+        if !path.exists() {
+            return Err(RegistryError::CacheError(
+                "Cache file not found".to_string(),
+            ));
+        }
+
+        let content = std::fs::read_to_string(&path)?;
+        let data: serde_json::Value =
+            serde_json::from_str(&content).map_err(|e| RegistryError::ParseError(e.to_string()))?;
+
+        // Extract models regardless of TTL
         data.get("models")
             .and_then(|m| serde_json::from_value::<Vec<CachedModel>>(m.clone()).ok())
             .ok_or_else(|| RegistryError::ParseError("Invalid cache format".to_string()))
@@ -471,18 +490,36 @@ impl CachedModelRegistry {
 #[async_trait]
 impl ModelRegistry for CachedModelRegistry {
     async fn list_models(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
-        // Try cache first
+        // Try fresh cache first
         if let Ok(models) = self.load_from_cache(provider) {
             return Ok(models);
         }
 
-        // Fetch from API
-        let models = self.fetch_from_api(provider).await?;
-
-        // Save to cache (ignore errors)
-        let _ = self.save_to_cache(provider, &models);
-
-        Ok(models)
+        // Fetch from API with stale fallback
+        match self.fetch_from_api(provider).await {
+            Ok(models) => {
+                // Save to cache (ignore errors)
+                let _ = self.save_to_cache(provider, &models);
+                Ok(models)
+            }
+            Err(api_error) => {
+                // Try stale cache as fallback
+                match self.load_stale_cache(provider) {
+                    Ok(models) => {
+                        tracing::warn!(
+                            provider = provider,
+                            error = %api_error,
+                            "API request failed, returning stale cached models"
+                        );
+                        Ok(models)
+                    }
+                    Err(_) => {
+                        // No stale cache available, return original API error
+                        Err(api_error)
+                    }
+                }
+            }
+        }
     }
 
     async fn model_exists(&self, provider: &str, model_id: &str) -> Result<bool, RegistryError> {
@@ -510,6 +547,49 @@ impl ModelRegistry for CachedModelRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_load_stale_cache_ignores_ttl() {
+        // Arrange: Create a temporary cache file with expired TTL
+        let temp_dir = std::env::temp_dir().join("aptu_test_stale_cache");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let registry = CachedModelRegistry::new(temp_dir.clone(), 1); // 1 second TTL
+
+        let models = vec![
+            CachedModel {
+                id: "test-model-1".to_string(),
+                name: Some("Test Model 1".to_string()),
+                is_free: Some(true),
+                context_window: Some(4096),
+            },
+            CachedModel {
+                id: "test-model-2".to_string(),
+                name: Some("Test Model 2".to_string()),
+                is_free: Some(false),
+                context_window: Some(8192),
+            },
+        ];
+
+        // Save to cache
+        let _ = registry.save_to_cache("test_provider", &models);
+
+        // Wait for TTL to expire
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        // Act: Load stale cache (should succeed despite expired TTL)
+        let result = registry.load_stale_cache("test_provider");
+
+        // Assert
+        assert!(result.is_ok(), "load_stale_cache should succeed");
+        let loaded_models = result.unwrap();
+        assert_eq!(loaded_models.len(), 2);
+        assert_eq!(loaded_models[0].id, "test-model-1");
+        assert_eq!(loaded_models[1].id, "test-model-2");
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 
     #[test]
     fn test_get_provider_gemini() {

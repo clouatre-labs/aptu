@@ -684,13 +684,9 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
         }
 
         Commands::Models(models_cmd) => match models_cmd {
-            crate::cli::ModelsCommand::List {
-                provider,
-                free,
-                refresh,
-            } => {
+            crate::cli::ModelsCommand::List { provider, free } => {
                 let spinner = maybe_spinner(&ctx, "Fetching models...");
-                let result = models::run_list(&provider, free, refresh).await?;
+                let result = models::run_list(&provider, free).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
