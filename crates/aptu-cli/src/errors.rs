@@ -95,6 +95,11 @@ pub fn format_error(error: &Error) -> String {
                 // Type mismatch errors are clear and actionable - no tip needed
                 aptu_err.to_string()
             }
+            AptuError::ModelRegistry { message: _ } => {
+                format!(
+                    "{aptu_err}\n\nTip: Failed to fetch or validate models from the provider API. Check your internet connection and try again."
+                )
+            }
         }
     } else {
         // Not an AptuError, return the original error chain

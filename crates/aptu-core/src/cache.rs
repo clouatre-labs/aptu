@@ -104,6 +104,20 @@ pub fn cache_key_issues(owner: &str, repo: &str) -> String {
     format!("issues/{owner}_{repo}.json")
 }
 
+/// Generate a cache key for model lists.
+///
+/// # Arguments
+///
+/// * `provider` - Provider name (e.g., "openrouter", "gemini")
+///
+/// # Returns
+///
+/// A cache key string in the format `models/{provider}.json`
+#[must_use]
+pub fn cache_key_models(provider: &str) -> String {
+    format!("models/{provider}.json")
+}
+
 /// Read a cache entry from disk.
 ///
 /// # Arguments
