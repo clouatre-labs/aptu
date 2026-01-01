@@ -7,6 +7,7 @@ pub mod completion;
 pub mod create;
 pub mod history;
 pub mod issue;
+pub mod models;
 pub mod pr;
 pub mod release;
 pub mod repo;
@@ -666,6 +667,22 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             output::render(&result, &ctx)?;
             Ok(())
         }
+
+        Commands::Models(models_cmd) => match models_cmd {
+            crate::cli::ModelsCommand::List {
+                provider,
+                free,
+                refresh,
+            } => {
+                let spinner = maybe_spinner(&ctx, "Fetching models...");
+                let result = models::run_list(&provider, free, refresh).await?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
+                output::render(&result, &ctx)?;
+                Ok(())
+            }
+        },
 
         Commands::Completion(completion_cmd) => match completion_cmd {
             CompletionCommand::Generate { shell } => completion::run_generate(shell),

@@ -221,6 +221,10 @@ pub enum Commands {
     /// Show your contribution history
     History,
 
+    /// List AI models from providers
+    #[command(subcommand)]
+    Models(ModelsCommand),
+
     /// Generate or install shell completion scripts
     #[command(subcommand)]
     Completion(CompletionCommand),
@@ -425,5 +429,24 @@ pub enum PrCommand {
         /// Preview labels without applying
         #[arg(long)]
         dry_run: bool,
+    },
+}
+
+/// AI models subcommands
+#[derive(Subcommand)]
+pub enum ModelsCommand {
+    /// List available AI models from a provider
+    List {
+        /// AI provider name (e.g., "openrouter", "openai")
+        #[arg(long)]
+        provider: String,
+
+        /// Show only free models
+        #[arg(long)]
+        free: bool,
+
+        /// Force cache refresh (ignore 24h TTL)
+        #[arg(long)]
+        refresh: bool,
     },
 }
