@@ -79,7 +79,7 @@ pub use repos::{CuratedRepo, RepoFilter};
 // Triage Detection
 // ============================================================================
 
-pub use triage::{APTU_SIGNATURE, TriageStatus, check_already_triaged};
+pub use triage::{APTU_SIGNATURE, TriageStatus, check_already_triaged, render_release_notes_markdown};
 
 // ============================================================================
 // Retry Logic
