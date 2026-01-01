@@ -1292,27 +1292,9 @@ pub async fn list_models(
 ) -> crate::Result<Vec<crate::ai::registry::CachedModel>> {
     use crate::ai::registry::{CachedModelRegistry, ModelRegistry};
     use crate::cache::cache_dir;
-    use std::sync::Arc;
 
     let cache_dir = cache_dir();
-
-    // Create a wrapper that implements TokenProvider for the reference
-    struct TokenProviderWrapper<'a> {
-        inner: &'a dyn TokenProvider,
-    }
-
-    impl TokenProvider for TokenProviderWrapper<'_> {
-        fn github_token(&self) -> Option<secrecy::SecretString> {
-            self.inner.github_token()
-        }
-
-        fn ai_api_key(&self, provider: &str) -> Option<secrecy::SecretString> {
-            self.inner.ai_api_key(provider)
-        }
-    }
-
-    let wrapper = TokenProviderWrapper { inner: provider };
-    let registry = CachedModelRegistry::new(cache_dir, 86400, Arc::new(wrapper)); // 24h TTL
+    let registry = CachedModelRegistry::new(cache_dir, 86400, provider); // 24h TTL
 
     if force_refresh {
         debug!("Force refresh requested, fetching from API");
@@ -1355,27 +1337,9 @@ pub async fn validate_model(
 ) -> crate::Result<bool> {
     use crate::ai::registry::{CachedModelRegistry, ModelRegistry};
     use crate::cache::cache_dir;
-    use std::sync::Arc;
 
     let cache_dir = cache_dir();
-
-    // Create a wrapper that implements TokenProvider for the reference
-    struct TokenProviderWrapper<'a> {
-        inner: &'a dyn TokenProvider,
-    }
-
-    impl TokenProvider for TokenProviderWrapper<'_> {
-        fn github_token(&self) -> Option<secrecy::SecretString> {
-            self.inner.github_token()
-        }
-
-        fn ai_api_key(&self, provider: &str) -> Option<secrecy::SecretString> {
-            self.inner.ai_api_key(provider)
-        }
-    }
-
-    let wrapper = TokenProviderWrapper { inner: provider };
-    let registry = CachedModelRegistry::new(cache_dir, 86400, Arc::new(wrapper)); // 24h TTL
+    let registry = CachedModelRegistry::new(cache_dir, 86400, provider); // 24h TTL
 
     registry
         .model_exists(provider_name, model_id)

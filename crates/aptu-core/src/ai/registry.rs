@@ -27,7 +27,6 @@ use async_trait::async_trait;
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -289,14 +288,14 @@ pub trait ModelRegistry: Send + Sync {
 }
 
 /// Cached model registry with HTTP client and TTL support.
-pub struct CachedModelRegistry<T: TokenProvider + ?Sized> {
+pub struct CachedModelRegistry<'a> {
     cache_dir: PathBuf,
     ttl_seconds: u64,
     client: reqwest::Client,
-    token_provider: Arc<T>,
+    token_provider: &'a dyn TokenProvider,
 }
 
-impl<T: TokenProvider + ?Sized> CachedModelRegistry<T> {
+impl CachedModelRegistry<'_> {
     /// Create a new cached model registry.
     ///
     /// # Arguments
@@ -305,8 +304,12 @@ impl<T: TokenProvider + ?Sized> CachedModelRegistry<T> {
     /// * `ttl_seconds` - Time-to-live for cache entries (default: 86400 = 24 hours)
     /// * `token_provider` - Token provider for API credentials
     #[must_use]
-    pub fn new(cache_dir: PathBuf, ttl_seconds: u64, token_provider: Arc<T>) -> Self {
-        Self {
+    pub fn new(
+        cache_dir: PathBuf,
+        ttl_seconds: u64,
+        token_provider: &dyn TokenProvider,
+    ) -> CachedModelRegistry<'_> {
+        CachedModelRegistry {
             cache_dir,
             ttl_seconds,
             client: reqwest::Client::new(),
@@ -402,6 +405,76 @@ impl<T: TokenProvider + ?Sized> CachedModelRegistry<T> {
         Ok(())
     }
 
+    /// Parse `OpenRouter` API response into models.
+    fn parse_openrouter_models(data: &serde_json::Value) -> Vec<CachedModel> {
+        data.get("data")
+            .and_then(|d| d.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|m| {
+                        Some(CachedModel {
+                            id: m.get("id")?.as_str()?.to_string(),
+                            name: m.get("name").and_then(|n| n.as_str()).map(String::from),
+                            is_free: m
+                                .get("pricing")
+                                .and_then(|p| p.get("prompt"))
+                                .and_then(|p| p.as_str())
+                                .map(|p| p == "0"),
+                            context_window: m
+                                .get("context_length")
+                                .and_then(serde_json::Value::as_u64)
+                                .and_then(|c| u32::try_from(c).ok()),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Parse Gemini API response into models.
+    fn parse_gemini_models(data: &serde_json::Value) -> Vec<CachedModel> {
+        data.get("models")
+            .and_then(|d| d.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|m| {
+                        Some(CachedModel {
+                            id: m.get("name")?.as_str()?.to_string(),
+                            name: m
+                                .get("displayName")
+                                .and_then(|n| n.as_str())
+                                .map(String::from),
+                            is_free: None,
+                            context_window: m
+                                .get("inputTokenLimit")
+                                .and_then(serde_json::Value::as_u64)
+                                .and_then(|c| u32::try_from(c).ok()),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Parse generic OpenAI-compatible API response into models.
+    fn parse_generic_models(data: &serde_json::Value) -> Vec<CachedModel> {
+        data.get("data")
+            .and_then(|d| d.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|m| {
+                        Some(CachedModel {
+                            id: m.get("id")?.as_str()?.to_string(),
+                            name: None,
+                            is_free: None,
+                            context_window: None,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Fetch models from provider API.
     async fn fetch_from_api(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         let url = match provider {
@@ -419,23 +492,23 @@ impl<T: TokenProvider + ?Sized> CachedModelRegistry<T> {
             RegistryError::HttpError(format!("No API key available for {provider}"))
         })?;
 
-        let mut request = self.client.get(url);
-
-        // Add authentication based on provider
-        match provider {
+        // Build request incrementally with provider-specific authentication
+        let request = match provider {
             "gemini" => {
                 // Gemini uses query parameter authentication
-                request = request.query(&[("key", api_key.expose_secret())]);
+                self.client
+                    .get(url)
+                    .query(&[("key", api_key.expose_secret())])
             }
             "openrouter" | "groq" | "cerebras" | "zenmux" | "zai" => {
                 // These providers use Bearer token authentication
-                request = request.header(
+                self.client.get(url).header(
                     "Authorization",
                     format!("Bearer {}", api_key.expose_secret()),
-                );
+                )
             }
-            _ => {}
-        }
+            _ => self.client.get(url),
+        };
 
         let response = request
             .send()
@@ -449,67 +522,9 @@ impl<T: TokenProvider + ?Sized> CachedModelRegistry<T> {
 
         // Parse based on provider API format
         let models = match provider {
-            "openrouter" => data
-                .get("data")
-                .and_then(|d| d.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|m| {
-                            Some(CachedModel {
-                                id: m.get("id")?.as_str()?.to_string(),
-                                name: m.get("name").and_then(|n| n.as_str()).map(String::from),
-                                is_free: m
-                                    .get("pricing")
-                                    .and_then(|p| p.get("prompt"))
-                                    .and_then(|p| p.as_str())
-                                    .map(|p| p == "0"),
-                                context_window: m
-                                    .get("context_length")
-                                    .and_then(serde_json::Value::as_u64)
-                                    .and_then(|c| u32::try_from(c).ok()),
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-            "gemini" => data
-                .get("models")
-                .and_then(|d| d.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|m| {
-                            Some(CachedModel {
-                                id: m.get("name")?.as_str()?.to_string(),
-                                name: m
-                                    .get("displayName")
-                                    .and_then(|n| n.as_str())
-                                    .map(String::from),
-                                is_free: None,
-                                context_window: m
-                                    .get("inputTokenLimit")
-                                    .and_then(serde_json::Value::as_u64)
-                                    .and_then(|c| u32::try_from(c).ok()),
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-            "groq" | "cerebras" => data
-                .get("data")
-                .and_then(|d| d.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|m| {
-                            Some(CachedModel {
-                                id: m.get("id")?.as_str()?.to_string(),
-                                name: None,
-                                is_free: None,
-                                context_window: None,
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
+            "openrouter" => Self::parse_openrouter_models(&data),
+            "gemini" => Self::parse_gemini_models(&data),
+            "groq" | "cerebras" => Self::parse_generic_models(&data),
             _ => vec![],
         };
 
@@ -518,7 +533,7 @@ impl<T: TokenProvider + ?Sized> CachedModelRegistry<T> {
 }
 
 #[async_trait]
-impl<T: TokenProvider + ?Sized> ModelRegistry for CachedModelRegistry<T> {
+impl ModelRegistry for CachedModelRegistry<'_> {
     async fn list_models(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         // Try fresh cache first
         if let Ok(models) = self.load_from_cache(provider) {
