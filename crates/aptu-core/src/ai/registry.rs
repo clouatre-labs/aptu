@@ -298,6 +298,7 @@ impl CachedModelRegistry {
     ///
     /// * `cache_dir` - Directory for storing cached model lists
     /// * `ttl_seconds` - Time-to-live for cache entries (default: 86400 = 24 hours)
+    #[must_use]
     pub fn new(cache_dir: PathBuf, ttl_seconds: u64) -> Self {
         Self {
             cache_dir,
@@ -308,11 +309,11 @@ impl CachedModelRegistry {
 
     /// Get the cache file path for a provider.
     fn cache_path(&self, provider: &str) -> PathBuf {
-        self.cache_dir.join(format!("models_{}.json", provider))
+        self.cache_dir.join(format!("models_{provider}.json"))
     }
 
     /// Check if cache is still valid.
-    fn is_cache_valid(&self, metadata: &CacheMetadata) -> bool {
+    fn is_cache_valid(metadata: &CacheMetadata) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -324,23 +325,30 @@ impl CachedModelRegistry {
     fn load_from_cache(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         let path = self.cache_path(provider);
         if !path.exists() {
-            return Err(RegistryError::CacheError("Cache file not found".to_string()));
+            return Err(RegistryError::CacheError(
+                "Cache file not found".to_string(),
+            ));
         }
 
         let content = std::fs::read_to_string(&path)?;
-        let data: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| RegistryError::ParseError(e.to_string()))?;
+        let data: serde_json::Value =
+            serde_json::from_str(&content).map_err(|e| RegistryError::ParseError(e.to_string()))?;
 
-        // Check TTL
-        if let Some(metadata) = data.get("metadata").and_then(|m| {
-            serde_json::from_value::<CacheMetadata>(m.clone()).ok()
-        }) {
-            if !self.is_cache_valid(&metadata) {
-                return Err(RegistryError::CacheError("Cache expired".to_string()));
+        // Check TTL and extract models in one step
+        if let Some(metadata) = data
+            .get("metadata")
+            .and_then(|m| serde_json::from_value::<CacheMetadata>(m.clone()).ok())
+        {
+            if Self::is_cache_valid(&metadata) {
+                return data
+                    .get("models")
+                    .and_then(|m| serde_json::from_value::<Vec<CachedModel>>(m.clone()).ok())
+                    .ok_or_else(|| RegistryError::ParseError("Invalid cache format".to_string()));
             }
+            return Err(RegistryError::CacheError("Cache expired".to_string()));
         }
 
-        // Extract models
+        // Extract models if no metadata
         data.get("models")
             .and_then(|m| serde_json::from_value::<Vec<CachedModel>>(m.clone()).ok())
             .ok_or_else(|| RegistryError::ParseError("Invalid cache format".to_string()))
@@ -392,67 +400,67 @@ impl CachedModelRegistry {
 
         // Parse based on provider API format
         let models = match provider {
-            "openrouter" => {
-                data.get("data")
-                    .and_then(|d| d.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|m| {
-                                Some(CachedModel {
-                                    id: m.get("id")?.as_str()?.to_string(),
-                                    name: m.get("name").and_then(|n| n.as_str()).map(String::from),
-                                    is_free: m
-                                        .get("pricing")
-                                        .and_then(|p| p.get("prompt"))
-                                        .and_then(|p| p.as_str())
-                                        .map(|p| p == "0"),
-                                    context_window: m
-                                        .get("context_length")
-                                        .and_then(|c| c.as_u64())
-                                        .map(|c| c as u32),
-                                })
+            "openrouter" => data
+                .get("data")
+                .and_then(|d| d.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| {
+                            Some(CachedModel {
+                                id: m.get("id")?.as_str()?.to_string(),
+                                name: m.get("name").and_then(|n| n.as_str()).map(String::from),
+                                is_free: m
+                                    .get("pricing")
+                                    .and_then(|p| p.get("prompt"))
+                                    .and_then(|p| p.as_str())
+                                    .map(|p| p == "0"),
+                                context_window: m
+                                    .get("context_length")
+                                    .and_then(serde_json::Value::as_u64)
+                                    .and_then(|c| u32::try_from(c).ok()),
                             })
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            }
-            "gemini" => {
-                data.get("models")
-                    .and_then(|d| d.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|m| {
-                                Some(CachedModel {
-                                    id: m.get("name")?.as_str()?.to_string(),
-                                    name: m.get("displayName").and_then(|n| n.as_str()).map(String::from),
-                                    is_free: None,
-                                    context_window: m
-                                        .get("inputTokenLimit")
-                                        .and_then(|c| c.as_u64())
-                                        .map(|c| c as u32),
-                                })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            "gemini" => data
+                .get("models")
+                .and_then(|d| d.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| {
+                            Some(CachedModel {
+                                id: m.get("name")?.as_str()?.to_string(),
+                                name: m
+                                    .get("displayName")
+                                    .and_then(|n| n.as_str())
+                                    .map(String::from),
+                                is_free: None,
+                                context_window: m
+                                    .get("inputTokenLimit")
+                                    .and_then(serde_json::Value::as_u64)
+                                    .and_then(|c| u32::try_from(c).ok()),
                             })
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            }
-            "groq" | "cerebras" => {
-                data.get("data")
-                    .and_then(|d| d.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|m| {
-                                Some(CachedModel {
-                                    id: m.get("id")?.as_str()?.to_string(),
-                                    name: None,
-                                    is_free: None,
-                                    context_window: None,
-                                })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            "groq" | "cerebras" => data
+                .get("data")
+                .and_then(|d| d.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| {
+                            Some(CachedModel {
+                                id: m.get("id")?.as_str()?.to_string(),
+                                name: None,
+                                is_free: None,
+                                context_window: None,
                             })
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
             _ => vec![],
         };
 
@@ -488,12 +496,10 @@ impl ModelRegistry for CachedModelRegistry {
         model_id: &str,
     ) -> Result<Vec<String>, RegistryError> {
         let models = self.list_models(provider).await?;
+        let last_part = model_id.split('/').next_back().unwrap_or(model_id);
         let mut suggestions: Vec<_> = models
             .iter()
-            .filter(|m| {
-                m.id.contains(&model_id.split('/').last().unwrap_or(&model_id))
-                    || model_id.contains(&m.id)
-            })
+            .filter(|m| m.id.contains(last_part) || model_id.contains(&m.id))
             .map(|m| m.id.clone())
             .collect();
         suggestions.truncate(5);
