@@ -1285,21 +1285,16 @@ mod tests {
 /// - Provider is not found
 /// - API request fails
 /// - Response parsing fails
-#[instrument(skip(provider), fields(provider_name, force_refresh))]
+#[instrument(skip(provider), fields(provider_name))]
 pub async fn list_models(
     provider: &dyn TokenProvider,
     provider_name: &str,
-    force_refresh: bool,
 ) -> crate::Result<Vec<crate::ai::registry::CachedModel>> {
     use crate::ai::registry::{CachedModelRegistry, ModelRegistry};
     use crate::cache::cache_dir;
 
     let cache_dir = cache_dir();
     let registry = CachedModelRegistry::new(cache_dir, 86400); // 24h TTL
-
-    if force_refresh {
-        debug!("Force refresh requested, fetching from API");
-    }
 
     let _ = provider; // Placeholder for future credential-based API calls
 

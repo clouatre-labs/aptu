@@ -444,9 +444,5 @@ pub enum ModelsCommand {
         /// Show only free models
         #[arg(long)]
         free: bool,
-
-        /// Force cache refresh (ignore 24h TTL)
-        #[arg(long)]
-        refresh: bool,
     },
 }
