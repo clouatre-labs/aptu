@@ -21,6 +21,12 @@ pub enum AptuFfiError {
 
     #[error("Internal error: {message}")]
     InternalError { message: String },
+
+    #[error("Model provider not found: {provider}")]
+    ProviderNotFound { provider: String },
+
+    #[error("Model cache error: {message}")]
+    CacheError { message: String },
 }
 
 impl From<anyhow::Error> for AptuFfiError {

@@ -7,6 +7,7 @@ pub mod completion;
 pub mod create;
 pub mod history;
 pub mod issue;
+pub mod models;
 pub mod pr;
 pub mod release;
 pub mod repo;
@@ -24,8 +25,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use tracing::debug;
 
 use crate::cli::{
-    AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
-    OutputFormat, PrCommand, RepoCommand,
+    AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, ModelsCommand,
+    OutputContext, OutputFormat, PrCommand, RepoCommand,
 };
 use crate::commands::types::PrReviewResult;
 use crate::output;
@@ -551,6 +552,22 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             output::render(&result, &ctx);
             Ok(())
         }
+
+        Commands::Models(models_cmd) => match models_cmd {
+            ModelsCommand::List {
+                provider,
+                free,
+                refresh: _,
+            } => {
+                let spinner = maybe_spinner(&ctx, "Fetching models...");
+                let result = models::run_list(provider, free).await?;
+                if let Some(s) = spinner {
+                    s.finish_and_clear();
+                }
+                output::render(&result, &ctx);
+                Ok(())
+            }
+        },
 
         Commands::Pr(pr_cmd) => match pr_cmd {
             PrCommand::Review {

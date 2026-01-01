@@ -54,6 +54,7 @@ mod bulk;
 mod create;
 mod history;
 mod issues;
+mod models;
 mod pr;
 mod release;
 mod repos;

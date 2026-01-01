@@ -227,3 +227,22 @@ impl From<aptu_core::ApplyResult> for FfiApplyResult {
         }
     }
 }
+
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiModelInfo {
+    pub display_name: String,
+    pub identifier: String,
+    pub is_free: bool,
+    pub context_window: u32,
+}
+
+impl From<aptu_core::ai::registry::ModelInfo> for FfiModelInfo {
+    fn from(model: aptu_core::ai::registry::ModelInfo) -> Self {
+        FfiModelInfo {
+            display_name: model.display_name.to_string(),
+            identifier: model.identifier.to_string(),
+            is_free: model.is_free,
+            context_window: model.context_window,
+        }
+    }
+}

@@ -27,6 +27,34 @@ use crate::repos::{self, CuratedRepo};
 use crate::retry::is_retryable_anyhow;
 use secrecy::SecretString;
 
+/// Lists available AI models from a provider.
+///
+/// Returns models from the static registry for the specified provider.
+///
+/// # Arguments
+///
+/// * `provider_name` - Name of the AI provider (e.g., "openrouter", "gemini")
+///
+/// # Returns
+///
+/// A vector of `ModelInfo` for the provider.
+///
+/// # Errors
+///
+/// Returns an error if the provider is not found in the static registry.
+#[instrument(fields(provider_name))]
+pub async fn list_models(
+    provider_name: &str,
+) -> crate::Result<Vec<crate::ai::registry::ModelInfo>> {
+    use crate::ai::registry::get_provider;
+
+    get_provider(provider_name)
+        .map(|p| p.models.to_vec())
+        .ok_or_else(|| AptuError::Config {
+            message: format!("Unknown provider: {provider_name}"),
+        })
+}
+
 /// Fetches "good first issue" issues from curated repositories.
 ///
 /// This function abstracts the credential resolution and API client creation,

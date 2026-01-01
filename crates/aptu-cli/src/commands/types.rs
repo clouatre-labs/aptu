@@ -180,3 +180,38 @@ pub struct DiscoverResult {
     /// List of discovered repositories.
     pub repos: Vec<DiscoveredRepo>,
 }
+
+/// Serializable model info for output.
+#[derive(Debug, Clone, Serialize)]
+pub struct SerializableModelInfo {
+    /// Human-readable model name for UI display
+    pub display_name: String,
+    /// Provider-specific model identifier used in API requests
+    pub identifier: String,
+    /// Whether this model is free to use
+    pub is_free: bool,
+    /// Maximum context window size in tokens
+    pub context_window: u32,
+}
+
+impl From<aptu_core::ai::registry::ModelInfo> for SerializableModelInfo {
+    fn from(model: aptu_core::ai::registry::ModelInfo) -> Self {
+        SerializableModelInfo {
+            display_name: model.display_name.to_string(),
+            identifier: model.identifier.to_string(),
+            is_free: model.is_free,
+            context_window: model.context_window,
+        }
+    }
+}
+
+/// Result from the models list command.
+///
+/// `ModelsResult` with list of models and provider name.
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelsResult {
+    /// List of available models.
+    pub models: Vec<SerializableModelInfo>,
+    /// Provider name.
+    pub provider: String,
+}

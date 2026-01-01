@@ -20,7 +20,7 @@
 //! ```
 
 /// Metadata for a single AI model.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ModelInfo {
     /// Human-readable model name for UI display
     pub display_name: &'static str,
@@ -205,6 +205,49 @@ pub fn get_provider(name: &str) -> Option<&'static ProviderConfig> {
 #[must_use]
 pub fn all_providers() -> &'static [ProviderConfig] {
     PROVIDERS
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Check if a model exists for a provider.
+///
+/// # Arguments
+///
+/// * `provider` - Provider name
+/// * `model_id` - Model identifier
+///
+/// # Returns
+///
+/// `true` if the model exists, `false` otherwise.
+#[must_use]
+pub fn model_exists(provider: &str, model_id: &str) -> bool {
+    get_provider(provider).is_some_and(|p| p.models.iter().any(|m| m.identifier == model_id))
+}
+
+/// Suggest similar models based on a partial identifier.
+///
+/// # Arguments
+///
+/// * `provider` - Provider name
+/// * `partial_id` - Partial model identifier
+///
+/// # Returns
+///
+/// A vector of matching `ModelInfo` entries.
+#[must_use]
+pub fn suggest_similar(provider: &str, partial_id: &str) -> Vec<ModelInfo> {
+    get_provider(provider)
+        .map(|p| {
+            let partial_lower = partial_id.to_lowercase();
+            p.models
+                .iter()
+                .filter(|m| m.identifier.to_lowercase().contains(&partial_lower))
+                .copied()
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

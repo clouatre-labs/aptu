@@ -221,9 +221,32 @@ pub enum Commands {
     /// Show your contribution history
     History,
 
+    /// List and validate AI models from provider APIs
+    #[command(subcommand)]
+    Models(ModelsCommand),
+
     /// Generate or install shell completion scripts
     #[command(subcommand)]
     Completion(CompletionCommand),
+}
+
+/// Models subcommands
+#[derive(Subcommand)]
+pub enum ModelsCommand {
+    /// List available models from a provider
+    List {
+        /// AI provider name (e.g., openrouter, gemini, groq)
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// Filter to free tier models only
+        #[arg(long)]
+        free: bool,
+
+        /// Force refresh cache (ignore 24h TTL)
+        #[arg(long)]
+        refresh: bool,
+    },
 }
 
 /// Authentication subcommands

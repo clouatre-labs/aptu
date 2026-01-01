@@ -95,6 +95,21 @@ pub fn format_error(error: &Error) -> String {
                 // Type mismatch errors are clear and actionable - no tip needed
                 aptu_err.to_string()
             }
+            AptuError::ModelProviderNotFound { provider: _ } => {
+                format!("{aptu_err}\n\nTip: Use `aptu models list` to see available providers.")
+            }
+            AptuError::ModelApiError {
+                provider,
+                message: _,
+            } => {
+                format!(
+                    "{aptu_err}\n\nTip: Check your {}_API_KEY environment variable and internet connection.",
+                    provider.to_uppercase()
+                )
+            }
+            AptuError::ModelCacheError { message: _ } => {
+                format!("{aptu_err}\n\nTip: Try running with --refresh to bypass the cache.")
+            }
         }
     } else {
         // Not an AptuError, return the original error chain

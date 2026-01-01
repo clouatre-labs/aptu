@@ -8,7 +8,8 @@ pub mod types;
 use crate::error::AptuFfiError;
 use crate::keychain::KeychainProviderRef;
 use crate::types::{
-    FfiAiModel, FfiApplyResult, FfiCuratedRepo, FfiIssueNode, FfiTokenStatus, FfiTriageResponse,
+    FfiAiModel, FfiApplyResult, FfiCuratedRepo, FfiIssueNode, FfiModelInfo, FfiTokenStatus,
+    FfiTriageResponse,
 };
 use tokio::runtime::Runtime;
 
@@ -513,6 +514,66 @@ pub fn apply_triage_labels(
             }),
         }
     })
+}
+
+/// List available AI models from a provider.
+///
+/// Returns models from the static registry for the specified provider.
+///
+/// # Arguments
+///
+/// * `provider_name` - Name of the AI provider (e.g., "openrouter", "gemini")
+///
+/// # Returns
+///
+/// A vector of FfiModelInfo structs representing available models.
+///
+/// # Errors
+///
+/// Returns an error if the provider is not found in the static registry.
+#[uniffi::export]
+pub fn list_models_from_api(provider_name: String) -> Result<Vec<FfiModelInfo>, AptuFfiError> {
+    RUNTIME.block_on(async {
+        match aptu_core::list_models(&provider_name).await {
+            Ok(models) => Ok(models.into_iter().map(FfiModelInfo::from).collect()),
+            Err(e) => {
+                // Map AptuError variants to FFI error variants
+                use aptu_core::error::AptuError;
+                match e {
+                    AptuError::Config { message: _ } => Err(AptuFfiError::ProviderNotFound {
+                        provider: provider_name,
+                    }),
+                    _ => Err(AptuFfiError::InternalError {
+                        message: e.to_string(),
+                    }),
+                }
+            }
+        }
+    })
+}
+
+/// Validate that a model exists for a provider.
+///
+/// Checks if a specific model identifier is available from a provider
+/// using the static registry.
+///
+/// # Arguments
+///
+/// * `provider_name` - Name of the AI provider
+/// * `model_id` - Model identifier to validate
+///
+/// # Returns
+///
+/// `true` if the model exists, `false` otherwise.
+///
+/// # Errors
+///
+/// Returns an error if the provider is not found.
+#[uniffi::export]
+pub fn validate_model(provider_name: String, model_id: String) -> Result<bool, AptuFfiError> {
+    use aptu_core::ai::registry::model_exists;
+
+    Ok(model_exists(&provider_name, &model_id))
 }
 
 uniffi::setup_scaffolding!();

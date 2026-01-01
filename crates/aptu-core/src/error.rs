@@ -84,6 +84,29 @@ pub enum AptuError {
         /// Actual type.
         actual: ResourceType,
     },
+
+    /// Model provider not found.
+    #[error("Model provider not found: {provider}")]
+    ModelProviderNotFound {
+        /// The provider name that was not found.
+        provider: String,
+    },
+
+    /// Model API error.
+    #[error("Model API error from {provider}: {message}")]
+    ModelApiError {
+        /// The provider name.
+        provider: String,
+        /// Error message from the API.
+        message: String,
+    },
+
+    /// Model cache error.
+    #[error("Model cache error: {message}")]
+    ModelCacheError {
+        /// Error message.
+        message: String,
+    },
 }
 
 /// GitHub resource type for type mismatch errors.
