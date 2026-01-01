@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{Context, Result};
 use console::style;
 use std::io::{self, Write};
 
@@ -106,56 +107,50 @@ impl Renderable for DiscoverResult {
 
 // Special handling for ReposResult to maintain backward compatibility with JSON output
 impl ReposResult {
-    pub fn render_with_context(&self, ctx: &OutputContext) {
+    pub fn render_with_context(&self, ctx: &OutputContext) -> Result<()> {
         match ctx.format {
             OutputFormat::Json => {
                 // Output just the repos array for backward compatibility
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&self.repos)
-                        .expect("Failed to serialize repos to JSON")
-                );
+                let json = serde_json::to_string_pretty(&self.repos)
+                    .context("Failed to serialize repos to JSON")?;
+                println!("{json}");
             }
             OutputFormat::Yaml => {
                 // Output just the repos array for backward compatibility
-                println!(
-                    "{}",
-                    serde_saphyr::to_string(&self.repos)
-                        .expect("Failed to serialize repos to YAML")
-                );
+                let yaml = serde_saphyr::to_string(&self.repos)
+                    .context("Failed to serialize repos to YAML")?;
+                println!("{yaml}");
             }
             _ => {
                 // Use the trait implementation for text/markdown
-                super::render(self, ctx);
+                super::render(self, ctx)?;
             }
         }
+        Ok(())
     }
 }
 
 // Special handling for DiscoverResult to maintain backward compatibility with JSON output
 impl DiscoverResult {
-    pub fn render_with_context(&self, ctx: &OutputContext) {
+    pub fn render_with_context(&self, ctx: &OutputContext) -> Result<()> {
         match ctx.format {
             OutputFormat::Json => {
                 // Output just the repos array for backward compatibility
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&self.repos)
-                        .expect("Failed to serialize repos to JSON")
-                );
+                let json = serde_json::to_string_pretty(&self.repos)
+                    .context("Failed to serialize repos to JSON")?;
+                println!("{json}");
             }
             OutputFormat::Yaml => {
                 // Output just the repos array for backward compatibility
-                println!(
-                    "{}",
-                    serde_saphyr::to_string(&self.repos)
-                        .expect("Failed to serialize repos to YAML")
-                );
+                let yaml = serde_saphyr::to_string(&self.repos)
+                    .context("Failed to serialize repos to YAML")?;
+                println!("{yaml}");
             }
             _ => {
                 // Use the trait implementation for text/markdown
-                super::render(self, ctx);
+                super::render(self, ctx)?;
             }
         }
+        Ok(())
     }
 }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{Context, Result};
 use aptu_core::utils::parse_and_format_relative_time;
 use console::style;
 use std::io::{self, Write};
@@ -107,7 +108,7 @@ impl Renderable for IssuesResult {
 
 // Special handling for IssuesResult to handle no_repos_matched and custom JSON/YAML
 impl IssuesResult {
-    pub fn render_with_context(&self, ctx: &OutputContext) {
+    pub fn render_with_context(&self, ctx: &OutputContext) -> Result<()> {
         // Handle "no repos matched filter" case
         if self.no_repos_matched {
             if let Some(ref filter) = self.repo_filter {
@@ -125,7 +126,7 @@ impl IssuesResult {
                     }
                 }
             }
-            return;
+            return Ok(());
         }
 
         match ctx.format {
@@ -138,11 +139,9 @@ impl IssuesResult {
                         issues: issues.clone(),
                     })
                     .collect();
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&output)
-                        .expect("Failed to serialize issues to JSON")
-                );
+                let json = serde_json::to_string_pretty(&output)
+                    .context("Failed to serialize issues to JSON")?;
+                println!("{json}");
             }
             OutputFormat::Yaml => {
                 let output: Vec<RepoIssuesOutput> = self
@@ -153,15 +152,15 @@ impl IssuesResult {
                         issues: issues.clone(),
                     })
                     .collect();
-                println!(
-                    "{}",
-                    serde_saphyr::to_string(&output).expect("Failed to serialize issues to YAML")
-                );
+                let yaml = serde_saphyr::to_string(&output)
+                    .context("Failed to serialize issues to YAML")?;
+                println!("{yaml}");
             }
             _ => {
                 // Use the trait implementation for text/markdown
-                super::render(self, ctx);
+                super::render(self, ctx)?;
             }
         }
+        Ok(())
     }
 }

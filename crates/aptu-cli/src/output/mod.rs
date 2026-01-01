@@ -5,6 +5,7 @@
 //! Centralizes all output formatting logic, supporting text, JSON, and YAML formats.
 //! Command handlers return data; this module handles presentation.
 
+use anyhow::{Context, Result};
 use serde::Serialize;
 use std::io::{self, Write};
 
@@ -22,31 +23,29 @@ pub trait Renderable: Serialize {
 }
 
 /// Generic render function - handles JSON/YAML via serde, delegates text/markdown to trait.
-pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) {
+pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) -> Result<()> {
     match ctx.format {
         OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(result).expect("Failed to serialize to JSON")
-            );
+            let json =
+                serde_json::to_string_pretty(result).context("Failed to serialize to JSON")?;
+            println!("{json}");
         }
         OutputFormat::Yaml => {
-            println!(
-                "{}",
-                serde_saphyr::to_string(result).expect("Failed to serialize to YAML")
-            );
+            let yaml = serde_saphyr::to_string(result).context("Failed to serialize to YAML")?;
+            println!("{yaml}");
         }
         OutputFormat::Markdown => {
             result
                 .render_markdown(&mut io::stdout(), ctx)
-                .expect("Failed to render markdown");
+                .context("Failed to render markdown")?;
         }
         OutputFormat::Text => {
             result
                 .render_text(&mut io::stdout(), ctx)
-                .expect("Failed to render text");
+                .context("Failed to render text")?;
         }
     }
+    Ok(())
 }
 
 mod auth;
