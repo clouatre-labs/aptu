@@ -279,6 +279,7 @@ pub trait ModelRegistry: Send + Sync {
 ///
 /// Fetches model lists from provider APIs and caches them locally
 /// with a configurable TTL (default 24 hours).
+#[allow(dead_code)]
 pub struct CachedModelRegistry {
     /// Cache directory path
     cache_dir: PathBuf,
@@ -293,6 +294,7 @@ impl CachedModelRegistry {
     ///
     /// * `cache_dir` - Directory to store cached model lists
     /// * `ttl_seconds` - Time-to-live for cache entries in seconds
+    #[must_use]
     pub fn new(cache_dir: PathBuf, ttl_seconds: u64) -> Self {
         Self {
             cache_dir,
@@ -301,6 +303,7 @@ impl CachedModelRegistry {
     }
 
     /// Create a new cached model registry with default TTL (24 hours).
+    #[must_use]
     pub fn with_default_ttl(cache_dir: PathBuf) -> Self {
         Self::new(cache_dir, 86400)
     }

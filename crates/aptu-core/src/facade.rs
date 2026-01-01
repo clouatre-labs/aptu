@@ -292,7 +292,7 @@ pub async fn discover_repos(
 ///
 /// # Arguments
 ///
-/// * `registry` - Model registry implementation (e.g., CachedModelRegistry)
+/// * `registry` - Model registry implementation (e.g., `CachedModelRegistry`)
 /// * `provider` - Provider name (e.g., "openrouter", "gemini")
 /// * `force_refresh` - If true, bypass cache and fetch fresh data
 ///
@@ -319,7 +319,7 @@ pub async fn list_models(
         .list_models(provider)
         .await
         .map_err(|e| AptuError::AI {
-            message: format!("Failed to fetch models from {}: {}", provider, e),
+            message: format!("Failed to fetch models from {provider}: {e}"),
             status: None,
             provider: provider.to_string(),
         })
@@ -355,10 +355,7 @@ pub async fn validate_model(
         .model_exists(provider, model_id)
         .await
         .map_err(|e| AptuError::AI {
-            message: format!(
-                "Failed to validate model {} for {}: {}",
-                model_id, provider, e
-            ),
+            message: format!("Failed to validate model {model_id} for {provider}: {e}"),
             status: None,
             provider: provider.to_string(),
         })
@@ -394,10 +391,7 @@ pub async fn suggest_similar_models(
         .suggest_similar(provider, partial_id)
         .await
         .map_err(|e| AptuError::AI {
-            message: format!(
-                "Failed to suggest models for {} in {}: {}",
-                partial_id, provider, e
-            ),
+            message: format!("Failed to suggest models for {partial_id} in {provider}: {e}"),
             status: None,
             provider: provider.to_string(),
         })
