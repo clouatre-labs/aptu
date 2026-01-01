@@ -415,10 +415,9 @@ impl<T: TokenProvider + ?Sized> CachedModelRegistry<T> {
         };
 
         // Get API key from token provider
-        let api_key = self
-            .token_provider
-            .ai_api_key(provider)
-            .ok_or_else(|| RegistryError::HttpError(format!("No API key available for {}", provider)))?;
+        let api_key = self.token_provider.ai_api_key(provider).ok_or_else(|| {
+            RegistryError::HttpError(format!("No API key available for {provider}"))
+        })?;
 
         let mut request = self.client.get(url);
 
@@ -430,7 +429,10 @@ impl<T: TokenProvider + ?Sized> CachedModelRegistry<T> {
             }
             "openrouter" | "groq" | "cerebras" | "zenmux" | "zai" => {
                 // These providers use Bearer token authentication
-                request = request.header("Authorization", format!("Bearer {}", api_key.expose_secret()));
+                request = request.header(
+                    "Authorization",
+                    format!("Bearer {}", api_key.expose_secret()),
+                );
             }
             _ => {}
         }
