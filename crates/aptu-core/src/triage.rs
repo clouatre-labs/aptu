@@ -203,6 +203,97 @@ pub fn render_triage_markdown(triage: &TriageResponse) -> String {
     output
 }
 
+/// Render a `ReleaseNotesResponse` to markdown format.
+///
+/// Formats release notes with theme, narrative, and categorized sections
+/// (highlights, features, fixes, improvements, documentation, maintenance, contributors).
+///
+/// # Arguments
+///
+/// * `response` - The release notes response to render
+///
+/// # Returns
+///
+/// A markdown string suitable for release notes or GitHub release descriptions.
+#[must_use]
+pub fn render_release_notes_markdown(response: &crate::ai::types::ReleaseNotesResponse) -> String {
+    use std::fmt::Write;
+
+    let mut body = String::new();
+
+    // Add theme as header
+    let _ = writeln!(body, "## {}\n", response.theme);
+
+    // Add narrative
+    if !response.narrative.is_empty() {
+        let _ = writeln!(body, "{}\n", response.narrative);
+    }
+
+    // Add highlights
+    if !response.highlights.is_empty() {
+        body.push_str("### Highlights\n\n");
+        for highlight in &response.highlights {
+            let _ = writeln!(body, "- {highlight}");
+        }
+        body.push('\n');
+    }
+
+    // Add features
+    if !response.features.is_empty() {
+        body.push_str("### Features\n\n");
+        for feature in &response.features {
+            let _ = writeln!(body, "- {feature}");
+        }
+        body.push('\n');
+    }
+
+    // Add fixes
+    if !response.fixes.is_empty() {
+        body.push_str("### Fixes\n\n");
+        for fix in &response.fixes {
+            let _ = writeln!(body, "- {fix}");
+        }
+        body.push('\n');
+    }
+
+    // Add improvements
+    if !response.improvements.is_empty() {
+        body.push_str("### Improvements\n\n");
+        for improvement in &response.improvements {
+            let _ = writeln!(body, "- {improvement}");
+        }
+        body.push('\n');
+    }
+
+    // Add documentation
+    if !response.documentation.is_empty() {
+        body.push_str("### Documentation\n\n");
+        for doc in &response.documentation {
+            let _ = writeln!(body, "- {doc}");
+        }
+        body.push('\n');
+    }
+
+    // Add maintenance
+    if !response.maintenance.is_empty() {
+        body.push_str("### Maintenance\n\n");
+        for maint in &response.maintenance {
+            let _ = writeln!(body, "- {maint}");
+        }
+        body.push('\n');
+    }
+
+    // Add contributors
+    if !response.contributors.is_empty() {
+        body.push_str("### Contributors\n\n");
+        for contributor in &response.contributors {
+            let _ = writeln!(body, "- {contributor}");
+        }
+    }
+
+    body
+}
+
 /// Check if an issue has already been triaged.
 ///
 /// Returns `TriageStatus` indicating whether the issue has both type and priority labels,
