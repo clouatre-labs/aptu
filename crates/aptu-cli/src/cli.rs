@@ -242,10 +242,6 @@ pub enum ModelsCommand {
         /// Filter to free tier models only
         #[arg(long)]
         free: bool,
-
-        /// Force refresh cache (ignore 24h TTL)
-        #[arg(long)]
-        refresh: bool,
     },
 }
 
