@@ -15,6 +15,7 @@ use serde::Serialize;
 
 /// Result from the auth status command.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct AuthStatusResult {
     /// Whether the user is authenticated.
     pub authenticated: bool,
@@ -26,6 +27,7 @@ pub struct AuthStatusResult {
 
 /// Result from the repos command.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ReposResult {
     /// List of curated repositories.
     pub repos: Vec<CuratedRepo>,
@@ -33,6 +35,7 @@ pub struct ReposResult {
 
 /// Result from the issues command.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct IssuesResult {
     /// Issues grouped by repository name.
     pub issues_by_repo: Vec<(String, Vec<IssueNode>)>,
@@ -46,6 +49,7 @@ pub struct IssuesResult {
 
 /// Result from the triage command.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct TriageResult {
     /// Issue title (for display).
     pub issue_title: String,
@@ -71,6 +75,7 @@ pub struct TriageResult {
 
 /// Outcome of a single triage operation in a bulk operation.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 #[allow(clippy::large_enum_variant)]
 pub enum SingleTriageOutcome {
     /// Triage succeeded.
@@ -96,6 +101,7 @@ impl SingleTriageOutcome {
 
 /// Result from a bulk triage operation.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct BulkTriageResult {
     /// Number of issues successfully triaged.
     pub succeeded: usize,
@@ -120,6 +126,7 @@ impl BulkTriageResult {
 
 /// Result from the history command.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct HistoryResult {
     /// List of contributions.
     pub contributions: Vec<Contribution>,
@@ -129,6 +136,7 @@ pub struct HistoryResult {
 
 /// Result from the create command.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct CreateResult {
     /// URL of the created issue.
     pub issue_url: String,
@@ -146,6 +154,7 @@ pub struct CreateResult {
 
 /// Result from the PR review command.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct PrReviewResult {
     /// PR title.
     pub pr_title: String,
@@ -161,6 +170,7 @@ pub struct PrReviewResult {
 
 /// Result from the PR label command.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct PrLabelResult {
     /// PR number.
     pub pr_number: u64,
@@ -176,6 +186,7 @@ pub struct PrLabelResult {
 
 /// Result from the discover command.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct DiscoverResult {
     /// List of discovered repositories.
     pub repos: Vec<DiscoveredRepo>,
