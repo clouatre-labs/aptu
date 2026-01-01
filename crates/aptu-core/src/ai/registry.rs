@@ -24,10 +24,14 @@
 //! ```
 
 use async_trait::async_trait;
+use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
+
+use crate::auth::TokenProvider;
 
 /// Metadata for a single AI model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -285,25 +289,28 @@ pub trait ModelRegistry: Send + Sync {
 }
 
 /// Cached model registry with HTTP client and TTL support.
-pub struct CachedModelRegistry {
+pub struct CachedModelRegistry<T: TokenProvider + ?Sized> {
     cache_dir: PathBuf,
     ttl_seconds: u64,
     client: reqwest::Client,
+    token_provider: Arc<T>,
 }
 
-impl CachedModelRegistry {
+impl<T: TokenProvider + ?Sized> CachedModelRegistry<T> {
     /// Create a new cached model registry.
     ///
     /// # Arguments
     ///
     /// * `cache_dir` - Directory for storing cached model lists
     /// * `ttl_seconds` - Time-to-live for cache entries (default: 86400 = 24 hours)
+    /// * `token_provider` - Token provider for API credentials
     #[must_use]
-    pub fn new(cache_dir: PathBuf, ttl_seconds: u64) -> Self {
+    pub fn new(cache_dir: PathBuf, ttl_seconds: u64, token_provider: Arc<T>) -> Self {
         Self {
             cache_dir,
             ttl_seconds,
             client: reqwest::Client::new(),
+            token_provider,
         }
     }
 
@@ -402,12 +409,33 @@ impl CachedModelRegistry {
             "gemini" => "https://generativelanguage.googleapis.com/v1beta/models",
             "groq" => "https://api.groq.com/openai/v1/models",
             "cerebras" => "https://api.cerebras.ai/v1/models",
+            "zenmux" => "https://zenmux.ai/api/v1/models",
+            "zai" => "https://api.z.ai/api/paas/v4/models",
             _ => return Err(RegistryError::ProviderNotFound(provider.to_string())),
         };
 
-        let response = self
-            .client
-            .get(url)
+        // Get API key from token provider
+        let api_key = self
+            .token_provider
+            .ai_api_key(provider)
+            .ok_or_else(|| RegistryError::HttpError(format!("No API key available for {}", provider)))?;
+
+        let mut request = self.client.get(url);
+
+        // Add authentication based on provider
+        match provider {
+            "gemini" => {
+                // Gemini uses query parameter authentication
+                request = request.query(&[("key", api_key.expose_secret())]);
+            }
+            "openrouter" | "groq" | "cerebras" | "zenmux" | "zai" => {
+                // These providers use Bearer token authentication
+                request = request.header("Authorization", format!("Bearer {}", api_key.expose_secret()));
+            }
+            _ => {}
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| RegistryError::HttpError(e.to_string()))?;
@@ -488,7 +516,7 @@ impl CachedModelRegistry {
 }
 
 #[async_trait]
-impl ModelRegistry for CachedModelRegistry {
+impl<T: TokenProvider + ?Sized> ModelRegistry for CachedModelRegistry<T> {
     async fn list_models(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         // Try fresh cache first
         if let Ok(models) = self.load_from_cache(provider) {
