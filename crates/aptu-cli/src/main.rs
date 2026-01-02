@@ -25,9 +25,9 @@ use crate::cli::{Cli, OutputContext};
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    logging::init_logging(cli.quiet, cli.verbose);
+    logging::init_logging(cli.output, cli.verbose);
 
-    let output_ctx = OutputContext::from_cli(cli.output, cli.quiet, cli.verbose);
+    let output_ctx = OutputContext::from_cli(cli.output, cli.verbose);
 
     // Load config early to validate it works (Option A from plan)
     let mut config = config::load_config().context("Failed to load configuration")?;

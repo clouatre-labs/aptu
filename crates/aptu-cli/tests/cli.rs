@@ -183,11 +183,13 @@ fn test_repo_invalid_subcommand() {
 }
 
 #[test]
-fn test_quiet_flag_suppresses_output() {
+fn test_json_output_is_quiet_by_default() {
+    // JSON output should automatically suppress spinners/progress
     let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("repo")
         .arg("list")
-        .arg("--quiet")
+        .arg("--output")
+        .arg("json")
         .assert()
         .success();
 }

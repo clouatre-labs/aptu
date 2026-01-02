@@ -21,6 +21,8 @@
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{EnvFilter, fmt};
 
+use crate::cli::OutputFormat;
+
 /// Initialize the logging subsystem.
 ///
 /// Verbosity levels:
@@ -29,8 +31,14 @@ use tracing_subscriber::{EnvFilter, fmt};
 /// - 2+ (-vv): Full debug tracing with timestamps
 ///
 /// The `RUST_LOG` environment variable can override these defaults.
-pub fn init_logging(quiet: bool, verbosity: u8) {
+pub fn init_logging(format: OutputFormat, verbosity: u8) {
     let fmt_layer = fmt::layer().with_target(false).with_writer(std::io::stderr);
+
+    // Derive quiet mode from format (structured formats are quiet)
+    let quiet = matches!(
+        format,
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown
+    );
 
     // Only enable tracing output for debug mode (verbosity >= 2)
     // Default and verbose modes use direct user output instead
