@@ -388,9 +388,9 @@ pub enum CompletionCommand {
 pub enum PrCommand {
     /// Review a pull request with AI assistance
     Review {
-        /// PR reference (URL, owner/repo#number, or number)
+        /// PR references (URL, owner/repo#number, or number)
         #[arg(value_name = "REFERENCE")]
-        reference: String,
+        references: Vec<String>,
 
         /// Repository for bare PR numbers (e.g., "block/goose")
         #[arg(long, short = 'r')]

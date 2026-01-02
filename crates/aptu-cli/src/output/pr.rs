@@ -7,7 +7,9 @@ use std::io::{self, Write};
 use console::style;
 
 use crate::cli::OutputContext;
-use crate::commands::types::{PrLabelResult, PrReviewResult};
+use crate::commands::types::{
+    BulkPrReviewResult, PrLabelResult, PrReviewResult, SinglePrReviewOutcome,
+};
 use crate::output::Renderable;
 
 impl Renderable for PrReviewResult {
@@ -145,6 +147,100 @@ impl Renderable for PrReviewResult {
             writeln!(w, "### Suggestions")?;
             for suggestion in &self.review.suggestions {
                 writeln!(w, "- {suggestion}")?;
+            }
+            writeln!(w)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Renderable for BulkPrReviewResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w)?;
+        writeln!(w, "{}", style("PR Review Summary").cyan().bold())?;
+        writeln!(w)?;
+
+        // Summary counts
+        writeln!(
+            w,
+            "  {} succeeded | {} failed | {} skipped",
+            style(self.succeeded).green().bold(),
+            style(self.failed).red().bold(),
+            style(self.skipped).yellow().bold(),
+        )?;
+        writeln!(w)?;
+
+        // Per-PR outcomes
+        if !self.outcomes.is_empty() {
+            writeln!(w, "{}", style("Outcomes").dim().bold())?;
+            for (pr_ref, outcome) in &self.outcomes {
+                match outcome {
+                    SinglePrReviewOutcome::Success(result) => {
+                        writeln!(
+                            w,
+                            "  {} {} ({})",
+                            style("✓").green(),
+                            pr_ref,
+                            style(&result.review.verdict).green()
+                        )?;
+                    }
+                    SinglePrReviewOutcome::Skipped(reason) => {
+                        writeln!(
+                            w,
+                            "  {} {} ({})",
+                            style("⊘").yellow(),
+                            pr_ref,
+                            style(reason).yellow()
+                        )?;
+                    }
+                    SinglePrReviewOutcome::Failed(error) => {
+                        writeln!(
+                            w,
+                            "  {} {} ({})",
+                            style("✗").red(),
+                            pr_ref,
+                            style(error).red()
+                        )?;
+                    }
+                }
+            }
+            writeln!(w)?;
+        }
+
+        // Dry-run message
+        if self.has_dry_run() {
+            crate::output::common::show_dry_run_message(w, "DRY RUN MODE")?;
+        }
+
+        Ok(())
+    }
+
+    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w, "## PR Review Summary")?;
+        writeln!(w)?;
+
+        writeln!(
+            w,
+            "- **Succeeded:** {}\n- **Failed:** {}\n- **Skipped:** {}",
+            self.succeeded, self.failed, self.skipped
+        )?;
+        writeln!(w)?;
+
+        if !self.outcomes.is_empty() {
+            writeln!(w, "### Outcomes")?;
+            for (pr_ref, outcome) in &self.outcomes {
+                match outcome {
+                    SinglePrReviewOutcome::Success(result) => {
+                        writeln!(w, "- ✓ `{pr_ref}` ({})", result.review.verdict)?;
+                    }
+                    SinglePrReviewOutcome::Skipped(reason) => {
+                        writeln!(w, "- ⊘ `{pr_ref}` ({reason})")?;
+                    }
+                    SinglePrReviewOutcome::Failed(error) => {
+                        writeln!(w, "- ✗ `{pr_ref}` ({error})")?;
+                    }
+                }
             }
             writeln!(w)?;
         }
