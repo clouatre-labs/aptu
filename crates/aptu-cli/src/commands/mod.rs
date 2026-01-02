@@ -58,7 +58,7 @@ async fn triage_single_issue(
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
-    apply: bool,
+    no_apply: bool,
     no_comment: bool,
     force: bool,
     ctx: &OutputContext,
@@ -171,7 +171,7 @@ async fn triage_single_issue(
     result.comment_url.clone_from(&comment_url);
 
     // Phase 3: Apply labels and milestone if requested (independent of comment posting)
-    if apply {
+    if !no_apply {
         let spinner = maybe_spinner(ctx, "Applying labels and milestone...");
         let apply_result = triage::apply(&issue_details, &ai_response.triage).await?;
         if let Some(s) = spinner {
@@ -210,7 +210,7 @@ async fn triage_single_issue(
             println!("{}", style("Comment posted successfully!").green().bold());
             println!("  {}", style(url).cyan().underlined());
         }
-        if apply && (!result.applied_labels.is_empty() || result.applied_milestone.is_some()) {
+        if !no_apply && (!result.applied_labels.is_empty() || result.applied_milestone.is_some()) {
             println!();
             println!("{}", style("Applied to issue:").green());
             if !result.applied_labels.is_empty() {
@@ -376,7 +376,7 @@ pub async fn run(
                 since,
                 state,
                 dry_run,
-                apply,
+                no_apply,
                 no_comment,
                 force,
             } => {
@@ -488,7 +488,7 @@ pub async fn run(
                                 &issue_ref,
                                 repo_context.as_deref(),
                                 dry_run,
-                                apply,
+                                no_apply,
                                 no_comment,
                                 force,
                                 &ctx,
@@ -572,6 +572,9 @@ pub async fn run(
                 approve,
                 request_changes,
                 dry_run,
+                no_apply: _,
+                no_comment: _,
+                force: _,
             } => {
                 let repo_context = repo
                     .as_deref()
