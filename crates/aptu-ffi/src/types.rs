@@ -256,3 +256,35 @@ impl From<aptu_core::ai::types::ReleaseNotesResponse> for FfiReleaseNotesRespons
         }
     }
 }
+
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiCreateIssueResponse {
+    pub formatted_title: String,
+    pub formatted_body: String,
+    pub suggested_labels: Vec<String>,
+}
+
+impl From<aptu_core::ai::types::CreateIssueResponse> for FfiCreateIssueResponse {
+    fn from(response: aptu_core::ai::types::CreateIssueResponse) -> Self {
+        FfiCreateIssueResponse {
+            formatted_title: response.formatted_title,
+            formatted_body: response.formatted_body,
+            suggested_labels: response.suggested_labels,
+        }
+    }
+}
+
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiPostIssueResult {
+    pub issue_url: String,
+    pub issue_number: u64,
+}
+
+impl From<(String, u64)> for FfiPostIssueResult {
+    fn from((url, number): (String, u64)) -> Self {
+        FfiPostIssueResult {
+            issue_url: url,
+            issue_number: number,
+        }
+    }
+}
