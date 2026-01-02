@@ -11,10 +11,11 @@ use chrono::Duration;
 use tracing::{debug, info, instrument, warn};
 
 use crate::ai::provider::MAX_LABELS;
+use crate::ai::registry::{CachedModelRegistry, ModelRegistry};
 use crate::ai::types::{CreateIssueResponse, PrDetails, ReviewEvent, TriageResponse};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
-use crate::cache::{self, CacheEntry};
+use crate::cache::{self, CacheEntry, cache_dir};
 use crate::config::{AiConfig, TaskType, load_config};
 use crate::error::AptuError;
 use crate::github::auth::{create_client_from_provider, create_client_with_token};
@@ -311,10 +312,29 @@ where
     F: Fn(AiClient) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
+    // Create cached model registry for validation
+    let registry = CachedModelRegistry::new(cache_dir(), 86400, provider);
+
     // Try primary provider first
     let api_key = provider
         .ai_api_key(primary_provider)
         .ok_or(AptuError::NotAuthenticated)?;
+
+    // Validate primary provider's model before creating client
+    if let Err(e) = registry.validate_model(primary_provider, model_name).await {
+        return Err(match e {
+            crate::ai::registry::RegistryError::ModelValidation {
+                model_id,
+                suggestions,
+            } => AptuError::ModelValidation {
+                model_id,
+                suggestions: suggestions.join(", "),
+            },
+            other => AptuError::ModelRegistry {
+                message: format!("Failed to validate model: {other}"),
+            },
+        });
+    }
 
     let ai_client = AiClient::with_api_key(primary_provider, api_key, model_name, ai_config)
         .map_err(|e| AptuError::AI {
@@ -362,6 +382,21 @@ where
             };
 
             let fallback_model = entry.model.as_deref().unwrap_or(model_name);
+
+            // Validate fallback provider's model before attempting client creation
+            if let Err(e) = registry
+                .validate_model(&entry.provider, fallback_model)
+                .await
+            {
+                warn!(
+                    fallback_provider = entry.provider,
+                    fallback_model = fallback_model,
+                    error = %e,
+                    "Fallback provider model validation failed, continuing to next provider"
+                );
+                continue;
+            }
+
             let Ok(ai_client) =
                 AiClient::with_api_key(&entry.provider, api_key, fallback_model, ai_config)
             else {
