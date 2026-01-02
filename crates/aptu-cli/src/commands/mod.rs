@@ -299,7 +299,12 @@ async fn review_single_pr(
 
 /// Dispatch to the appropriate command handler.
 #[allow(clippy::too_many_lines)]
-pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> Result<()> {
+pub async fn run(
+    command: Commands,
+    ctx: OutputContext,
+    config: &AppConfig,
+    inferred_repo: Option<String>,
+) -> Result<()> {
     match command {
         Commands::Auth(auth_cmd) => match auth_cmd {
             AuthCommand::Login => auth::run_login().await,
@@ -379,8 +384,11 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 no_comment,
                 force,
             } => {
-                // Determine repo context: --repo flag > default_repo config
-                let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
+                // Determine repo context: --repo flag > inferred_repo > default_repo config
+                let repo_context = repo
+                    .as_deref()
+                    .or(inferred_repo.as_deref())
+                    .or(config.user.default_repo.as_deref());
 
                 // Resolve issue numbers from references or --since flag
                 let issue_refs = if !references.is_empty() {
@@ -571,7 +579,10 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 dry_run,
                 yes,
             } => {
-                let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
+                let repo_context = repo
+                    .as_deref()
+                    .or(inferred_repo.as_deref())
+                    .or(config.user.default_repo.as_deref());
 
                 // Determine review type from flags
                 let review_type = if comment {
@@ -665,7 +676,10 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 repo,
                 dry_run,
             } => {
-                let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
+                let repo_context = repo
+                    .as_deref()
+                    .or(inferred_repo.as_deref())
+                    .or(config.user.default_repo.as_deref());
 
                 let spinner = maybe_spinner(&ctx, "Fetching PR and extracting labels...");
                 let result = pr::run_label(&reference, repo_context, dry_run, &config.ai).await?;

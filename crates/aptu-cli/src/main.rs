@@ -17,14 +17,15 @@ pub use provider::CliTokenProvider;
 use anyhow::{Context, Result};
 use aptu_core::ai::registry;
 use aptu_core::config;
+use aptu_core::utils;
 use clap::Parser;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::cli::{Cli, OutputContext};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
     logging::init_logging(cli.output, cli.verbose);
 
     let output_ctx = OutputContext::from_cli(cli.output, cli.verbose);
@@ -32,6 +33,14 @@ async fn main() -> Result<()> {
     // Load config early to validate it works (Option A from plan)
     let mut config = config::load_config().context("Failed to load configuration")?;
     debug!("Configuration loaded successfully");
+
+    // Attempt to infer repository from git remote
+    if let Ok(inferred) = utils::infer_repo_from_git() {
+        cli.inferred_repo = Some(inferred.clone());
+        info!("Inferred repository from git remote: {}", inferred);
+    } else {
+        debug!("Could not infer repository from git remote");
+    }
 
     // Apply CLI overrides to config
     if let Some(provider) = &cli.provider {
@@ -46,7 +55,7 @@ async fn main() -> Result<()> {
         debug!("Overriding AI model to: {model}");
     }
 
-    match commands::run(cli.command, output_ctx, &config).await {
+    match commands::run(cli.command, output_ctx, &config, cli.inferred_repo).await {
         Ok(()) => Ok(()),
         Err(e) => {
             let formatted = errors::format_error(&e);

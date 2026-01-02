@@ -235,16 +235,28 @@ fn test_triage_since_flag_invalid_date() {
 
 #[test]
 fn test_triage_since_requires_repo() {
-    // Test that --since without --repo fails with helpful message
+    // Test that --since without explicit --repo works due to auto-inference.
+    // When running in a git repository (like the aptu repo itself), the repo
+    // is automatically inferred. The command may fail with auth error in CI
+    // (no token), but it should NOT fail with "--since requires --repo".
+    // This proves auto-inference is working.
     let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
+    let assert = cmd
+        .arg("issue")
         .arg("triage")
         .arg("--since")
         .arg("2025-12-01")
         .arg("--dry-run")
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains("--since requires --repo"));
+        .assert();
+
+    // Either succeeds (local with auth) or fails with auth error (CI without auth)
+    // but never with "--since requires --repo" (that would mean inference failed)
+    let output = assert.get_output();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("--since requires --repo"),
+        "Auto-inference should have found repo from git remote"
+    );
 }
 
 #[test]
