@@ -325,10 +325,6 @@ pub enum IssueCommand {
         #[arg(long)]
         dry_run: bool,
 
-        /// Skip confirmation prompt (post immediately)
-        #[arg(short = 'y', long)]
-        yes: bool,
-
         /// Apply AI-suggested labels and milestone to the issue (additive: merges with existing labels, preserves existing priority labels and milestone)
         #[arg(long)]
         apply: bool,
@@ -416,10 +412,6 @@ pub enum PrCommand {
         /// Preview the review without posting
         #[arg(long)]
         dry_run: bool,
-
-        /// Skip confirmation prompt when posting
-        #[arg(long)]
-        yes: bool,
     },
     /// Auto-label a pull request based on conventional commit prefix and file paths
     Label {
