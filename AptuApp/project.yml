@@ -2,12 +2,12 @@ name: AptuApp
 options:
   bundleIdPrefix: com.block
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "17.0"
   minimumXcodeGenVersion: 2.35
 
 settings:
   SWIFT_VERSION: "6.2"
-  IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+  IPHONEOS_DEPLOYMENT_TARGET: "17.0"
   CODE_SIGN_IDENTITY: "Apple Development"
   DEVELOPMENT_TEAM: ""
 
@@ -55,6 +55,8 @@ targets:
     platform: iOS
     sources:
       - path: AptuAppTests
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: AptuApp
         type: native
