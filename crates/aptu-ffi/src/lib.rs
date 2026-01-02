@@ -612,4 +612,107 @@ pub fn post_release_notes(
     })
 }
 
+/// Format a GitHub issue with AI assistance.
+///
+/// This function wires the FFI layer to the core facade by:
+/// 1. Creating an FfiTokenProvider from the iOS keychain
+/// 2. Calling the core facade format_issue() function
+/// 3. Converting CreateIssueResponse to FfiCreateIssueResponse using From trait
+///
+/// This is the first step of the two-step issue creation process.
+/// Use `post_issue()` to post the formatted issue to GitHub.
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `title` - Raw issue title
+/// * `body` - Raw issue body
+/// * `repo` - Repository name (owner/repo format) for context
+///
+/// # Returns
+///
+/// Formatted issue response with title, body, and suggested labels.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - OpenRouter token is not available in keychain
+/// - AI API call fails
+/// - Response parsing fails
+#[uniffi::export]
+pub fn format_issue(
+    keychain: KeychainProviderRef,
+    title: String,
+    body: String,
+    repo: String,
+) -> Result<crate::types::FfiCreateIssueResponse, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        // Load AI config
+        let config = match aptu_core::load_config() {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                return Err(AptuFfiError::InternalError {
+                    message: format!("Failed to load config: {e}"),
+                });
+            }
+        };
+
+        match aptu_core::format_issue(&provider, &title, &body, &repo, &config.ai).await {
+            Ok(response) => Ok(crate::types::FfiCreateIssueResponse::from(response)),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
+/// Post a formatted issue to GitHub.
+///
+/// This function wires the FFI layer to the core facade by:
+/// 1. Creating an FfiTokenProvider from the iOS keychain
+/// 2. Calling the core facade post_issue() function
+/// 3. Returning the issue URL and number
+///
+/// This is the second step of the two-step issue creation process.
+/// Use `format_issue()` first to format the issue content.
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `title` - Formatted issue title
+/// * `body` - Formatted issue body
+///
+/// # Returns
+///
+/// FfiPostIssueResult with issue_url and issue_number.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available in keychain
+/// - GitHub API call fails
+#[uniffi::export]
+pub fn post_issue(
+    keychain: KeychainProviderRef,
+    owner: String,
+    repo: String,
+    title: String,
+    body: String,
+) -> Result<crate::types::FfiPostIssueResult, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        match aptu_core::post_issue(&provider, &owner, &repo, &title, &body).await {
+            Ok((url, number)) => Ok(crate::types::FfiPostIssueResult::from((url, number))),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
 uniffi::setup_scaffolding!();

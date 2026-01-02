@@ -13,8 +13,9 @@ use dialoguer::Input;
 use tracing::{debug, info, instrument};
 
 use super::types::CreateResult;
-use aptu_core::github::issues as gh_issues;
-use aptu_core::github::{auth, parse_owner_repo};
+use crate::provider::CliTokenProvider;
+use aptu_core::github::parse_owner_repo;
+use aptu_core::{format_issue, post_issue};
 
 /// Create a GitHub issue with AI assistance.
 ///
@@ -71,8 +72,16 @@ pub async fn run(
 
     debug!(title = %final_title, body_len = final_body.len(), "Collected issue content");
 
-    // Format title and body with AI
-    let (ai_response, _ai_stats) = aptu_core::ai::create_issue(&final_title, &final_body, &repo)
+    // Load AI config for facade functions
+    let ai_config = aptu_core::load_config()
+        .context("Failed to load configuration")?
+        .ai;
+
+    // Create CLI token provider
+    let provider = CliTokenProvider;
+
+    // Step 1: Format issue with AI using facade function
+    let ai_response = format_issue(&provider, &final_title, &final_body, &repo, &ai_config)
         .await
         .context("Failed to format issue with AI")?;
 
@@ -95,17 +104,9 @@ pub async fn run(
         });
     }
 
-    // Check authentication
-    if !auth::is_authenticated() {
-        anyhow::bail!("Not authenticated. Run 'aptu auth login' first.");
-    }
-
-    // Create GitHub client
-    let client = auth::create_client().context("Failed to create GitHub client")?;
-
-    // Post issue to GitHub
-    let (issue_url, issue_number) = gh_issues::create_issue(
-        &client,
+    // Step 2: Post issue to GitHub using facade function
+    let (issue_url, issue_number) = post_issue(
+        &provider,
         &owner,
         &repo_name,
         &ai_response.formatted_title,
