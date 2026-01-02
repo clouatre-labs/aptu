@@ -45,7 +45,7 @@ jobs:
       
       - name: Install uniffi-bindgen
         run: |
-          cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen uniffi
+          cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen --features cli uniffi
       
       - name: Generate Xcode project
         working-directory: AptuApp
