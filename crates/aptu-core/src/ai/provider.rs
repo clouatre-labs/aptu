@@ -1003,15 +1003,15 @@ mod tests {
     struct TestProvider;
 
     impl AiProvider for TestProvider {
-        fn name(&self) -> &str {
+        fn name(&self) -> &'static str {
             "test"
         }
 
-        fn api_url(&self) -> &str {
+        fn api_url(&self) -> &'static str {
             "https://test.example.com"
         }
 
-        fn api_key_env(&self) -> &str {
+        fn api_key_env(&self) -> &'static str {
             "TEST_API_KEY"
         }
 
@@ -1023,7 +1023,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn model(&self) -> &str {
+        fn model(&self) -> &'static str {
             "test-model"
         }
 
@@ -1118,11 +1118,11 @@ mod tests {
         let mut files = Vec::new();
         for i in 0..25 {
             files.push(PrFile {
-                filename: format!("file{}.rs", i),
+                filename: format!("file{i}.rs"),
                 status: "modified".to_string(),
                 additions: 10,
                 deletions: 5,
-                patch: Some(format!("patch content {}", i)),
+                patch: Some(format!("patch content {i}")),
             });
         }
 
@@ -1275,7 +1275,7 @@ mod tests {
         let body = "test";
         let mut files = Vec::new();
         for i in 0..25 {
-            files.push(format!("file{}.rs", i));
+            files.push(format!("file{i}.rs"));
         }
 
         let prompt = TestProvider::build_pr_label_user_prompt(title, body, &files);
@@ -1314,6 +1314,7 @@ mod tests {
     #[test]
     fn test_parse_ai_json_with_truncated_json() {
         #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
         struct TestResponse {
             message: String,
         }
@@ -1331,6 +1332,7 @@ mod tests {
     #[test]
     fn test_parse_ai_json_with_malformed_json() {
         #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
         struct TestResponse {
             message: String,
         }

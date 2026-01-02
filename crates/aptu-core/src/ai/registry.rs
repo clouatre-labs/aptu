@@ -538,7 +538,7 @@ impl CachedModelRegistry<'_> {
         let models = match provider {
             "openrouter" => Self::parse_openrouter_models(&data),
             "gemini" => Self::parse_gemini_models(&data),
-            "groq" | "cerebras" => Self::parse_generic_models(&data),
+            "groq" | "cerebras" | "zenmux" | "zai" => Self::parse_generic_models(&data),
             _ => vec![],
         };
 
@@ -638,7 +638,9 @@ mod tests {
         let _ = std::fs::create_dir_all(&temp_dir);
 
         // Create a mock token provider
+        #[allow(clippy::items_after_statements)]
         struct MockTokenProvider;
+        #[allow(clippy::items_after_statements)]
         impl crate::auth::TokenProvider for MockTokenProvider {
             fn github_token(&self) -> Option<secrecy::SecretString> {
                 None

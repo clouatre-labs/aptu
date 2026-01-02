@@ -1318,9 +1318,9 @@ mod label_tests {
         let mut labels = vec![];
         for i in 0..20 {
             labels.push(crate::ai::types::RepoLabel {
-                name: format!("label{}", i),
+                name: format!("label{i}"),
                 color: "cccccc".to_string(),
-                description: format!("Label {}", i),
+                description: format!("Label {i}"),
             });
         }
         labels.push(crate::ai::types::RepoLabel {

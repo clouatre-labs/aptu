@@ -1263,6 +1263,7 @@ mod tests {
     }
 }
 
+#[allow(clippy::items_after_test_module)]
 /// Lists available models from a provider API with caching.
 ///
 /// This function fetches the list of available models from a provider's API,
