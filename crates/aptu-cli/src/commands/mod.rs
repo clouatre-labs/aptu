@@ -578,7 +578,9 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                         "comment" => Some(aptu_core::ReviewEvent::Comment),
                         "approve" => Some(aptu_core::ReviewEvent::Approve),
                         "request-changes" => Some(aptu_core::ReviewEvent::RequestChanges),
-                        _ => anyhow::bail!("Invalid review type: {}. Must be 'comment', 'approve', or 'request-changes'", rt_str),
+                        _ => anyhow::bail!(
+                            "Invalid review type: {rt_str}. Must be 'comment', 'approve', or 'request-changes'"
+                        ),
                     }
                 } else {
                     None
