@@ -77,25 +77,7 @@ async fn triage_single_issue(
     }
 
     // Phase 1a.5: Display issue preview (title and labels) immediately after fetch
-    if matches!(ctx.format, OutputFormat::Text) {
-        println!(
-            "  {}  {}",
-            style("title:").dim(),
-            style(&issue_details.title).bold()
-        );
-        let labels_display = if issue_details.labels.is_empty() {
-            style("none").dim().to_string()
-        } else {
-            issue_details
-                .labels
-                .iter()
-                .map(|l| style(l).cyan().to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
-        println!("  {}  {}", style("labels:").dim(), labels_display);
-        println!();
-    }
+    crate::output::common::show_preview(ctx, &issue_details.title, &issue_details.labels);
 
     // Phase 1b: Check if already triaged (unless force is true)
     if !force {
@@ -116,25 +98,14 @@ async fn triage_single_issue(
     }
 
     // Verbose output: show fetch timing and AI analysis timing
-    if ctx.is_verbose() && matches!(ctx.format, OutputFormat::Text) {
-        let fetch_ms = fetch_elapsed.as_millis();
-        println!(
-            "  {}",
-            style(format!("Fetched issue in {fetch_ms}ms")).dim()
-        );
-
-        let stats = &ai_response.stats;
-        #[allow(clippy::cast_precision_loss)]
-        let duration_secs = stats.duration_ms as f64 / 1000.0;
-        let total_tokens = stats.input_tokens + stats.output_tokens;
-        println!(
-            "  {} (model: {}) in {:.1}s ({} tokens)",
-            style("AI analysis").dim(),
-            style(&stats.model).cyan(),
-            duration_secs,
-            total_tokens
-        );
-    }
+    crate::output::common::show_timing(
+        ctx,
+        fetch_elapsed.as_millis(),
+        &ai_response.stats.model,
+        ai_response.stats.duration_ms,
+        ai_response.stats.input_tokens,
+        ai_response.stats.output_tokens,
+    );
 
     // Build result for rendering (before posting decision)
     let is_maintainer = issue_details
@@ -451,14 +422,12 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                         let ctx = ctx_clone.clone();
                         async move {
                             // Progress output for concurrent processing
-                            if matches!(ctx.format, OutputFormat::Text) {
-                                println!(
-                                    "\n[{}/{}] Triaging {}",
-                                    idx + 1,
-                                    total_issues,
-                                    style(&issue_ref).cyan()
-                                );
-                            }
+                            crate::output::common::show_progress(
+                                &ctx,
+                                idx + 1,
+                                total_issues,
+                                &format!("Triaging {}", style(&issue_ref).cyan()),
+                            );
 
                             // Triage single issue with retry logic
                             let result = (|| async {
@@ -576,27 +545,12 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     None
                 };
 
-                // Display progress indicator
-                eprintln!("{}", style("[1/1] Reviewing").cyan().bold());
-
-                // Fetch PR details first (without spinner for immediate feedback)
+                // Display progress indicator and fetch PR details
+                crate::output::common::show_progress(&ctx, 1, 1, "Reviewing");
                 let pr_details = pr::fetch(&reference, repo_context).await?;
 
-                // Display styled PR preview matching triage pattern
-                eprintln!();
-                eprintln!(
-                    "{} #{}: {}",
-                    style("PR").cyan().bold(),
-                    pr_details.number,
-                    style(&pr_details.title).bold()
-                );
-                if !pr_details.labels.is_empty() {
-                    eprintln!(
-                        "{}",
-                        style(format!("Labels: {}", pr_details.labels.join(", "))).dim()
-                    );
-                }
-                eprintln!();
+                // Display styled PR preview
+                crate::output::common::show_preview(&ctx, &pr_details.title, &pr_details.labels);
 
                 // Now analyze with AI (with spinner)
                 let spinner = maybe_spinner(&ctx, "Analyzing with AI...");

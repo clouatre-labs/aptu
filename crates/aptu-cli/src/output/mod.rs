@@ -50,6 +50,7 @@ pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) -> Result<()> {
 
 mod auth;
 mod bulk;
+pub mod common;
 mod create;
 mod history;
 mod issues;
