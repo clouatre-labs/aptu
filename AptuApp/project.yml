@@ -45,10 +45,6 @@ targets:
         script: |
           set -e
           bash "${SRCROOT}/Scripts/build-rust-ffi.sh" "${SRCROOT}" "${CONFIGURATION}" "${PLATFORM_NAME}" "${ARCHS}"
-          
-    dependencies:
-      - target: AptuAppTests
-        type: native
 
   AptuAppTests:
     type: bundle.unit-test
