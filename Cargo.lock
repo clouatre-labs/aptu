@@ -139,6 +139,7 @@ dependencies = [
  "chrono",
  "config",
  "dirs",
+ "futures",
  "keyring",
  "octocrab",
  "percent-encoding",

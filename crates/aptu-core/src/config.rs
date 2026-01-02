@@ -37,7 +37,7 @@ pub enum TaskType {
 }
 
 /// Application configuration.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Clone)]
 #[serde(default)]
 pub struct AppConfig {
     /// User preferences.
@@ -55,7 +55,7 @@ pub struct AppConfig {
 }
 
 /// User preferences.
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 #[serde(default)]
 pub struct UserConfig {
     /// Default repository to use (skip repo selection).
@@ -63,7 +63,7 @@ pub struct UserConfig {
 }
 
 /// Task-specific AI model override.
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 #[serde(default)]
 pub struct TaskOverride {
     /// Optional provider override for this task.
@@ -73,7 +73,7 @@ pub struct TaskOverride {
 }
 
 /// Task-specific AI configuration.
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 #[serde(default)]
 pub struct TasksConfig {
     /// Triage task configuration.
@@ -127,7 +127,7 @@ pub struct FallbackConfig {
 }
 
 /// AI provider settings.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct AiConfig {
     /// AI provider: "openrouter" or "ollama".
@@ -217,7 +217,7 @@ impl AiConfig {
 }
 
 /// GitHub API settings.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct GitHubConfig {
     /// API request timeout in seconds.
@@ -233,7 +233,7 @@ impl Default for GitHubConfig {
 }
 
 /// UI preferences.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct UiConfig {
     /// Enable colored output.
@@ -255,7 +255,7 @@ impl Default for UiConfig {
 }
 
 /// Cache settings.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct CacheConfig {
     /// Issue cache TTL in minutes.
@@ -279,7 +279,7 @@ impl Default for CacheConfig {
 }
 
 /// Repository settings.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct ReposConfig {
     /// Include curated repositories (default: true).
