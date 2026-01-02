@@ -1273,7 +1273,6 @@ mod tests {
 ///
 /// * `provider` - Token provider for API credentials
 /// * `provider_name` - Name of the provider (e.g., "openrouter", "gemini")
-/// * `force_refresh` - If true, bypass cache and fetch from API
 ///
 /// # Returns
 ///
@@ -1295,10 +1294,6 @@ pub async fn list_models(
 
     let cache_dir = cache_dir();
     let registry = CachedModelRegistry::new(cache_dir, 86400, provider); // 24h TTL
-
-    if force_refresh {
-        debug!("Force refresh requested, fetching from API");
-    }
 
     registry
         .list_models(provider_name)

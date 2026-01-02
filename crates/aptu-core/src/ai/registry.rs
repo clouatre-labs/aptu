@@ -599,7 +599,19 @@ mod tests {
         let temp_dir = std::env::temp_dir().join("aptu_test_stale_cache");
         let _ = std::fs::create_dir_all(&temp_dir);
 
-        let registry = CachedModelRegistry::new(temp_dir.clone(), 1); // 1 second TTL
+        // Create a mock token provider
+        struct MockTokenProvider;
+        impl crate::auth::TokenProvider for MockTokenProvider {
+            fn github_token(&self) -> Option<secrecy::SecretString> {
+                None
+            }
+            fn ai_api_key(&self, _provider: &str) -> Option<secrecy::SecretString> {
+                None
+            }
+        }
+
+        let mock_provider = MockTokenProvider;
+        let registry = CachedModelRegistry::new(temp_dir.clone(), 1, &mock_provider); // 1 second TTL
 
         let models = vec![
             CachedModel {
