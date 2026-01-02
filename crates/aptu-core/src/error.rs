@@ -91,6 +91,15 @@ pub enum AptuError {
         /// Error message.
         message: String,
     },
+
+    /// Model validation error - invalid model ID with suggestions.
+    #[error("Invalid model ID: {model_id}. Did you mean one of these?\n{suggestions}")]
+    ModelValidation {
+        /// The invalid model ID provided by the user.
+        model_id: String,
+        /// Suggested valid model IDs based on fuzzy matching.
+        suggestions: String,
+    },
 }
 
 /// GitHub resource type for type mismatch errors.
