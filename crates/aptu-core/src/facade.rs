@@ -340,7 +340,9 @@ where
         .ai_api_key(primary_provider)
         .ok_or(AptuError::NotAuthenticated)?;
 
-    validate_provider_model(&registry, primary_provider, model_name).await?;
+    if ai_config.validation_enabled {
+        validate_provider_model(&registry, primary_provider, model_name).await?;
+    }
 
     let ai_client = AiClient::with_api_key(primary_provider, api_key, model_name, ai_config)
         .map_err(|e| AptuError::AI {
@@ -384,9 +386,10 @@ where
 
             let fallback_model = entry.model.as_deref().unwrap_or(model_name);
 
-            if validate_provider_model(&registry, &entry.provider, fallback_model)
-                .await
-                .is_err()
+            if ai_config.validation_enabled
+                && validate_provider_model(&registry, &entry.provider, fallback_model)
+                    .await
+                    .is_err()
             {
                 warn!(
                     fallback_provider = entry.provider,
