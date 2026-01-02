@@ -25,6 +25,25 @@ impl FfiTokenProvider {
     }
 }
 
+/// CLI token provider for FFI operations that don't require keychain.
+///
+/// Resolves credentials from environment variables and system sources.
+/// Used for operations like listing models that don't require iOS keychain access.
+pub struct CliTokenProvider;
+
+impl CliTokenProvider {
+    /// Creates a new CLI token provider.
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for CliTokenProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokenProvider for FfiTokenProvider {
     fn github_token(&self) -> Option<SecretString> {
         match self
@@ -64,6 +83,38 @@ impl TokenProvider for FfiTokenProvider {
                     error = ?e,
                     "Failed to retrieve {} API key from keychain",
                     provider
+                );
+                None
+            }
+        }
+    }
+}
+
+impl TokenProvider for CliTokenProvider {
+    fn github_token(&self) -> Option<SecretString> {
+        if let Some((token, _source)) = aptu_core::github::auth::resolve_token() {
+            debug!("Resolved GitHub token from CLI sources");
+            Some(token)
+        } else {
+            debug!("No GitHub token found in CLI sources");
+            None
+        }
+    }
+
+    fn ai_api_key(&self, provider: &str) -> Option<SecretString> {
+        let provider_config = aptu_core::ai::registry::get_provider(provider)?;
+        match std::env::var(provider_config.api_key_env) {
+            Ok(key) if !key.is_empty() => {
+                debug!(
+                    "Resolved {} API key from environment variable {}",
+                    provider, provider_config.api_key_env
+                );
+                Some(SecretString::from(key))
+            }
+            _ => {
+                debug!(
+                    "No {} API key found in environment variable {}",
+                    provider, provider_config.api_key_env
                 );
                 None
             }
