@@ -76,7 +76,12 @@ pub struct OutputContext {
 
 impl OutputContext {
     /// Creates an `OutputContext` from CLI arguments.
-    pub fn from_cli(format: OutputFormat, quiet: bool, verbosity: u8) -> Self {
+    /// Quiet mode is automatically enabled for structured formats (Json, Yaml, Markdown).
+    pub fn from_cli(format: OutputFormat, verbosity: u8) -> Self {
+        let quiet = matches!(
+            format,
+            OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown
+        );
         Self {
             format,
             quiet,
@@ -147,10 +152,6 @@ pub struct Cli {
     /// Output format (text, json, yaml)
     #[arg(long, short = 'o', global = true, default_value = "text", value_enum)]
     pub output: OutputFormat,
-
-    /// Suppress non-essential output (spinners, progress)
-    #[arg(long, short = 'q', global = true)]
-    pub quiet: bool,
 
     /// Enable verbose output (debug-level logging). Use -v for verbose, -vv for debug
     #[arg(long, short = 'v', global = true, action = clap::ArgAction::Count)]
