@@ -108,34 +108,34 @@ mod tests {
 
     #[test]
     fn test_show_progress_text_format() {
-        let ctx = OutputContext::from_cli(OutputFormat::Text, 0);
+        let ctx = OutputContext::from_cli(OutputFormat::Text, false);
         // Visual test - should print "[2/5] Processing"
         show_progress(&ctx, 2, 5, "Processing");
     }
 
     #[test]
     fn test_show_progress_json_format() {
-        let ctx = OutputContext::from_cli(OutputFormat::Json, 0);
+        let ctx = OutputContext::from_cli(OutputFormat::Json, false);
         // Should not print anything
         show_progress(&ctx, 1, 1, "Test");
     }
 
     #[test]
     fn test_show_preview_with_labels() {
-        let ctx = OutputContext::from_cli(OutputFormat::Text, 0);
+        let ctx = OutputContext::from_cli(OutputFormat::Text, false);
         let labels = vec!["bug".to_string(), "help wanted".to_string()];
         show_preview(&ctx, "Test Issue", &labels);
     }
 
     #[test]
     fn test_show_preview_no_labels() {
-        let ctx = OutputContext::from_cli(OutputFormat::Text, 0);
+        let ctx = OutputContext::from_cli(OutputFormat::Text, false);
         show_preview(&ctx, "Test Issue", &[]);
     }
 
     #[test]
     fn test_show_preview_json_format() {
-        let ctx = OutputContext::from_cli(OutputFormat::Json, 0);
+        let ctx = OutputContext::from_cli(OutputFormat::Json, false);
         show_preview(&ctx, "Test", &["label".to_string()]);
     }
 
@@ -149,20 +149,20 @@ mod tests {
 
     #[test]
     fn test_show_timing_verbose() {
-        let ctx = OutputContext::from_cli(OutputFormat::Text, 1);
+        let ctx = OutputContext::from_cli(OutputFormat::Text, true);
         show_timing(&ctx, 150, "gpt-4", 2500, 100, 50);
     }
 
     #[test]
     fn test_show_timing_quiet() {
-        let ctx = OutputContext::from_cli(OutputFormat::Json, 0);
+        let ctx = OutputContext::from_cli(OutputFormat::Json, false);
         // Should not print anything (JSON format is quiet)
         show_timing(&ctx, 150, "gpt-4", 2500, 100, 50);
     }
 
     #[test]
     fn test_show_timing_json_format() {
-        let ctx = OutputContext::from_cli(OutputFormat::Json, 1);
+        let ctx = OutputContext::from_cli(OutputFormat::Json, true);
         // Should not print anything
         show_timing(&ctx, 150, "gpt-4", 2500, 100, 50);
     }

@@ -68,8 +68,8 @@ pub struct OutputContext {
     pub format: OutputFormat,
     /// Suppress non-essential output (spinners, progress)
     pub quiet: bool,
-    /// Verbosity level: 0 = default, 1 = verbose (-v), 2+ = debug (-vv)
-    pub verbosity: u8,
+    /// Verbose output enabled (-v flag)
+    pub verbose: bool,
     /// Whether stdout is a terminal (TTY)
     pub is_tty: bool,
 }
@@ -77,7 +77,7 @@ pub struct OutputContext {
 impl OutputContext {
     /// Creates an `OutputContext` from CLI arguments.
     /// Quiet mode is automatically enabled for structured formats (Json, Yaml, Markdown).
-    pub fn from_cli(format: OutputFormat, verbosity: u8) -> Self {
+    pub fn from_cli(format: OutputFormat, verbose: bool) -> Self {
         let quiet = matches!(
             format,
             OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown
@@ -85,7 +85,7 @@ impl OutputContext {
         Self {
             format,
             quiet,
-            verbosity,
+            verbose,
             is_tty: std::io::stdout().is_terminal(),
         }
     }
@@ -95,15 +95,9 @@ impl OutputContext {
         self.is_tty && !self.quiet && matches!(self.format, OutputFormat::Text)
     }
 
-    /// Returns true if verbose output is enabled (-v or higher).
+    /// Returns true if verbose output is enabled (-v flag).
     pub fn is_verbose(&self) -> bool {
-        self.verbosity >= 1
-    }
-
-    /// Returns true if debug output is enabled (-vv or higher).
-    #[allow(dead_code)]
-    pub fn is_debug(&self) -> bool {
-        self.verbosity >= 2
+        self.verbose
     }
 }
 
@@ -153,9 +147,9 @@ pub struct Cli {
     #[arg(long, short = 'o', global = true, default_value = "text", value_enum)]
     pub output: OutputFormat,
 
-    /// Enable verbose output (debug-level logging). Use -v for verbose, -vv for debug
-    #[arg(long, short = 'v', global = true, action = clap::ArgAction::Count)]
-    pub verbose: u8,
+    /// Enable verbose output
+    #[arg(long, short = 'v', global = true)]
+    pub verbose: bool,
 
     /// Override configured AI provider (e.g., openrouter, anthropic)
     #[arg(long, global = true)]
