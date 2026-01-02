@@ -101,13 +101,19 @@ pub fn format_error(error: &Error) -> String {
                 )
             }
             AptuError::ModelValidation {
-                model_id: _,
-                suggestions: _,
+                model_id,
+                suggestions,
             } => {
-                format!(
-                    "{aptu_err}\n\nTip: Check your model configuration and try one of the \
-                     suggested models."
-                )
+                let mut msg = format!("Invalid model ID: {model_id}");
+                if !suggestions.is_empty() {
+                    msg.push_str("\n\nDid you mean one of these?");
+                    for suggestion in suggestions.split('\n') {
+                        if !suggestion.is_empty() {
+                            let _ = write!(msg, "\n  - {suggestion}");
+                        }
+                    }
+                }
+                msg
             }
         }
     } else {
