@@ -367,7 +367,10 @@ mod tests {
         assert_eq!(config.ai.model, "gemini-3-flash-preview");
         assert_eq!(config.ai.timeout_seconds, 30);
         assert_eq!(config.ai.max_tokens, 4096);
-        assert_eq!(config.ai.temperature, 0.3);
+        #[allow(clippy::float_cmp)]
+        {
+            assert_eq!(config.ai.temperature, 0.3);
+        }
         assert_eq!(config.github.api_timeout_seconds, 10);
         assert!(config.ui.color);
         assert!(config.ui.confirm_before_post);

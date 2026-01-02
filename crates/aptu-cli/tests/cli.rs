@@ -306,8 +306,7 @@ fn test_issue_triage_dry_run_json_output() {
     // In that case, we just verify the test runs without panic
     if !stdout.is_empty() {
         let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
-        if parsed.is_ok() {
-            let json = parsed.unwrap();
+        if let Ok(json) = parsed {
             assert!(
                 json.is_object(),
                 "issue triage JSON output should be an object"
@@ -344,8 +343,7 @@ fn test_issue_list_json_output() {
     // In that case, we just verify the test runs without panic
     if !stdout.is_empty() {
         let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
-        if parsed.is_ok() {
-            let json = parsed.unwrap();
+        if let Ok(json) = parsed {
             assert!(json.is_array(), "issue list JSON output should be an array");
         }
     }
@@ -369,8 +367,7 @@ fn test_repo_discover_json_output() {
     // In that case, we just verify the test runs without panic
     if !stdout.is_empty() {
         let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
-        if parsed.is_ok() {
-            let json = parsed.unwrap();
+        if let Ok(json) = parsed {
             assert!(
                 json.is_array(),
                 "repo discover JSON output should be an array"

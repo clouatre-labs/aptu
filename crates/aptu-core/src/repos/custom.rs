@@ -213,7 +213,7 @@ mod tests {
 
         assert_eq!(result.len(), 2);
         let full_names: std::collections::HashSet<_> =
-            result.iter().map(|r| r.full_name()).collect();
+            result.iter().map(super::super::CuratedRepo::full_name).collect();
         assert!(full_names.contains("test/repo1"));
         assert!(full_names.contains("test/repo2"));
     }

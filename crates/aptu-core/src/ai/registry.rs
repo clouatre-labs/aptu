@@ -600,7 +600,9 @@ mod tests {
         let _ = std::fs::create_dir_all(&temp_dir);
 
         // Create a mock token provider
+        #[allow(clippy::items_after_statements)]
         struct MockTokenProvider;
+        #[allow(clippy::items_after_statements)]
         impl crate::auth::TokenProvider for MockTokenProvider {
             fn github_token(&self) -> Option<secrecy::SecretString> {
                 None

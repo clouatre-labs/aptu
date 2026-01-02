@@ -448,7 +448,6 @@ mod tests {
         let mock_env = |key: &str| -> Result<String, std::env::VarError> {
             match key {
                 "GH_TOKEN" => Ok("test_token_123".to_string()),
-                "GITHUB_TOKEN" => Err(std::env::VarError::NotPresent),
                 _ => Err(std::env::VarError::NotPresent),
             }
         };
