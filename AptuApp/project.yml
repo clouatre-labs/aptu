@@ -2,12 +2,12 @@ name: AptuApp
 options:
   bundleIdPrefix: com.block
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "26.0"
   minimumXcodeGenVersion: 2.35
 
 settings:
   SWIFT_VERSION: "6.2"
-  IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+  IPHONEOS_DEPLOYMENT_TARGET: "26.0"
   CODE_SIGN_IDENTITY: "Apple Development"
   DEVELOPMENT_TEAM: ""
 
