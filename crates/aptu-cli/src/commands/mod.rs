@@ -28,7 +28,7 @@ use crate::cli::{
     AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
     OutputFormat, PrCommand, RepoCommand,
 };
-use crate::commands::types::PrReviewResult;
+use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewOutcome};
 use crate::output;
 use aptu_core::{AppConfig, State, check_already_triaged, is_retryable_anyhow, retry_backoff};
 
@@ -233,6 +233,68 @@ async fn triage_single_issue(
             }
         }
     }
+
+    Ok(Some(result))
+}
+
+/// Review a single PR and return the result.
+///
+/// Returns Ok(Some(result)) if reviewed successfully, Ok(None) if skipped,
+/// or Err if an error occurred.
+#[allow(clippy::too_many_arguments)]
+async fn review_single_pr(
+    reference: &str,
+    repo_context: Option<&str>,
+    review_type: Option<aptu_core::ReviewEvent>,
+    dry_run: bool,
+    yes: bool,
+    ctx: &OutputContext,
+    config: &AppConfig,
+) -> Result<Option<PrReviewResult>> {
+    // Fetch PR details
+    let pr_details = pr::fetch(reference, repo_context).await?;
+
+    // Display styled PR preview
+    crate::output::common::show_preview(ctx, &pr_details.title, &pr_details.labels);
+
+    // Analyze with AI
+    let spinner = maybe_spinner(ctx, "Analyzing with AI...");
+    let (review, ai_stats) = pr::analyze(&pr_details, &config.ai).await?;
+    if let Some(s) = spinner {
+        s.finish_and_clear();
+    }
+
+    // Build result
+    let analyze_result = pr::AnalyzeResult {
+        pr_details: pr_details.clone(),
+        review: review.clone(),
+        ai_stats: ai_stats.clone(),
+    };
+
+    // Handle posting if review type specified
+    if let Some(event) = review_type {
+        pr::post(
+            &analyze_result,
+            reference,
+            repo_context,
+            event,
+            dry_run,
+            yes,
+        )
+        .await?;
+    }
+
+    // Render output
+    let result = PrReviewResult {
+        pr_title: pr_details.title,
+        pr_number: pr_details.number,
+        pr_url: pr_details.url,
+        review,
+        ai_stats,
+        dry_run,
+        labels: pr_details.labels,
+    };
+    output::render(&result, ctx)?;
 
     Ok(Some(result))
 }
@@ -524,7 +586,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
 
         Commands::Pr(pr_cmd) => match pr_cmd {
             PrCommand::Review {
-                reference,
+                references,
                 repo,
                 comment,
                 approve,
@@ -545,51 +607,102 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     None
                 };
 
-                // Display progress indicator and fetch PR details
-                crate::output::common::show_progress(&ctx, 1, 1, "Reviewing");
-                let pr_details = pr::fetch(&reference, repo_context).await?;
-
-                // Display styled PR preview
-                crate::output::common::show_preview(&ctx, &pr_details.title, &pr_details.labels);
-
-                // Now analyze with AI (with spinner)
-                let spinner = maybe_spinner(&ctx, "Analyzing with AI...");
-                let (review, ai_stats) = pr::analyze(&pr_details, &config.ai).await?;
-                if let Some(s) = spinner {
-                    s.finish_and_clear();
+                if references.is_empty() {
+                    if matches!(ctx.format, OutputFormat::Text) {
+                        println!("{}", style("No PRs to review.").yellow());
+                    }
+                    return Ok(());
                 }
 
-                // Build result
-                let analyze_result = pr::AnalyzeResult {
-                    pr_details: pr_details.clone(),
-                    review: review.clone(),
-                    ai_stats: ai_stats.clone(),
+                // Bulk PR review loop with concurrent processing
+                let mut bulk_result = BulkPrReviewResult {
+                    succeeded: 0,
+                    failed: 0,
+                    skipped: 0,
+                    outcomes: Vec::new(),
                 };
 
-                // Handle posting if review type specified
-                if let Some(event) = review_type {
-                    pr::post(
-                        &analyze_result,
-                        &reference,
-                        repo_context,
-                        event,
-                        dry_run,
-                        yes,
-                    )
-                    .await?;
+                // Process PRs concurrently with buffer_unordered(5) for rate limit awareness
+                let total_prs = references.len();
+                let ctx_clone = ctx.clone();
+                let outcomes = stream::iter(references.iter().enumerate())
+                    .map(|(idx, pr_ref)| {
+                        let pr_ref = pr_ref.clone();
+                        let ctx = ctx_clone.clone();
+                        async move {
+                            // Progress output for concurrent processing
+                            crate::output::common::show_progress(
+                                &ctx,
+                                idx + 1,
+                                total_prs,
+                                &format!("Reviewing {}", style(&pr_ref).cyan()),
+                            );
+
+                            // Review single PR with retry logic
+                            let result = (|| async {
+                                review_single_pr(
+                                    &pr_ref,
+                                    repo_context,
+                                    review_type,
+                                    dry_run,
+                                    yes,
+                                    &ctx,
+                                    config,
+                                )
+                                .await
+                            })
+                            .retry(retry_backoff())
+                            .when(is_retryable_anyhow)
+                            .notify(|err, dur| {
+                                tracing::warn!(
+                                    error = %err,
+                                    delay_ms = dur.as_millis(),
+                                    "Retrying PR review after transient failure"
+                                );
+                            })
+                            .await;
+
+                            (pr_ref, result)
+                        }
+                    })
+                    .buffer_unordered(5)
+                    .collect::<Vec<_>>()
+                    .await;
+
+                // Process results and update bulk_result
+                for (pr_ref, result) in outcomes {
+                    match result {
+                        Ok(Some(review_result)) => {
+                            bulk_result.succeeded += 1;
+                            bulk_result.outcomes.push((
+                                pr_ref,
+                                SinglePrReviewOutcome::Success(Box::new(review_result)),
+                            ));
+                        }
+                        Ok(None) => {
+                            bulk_result.skipped += 1;
+                            bulk_result.outcomes.push((
+                                pr_ref,
+                                SinglePrReviewOutcome::Skipped("Skipped".to_string()),
+                            ));
+                        }
+                        Err(e) => {
+                            bulk_result.failed += 1;
+                            bulk_result
+                                .outcomes
+                                .push((pr_ref, SinglePrReviewOutcome::Failed(e.to_string())));
+                            if matches!(ctx.format, OutputFormat::Text) {
+                                println!("  {}", style(format!("Error: {e}")).red());
+                            }
+                        }
+                    }
                 }
 
-                // Render output
-                let result = PrReviewResult {
-                    pr_title: pr_details.title,
-                    pr_number: pr_details.number,
-                    pr_url: pr_details.url,
-                    review,
-                    ai_stats,
-                    dry_run,
-                    labels: pr_details.labels,
-                };
-                output::render(&result, &ctx)?;
+                // Render bulk summary (only for multiple PRs)
+                if references.len() > 1 {
+                    output::render(&bulk_result, &ctx)?;
+                }
+
                 Ok(())
             }
             PrCommand::Label {

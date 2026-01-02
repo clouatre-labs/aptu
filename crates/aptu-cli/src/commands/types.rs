@@ -172,6 +172,55 @@ pub struct PrReviewResult {
     pub labels: Vec<String>,
 }
 
+/// Outcome of a single PR review operation in a bulk operation.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
+pub enum SinglePrReviewOutcome {
+    /// PR review succeeded.
+    #[allow(dead_code)]
+    Success(Box<PrReviewResult>),
+    /// PR review was skipped.
+    #[allow(dead_code)]
+    Skipped(String),
+    /// PR review failed with an error.
+    #[allow(dead_code)]
+    Failed(String),
+}
+
+impl SinglePrReviewOutcome {
+    /// Extract `PrReviewResult` if this is a Success outcome.
+    pub fn as_pr_review_result(&self) -> Option<&PrReviewResult> {
+        match self {
+            SinglePrReviewOutcome::Success(result) => Some(result),
+            _ => None,
+        }
+    }
+}
+
+/// Result from a bulk PR review operation.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct BulkPrReviewResult {
+    /// Number of PRs successfully reviewed.
+    pub succeeded: usize,
+    /// Number of PRs that failed.
+    pub failed: usize,
+    /// Number of PRs that were skipped.
+    pub skipped: usize,
+    /// Individual outcomes for each PR.
+    pub outcomes: Vec<(String, SinglePrReviewOutcome)>,
+}
+
+impl BulkPrReviewResult {
+    /// Check if any outcomes are dry-run operations.
+    pub fn has_dry_run(&self) -> bool {
+        self.outcomes
+            .iter()
+            .any(|(_, outcome)| outcome.as_pr_review_result().is_some_and(|r| r.dry_run))
+    }
+}
+
 /// Result from the PR label command.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
