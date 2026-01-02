@@ -134,12 +134,19 @@ pub async fn post(
 /// * `reference` - PR reference (URL, owner/repo#number, or bare number)
 /// * `repo_context` - Optional repository context for bare numbers
 /// * `dry_run` - If true, preview labels without applying
+/// * `apply` - If true, apply extracted labels to the PR
+/// * `no_comment` - If true, skip posting label comment to GitHub
+/// * `force` - If true, bypass existing label detection
 /// * `ai_config` - AI configuration for fallback label suggestion
+#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 #[instrument(skip_all, fields(reference = %reference))]
 pub async fn run_label(
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
+    _apply: bool,
+    _no_comment: bool,
+    _force: bool,
     ai_config: &aptu_core::AiConfig,
 ) -> Result<PrLabelResult> {
     // Create CLI token provider

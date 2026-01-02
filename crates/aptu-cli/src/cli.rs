@@ -412,6 +412,18 @@ pub enum PrCommand {
         /// Skip confirmation prompt when posting
         #[arg(long)]
         yes: bool,
+
+        /// Apply AI-suggested labels and milestone to the PR
+        #[arg(long)]
+        apply: bool,
+
+        /// Skip posting review comment to GitHub
+        #[arg(long)]
+        no_comment: bool,
+
+        /// Bypass existing review detection
+        #[arg(long)]
+        force: bool,
     },
     /// Auto-label a pull request based on conventional commit prefix and file paths
     Label {
@@ -426,6 +438,18 @@ pub enum PrCommand {
         /// Preview labels without applying
         #[arg(long)]
         dry_run: bool,
+
+        /// Apply extracted labels to the PR
+        #[arg(long)]
+        apply: bool,
+
+        /// Skip posting label comment to GitHub
+        #[arg(long)]
+        no_comment: bool,
+
+        /// Bypass existing label detection
+        #[arg(long)]
+        force: bool,
     },
 }
 

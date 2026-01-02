@@ -239,13 +239,16 @@ async fn triage_single_issue(
 ///
 /// Returns Ok(Some(result)) if reviewed successfully, Ok(None) if skipped,
 /// or Err if an error occurred.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 async fn review_single_pr(
     reference: &str,
     repo_context: Option<&str>,
     review_type: Option<aptu_core::ReviewEvent>,
     dry_run: bool,
     yes: bool,
+    _apply: bool,
+    _no_comment: bool,
+    _force: bool,
     ctx: &OutputContext,
     config: &AppConfig,
 ) -> Result<Option<PrReviewResult>> {
@@ -569,6 +572,9 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 no_apply: _,
                 dry_run,
                 yes,
+                apply,
+                no_comment,
+                force,
             } => {
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
 
@@ -614,6 +620,9 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                                 parsed_review_type,
                                 dry_run,
                                 yes,
+                                apply,
+                                no_comment,
+                                force,
                                 &ctx,
                                 &config,
                             )
@@ -666,11 +675,14 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 reference,
                 repo,
                 dry_run,
+                apply,
+                no_comment,
+                force,
             } => {
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
 
                 let spinner = maybe_spinner(&ctx, "Fetching PR and extracting labels...");
-                let result = pr::run_label(&reference, repo_context, dry_run, &config.ai).await?;
+                let result = pr::run_label(&reference, repo_context, dry_run, apply, no_comment, force, &config.ai).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
