@@ -58,7 +58,6 @@ async fn triage_single_issue(
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
-    yes: bool,
     apply: bool,
     no_comment: bool,
     force: bool,
@@ -135,11 +134,9 @@ async fn triage_single_issue(
     // Determine if we should post a comment (independent of --apply)
     let should_post_comment = if no_comment {
         false
-    } else if !ctx.is_interactive() && !yes {
-        // For non-interactive without --yes, don't post (safe default)
+    } else if !ctx.is_interactive() {
+        // For non-interactive mode, don't post (safe default)
         false
-    } else if yes {
-        true
     } else if config.ui.confirm_before_post {
         println!();
         Confirm::new()
@@ -379,7 +376,6 @@ pub async fn run(
                 since,
                 state,
                 dry_run,
-                yes,
                 apply,
                 no_comment,
                 force,
@@ -492,7 +488,6 @@ pub async fn run(
                                 &issue_ref,
                                 repo_context.as_deref(),
                                 dry_run,
-                                yes,
                                 apply,
                                 no_comment,
                                 force,
@@ -577,7 +572,6 @@ pub async fn run(
                 approve,
                 request_changes,
                 dry_run,
-                yes,
             } => {
                 let repo_context = repo
                     .as_deref()
@@ -622,7 +616,7 @@ pub async fn run(
                                 repo_context.as_deref(),
                                 review_type,
                                 dry_run,
-                                yes,
+                                false,
                                 &ctx,
                                 &config,
                             )
