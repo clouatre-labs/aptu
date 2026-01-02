@@ -524,7 +524,7 @@ impl CachedModelRegistry<'_> {
         let models = match provider {
             "openrouter" => Self::parse_openrouter_models(&data),
             "gemini" => Self::parse_gemini_models(&data),
-            "groq" | "cerebras" => Self::parse_generic_models(&data),
+            "groq" | "cerebras" | "zenmux" | "zai" => Self::parse_generic_models(&data),
             _ => vec![],
         };
 
