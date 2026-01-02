@@ -27,7 +27,7 @@ use async_trait::async_trait;
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 use crate::auth::TokenProvider;
@@ -257,7 +257,10 @@ impl CachedModelRegistry<'_> {
         CachedModelRegistry {
             cache_dir,
             ttl_seconds,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new()),
             token_provider,
         }
     }
@@ -436,6 +439,9 @@ impl CachedModelRegistry<'_> {
         let api_key = self.token_provider.ai_api_key(provider).ok_or_else(|| {
             RegistryError::HttpError(format!("No API key available for {provider}"))
         })?;
+
+        // Provide UI feedback that model validation is in progress
+        tracing::info!(provider = provider, "Validating model with API...");
 
         // Build request incrementally with provider-specific authentication
         let request = match provider {
