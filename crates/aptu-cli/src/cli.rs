@@ -165,6 +165,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub model: Option<String>,
 
+    /// Repository inferred from git remote (set by main.rs, not user-facing)
+    #[arg(skip)]
+    pub inferred_repo: Option<String>,
+
     /// Subcommand to execute
     #[command(subcommand)]
     pub command: Commands,
