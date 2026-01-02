@@ -309,10 +309,7 @@ mod tests {
                 );
             }
             if expected_labels.is_empty() {
-                assert!(
-                    labels.is_empty(),
-                    "{msg}: expected empty, got {labels:?}",
-                );
+                assert!(labels.is_empty(), "{msg}: expected empty, got {labels:?}",);
             }
         }
     }
@@ -361,7 +358,10 @@ mod tests {
         for (title, paths, expected_labels, msg) in cases {
             let labels = labels_from_pr_metadata(
                 title,
-                &paths.iter().map(std::string::ToString::to_string).collect::<Vec<_>>(),
+                &paths
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>(),
             );
             for expected in expected_labels {
                 assert!(
