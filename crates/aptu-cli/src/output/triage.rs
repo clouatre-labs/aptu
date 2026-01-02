@@ -158,7 +158,7 @@ impl Renderable for TriageResult {
 
         // Status messages
         if self.dry_run {
-            writeln!(w, "{}", style("Dry run - comment not posted.").yellow())?;
+            crate::output::common::show_dry_run_message(w, "Dry run - comment not posted.")?;
         } else if self.user_declined {
             writeln!(w, "{}", style("Triage not posted.").yellow())?;
         } else if let Some(ref url) = self.comment_url {

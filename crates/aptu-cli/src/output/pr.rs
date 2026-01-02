@@ -95,7 +95,7 @@ impl Renderable for PrReviewResult {
 
         // Dry-run message
         if self.dry_run {
-            writeln!(w, "{}", style("DRY RUN MODE").yellow().bold())?;
+            crate::output::common::show_dry_run_message(w, "DRY RUN MODE")?;
         }
 
         Ok(())
