@@ -104,7 +104,10 @@ pub fn format_error(error: &Error) -> String {
                 model_id: _,
                 suggestions: _,
             } => {
-                format!("{aptu_err}\n\nTip: Check your model configuration and try one of the suggested models.")
+                format!(
+                    "{aptu_err}\n\nTip: Check your model configuration and try one of the \
+                     suggested models."
+                )
             }
         }
     } else {
