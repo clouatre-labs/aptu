@@ -16,7 +16,7 @@ pub use circuit_breaker::CircuitBreaker;
 pub use client::AiClient;
 pub use models::{AiModel, ModelProvider};
 pub use provider::AiProvider;
-pub use registry::{ModelInfo, ProviderConfig, all_providers, get_provider};
+pub use registry::{ProviderConfig, all_providers, get_provider};
 pub use types::{CreateIssueResponse, CreditsStatus, TriageResponse};
 
 use crate::history::AiStats;

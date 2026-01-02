@@ -8,8 +8,8 @@ pub mod types;
 use crate::error::AptuFfiError;
 use crate::keychain::KeychainProviderRef;
 use crate::types::{
-    FfiAiModel, FfiApplyResult, FfiCuratedRepo, FfiIssueNode, FfiReleaseNotesResponse,
-    FfiTokenStatus, FfiTriageResponse,
+    FfiApplyResult, FfiCuratedRepo, FfiIssueNode, FfiReleaseNotesResponse, FfiTokenStatus,
+    FfiTriageResponse,
 };
 use tokio::runtime::Runtime;
 
@@ -298,35 +298,6 @@ pub fn list_repos(filter_type: String) -> Result<Vec<FfiCuratedRepo>, AptuFfiErr
             }),
         }
     })
-}
-
-/// List all available AI models across all providers.
-///
-/// Returns the complete registry of models that Aptu supports,
-/// including free and paid tiers from OpenRouter, Ollama, and MLX.
-///
-/// # Returns
-///
-/// A vector of FfiAiModel structs representing all available models.
-#[uniffi::export]
-pub fn list_available_models() -> Vec<FfiAiModel> {
-    aptu_core::ai::models::AiModel::available_models()
-        .into_iter()
-        .map(FfiAiModel::from)
-        .collect()
-}
-
-/// Get the default free AI model for new users.
-///
-/// Returns the recommended starting model for users without API keys.
-/// This is the first free OpenRouter model in the registry.
-///
-/// # Returns
-///
-/// The default free model (Devstral 2).
-#[uniffi::export]
-pub fn get_default_model() -> FfiAiModel {
-    FfiAiModel::from(aptu_core::ai::models::AiModel::default_free())
 }
 
 /// List all available AI providers with their metadata.

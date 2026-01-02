@@ -62,70 +62,7 @@ pub struct ProviderConfig {
 
     /// Environment variable name for API key
     pub api_key_env: &'static str,
-
-    /// Available models for this provider
-    pub models: &'static [ModelInfo],
 }
-
-// ============================================================================
-// Provider Models
-// ============================================================================
-
-/// `Gemini` models
-const GEMINI_MODELS: &[ModelInfo] = &[ModelInfo {
-    display_name: "Gemini 3 Flash",
-    identifier: "gemini-3-flash-preview",
-    is_free: true,
-    context_window: 1_048_576,
-}];
-
-/// `OpenRouter` models
-const OPENROUTER_MODELS: &[ModelInfo] = &[
-    ModelInfo {
-        display_name: "Devstral 2",
-        identifier: "mistralai/devstral-2512:free",
-        is_free: true,
-        context_window: 262_144,
-    },
-    ModelInfo {
-        display_name: "Claude Haiku 4.5",
-        identifier: "anthropic/claude-haiku-4.5",
-        is_free: false,
-        context_window: 200_000,
-    },
-];
-
-/// `Groq` models
-const GROQ_MODELS: &[ModelInfo] = &[ModelInfo {
-    display_name: "GPT-OSS 20B",
-    identifier: "openai/gpt-oss-20b",
-    is_free: true,
-    context_window: 131_072,
-}];
-
-/// `Cerebras` models
-const CEREBRAS_MODELS: &[ModelInfo] = &[ModelInfo {
-    display_name: "Llama 3.3 70B",
-    identifier: "llama-3.3-70b",
-    is_free: true,
-    context_window: 128_000,
-}];
-
-/// `Zenmux` models
-const ZENMUX_MODELS: &[ModelInfo] = &[ModelInfo {
-    display_name: "Grok Code Fast 1",
-    identifier: "x-ai/grok-code-fast-1",
-    is_free: true,
-    context_window: 256_000,
-}];
-
-/// `Z.AI` models
-const ZAI_MODELS: &[ModelInfo] = &[ModelInfo {
-    display_name: "GLM-4.5 Air",
-    identifier: "glm-4.5-air",
-    is_free: false,
-    context_window: 128_000,
-}];
 
 // ============================================================================
 // Provider Registry
@@ -138,42 +75,36 @@ pub static PROVIDERS: &[ProviderConfig] = &[
         display_name: "Google Gemini",
         api_url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         api_key_env: "GEMINI_API_KEY",
-        models: GEMINI_MODELS,
     },
     ProviderConfig {
         name: "openrouter",
         display_name: "OpenRouter",
         api_url: "https://openrouter.ai/api/v1/chat/completions",
         api_key_env: "OPENROUTER_API_KEY",
-        models: OPENROUTER_MODELS,
     },
     ProviderConfig {
         name: "groq",
         display_name: "Groq",
         api_url: "https://api.groq.com/openai/v1/chat/completions",
         api_key_env: "GROQ_API_KEY",
-        models: GROQ_MODELS,
     },
     ProviderConfig {
         name: "cerebras",
         display_name: "Cerebras",
         api_url: "https://api.cerebras.ai/v1/chat/completions",
         api_key_env: "CEREBRAS_API_KEY",
-        models: CEREBRAS_MODELS,
     },
     ProviderConfig {
         name: "zenmux",
         display_name: "Zenmux",
         api_url: "https://zenmux.ai/api/v1/chat/completions",
         api_key_env: "ZENMUX_API_KEY",
-        models: ZENMUX_MODELS,
     },
     ProviderConfig {
         name: "zai",
         display_name: "Z.AI (Zhipu)",
         api_url: "https://api.z.ai/api/paas/v4/chat/completions",
         api_key_env: "ZAI_API_KEY",
-        models: ZAI_MODELS,
     },
 ];
 
@@ -695,7 +626,6 @@ mod tests {
         let provider = provider.unwrap();
         assert_eq!(provider.display_name, "Google Gemini");
         assert_eq!(provider.api_key_env, "GEMINI_API_KEY");
-        assert!(!provider.models.is_empty());
     }
 
     #[test]
@@ -705,7 +635,6 @@ mod tests {
         let provider = provider.unwrap();
         assert_eq!(provider.display_name, "OpenRouter");
         assert_eq!(provider.api_key_env, "OPENROUTER_API_KEY");
-        assert!(!provider.models.is_empty());
     }
 
     #[test]
@@ -715,7 +644,6 @@ mod tests {
         let provider = provider.unwrap();
         assert_eq!(provider.display_name, "Groq");
         assert_eq!(provider.api_key_env, "GROQ_API_KEY");
-        assert!(!provider.models.is_empty());
     }
 
     #[test]
@@ -725,7 +653,6 @@ mod tests {
         let provider = provider.unwrap();
         assert_eq!(provider.display_name, "Cerebras");
         assert_eq!(provider.api_key_env, "CEREBRAS_API_KEY");
-        assert!(!provider.models.is_empty());
     }
 
     #[test]
@@ -750,18 +677,6 @@ mod tests {
     }
 
     #[test]
-    fn test_all_providers_have_models() {
-        let providers = all_providers();
-        for provider in providers {
-            assert!(
-                !provider.models.is_empty(),
-                "Provider {} should have at least one model",
-                provider.name
-            );
-        }
-    }
-
-    #[test]
     fn test_all_providers_have_unique_names() {
         let providers = all_providers();
         let mut names = Vec::new();
@@ -776,47 +691,12 @@ mod tests {
     }
 
     #[test]
-    fn test_gemini_models() {
-        let provider = get_provider("gemini").unwrap();
-        assert_eq!(provider.models.len(), 1);
-        let model = &provider.models[0];
-        assert_eq!(model.identifier, "gemini-3-flash-preview");
-        assert!(model.is_free);
-    }
-
-    #[test]
-    fn test_openrouter_models() {
-        let provider = get_provider("openrouter").unwrap();
-        assert_eq!(provider.models.len(), 2);
-        let free_models: Vec<_> = provider.models.iter().filter(|m| m.is_free).collect();
-        assert!(
-            !free_models.is_empty(),
-            "OpenRouter should have free models"
-        );
-    }
-
-    #[test]
-    fn test_groq_models() {
-        let provider = get_provider("groq").unwrap();
-        assert!(!provider.models.is_empty());
-        let model = &provider.models[0];
-        assert_eq!(model.identifier, "openai/gpt-oss-20b");
-    }
-
-    #[test]
-    fn test_cerebras_models() {
-        let provider = get_provider("cerebras").unwrap();
-        assert!(!provider.models.is_empty());
-    }
-
-    #[test]
     fn test_get_provider_zenmux() {
         let provider = get_provider("zenmux");
         assert!(provider.is_some());
         let provider = provider.unwrap();
         assert_eq!(provider.display_name, "Zenmux");
         assert_eq!(provider.api_key_env, "ZENMUX_API_KEY");
-        assert!(!provider.models.is_empty());
     }
 
     #[test]
@@ -826,44 +706,6 @@ mod tests {
         let provider = provider.unwrap();
         assert_eq!(provider.display_name, "Z.AI (Zhipu)");
         assert_eq!(provider.api_key_env, "ZAI_API_KEY");
-        assert!(!provider.models.is_empty());
-    }
-
-    #[test]
-    fn test_zenmux_models() {
-        let provider = get_provider("zenmux").unwrap();
-        assert_eq!(provider.models.len(), 1);
-        let model = &provider.models[0];
-        assert_eq!(model.identifier, "x-ai/grok-code-fast-1");
-        assert!(model.is_free);
-        assert_eq!(model.context_window, 256_000);
-    }
-
-    #[test]
-    fn test_zai_models() {
-        let provider = get_provider("zai").unwrap();
-        assert_eq!(provider.models.len(), 1);
-        let model = &provider.models[0];
-        assert_eq!(model.identifier, "glm-4.5-air");
-        assert!(!model.is_free);
-        assert_eq!(model.context_window, 128_000);
-    }
-
-    #[test]
-    fn test_model_identifiers_unique_within_provider() {
-        let providers = all_providers();
-        for provider in providers {
-            let mut identifiers = Vec::new();
-            for model in provider.models {
-                assert!(
-                    !identifiers.contains(&model.identifier),
-                    "Duplicate model identifier in {}: {}",
-                    provider.name,
-                    model.identifier
-                );
-                identifiers.push(model.identifier);
-            }
-        }
     }
 
     #[test]

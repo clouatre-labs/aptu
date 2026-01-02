@@ -43,9 +43,7 @@ pub use ai::types::{
     IssueComment, IssueDetails, PrDetails, PrFile, PrReviewResponse, PrSummary,
     ReleaseNotesResponse, ReviewEvent, TriageResponse,
 };
-pub use ai::{
-    AiClient, AiModel, ModelInfo, ModelProvider, ProviderConfig, all_providers, get_provider,
-};
+pub use ai::{AiClient, AiModel, ModelProvider, ProviderConfig, all_providers, get_provider};
 
 // ============================================================================
 // GitHub Integration
