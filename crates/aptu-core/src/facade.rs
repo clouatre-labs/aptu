@@ -300,6 +300,29 @@ pub async fn discover_repos(
 ///
 /// # Returns
 ///
+/// Validates a model for a given provider, converting registry errors to `AptuError`.
+async fn validate_provider_model(
+    registry: &CachedModelRegistry<'_>,
+    provider: &str,
+    model: &str,
+) -> crate::Result<()> {
+    registry
+        .validate_model(provider, model)
+        .await
+        .map_err(|e| match e {
+            crate::ai::registry::RegistryError::ModelValidation {
+                model_id,
+                suggestions,
+            } => AptuError::ModelValidation {
+                model_id,
+                suggestions: suggestions.join(", "),
+            },
+            other => AptuError::ModelRegistry {
+                message: format!("Failed to validate model: {other}"),
+            },
+        })
+}
+
 /// Result of the AI operation, or error if all providers fail.
 async fn try_with_fallback<T, F, Fut>(
     provider: &dyn TokenProvider,
@@ -312,29 +335,12 @@ where
     F: Fn(AiClient) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
-    // Create cached model registry for validation
     let registry = CachedModelRegistry::new(cache_dir(), 86400, provider);
-
-    // Try primary provider first
     let api_key = provider
         .ai_api_key(primary_provider)
         .ok_or(AptuError::NotAuthenticated)?;
 
-    // Validate primary provider's model before creating client
-    if let Err(e) = registry.validate_model(primary_provider, model_name).await {
-        return Err(match e {
-            crate::ai::registry::RegistryError::ModelValidation {
-                model_id,
-                suggestions,
-            } => AptuError::ModelValidation {
-                model_id,
-                suggestions: suggestions.join(", "),
-            },
-            other => AptuError::ModelRegistry {
-                message: format!("Failed to validate model: {other}"),
-            },
-        });
-    }
+    validate_provider_model(&registry, primary_provider, model_name).await?;
 
     let ai_client = AiClient::with_api_key(primary_provider, api_key, model_name, ai_config)
         .map_err(|e| AptuError::AI {
@@ -346,17 +352,13 @@ where
     match operation(ai_client).await {
         Ok(response) => return Ok(response),
         Err(e) => {
-            // Check if error is retryable using is_retryable_anyhow
             if is_retryable_anyhow(&e) {
-                // Retryable error, don't try fallback
                 return Err(AptuError::AI {
                     message: e.to_string(),
                     status: None,
                     provider: primary_provider.to_string(),
                 });
             }
-
-            // Non-retryable error, try fallback chain
             warn!(
                 primary_provider = primary_provider,
                 error = %e,
@@ -365,7 +367,6 @@ where
         }
     }
 
-    // Try fallback chain
     if let Some(fallback_config) = &ai_config.fallback {
         for entry in &fallback_config.chain {
             warn!(
@@ -383,15 +384,13 @@ where
 
             let fallback_model = entry.model.as_deref().unwrap_or(model_name);
 
-            // Validate fallback provider's model before attempting client creation
-            if let Err(e) = registry
-                .validate_model(&entry.provider, fallback_model)
+            if validate_provider_model(&registry, &entry.provider, fallback_model)
                 .await
+                .is_err()
             {
                 warn!(
                     fallback_provider = entry.provider,
                     fallback_model = fallback_model,
-                    error = %e,
                     "Fallback provider model validation failed, continuing to next provider"
                 );
                 continue;
@@ -426,7 +425,6 @@ where
         }
     }
 
-    // All providers failed
     Err(AptuError::AI {
         message: "All AI providers failed (primary and fallback chain)".to_string(),
         status: None,
