@@ -5,6 +5,9 @@
 //! Uses `tracing` with `tracing-subscriber` for structured logging.
 //! Log level can be controlled via the `RUST_LOG` environment variable.
 //!
+//! The `-v` flag controls user-facing verbose output (handled separately by `OutputContext`).
+//! For debug-level tracing, use the `RUST_LOG` environment variable.
+//!
 //! # Examples
 //!
 //! ```bash
@@ -25,13 +28,14 @@ use crate::cli::OutputFormat;
 
 /// Initialize the logging subsystem.
 ///
-/// Verbosity levels:
-/// - 0 (default): No tracing output (clean user-facing output)
-/// - 1 (-v): No tracing output (verbose user info handled separately)
-/// - 2+ (-vv): Full debug tracing with timestamps
+/// The `verbose` flag controls user-facing output verbosity (handled separately by `OutputContext`).
+/// The `RUST_LOG` environment variable controls debug tracing output.
 ///
-/// The `RUST_LOG` environment variable can override these defaults.
-pub fn init_logging(format: OutputFormat, verbosity: u8) {
+/// # Arguments
+///
+/// * `format` - Output format (determines if quiet mode is enabled)
+/// * `verbose` - Whether verbose user output is enabled (-v flag)
+pub fn init_logging(format: OutputFormat, _verbose: bool) {
     let fmt_layer = fmt::layer().with_target(false).with_writer(std::io::stderr);
 
     // Derive quiet mode from format (structured formats are quiet)
@@ -40,11 +44,9 @@ pub fn init_logging(format: OutputFormat, verbosity: u8) {
         OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown
     );
 
-    // Only enable tracing output for debug mode (verbosity >= 2)
-    // Default and verbose modes use direct user output instead
-    let default_filter = if verbosity >= 2 {
-        "aptu=debug,octocrab=warn,reqwest=warn"
-    } else if quiet {
+    // Default filter: suppress tracing unless RUST_LOG is set
+    // Users can enable debug output with RUST_LOG=aptu=debug
+    let default_filter = if quiet {
         "aptu=error,octocrab=error,reqwest=error"
     } else {
         // Suppress tracing for default/verbose - user output is handled separately
