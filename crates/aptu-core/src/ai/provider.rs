@@ -133,6 +133,7 @@ pub trait AiProvider: Send + Sync {
     ///
     /// Default implementation handles HTTP headers, error responses (401, 429).
     /// Does not include retry logic - use `send_and_parse()` for retry behavior.
+    #[instrument(skip(self, request), fields(provider = self.name(), model = self.model()))]
     async fn send_request_inner(
         &self,
         request: &ChatCompletionRequest,
