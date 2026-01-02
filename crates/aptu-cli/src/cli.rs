@@ -429,6 +429,16 @@ pub enum PrCommand {
     },
 }
 
+/// Sort order for models list
+#[derive(Clone, Copy, Default, ValueEnum)]
+pub enum SortBy {
+    /// Sort alphabetically by model name (default)
+    #[default]
+    Name,
+    /// Sort by context window size (largest first)
+    Context,
+}
+
 /// AI models subcommands
 #[derive(Subcommand)]
 pub enum ModelsCommand {
@@ -437,5 +447,13 @@ pub enum ModelsCommand {
         /// AI provider name (e.g., "openrouter", "openai"). If not specified, shows all providers.
         #[arg(long)]
         provider: Option<String>,
+
+        /// Sort models by field (name or context)
+        #[arg(long, value_enum, default_value = "name")]
+        sort: SortBy,
+
+        /// Filter models by minimum context window size (in tokens)
+        #[arg(long)]
+        min_context: Option<u32>,
     },
 }

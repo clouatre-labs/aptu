@@ -714,11 +714,15 @@ pub async fn run(
         }
 
         Commands::Models(models_cmd) => match models_cmd {
-            crate::cli::ModelsCommand::List { provider } => {
+            crate::cli::ModelsCommand::List {
+                provider,
+                sort,
+                min_context,
+            } => {
                 let spinner = maybe_spinner(&ctx, "Fetching models...");
                 if let Some(provider_name) = provider {
                     // Single provider
-                    let result = models::run_list(&provider_name).await?;
+                    let result = models::run_list(&provider_name, sort, min_context).await?;
                     if let Some(s) = spinner {
                         s.finish_and_clear();
                     }
