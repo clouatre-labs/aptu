@@ -8,8 +8,8 @@ pub mod types;
 use crate::error::AptuFfiError;
 use crate::keychain::KeychainProviderRef;
 use crate::types::{
-    FfiApplyResult, FfiCuratedRepo, FfiIssueNode, FfiReleaseNotesResponse, FfiTokenStatus,
-    FfiTriageResponse,
+    FfiApplyResult, FfiCuratedRepo, FfiDiscoveredRepo, FfiIssueNode, FfiLabelPrResult,
+    FfiReleaseNotesResponse, FfiTokenStatus, FfiTriageResponse,
 };
 use tokio::runtime::Runtime;
 
@@ -683,6 +683,180 @@ pub fn post_issue(
 
         match aptu_core::post_issue(&provider, &owner, &repo, &title, &body).await {
             Ok((url, number)) => Ok(crate::types::FfiPostIssueResult::from((url, number))),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
+/// Auto-label a pull request with AI assistance.
+///
+/// This function wires the FFI layer to the core facade by:
+/// 1. Creating an FfiTokenProvider from the iOS keychain
+/// 2. Loading AI configuration
+/// 3. Calling the core facade label_pr() function
+/// 4. Converting the result tuple to FfiLabelPrResult using From trait
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `reference` - PR reference (URL, owner/repo#number, or number)
+/// * `repo_context` - Optional repository context for bare numbers
+/// * `dry_run` - If true, analyze without applying labels
+///
+/// # Returns
+///
+/// FfiLabelPrResult with PR number, title, body, and applied labels.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub or OpenRouter token is not available in keychain
+/// - PR cannot be parsed or found
+/// - AI API call fails
+/// - GitHub API call fails
+#[uniffi::export]
+pub fn auto_label_pr(
+    keychain: KeychainProviderRef,
+    reference: String,
+    repo_context: Option<String>,
+    dry_run: bool,
+) -> Result<FfiLabelPrResult, AptuFfiError> {
+    RUNTIME.block_on(async {
+        // Load configuration at FFI boundary
+        let config = aptu_core::config::load_config().map_err(|e| AptuFfiError::InternalError {
+            message: format!("Failed to load config: {e}"),
+        })?;
+
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        match aptu_core::label_pr(
+            &provider,
+            &reference,
+            repo_context.as_deref(),
+            dry_run,
+            &config.ai,
+        )
+        .await
+        {
+            Ok((pr_number, title, body, applied_labels)) => Ok(FfiLabelPrResult::from((
+                pr_number,
+                title,
+                body,
+                applied_labels,
+            ))),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
+/// Discover repositories on GitHub matching specified criteria.
+///
+/// This function wires the FFI layer to the core facade by:
+/// 1. Creating an FfiTokenProvider from the iOS keychain
+/// 2. Creating a DiscoveryFilter with the specified criteria
+/// 3. Calling the core facade discover_repos() function
+/// 4. Converting DiscoveredRepo results to FfiDiscoveredRepo using From trait
+///
+/// # Arguments
+///
+/// * `keychain` - iOS keychain provider for credential resolution
+/// * `language` - Optional programming language filter (e.g., "rust", "python")
+/// * `min_stars` - Minimum number of GitHub stars
+/// * `limit` - Maximum number of repositories to return
+///
+/// # Returns
+///
+/// A vector of FfiDiscoveredRepo structs matching the criteria.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - GitHub token is not available in keychain
+/// - GitHub API call fails
+/// - Response parsing fails
+#[uniffi::export]
+pub fn discover_repos(
+    keychain: KeychainProviderRef,
+    language: Option<String>,
+    min_stars: u32,
+    limit: u32,
+) -> Result<Vec<FfiDiscoveredRepo>, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::FfiTokenProvider::new(keychain);
+
+        // Create discovery filter with specified criteria
+        let filter = aptu_core::repos::discovery::DiscoveryFilter {
+            language,
+            min_stars,
+            limit,
+        };
+
+        match aptu_core::discover_repos(&provider, filter).await {
+            Ok(repos) => Ok(repos.into_iter().map(FfiDiscoveredRepo::from).collect()),
+            Err(e) => Err(AptuFfiError::InternalError {
+                message: e.to_string(),
+            }),
+        }
+    })
+}
+
+/// List available AI models for a given provider.
+///
+/// This function wires the FFI layer to the core facade by:
+/// 1. Creating a CliTokenProvider for token resolution
+/// 2. Calling the core facade list_models() function
+/// 3. Converting CachedModel results to FfiAiModel
+///
+/// # Arguments
+///
+/// * `provider_name` - Name of the AI provider (e.g., "openrouter", "ollama")
+///
+/// # Returns
+///
+/// A vector of FfiAiModel structs available from the provider.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Provider is not recognized
+/// - API call fails
+/// - Response parsing fails
+#[uniffi::export]
+pub fn list_models(provider_name: String) -> Result<Vec<crate::types::FfiAiModel>, AptuFfiError> {
+    RUNTIME.block_on(async {
+        let provider = auth::CliTokenProvider::new();
+
+        match aptu_core::list_models(&provider, &provider_name).await {
+            Ok(models) => {
+                // Determine the ModelProvider enum variant from the string name
+                let model_provider = match provider_name.to_lowercase().as_str() {
+                    "openrouter" => aptu_core::ai::models::ModelProvider::OpenRouter,
+                    "ollama" => aptu_core::ai::models::ModelProvider::Ollama,
+                    "mlx" => aptu_core::ai::models::ModelProvider::Mlx,
+                    _ => aptu_core::ai::models::ModelProvider::OpenRouter, // Default fallback
+                };
+
+                let ffi_models = models
+                    .into_iter()
+                    .map(|cached_model| {
+                        // Convert CachedModel to FfiAiModel
+                        crate::types::FfiAiModel {
+                            display_name: cached_model
+                                .name
+                                .unwrap_or_else(|| cached_model.id.clone()),
+                            identifier: cached_model.id,
+                            provider: crate::types::FfiModelProvider::from(model_provider),
+                            is_free: cached_model.is_free.unwrap_or(false),
+                            context_window: cached_model.context_window.unwrap_or(0),
+                        }
+                    })
+                    .collect();
+                Ok(ffi_models)
+            }
             Err(e) => Err(AptuFfiError::InternalError {
                 message: e.to_string(),
             }),

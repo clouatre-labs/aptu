@@ -288,3 +288,54 @@ impl From<(String, u64)> for FfiPostIssueResult {
         }
     }
 }
+
+/// Represents a discovered repository from GitHub search.
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiDiscoveredRepo {
+    /// Repository owner/organization name
+    pub owner: String,
+    /// Repository name
+    pub name: String,
+    /// Primary programming language (if available)
+    pub language: Option<String>,
+    /// Repository description
+    pub description: Option<String>,
+    /// Number of GitHub stars
+    pub stars: u32,
+}
+
+impl From<aptu_core::repos::discovery::DiscoveredRepo> for FfiDiscoveredRepo {
+    fn from(repo: aptu_core::repos::discovery::DiscoveredRepo) -> Self {
+        FfiDiscoveredRepo {
+            owner: repo.owner,
+            name: repo.name,
+            language: repo.language,
+            description: repo.description,
+            stars: repo.stars,
+        }
+    }
+}
+
+/// Result of auto-labeling a pull request.
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiLabelPrResult {
+    /// Pull request number
+    pub pr_number: u64,
+    /// Pull request title
+    pub title: String,
+    /// Pull request body/description
+    pub body: String,
+    /// Labels that were applied to the PR
+    pub applied_labels: Vec<String>,
+}
+
+impl From<(u64, String, String, Vec<String>)> for FfiLabelPrResult {
+    fn from((pr_number, title, body, applied_labels): (u64, String, String, Vec<String>)) -> Self {
+        FfiLabelPrResult {
+            pr_number,
+            title,
+            body,
+            applied_labels,
+        }
+    }
+}
