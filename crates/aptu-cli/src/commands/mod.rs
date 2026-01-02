@@ -682,7 +682,16 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
 
                 let spinner = maybe_spinner(&ctx, "Fetching PR and extracting labels...");
-                let result = pr::run_label(&reference, repo_context, dry_run, apply, no_comment, force, &config.ai).await?;
+                let result = pr::run_label(
+                    &reference,
+                    repo_context,
+                    dry_run,
+                    apply,
+                    no_comment,
+                    force,
+                    &config.ai,
+                )
+                .await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
