@@ -100,6 +100,12 @@ pub fn format_error(error: &Error) -> String {
                     "{aptu_err}\n\nTip: Failed to fetch or validate models from the provider API. Check your internet connection and try again."
                 )
             }
+            AptuError::ModelValidation {
+                model_id: _,
+                suggestions: _,
+            } => {
+                format!("{aptu_err}\n\nTip: Check your model configuration and try one of the suggested models.")
+            }
         }
     } else {
         // Not an AptuError, return the original error chain

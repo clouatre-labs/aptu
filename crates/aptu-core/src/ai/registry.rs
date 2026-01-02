@@ -592,7 +592,7 @@ impl ModelRegistry for CachedModelRegistry<'_> {
         model_id: &str,
     ) -> Result<Vec<String>, RegistryError> {
         let models = self.list_models(provider).await?;
-        
+
         // Use jaro_winkler fuzzy matching to score similarity
         let mut scored_suggestions: Vec<(String, f64)> = models
             .iter()
@@ -601,15 +601,16 @@ impl ModelRegistry for CachedModelRegistry<'_> {
                 (m.id.clone(), score)
             })
             .collect();
-        
+
         // Sort by similarity score (descending) and take top 5
-        scored_suggestions.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scored_suggestions
+            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         let suggestions: Vec<String> = scored_suggestions
             .into_iter()
             .take(5)
             .map(|(id, _)| id)
             .collect();
-        
+
         Ok(suggestions)
     }
 
