@@ -88,6 +88,12 @@ pub use triage::{
 pub use retry::{is_retryable_anyhow, is_retryable_http, retry_backoff};
 
 // ============================================================================
+// Bulk Processing
+// ============================================================================
+
+pub use bulk::{BulkOutcome, BulkResult, process_bulk};
+
+// ============================================================================
 // Utilities
 // ============================================================================
 
@@ -114,6 +120,7 @@ pub use github::issues::ApplyResult;
 
 pub mod ai;
 pub mod auth;
+pub mod bulk;
 pub mod cache;
 pub mod config;
 pub mod error;

@@ -17,10 +17,8 @@ pub mod types;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use backon::Retryable;
 use console::style;
 use dialoguer::Confirm;
-use futures::{StreamExt, stream};
 use indicatif::{ProgressBar, ProgressStyle};
 use tracing::debug;
 
@@ -30,7 +28,7 @@ use crate::cli::{
 };
 use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewOutcome};
 use crate::output;
-use aptu_core::{AppConfig, State, check_already_triaged, is_retryable_anyhow, retry_backoff};
+use aptu_core::{AppConfig, State, check_already_triaged};
 
 /// Creates a styled spinner (only if interactive).
 fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
@@ -467,91 +465,70 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     }
                 }
 
-                // Bulk triage loop with concurrent processing
+                // Bulk triage using core processor
+                let items: Vec<(String, ())> = issue_refs.iter().map(|r| (r.clone(), ())).collect();
+
+                let ctx_for_processor = ctx.clone();
+                let ctx_for_progress = ctx.clone();
+                let repo_context_owned = repo_context.map(std::string::ToString::to_string);
+                let config_clone = config.clone();
+
+                let core_result = aptu_core::process_bulk(
+                    items,
+                    move |(issue_ref, ())| {
+                        let ctx = ctx_for_processor.clone();
+                        let repo_context = repo_context_owned.clone();
+                        let config = config_clone.clone();
+                        async move {
+                            triage_single_issue(
+                                &issue_ref,
+                                repo_context.as_deref(),
+                                dry_run,
+                                yes,
+                                apply,
+                                no_comment,
+                                force,
+                                &ctx,
+                                &config,
+                            )
+                            .await
+                        }
+                    },
+                    move |current, total, action| {
+                        crate::output::common::show_progress(
+                            &ctx_for_progress,
+                            current,
+                            total,
+                            action,
+                        );
+                    },
+                )
+                .await;
+
+                // Convert core BulkResult to CLI BulkTriageResult
                 let mut bulk_result = types::BulkTriageResult {
-                    succeeded: 0,
-                    failed: 0,
-                    skipped: 0,
+                    succeeded: core_result.succeeded,
+                    failed: core_result.failed,
+                    skipped: core_result.skipped,
                     outcomes: Vec::new(),
                 };
 
-                // Process issues concurrently with buffer_unordered(5) for rate limit awareness
-                let total_issues = issue_refs.len();
-                let ctx_clone = ctx.clone();
-                let outcomes = stream::iter(issue_refs.iter().enumerate())
-                    .map(|(idx, issue_ref)| {
-                        let issue_ref = issue_ref.clone();
-                        let ctx = ctx_clone.clone();
-                        async move {
-                            // Progress output for concurrent processing
-                            crate::output::common::show_progress(
-                                &ctx,
-                                idx + 1,
-                                total_issues,
-                                &format!("Triaging {}", style(&issue_ref).cyan()),
-                            );
-
-                            // Triage single issue with retry logic
-                            let result = (|| async {
-                                triage_single_issue(
-                                    &issue_ref,
-                                    repo_context,
-                                    dry_run,
-                                    yes,
-                                    apply,
-                                    no_comment,
-                                    force,
-                                    &ctx,
-                                    config,
-                                )
-                                .await
-                            })
-                            .retry(retry_backoff())
-                            .when(is_retryable_anyhow)
-                            .notify(|err, dur| {
-                                tracing::warn!(
-                                    error = %err,
-                                    delay_ms = dur.as_millis(),
-                                    "Retrying triage after transient failure"
-                                );
-                            })
-                            .await;
-
-                            (issue_ref, result)
+                for (issue_ref, outcome) in core_result.outcomes {
+                    let cli_outcome = match outcome {
+                        aptu_core::BulkOutcome::Success(triage_result) => {
+                            types::SingleTriageOutcome::Success(Box::new(triage_result))
                         }
-                    })
-                    .buffer_unordered(5)
-                    .collect::<Vec<_>>()
-                    .await;
-
-                // Process results and update bulk_result
-                for (issue_ref, result) in outcomes {
-                    match result {
-                        Ok(Some(triage_result)) => {
-                            bulk_result.succeeded += 1;
-                            bulk_result.outcomes.push((
-                                issue_ref,
-                                types::SingleTriageOutcome::Success(Box::new(triage_result)),
-                            ));
+                        aptu_core::BulkOutcome::Skipped(msg) => {
+                            types::SingleTriageOutcome::Skipped(msg)
                         }
-                        Ok(None) => {
-                            bulk_result.skipped += 1;
-                            bulk_result.outcomes.push((
-                                issue_ref,
-                                types::SingleTriageOutcome::Skipped("Already triaged".to_string()),
-                            ));
-                        }
-                        Err(e) => {
-                            bulk_result.failed += 1;
-                            bulk_result.outcomes.push((
-                                issue_ref,
-                                types::SingleTriageOutcome::Failed(e.to_string()),
-                            ));
+                        aptu_core::BulkOutcome::Failed(err) => {
                             if matches!(ctx.format, OutputFormat::Text) {
-                                println!("  {}", style(format!("Error: {e}")).red());
+                                println!("  {}", style(format!("Error: {err}")).red());
                             }
+                            types::SingleTriageOutcome::Failed(err)
                         }
-                    }
+                    };
+                    bulk_result.outcomes.push((issue_ref, cli_outcome));
                 }
 
                 // Render bulk summary (only for multiple issues)
@@ -614,88 +591,66 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                     return Ok(());
                 }
 
-                // Bulk PR review loop with concurrent processing
+                // Bulk PR review using core processor
+                let items: Vec<(String, ())> = references.iter().map(|r| (r.clone(), ())).collect();
+
+                let ctx_for_processor = ctx.clone();
+                let ctx_for_progress = ctx.clone();
+                let repo_context_owned = repo_context.map(std::string::ToString::to_string);
+                let config_clone = config.clone();
+
+                let core_result = aptu_core::process_bulk(
+                    items,
+                    move |(pr_ref, ())| {
+                        let ctx = ctx_for_processor.clone();
+                        let repo_context = repo_context_owned.clone();
+                        let config = config_clone.clone();
+                        async move {
+                            review_single_pr(
+                                &pr_ref,
+                                repo_context.as_deref(),
+                                review_type,
+                                dry_run,
+                                yes,
+                                &ctx,
+                                &config,
+                            )
+                            .await
+                        }
+                    },
+                    move |current, total, action| {
+                        crate::output::common::show_progress(
+                            &ctx_for_progress,
+                            current,
+                            total,
+                            action,
+                        );
+                    },
+                )
+                .await;
+
+                // Convert core BulkResult to CLI BulkPrReviewResult
                 let mut bulk_result = BulkPrReviewResult {
-                    succeeded: 0,
-                    failed: 0,
-                    skipped: 0,
+                    succeeded: core_result.succeeded,
+                    failed: core_result.failed,
+                    skipped: core_result.skipped,
                     outcomes: Vec::new(),
                 };
 
-                // Process PRs concurrently with buffer_unordered(5) for rate limit awareness
-                let total_prs = references.len();
-                let ctx_clone = ctx.clone();
-                let outcomes = stream::iter(references.iter().enumerate())
-                    .map(|(idx, pr_ref)| {
-                        let pr_ref = pr_ref.clone();
-                        let ctx = ctx_clone.clone();
-                        async move {
-                            // Progress output for concurrent processing
-                            crate::output::common::show_progress(
-                                &ctx,
-                                idx + 1,
-                                total_prs,
-                                &format!("Reviewing {}", style(&pr_ref).cyan()),
-                            );
-
-                            // Review single PR with retry logic
-                            let result = (|| async {
-                                review_single_pr(
-                                    &pr_ref,
-                                    repo_context,
-                                    review_type,
-                                    dry_run,
-                                    yes,
-                                    &ctx,
-                                    config,
-                                )
-                                .await
-                            })
-                            .retry(retry_backoff())
-                            .when(is_retryable_anyhow)
-                            .notify(|err, dur| {
-                                tracing::warn!(
-                                    error = %err,
-                                    delay_ms = dur.as_millis(),
-                                    "Retrying PR review after transient failure"
-                                );
-                            })
-                            .await;
-
-                            (pr_ref, result)
+                for (pr_ref, outcome) in core_result.outcomes {
+                    let cli_outcome = match outcome {
+                        aptu_core::BulkOutcome::Success(review_result) => {
+                            SinglePrReviewOutcome::Success(Box::new(review_result))
                         }
-                    })
-                    .buffer_unordered(5)
-                    .collect::<Vec<_>>()
-                    .await;
-
-                // Process results and update bulk_result
-                for (pr_ref, result) in outcomes {
-                    match result {
-                        Ok(Some(review_result)) => {
-                            bulk_result.succeeded += 1;
-                            bulk_result.outcomes.push((
-                                pr_ref,
-                                SinglePrReviewOutcome::Success(Box::new(review_result)),
-                            ));
-                        }
-                        Ok(None) => {
-                            bulk_result.skipped += 1;
-                            bulk_result.outcomes.push((
-                                pr_ref,
-                                SinglePrReviewOutcome::Skipped("Skipped".to_string()),
-                            ));
-                        }
-                        Err(e) => {
-                            bulk_result.failed += 1;
-                            bulk_result
-                                .outcomes
-                                .push((pr_ref, SinglePrReviewOutcome::Failed(e.to_string())));
+                        aptu_core::BulkOutcome::Skipped(msg) => SinglePrReviewOutcome::Skipped(msg),
+                        aptu_core::BulkOutcome::Failed(err) => {
                             if matches!(ctx.format, OutputFormat::Text) {
-                                println!("  {}", style(format!("Error: {e}")).red());
+                                println!("  {}", style(format!("Error: {err}")).red());
                             }
+                            SinglePrReviewOutcome::Failed(err)
                         }
-                    }
+                    };
+                    bulk_result.outcomes.push((pr_ref, cli_outcome));
                 }
 
                 // Render bulk summary (only for multiple PRs)

@@ -38,6 +38,7 @@ tracing = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true }
+futures = { workspace = true }
 
 # Async traits
 async-trait = { workspace = true }
