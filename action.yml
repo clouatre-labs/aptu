@@ -153,7 +153,7 @@ runs:
         set -e
         
         ISSUE_REF="${REPO}#${ISSUE_NUMBER}"
-        ARGS=""
+        ARGS="--yes"
         
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"
@@ -218,11 +218,11 @@ runs:
       run: |
         set -e
         
-        ARGS="--repo --update"
+        ARGS="--update"
         
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"
         fi
         
-        echo "Running: aptu release $ARGS $TAG"
-        aptu release $ARGS "$TAG"
+        echo "Running: aptu release --repo $REPO $ARGS $TAG"
+        aptu release --repo "$REPO" $ARGS "$TAG"
