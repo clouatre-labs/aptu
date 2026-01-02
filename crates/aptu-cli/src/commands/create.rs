@@ -72,12 +72,8 @@ pub async fn run(
 
     debug!(title = %final_title, body_len = final_body.len(), "Collected issue content");
 
-    // Load AI config for facade functions
-    let ai_config = aptu_core::load_config()
-        .context("Failed to load configuration")?
-        .ai;
-
-    // Create CLI token provider
+    // Load AI config and create token provider
+    let ai_config = load_ai_config()?;
     let provider = CliTokenProvider;
 
     // Step 1: Format issue with AI using facade function
@@ -125,6 +121,18 @@ pub async fn run(
         suggested_labels: ai_response.suggested_labels,
         dry_run: false,
     })
+}
+
+/// Load AI configuration from aptu config file.
+///
+/// Extracts the AI section from the global config.
+///
+/// # Errors
+///
+/// Returns error if config file cannot be loaded or parsed.
+fn load_ai_config() -> Result<aptu_core::config::AiConfig> {
+    let config = aptu_core::load_config().context("Failed to load configuration")?;
+    Ok(config.ai)
 }
 
 /// Prompt user for issue title interactively.

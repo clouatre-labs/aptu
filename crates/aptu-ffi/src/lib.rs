@@ -646,6 +646,8 @@ pub fn format_issue(
     body: String,
     repo: String,
 ) -> Result<crate::types::FfiCreateIssueResponse, AptuFfiError> {
+    // Bridge async Rust to synchronous C FFI by blocking on the async runtime.
+    // This is necessary because C/Swift cannot directly call async Rust functions.
     RUNTIME.block_on(async {
         let provider = auth::FfiTokenProvider::new(keychain);
 
@@ -703,6 +705,8 @@ pub fn post_issue(
     title: String,
     body: String,
 ) -> Result<crate::types::FfiPostIssueResult, AptuFfiError> {
+    // Bridge async Rust to synchronous C FFI by blocking on the async runtime.
+    // This is necessary because C/Swift cannot directly call async Rust functions.
     RUNTIME.block_on(async {
         let provider = auth::FfiTokenProvider::new(keychain);
 
