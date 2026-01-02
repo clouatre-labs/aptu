@@ -72,7 +72,7 @@ if command -v uniffi-bindgen &> /dev/null; then
         --out-dir "$BUILD_DIR"
 else
     echo "Warning: uniffi-bindgen not found, skipping Swift binding generation"
-    echo "Install with: cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 uniffi-bindgen"
+    echo "Install with: cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen uniffi"
 fi
 
 # Copy compiled library to build directory
