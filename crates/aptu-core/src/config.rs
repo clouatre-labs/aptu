@@ -156,6 +156,12 @@ pub struct AiConfig {
     /// that will be appended to the default best practices context.
     /// Useful for enforcing project-specific choices (e.g., poetry instead of uv).
     pub custom_guidance: Option<String>,
+    /// Enable pre-flight model validation with fuzzy matching (default: true).
+    ///
+    /// When enabled, validates that the configured model ID exists in the
+    /// cached model registry before creating an AI client. Provides helpful
+    /// suggestions if an invalid model ID is detected.
+    pub validation_enabled: bool,
 }
 
 impl Default for AiConfig {
@@ -172,6 +178,7 @@ impl Default for AiConfig {
             tasks: None,
             fallback: None,
             custom_guidance: None,
+            validation_enabled: true,
         }
     }
 }

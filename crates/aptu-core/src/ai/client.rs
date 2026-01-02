@@ -254,6 +254,7 @@ mod tests {
             tasks: None,
             fallback: None,
             custom_guidance: None,
+            validation_enabled: true,
         }
     }
 

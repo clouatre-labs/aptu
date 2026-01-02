@@ -246,6 +246,15 @@ pub enum RegistryError {
     /// IO error.
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+
+    /// Model validation error - invalid model ID with suggestions.
+    #[error("Invalid model ID: {model_id}. Did you mean one of these?\n{}", .suggestions.join(", "))]
+    ModelValidation {
+        /// The invalid model ID provided by the user.
+        model_id: String,
+        /// Suggested valid model IDs based on fuzzy matching.
+        suggestions: Vec<String>,
+    },
 }
 
 /// Cached model information from API responses.
@@ -285,6 +294,11 @@ pub trait ModelRegistry: Send + Sync {
         provider: &str,
         model_id: &str,
     ) -> Result<Vec<String>, RegistryError>;
+
+    /// Validate that a model ID exists for a provider.
+    ///
+    /// Returns an error with fuzzy-matched suggestions if the model is not found.
+    async fn validate_model(&self, provider: &str, model_id: &str) -> Result<(), RegistryError>;
 }
 
 /// Cached model registry with HTTP client and TTL support.
@@ -578,14 +592,38 @@ impl ModelRegistry for CachedModelRegistry<'_> {
         model_id: &str,
     ) -> Result<Vec<String>, RegistryError> {
         let models = self.list_models(provider).await?;
-        let last_part = model_id.split('/').next_back().unwrap_or(model_id);
-        let mut suggestions: Vec<_> = models
+
+        // Use jaro_winkler fuzzy matching to score similarity
+        let mut scored_suggestions: Vec<(String, f64)> = models
             .iter()
-            .filter(|m| m.id.contains(last_part) || model_id.contains(&m.id))
-            .map(|m| m.id.clone())
+            .map(|m| {
+                let score = strsim::jaro_winkler(&m.id, model_id);
+                (m.id.clone(), score)
+            })
             .collect();
-        suggestions.truncate(5);
+
+        // Sort by similarity score (descending) and take top 5
+        scored_suggestions
+            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let suggestions: Vec<String> = scored_suggestions
+            .into_iter()
+            .take(5)
+            .map(|(id, _)| id)
+            .collect();
+
         Ok(suggestions)
+    }
+
+    async fn validate_model(&self, provider: &str, model_id: &str) -> Result<(), RegistryError> {
+        if self.model_exists(provider, model_id).await? {
+            Ok(())
+        } else {
+            let suggestions = self.suggest_similar(provider, model_id).await?;
+            Err(RegistryError::ModelValidation {
+                model_id: model_id.to_string(),
+                suggestions,
+            })
+        }
     }
 }
 
