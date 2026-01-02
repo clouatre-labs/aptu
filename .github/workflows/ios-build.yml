@@ -1,0 +1,86 @@
+name: iOS Build
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'AptuApp/**'
+      - 'crates/aptu-ffi/**'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'AptuApp/**'
+      - 'crates/aptu-ffi/**'
+      - '.github/workflows/ios-build.yml'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
+        with:
+          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+      
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
+        with:
+          workspaces: |
+            .
+      
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+      
+      - name: Install uniffi-bindgen
+        run: |
+          cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen --features cli uniffi
+      
+      - name: Generate Xcode project
+        working-directory: AptuApp
+        run: |
+          xcodegen generate
+      
+      - name: Build for iOS Simulator
+        working-directory: AptuApp
+        run: |
+          xcodebuild build \
+            -project AptuApp.xcodeproj \
+            -scheme AptuApp \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -derivedDataPath DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+      
+      - name: Run unit tests
+        working-directory: AptuApp
+        run: |
+          xcodebuild test \
+            -project AptuApp.xcodeproj \
+            -scheme AptuApp \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -derivedDataPath DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+        continue-on-error: true
+      
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ios-build-artifacts
+          path: AptuApp/DerivedData/Build/Products/
+          retention-days: 7

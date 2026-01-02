@@ -1,0 +1,77 @@
+name: AptuApp
+options:
+  bundleIdPrefix: com.block
+  deploymentTarget:
+    iOS: "26.0"
+  minimumXcodeGenVersion: 2.35
+
+settings:
+  SWIFT_VERSION: "6.2"
+  IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+  CODE_SIGN_IDENTITY: "Apple Development"
+  DEVELOPMENT_TEAM: ""
+
+targets:
+  AptuApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: AptuApp
+        excludes:
+          - "*.xcodeproj"
+    resources:
+      - path: AptuApp/Assets.xcassets
+      - path: AptuApp/Preview\ Content
+    settings:
+      PRODUCT_NAME: AptuApp
+      BUNDLE_ID: com.block.aptu
+      INFOPLIST_FILE: AptuApp/Info.plist
+      SWIFT_OBJC_BRIDGING_HEADER: AptuApp-Bridging-Header.h
+      OTHER_LDFLAGS: "-lSystem"
+      LIBRARY_SEARCH_PATHS: "$(SRCROOT)/build/$(CONFIGURATION)-$(PLATFORM_NAME)"
+      HEADER_SEARCH_PATHS: "$(SRCROOT)/build/$(CONFIGURATION)-$(PLATFORM_NAME)"
+      
+    buildPhases:
+      - type: sources
+      - type: frameworks
+      - type: resourceBundles
+      - type: copyFiles
+        destination: frameworks
+        files:
+          - path: build/$(CONFIGURATION)-$(PLATFORM_NAME)/libaptu_ffi.a
+            subPath: true
+      - type: shell
+        name: "Build Rust FFI"
+        script: |
+          set -e
+          bash "${SRCROOT}/Scripts/build-rust-ffi.sh" "${SRCROOT}" "${CONFIGURATION}" "${PLATFORM_NAME}" "${ARCHS}"
+
+  AptuAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: AptuAppTests
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: AptuApp
+        type: native
+
+schemes:
+  AptuApp:
+    build:
+      targets:
+        AptuApp: all
+    run:
+      config: Debug
+      executable: AptuApp
+    test:
+      config: Debug
+      targets:
+        - AptuAppTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-class SwiftKeychain {
+final class SwiftKeychain: @unchecked Sendable {
     static let shared = SwiftKeychain()
 
     private let service = "com.aptu.app"
