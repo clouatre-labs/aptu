@@ -1273,7 +1273,6 @@ mod tests {
 ///
 /// * `provider` - Token provider for API credentials
 /// * `provider_name` - Name of the provider (e.g., "openrouter", "gemini")
-/// * `force_refresh` - If true, bypass cache and fetch from API
 ///
 /// # Returns
 ///
@@ -1294,9 +1293,7 @@ pub async fn list_models(
     use crate::cache::cache_dir;
 
     let cache_dir = cache_dir();
-    let registry = CachedModelRegistry::new(cache_dir, 86400); // 24h TTL
-
-    let _ = provider; // Placeholder for future credential-based API calls
+    let registry = CachedModelRegistry::new(cache_dir, 86400, provider); // 24h TTL
 
     registry
         .list_models(provider_name)
@@ -1337,9 +1334,7 @@ pub async fn validate_model(
     use crate::cache::cache_dir;
 
     let cache_dir = cache_dir();
-    let registry = CachedModelRegistry::new(cache_dir, 86400); // 24h TTL
-
-    let _ = provider; // Placeholder for future credential-based API calls
+    let registry = CachedModelRegistry::new(cache_dir, 86400, provider); // 24h TTL
 
     registry
         .model_exists(provider_name, model_id)

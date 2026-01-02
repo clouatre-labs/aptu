@@ -24,10 +24,13 @@
 //! ```
 
 use async_trait::async_trait;
+use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
+
+use crate::auth::TokenProvider;
 
 /// Metadata for a single AI model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -285,25 +288,32 @@ pub trait ModelRegistry: Send + Sync {
 }
 
 /// Cached model registry with HTTP client and TTL support.
-pub struct CachedModelRegistry {
+pub struct CachedModelRegistry<'a> {
     cache_dir: PathBuf,
     ttl_seconds: u64,
     client: reqwest::Client,
+    token_provider: &'a dyn TokenProvider,
 }
 
-impl CachedModelRegistry {
+impl CachedModelRegistry<'_> {
     /// Create a new cached model registry.
     ///
     /// # Arguments
     ///
     /// * `cache_dir` - Directory for storing cached model lists
     /// * `ttl_seconds` - Time-to-live for cache entries (default: 86400 = 24 hours)
+    /// * `token_provider` - Token provider for API credentials
     #[must_use]
-    pub fn new(cache_dir: PathBuf, ttl_seconds: u64) -> Self {
-        Self {
+    pub fn new(
+        cache_dir: PathBuf,
+        ttl_seconds: u64,
+        token_provider: &dyn TokenProvider,
+    ) -> CachedModelRegistry<'_> {
+        CachedModelRegistry {
             cache_dir,
             ttl_seconds,
             client: reqwest::Client::new(),
+            token_provider,
         }
     }
 
@@ -395,6 +405,76 @@ impl CachedModelRegistry {
         Ok(())
     }
 
+    /// Parse `OpenRouter` API response into models.
+    fn parse_openrouter_models(data: &serde_json::Value) -> Vec<CachedModel> {
+        data.get("data")
+            .and_then(|d| d.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|m| {
+                        Some(CachedModel {
+                            id: m.get("id")?.as_str()?.to_string(),
+                            name: m.get("name").and_then(|n| n.as_str()).map(String::from),
+                            is_free: m
+                                .get("pricing")
+                                .and_then(|p| p.get("prompt"))
+                                .and_then(|p| p.as_str())
+                                .map(|p| p == "0"),
+                            context_window: m
+                                .get("context_length")
+                                .and_then(serde_json::Value::as_u64)
+                                .and_then(|c| u32::try_from(c).ok()),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Parse Gemini API response into models.
+    fn parse_gemini_models(data: &serde_json::Value) -> Vec<CachedModel> {
+        data.get("models")
+            .and_then(|d| d.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|m| {
+                        Some(CachedModel {
+                            id: m.get("name")?.as_str()?.to_string(),
+                            name: m
+                                .get("displayName")
+                                .and_then(|n| n.as_str())
+                                .map(String::from),
+                            is_free: None,
+                            context_window: m
+                                .get("inputTokenLimit")
+                                .and_then(serde_json::Value::as_u64)
+                                .and_then(|c| u32::try_from(c).ok()),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Parse generic OpenAI-compatible API response into models.
+    fn parse_generic_models(data: &serde_json::Value) -> Vec<CachedModel> {
+        data.get("data")
+            .and_then(|d| d.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|m| {
+                        Some(CachedModel {
+                            id: m.get("id")?.as_str()?.to_string(),
+                            name: None,
+                            is_free: None,
+                            context_window: None,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Fetch models from provider API.
     async fn fetch_from_api(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         let url = match provider {
@@ -402,12 +482,35 @@ impl CachedModelRegistry {
             "gemini" => "https://generativelanguage.googleapis.com/v1beta/models",
             "groq" => "https://api.groq.com/openai/v1/models",
             "cerebras" => "https://api.cerebras.ai/v1/models",
+            "zenmux" => "https://zenmux.ai/api/v1/models",
+            "zai" => "https://api.z.ai/api/paas/v4/models",
             _ => return Err(RegistryError::ProviderNotFound(provider.to_string())),
         };
 
-        let response = self
-            .client
-            .get(url)
+        // Get API key from token provider
+        let api_key = self.token_provider.ai_api_key(provider).ok_or_else(|| {
+            RegistryError::HttpError(format!("No API key available for {provider}"))
+        })?;
+
+        // Build request incrementally with provider-specific authentication
+        let request = match provider {
+            "gemini" => {
+                // Gemini uses query parameter authentication
+                self.client
+                    .get(url)
+                    .query(&[("key", api_key.expose_secret())])
+            }
+            "openrouter" | "groq" | "cerebras" | "zenmux" | "zai" => {
+                // These providers use Bearer token authentication
+                self.client.get(url).header(
+                    "Authorization",
+                    format!("Bearer {}", api_key.expose_secret()),
+                )
+            }
+            _ => self.client.get(url),
+        };
+
+        let response = request
             .send()
             .await
             .map_err(|e| RegistryError::HttpError(e.to_string()))?;
@@ -419,67 +522,9 @@ impl CachedModelRegistry {
 
         // Parse based on provider API format
         let models = match provider {
-            "openrouter" => data
-                .get("data")
-                .and_then(|d| d.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|m| {
-                            Some(CachedModel {
-                                id: m.get("id")?.as_str()?.to_string(),
-                                name: m.get("name").and_then(|n| n.as_str()).map(String::from),
-                                is_free: m
-                                    .get("pricing")
-                                    .and_then(|p| p.get("prompt"))
-                                    .and_then(|p| p.as_str())
-                                    .map(|p| p == "0"),
-                                context_window: m
-                                    .get("context_length")
-                                    .and_then(serde_json::Value::as_u64)
-                                    .and_then(|c| u32::try_from(c).ok()),
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-            "gemini" => data
-                .get("models")
-                .and_then(|d| d.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|m| {
-                            Some(CachedModel {
-                                id: m.get("name")?.as_str()?.to_string(),
-                                name: m
-                                    .get("displayName")
-                                    .and_then(|n| n.as_str())
-                                    .map(String::from),
-                                is_free: None,
-                                context_window: m
-                                    .get("inputTokenLimit")
-                                    .and_then(serde_json::Value::as_u64)
-                                    .and_then(|c| u32::try_from(c).ok()),
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-            "groq" | "cerebras" => data
-                .get("data")
-                .and_then(|d| d.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|m| {
-                            Some(CachedModel {
-                                id: m.get("id")?.as_str()?.to_string(),
-                                name: None,
-                                is_free: None,
-                                context_window: None,
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
+            "openrouter" => Self::parse_openrouter_models(&data),
+            "gemini" => Self::parse_gemini_models(&data),
+            "groq" | "cerebras" => Self::parse_generic_models(&data),
             _ => vec![],
         };
 
@@ -488,7 +533,7 @@ impl CachedModelRegistry {
 }
 
 #[async_trait]
-impl ModelRegistry for CachedModelRegistry {
+impl ModelRegistry for CachedModelRegistry<'_> {
     async fn list_models(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         // Try fresh cache first
         if let Ok(models) = self.load_from_cache(provider) {
@@ -554,7 +599,19 @@ mod tests {
         let temp_dir = std::env::temp_dir().join("aptu_test_stale_cache");
         let _ = std::fs::create_dir_all(&temp_dir);
 
-        let registry = CachedModelRegistry::new(temp_dir.clone(), 1); // 1 second TTL
+        // Create a mock token provider
+        struct MockTokenProvider;
+        impl crate::auth::TokenProvider for MockTokenProvider {
+            fn github_token(&self) -> Option<secrecy::SecretString> {
+                None
+            }
+            fn ai_api_key(&self, _provider: &str) -> Option<secrecy::SecretString> {
+                None
+            }
+        }
+
+        let mock_provider = MockTokenProvider;
+        let registry = CachedModelRegistry::new(temp_dir.clone(), 1, &mock_provider); // 1 second TTL
 
         let models = vec![
             CachedModel {
