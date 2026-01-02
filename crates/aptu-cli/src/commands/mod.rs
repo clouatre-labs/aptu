@@ -59,7 +59,7 @@ async fn triage_single_issue(
     repo_context: Option<&str>,
     dry_run: bool,
     yes: bool,
-    apply: bool,
+    no_apply: bool,
     no_comment: bool,
     force: bool,
     ctx: &OutputContext,
@@ -173,8 +173,8 @@ async fn triage_single_issue(
 
     result.comment_url.clone_from(&comment_url);
 
-    // Phase 3: Apply labels and milestone if requested (independent of comment posting)
-    if apply {
+    // Phase 3: Apply labels and milestone unless --no-apply is set (default is to apply)
+    if !no_apply {
         let spinner = maybe_spinner(ctx, "Applying labels and milestone...");
         let apply_result = triage::apply(&issue_details, &ai_response.triage).await?;
         if let Some(s) = spinner {
@@ -213,7 +213,7 @@ async fn triage_single_issue(
             println!("{}", style("Comment posted successfully!").green().bold());
             println!("  {}", style(url).cyan().underlined());
         }
-        if apply && (!result.applied_labels.is_empty() || result.applied_milestone.is_some()) {
+        if !no_apply && (!result.applied_labels.is_empty() || result.applied_milestone.is_some()) {
             println!();
             println!("{}", style("Applied to issue:").green());
             if !result.applied_labels.is_empty() {
@@ -375,7 +375,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                 state,
                 dry_run,
                 yes,
-                apply,
+                no_apply,
                 no_comment,
                 force,
             } => {
@@ -485,7 +485,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                                 repo_context.as_deref(),
                                 dry_run,
                                 yes,
-                                apply,
+                                no_apply,
                                 no_comment,
                                 force,
                                 &ctx,
@@ -565,21 +565,21 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
             PrCommand::Review {
                 references,
                 repo,
-                comment,
-                approve,
-                request_changes,
+                review_type,
+                no_apply: _,
                 dry_run,
                 yes,
             } => {
                 let repo_context = repo.as_deref().or(config.user.default_repo.as_deref());
 
-                // Determine review type from flags
-                let review_type = if comment {
-                    Some(aptu_core::ReviewEvent::Comment)
-                } else if approve {
-                    Some(aptu_core::ReviewEvent::Approve)
-                } else if request_changes {
-                    Some(aptu_core::ReviewEvent::RequestChanges)
+                // Parse review_type string to ReviewEvent enum
+                let parsed_review_type = if let Some(rt_str) = review_type {
+                    match rt_str.as_str() {
+                        "comment" => Some(aptu_core::ReviewEvent::Comment),
+                        "approve" => Some(aptu_core::ReviewEvent::Approve),
+                        "request-changes" => Some(aptu_core::ReviewEvent::RequestChanges),
+                        _ => anyhow::bail!("Invalid review type: {}. Must be 'comment', 'approve', or 'request-changes'", rt_str),
+                    }
                 } else {
                     None
                 };
@@ -609,7 +609,7 @@ pub async fn run(command: Commands, ctx: OutputContext, config: &AppConfig) -> R
                             review_single_pr(
                                 &pr_ref,
                                 repo_context.as_deref(),
-                                review_type,
+                                parsed_review_type,
                                 dry_run,
                                 yes,
                                 &ctx,

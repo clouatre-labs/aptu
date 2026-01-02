@@ -325,9 +325,9 @@ pub enum IssueCommand {
         #[arg(short = 'y', long)]
         yes: bool,
 
-        /// Apply AI-suggested labels and milestone to the issue (additive: merges with existing labels, preserves existing priority labels and milestone)
+        /// Skip applying AI-suggested labels and milestone to the issue
         #[arg(long)]
-        apply: bool,
+        no_apply: bool,
 
         /// Skip posting triage comment to GitHub
         #[arg(long)]
@@ -397,17 +397,13 @@ pub enum PrCommand {
         #[arg(long, short = 'r')]
         repo: Option<String>,
 
-        /// Post review as a comment (read-only, no approval)
-        #[arg(long, group = "review_type")]
-        comment: bool,
+        /// Review type to post (comment, approve, request-changes). If not specified, infers from AI analysis.
+        #[arg(long, value_name = "TYPE")]
+        review_type: Option<String>,
 
-        /// Post review with approval
-        #[arg(long, group = "review_type")]
-        approve: bool,
-
-        /// Post review requesting changes
-        #[arg(long, group = "review_type")]
-        request_changes: bool,
+        /// Skip posting the review to GitHub
+        #[arg(long)]
+        no_apply: bool,
 
         /// Preview the review without posting
         #[arg(long)]
