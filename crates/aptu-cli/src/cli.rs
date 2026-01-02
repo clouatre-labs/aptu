@@ -435,14 +435,10 @@ pub enum PrCommand {
 /// AI models subcommands
 #[derive(Subcommand)]
 pub enum ModelsCommand {
-    /// List available AI models from a provider
+    /// List available AI models from a provider (or all providers if not specified)
     List {
-        /// AI provider name (e.g., "openrouter", "openai")
+        /// AI provider name (e.g., "openrouter", "openai"). If not specified, shows all providers.
         #[arg(long)]
-        provider: String,
-
-        /// Show only free models
-        #[arg(long)]
-        free: bool,
+        provider: Option<String>,
     },
 }
