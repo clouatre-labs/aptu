@@ -1,0 +1,61 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Xcode user-specific files
+*.xcuserdatad/
+*.xcworkspace/xcuserdata/
+*.playground/xcuserdata/
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+*.xcconfig
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/
+Cartfile.resolved
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Code coverage
+*.profraw
+*.profdata
+coverage.xml
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+
+# Generated files
+AptuApp.swift
+AptuFFI.swift
