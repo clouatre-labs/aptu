@@ -28,6 +28,13 @@ impl Renderable for PrReviewResult {
         writeln!(w, "{}", self.review.summary)?;
         writeln!(w)?;
 
+        // Disclaimer
+        if let Some(disclaimer) = &self.review.disclaimer {
+            writeln!(w, "{}", style("Disclaimer").yellow().bold())?;
+            writeln!(w, "{disclaimer}")?;
+            writeln!(w)?;
+        }
+
         // Strengths
         if !self.review.strengths.is_empty() {
             writeln!(w, "{}", style("Strengths").green().bold())?;
@@ -112,6 +119,12 @@ impl Renderable for PrReviewResult {
         writeln!(w, "### Summary")?;
         writeln!(w, "{}", self.review.summary)?;
         writeln!(w)?;
+
+        if let Some(disclaimer) = &self.review.disclaimer {
+            writeln!(w, "### Disclaimer")?;
+            writeln!(w, "> {disclaimer}")?;
+            writeln!(w)?;
+        }
 
         if !self.review.strengths.is_empty() {
             writeln!(w, "### Strengths")?;
