@@ -21,7 +21,7 @@ BUILD_DIR="${SRCROOT}/build/${CONFIGURATION}-${PLATFORM_NAME}"
 mkdir -p "$BUILD_DIR"
 
 # Get the root project directory (parent of AptuApp)
-PROJECT_ROOT="$(cd "$SRCROOT/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SRCROOT/.." && pwd)"
 
 # Determine target triple based on platform and architecture
 declare -a TARGETS=()
