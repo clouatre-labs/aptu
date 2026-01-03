@@ -351,6 +351,9 @@ pub struct PrReviewResponse {
     /// Suggested improvements (not blocking).
     #[serde(default)]
     pub suggestions: Vec<String>,
+    /// Optional disclaimer about limitations (e.g., platform version validation).
+    #[serde(default)]
+    pub disclaimer: Option<String>,
 }
 
 /// Review event type for posting to GitHub.

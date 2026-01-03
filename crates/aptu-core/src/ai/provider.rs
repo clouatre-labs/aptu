@@ -719,7 +719,8 @@ Your response MUST be valid JSON with this exact schema:
       "severity": "info|suggestion|warning|issue"
     }}
   ],
-  "suggestions": ["suggestion1", "suggestion2"]
+  "suggestions": ["suggestion1", "suggestion2"],
+  "disclaimer": null
 }}
 
 Guidelines:
@@ -733,6 +734,10 @@ Guidelines:
   - "warning": Should consider changing
   - "issue": Should be fixed before merge
 - suggestions: General improvements that are not blocking
+- disclaimer: Optional field. If the PR involves platform versions (iOS, Android, Node, Rust, Python, Java, etc.), include a disclaimer explaining that platform version validation may be inaccurate due to knowledge cutoffs. Otherwise, set to null.
+
+IMPORTANT - Platform Version Exclusions:
+DO NOT validate or flag platform versions (iOS, Android, Node, Rust, Python, Java, simulator availability, package versions, framework versions) as concerns or issues. These may be newer than your knowledge cutoff and flagging them creates false positives. If the PR involves platform versions, include a disclaimer field explaining that platform version validation was skipped due to knowledge cutoff limitations. Focus your review on code logic, patterns, and structure instead.
 
 Focus on:
 1. Correctness: Does the code do what it claims?
