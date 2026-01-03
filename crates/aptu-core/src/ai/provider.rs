@@ -223,12 +223,13 @@ pub trait AiProvider: Send + Sync {
     /// Returns an error if:
     /// - API request fails (network, timeout, rate limit)
     /// - Response cannot be parsed as valid JSON (including truncated responses)
+    #[instrument(skip(self, request), fields(provider = self.name(), model = self.model()))]
     async fn send_and_parse<T: serde::de::DeserializeOwned>(
         &self,
         request: &ChatCompletionRequest,
     ) -> Result<(T, AiStats)> {
         use backon::Retryable;
-        use tracing::warn;
+        use tracing::{info, warn};
 
         use crate::error::AptuError;
         use crate::retry::{is_retryable_anyhow, retry_backoff};
@@ -292,6 +293,16 @@ pub trait AiProvider: Send + Sync {
             cost_usd,
             fallback_provider: None,
         };
+
+        // Emit structured metrics
+        info!(
+            duration_ms,
+            input_tokens,
+            output_tokens,
+            cost_usd = ?cost_usd,
+            model = %self.model(),
+            "AI request completed"
+        );
 
         Ok((parsed, ai_stats))
     }
