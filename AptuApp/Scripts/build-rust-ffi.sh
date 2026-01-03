@@ -67,7 +67,7 @@ fi
 # Run uniffi-bindgen to generate Swift bindings
 if command -v uniffi-bindgen &> /dev/null; then
     uniffi-bindgen generate \
-        "$PROJECT_ROOT/crates/aptu-ffi/src/lib.rs" \
+        --library "$LIB_PATH" \
         --language swift \
         --out-dir "$BUILD_DIR"
 else
