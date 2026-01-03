@@ -300,17 +300,14 @@ pub async fn discover_repos(
 /// # Returns
 ///
 /// Validates a model for a given provider, converting registry errors to `AptuError`.
-fn validate_provider_model(
-    provider: &str,
-    model: &str,
-) -> crate::Result<()> {
+fn validate_provider_model(provider: &str, model: &str) -> crate::Result<()> {
     // Simple static validation: check if provider exists
     if crate::ai::registry::get_provider(provider).is_none() {
         return Err(AptuError::ModelRegistry {
             message: format!("Provider not found: {provider}"),
         });
     }
-    
+
     // For now, we allow any model ID (permissive fallback)
     // Unknown models will log a warning but won't fail validation
     tracing::debug!(provider = provider, model = model, "Validating model");
