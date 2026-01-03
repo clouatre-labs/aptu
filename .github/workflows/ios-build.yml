@@ -40,13 +40,25 @@ jobs:
           workspaces: |
             .
       
+      - name: Cache uniffi-bindgen binary
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.1
+        with:
+          path: ~/.cargo/bin/uniffi-bindgen
+          key: uniffi-bindgen-v0.30.0-${{ runner.os }}
+          restore-keys: |
+            uniffi-bindgen-v0.30.0-
+      
       - name: Install XcodeGen
         run: |
           brew install xcodegen
       
       - name: Install uniffi-bindgen
         run: |
-          cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen --features cli uniffi
+          if [ ! -f ~/.cargo/bin/uniffi-bindgen ]; then
+            cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen --features cli uniffi
+          else
+            echo "uniffi-bindgen already cached"
+          fi
       
       - name: Generate Xcode project
         working-directory: AptuApp

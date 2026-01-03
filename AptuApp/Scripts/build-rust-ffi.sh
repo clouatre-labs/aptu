@@ -75,11 +75,16 @@ else
     echo "Install with: cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen uniffi"
 fi
 
-# Copy compiled library to build directory
-echo "Copying compiled library to build directory..."
-if [ ${#TARGETS[@]} -eq 1 ]; then
-    # Single target: copy directly
-    TARGET="${TARGETS[0]}"
+# Create XCFramework from compiled libraries
+echo "Creating XCFramework from compiled libraries..."
+XCFRAMEWORK_PATH="$BUILD_DIR/libaptu_ffi.xcframework"
+rm -rf "$XCFRAMEWORK_PATH"
+
+# Build framework arguments for xcodebuild -create-xcframework
+FRAMEWORK_ARGS=()
+
+# Map Rust targets to platform identifiers
+for TARGET in "${TARGETS[@]}"; do
     if [ "$CONFIGURATION" = "Debug" ]; then
         SRC_LIB="$PROJECT_ROOT/target/${TARGET}/debug/libaptu_ffi.a"
     else
@@ -87,28 +92,36 @@ if [ ${#TARGETS[@]} -eq 1 ]; then
     fi
     
     if [ -f "$SRC_LIB" ]; then
-        cp "$SRC_LIB" "$BUILD_DIR/libaptu_ffi.a"
-        echo "Copied $SRC_LIB to $BUILD_DIR/libaptu_ffi.a"
-    fi
-else
-    # Multiple targets: create universal binary using lipo
-    echo "Creating universal binary from multiple targets..."
-    LIPO_ARGS=()
-    for TARGET in "${TARGETS[@]}"; do
-        if [ "$CONFIGURATION" = "Debug" ]; then
-            SRC_LIB="$PROJECT_ROOT/target/${TARGET}/debug/libaptu_ffi.a"
+        # Determine platform identifier based on target
+        if [ "$TARGET" = "aarch64-apple-ios" ]; then
+            PLATFORM_ID="iphoneos"
+        elif [ "$TARGET" = "aarch64-apple-ios-sim" ]; then
+            PLATFORM_ID="iphonesimulator"
+        elif [ "$TARGET" = "x86_64-apple-ios" ]; then
+            PLATFORM_ID="iphonesimulator"
         else
-            SRC_LIB="$PROJECT_ROOT/target/${TARGET}/release/libaptu_ffi.a"
+            PLATFORM_ID="iphoneos"
         fi
-        if [ -f "$SRC_LIB" ]; then
-            LIPO_ARGS+=("-arch" "${TARGET%%-*}" "$SRC_LIB")
-        fi
-    done
-    
-    if [ ${#LIPO_ARGS[@]} -gt 0 ]; then
-        lipo -create "${LIPO_ARGS[@]}" -output "$BUILD_DIR/libaptu_ffi.a"
-        echo "Created universal binary at $BUILD_DIR/libaptu_ffi.a"
+        
+        # Create temporary framework bundle for this library
+        TEMP_FRAMEWORK="$BUILD_DIR/libaptu_ffi_${TARGET}.framework"
+        rm -rf "$TEMP_FRAMEWORK"
+        mkdir -p "$TEMP_FRAMEWORK"
+        cp "$SRC_LIB" "$TEMP_FRAMEWORK/libaptu_ffi"
+        
+        FRAMEWORK_ARGS+=("-framework" "$TEMP_FRAMEWORK")
     fi
+done
+
+# Create XCFramework if we have frameworks to bundle
+if [ ${#FRAMEWORK_ARGS[@]} -gt 0 ]; then
+    xcodebuild -create-xcframework "${FRAMEWORK_ARGS[@]}" -output "$XCFRAMEWORK_PATH"
+    echo "Created XCFramework at $XCFRAMEWORK_PATH"
+    
+    # Clean up temporary frameworks
+    rm -rf "$BUILD_DIR"/libaptu_ffi_*.framework
+else
+    echo "Warning: No compiled libraries found for XCFramework creation"
 fi
 
 echo "Rust FFI build complete!"
