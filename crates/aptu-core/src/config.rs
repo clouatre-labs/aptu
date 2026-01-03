@@ -169,7 +169,7 @@ impl Default for AiConfig {
         Self {
             provider: "gemini".to_string(),
             model: "gemini-3-flash-preview".to_string(),
-            timeout_seconds: 5,
+            timeout_seconds: 30,
             allow_paid_models: false,
             max_tokens: 4096,
             temperature: 0.3,
@@ -372,7 +372,7 @@ mod tests {
 
         assert_eq!(config.ai.provider, "gemini");
         assert_eq!(config.ai.model, "gemini-3-flash-preview");
-        assert_eq!(config.ai.timeout_seconds, 5);
+        assert_eq!(config.ai.timeout_seconds, 30);
         assert_eq!(config.ai.max_tokens, 4096);
         #[allow(clippy::float_cmp)]
         {

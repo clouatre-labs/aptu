@@ -247,7 +247,7 @@ mod tests {
             model: "test-model:free".to_string(),
             max_tokens: 2048,
             temperature: 0.3,
-            timeout_seconds: 5,
+            timeout_seconds: 30,
             allow_paid_models: false,
             circuit_breaker_threshold: 3,
             circuit_breaker_reset_seconds: 60,
