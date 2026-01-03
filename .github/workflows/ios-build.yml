@@ -41,7 +41,7 @@ jobs:
             .
       
       - name: Cache uniffi-bindgen binary
-        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5
         with:
           path: ~/.cargo/bin/uniffi-bindgen
           key: uniffi-bindgen-v0.30.0-${{ runner.os }}
