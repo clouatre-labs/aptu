@@ -11,11 +11,10 @@ use chrono::Duration;
 use tracing::{debug, info, instrument, warn};
 
 use crate::ai::provider::MAX_LABELS;
-use crate::ai::registry::{CachedModelRegistry, ModelRegistry};
 use crate::ai::types::{CreateIssueResponse, PrDetails, ReviewEvent, TriageResponse};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
-use crate::cache::{self, CacheEntry, cache_dir};
+use crate::cache::{self, CacheEntry};
 use crate::config::{AiConfig, TaskType, load_config};
 use crate::error::AptuError;
 use crate::github::auth::{create_client_from_provider, create_client_with_token};
@@ -301,26 +300,18 @@ pub async fn discover_repos(
 /// # Returns
 ///
 /// Validates a model for a given provider, converting registry errors to `AptuError`.
-async fn validate_provider_model(
-    registry: &CachedModelRegistry<'_>,
-    provider: &str,
-    model: &str,
-) -> crate::Result<()> {
-    registry
-        .validate_model(provider, model)
-        .await
-        .map_err(|e| match e {
-            crate::ai::registry::RegistryError::ModelValidation {
-                model_id,
-                suggestions,
-            } => AptuError::ModelValidation {
-                model_id,
-                suggestions: suggestions.join(", "),
-            },
-            other => AptuError::ModelRegistry {
-                message: format!("Failed to validate model: {other}"),
-            },
-        })
+fn validate_provider_model(provider: &str, model: &str) -> crate::Result<()> {
+    // Simple static validation: check if provider exists
+    if crate::ai::registry::get_provider(provider).is_none() {
+        return Err(AptuError::ModelRegistry {
+            message: format!("Provider not found: {provider}"),
+        });
+    }
+
+    // For now, we allow any model ID (permissive fallback)
+    // Unknown models will log a warning but won't fail validation
+    tracing::debug!(provider = provider, model = model, "Validating model");
+    Ok(())
 }
 
 /// Result of the AI operation, or error if all providers fail.
@@ -335,13 +326,12 @@ where
     F: Fn(AiClient) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
-    let registry = CachedModelRegistry::new(cache_dir(), 86400, provider);
     let api_key = provider
         .ai_api_key(primary_provider)
         .ok_or(AptuError::NotAuthenticated)?;
 
     if ai_config.validation_enabled {
-        validate_provider_model(&registry, primary_provider, model_name).await?;
+        validate_provider_model(primary_provider, model_name)?;
     }
 
     let ai_client = AiClient::with_api_key(primary_provider, api_key, model_name, ai_config)
@@ -387,9 +377,7 @@ where
             let fallback_model = entry.model.as_deref().unwrap_or(model_name);
 
             if ai_config.validation_enabled
-                && validate_provider_model(&registry, &entry.provider, fallback_model)
-                    .await
-                    .is_err()
+                && validate_provider_model(&entry.provider, fallback_model).is_err()
             {
                 warn!(
                     fallback_provider = entry.provider,

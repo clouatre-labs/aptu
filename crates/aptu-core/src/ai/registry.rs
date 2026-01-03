@@ -6,8 +6,7 @@
 //! including their metadata, API endpoints, and available models.
 //!
 //! It also provides runtime model validation infrastructure via the `ModelRegistry` trait
-//! and `CachedModelRegistry` implementation for fetching and caching model lists from
-//! provider APIs.
+//! with a simple sync implementation using static model lists.
 //!
 //! # Examples
 //!
