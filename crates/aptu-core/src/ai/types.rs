@@ -319,6 +319,39 @@ pub struct PrFile {
     pub patch: Option<String>,
 }
 
+/// Severity level for PR review comments.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CommentSeverity {
+    /// Informational comment.
+    Info,
+    /// Suggested improvement.
+    Suggestion,
+    /// Warning about potential issues.
+    Warning,
+    /// Critical issue that should be addressed.
+    Issue,
+}
+
+impl std::fmt::Display for CommentSeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl CommentSeverity {
+    /// Returns the severity level as a string slice.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            CommentSeverity::Info => "info",
+            CommentSeverity::Suggestion => "suggestion",
+            CommentSeverity::Warning => "warning",
+            CommentSeverity::Issue => "issue",
+        }
+    }
+}
+
 /// A specific comment on a line of code in a PR review.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PrReviewComment {
@@ -328,8 +361,8 @@ pub struct PrReviewComment {
     pub line: Option<u32>,
     /// The comment text.
     pub comment: String,
-    /// Severity: "info", "suggestion", "warning", "issue".
-    pub severity: String,
+    /// Severity level for the comment.
+    pub severity: CommentSeverity,
 }
 
 /// Structured PR review response from AI.
