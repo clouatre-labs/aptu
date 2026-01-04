@@ -339,3 +339,115 @@ impl From<(u64, String, String, Vec<String>)> for FfiLabelPrResult {
         }
     }
 }
+
+/// FFI-compatible severity level for PR review comments.
+#[derive(Clone, Copy, Debug, uniffi::Enum, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FfiCommentSeverity {
+    Info,
+    Suggestion,
+    Warning,
+    Issue,
+}
+
+impl From<aptu_core::ai::types::CommentSeverity> for FfiCommentSeverity {
+    fn from(severity: aptu_core::ai::types::CommentSeverity) -> Self {
+        match severity {
+            aptu_core::ai::types::CommentSeverity::Info => FfiCommentSeverity::Info,
+            aptu_core::ai::types::CommentSeverity::Suggestion => FfiCommentSeverity::Suggestion,
+            aptu_core::ai::types::CommentSeverity::Warning => FfiCommentSeverity::Warning,
+            aptu_core::ai::types::CommentSeverity::Issue => FfiCommentSeverity::Issue,
+        }
+    }
+}
+
+/// FFI wrapper for a single PR review comment.
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiPrReviewComment {
+    /// File path the comment applies to.
+    pub file: String,
+    /// Line number in the diff (optional for general file comments).
+    pub line: Option<u32>,
+    /// The comment text.
+    pub comment: String,
+    /// Severity level for the comment.
+    pub severity: FfiCommentSeverity,
+}
+
+impl From<aptu_core::ai::types::PrReviewComment> for FfiPrReviewComment {
+    fn from(comment: aptu_core::ai::types::PrReviewComment) -> Self {
+        FfiPrReviewComment {
+            file: comment.file,
+            line: comment.line,
+            comment: comment.comment,
+            severity: comment.severity.into(),
+        }
+    }
+}
+
+/// FFI wrapper for AI usage statistics.
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiAiStats {
+    /// Model used for analysis.
+    pub model: String,
+    /// Number of input tokens.
+    pub input_tokens: u64,
+    /// Number of output tokens.
+    pub output_tokens: u64,
+    /// Duration of the API call in milliseconds.
+    pub duration_ms: u64,
+    /// Cost in USD (from `OpenRouter` API, `None` if not reported).
+    pub cost_usd: Option<f64>,
+    /// Fallback provider used if primary failed (None if primary succeeded).
+    pub fallback_provider: Option<String>,
+}
+
+impl From<aptu_core::history::AiStats> for FfiAiStats {
+    fn from(stats: aptu_core::history::AiStats) -> Self {
+        FfiAiStats {
+            model: stats.model,
+            input_tokens: stats.input_tokens,
+            output_tokens: stats.output_tokens,
+            duration_ms: stats.duration_ms,
+            cost_usd: stats.cost_usd,
+            fallback_provider: stats.fallback_provider,
+        }
+    }
+}
+
+/// FFI wrapper for PR review response.
+#[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
+pub struct FfiPrReviewResponse {
+    /// Overall summary of the PR (2-3 sentences).
+    pub summary: String,
+    /// Overall assessment: one of approve, request-changes, or comment.
+    pub verdict: String,
+    /// Key strengths of the PR.
+    pub strengths: Vec<String>,
+    /// Areas of concern or improvement.
+    pub concerns: Vec<String>,
+    /// Specific line-level comments.
+    pub comments: Vec<FfiPrReviewComment>,
+    /// Suggested improvements (not blocking).
+    pub suggestions: Vec<String>,
+    /// Optional disclaimer about limitations (e.g., platform version validation).
+    pub disclaimer: Option<String>,
+}
+
+impl From<aptu_core::ai::types::PrReviewResponse> for FfiPrReviewResponse {
+    fn from(response: aptu_core::ai::types::PrReviewResponse) -> Self {
+        FfiPrReviewResponse {
+            summary: response.summary,
+            verdict: response.verdict,
+            strengths: response.strengths,
+            concerns: response.concerns,
+            comments: response
+                .comments
+                .into_iter()
+                .map(FfiPrReviewComment::from)
+                .collect(),
+            suggestions: response.suggestions,
+            disclaimer: response.disclaimer,
+        }
+    }
+}
