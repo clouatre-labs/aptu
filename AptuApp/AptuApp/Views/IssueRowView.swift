@@ -1,11 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
 //
-//  IssueRowView.swift
-//  AptuApp
+// IssueRowView.swift
+// Aptu
 //
-//  SPDX-License-Identifier: Apache-2.0
-//
-//  Reusable row component for issue list items.
-//
+// Reusable row component for issue list items
 
 import SwiftUI
 
@@ -92,51 +90,6 @@ struct IssueRowView: View {
             return minutes == 1 ? "1 minute ago" : "\(minutes) minutes ago"
         } else {
             return "Just now"
-        }
-    }
-}
-
-// MARK: - Flow Layout Helper
-
-struct FlowLayout: View {
-    let spacing: CGFloat
-    let items: [AnyView]
-    
-    init<Data: RandomAccessCollection>(spacing: CGFloat = 8, @ViewBuilder content: () -> [Data.Element]? = { nil }, @ViewBuilder builder: (Data.Element) -> some View) where Data.Element: Identifiable {
-        self.spacing = spacing
-        self.items = []
-    }
-    
-    init(spacing: CGFloat = 8, @ViewBuilder content: () -> some View) {
-        self.spacing = spacing
-        self.items = []
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: spacing) {
-            // Simplified flow layout - just use HStack with wrapping
-            HStack(spacing: spacing) {
-                ForEach(items, id: \.self) { item in
-                    item
-                }
-            }
-        }
-    }
-}
-
-// Simpler FlowLayout implementation
-struct SimpleFlowLayout<Content: View>: View {
-    let spacing: CGFloat
-    let content: Content
-    
-    init(spacing: CGFloat = 8, @ViewBuilder content: () -> Content) {
-        self.spacing = spacing
-        self.content = content()
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: spacing) {
-            content
         }
     }
 }
