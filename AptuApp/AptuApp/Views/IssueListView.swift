@@ -96,7 +96,6 @@ struct IssueListView: View {
             id: "1",
             name: "aptu",
             owner: "clouatre-labs",
-            url: "https://github.com/clouatre-labs/aptu",
             description: "Gamified OSS issue triage with AI assistance"
         ))
     }

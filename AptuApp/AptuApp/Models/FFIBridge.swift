@@ -65,6 +65,7 @@ enum FFIBridgeError: Error {
     case notImplemented
 }
 
+@MainActor
 class FFIBridge {
     static let shared = FFIBridge()
     
