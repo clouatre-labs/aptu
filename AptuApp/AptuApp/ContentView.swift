@@ -4,58 +4,31 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var isAuthenticated: Bool = false
+    @State private var selectedRepository: Repository?
     
     var body: some View {
-        if isAuthenticated {
-            mainAppContent
+        if let repository = selectedRepository {
+            NavigationView {
+                IssueListView(repository: repository)
+                    .navigationBarBackButtonHidden(false)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button(action: {
+                                selectedRepository = nil
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                    Text("Back")
+                                }
+                            }
+                        }
+                    }
+            }
         } else {
-            AuthenticationView()
-                .onDisappear {
-                    // Check if authentication was successful
-                    // This would be updated when the auth flow completes
-                }
-        }
-    }
-    
-    private var mainAppContent: some View {
-        VStack(spacing: 20) {
-            Text("Aptu iOS App")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-            
-            Text("GitHub Issue Triage Assistant")
-                .font(.subheadline)
-                .foregroundColor(.gray)
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Welcome!")
-                    .font(.headline)
-                
-                Text("You are now authenticated with GitHub. You can browse and triage issues from curated repositories.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
-            
-            Spacer()
-            
-            Button(role: .destructive, action: {
-                isAuthenticated = false
-            }) {
-                Text("Sign Out")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.red.opacity(0.1))
-                    .foregroundColor(.red)
-                    .cornerRadius(8)
+            RepositoryPickerView { repository in
+                selectedRepository = repository
             }
         }
-        .padding()
     }
 }
 
