@@ -35,10 +35,19 @@ struct LabelBadge: View {
     
     /// Convert hex color string to SwiftUI Color
     private func colorFromHex(_ hex: String) -> Color {
-        let hex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        let scanner = Scanner(string: hex)
+        var cleanHex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        
+        // Handle 3-digit hex format by expanding to 6-digit
+        if cleanHex.count == 3 {
+            cleanHex = cleanHex.map { String($0) + String($0) }.joined()
+        }
+        
+        let scanner = Scanner(string: cleanHex)
         var rgb: UInt64 = 0
-        scanner.scanHexInt64(&rgb)
+        
+        guard scanner.scanHexInt64(&rgb) else {
+            return Color.gray // Fallback for invalid hex
+        }
         
         let r = Double((rgb >> 16) & 0xFF) / 255.0
         let g = Double((rgb >> 8) & 0xFF) / 255.0
@@ -49,10 +58,19 @@ struct LabelBadge: View {
     
     /// Calculate brightness of a hex color (0.0 = dark, 1.0 = light)
     private func calculateBrightness(hex: String) -> Double {
-        let hex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        let scanner = Scanner(string: hex)
+        var cleanHex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        
+        // Handle 3-digit hex format by expanding to 6-digit
+        if cleanHex.count == 3 {
+            cleanHex = cleanHex.map { String($0) + String($0) }.joined()
+        }
+        
+        let scanner = Scanner(string: cleanHex)
         var rgb: UInt64 = 0
-        scanner.scanHexInt64(&rgb)
+        
+        guard scanner.scanHexInt64(&rgb) else {
+            return 0.5 // Fallback for invalid hex
+        }
         
         let r = Double((rgb >> 16) & 0xFF) / 255.0
         let g = Double((rgb >> 8) & 0xFF) / 255.0
