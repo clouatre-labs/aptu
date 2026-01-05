@@ -15,16 +15,18 @@ struct AptuApp: App {
     
     var body: some Scene {
         WindowGroup {
-            if isAuthenticated {
-                ContentView()
-            } else {
-                AuthenticationView()
+            Group {
+                if isAuthenticated {
+                    ContentView()
+                } else {
+                    AuthenticationView()
+                }
             }
-        }
-        .task {
-            // Check authentication status asynchronously on app launch
-            // This ensures @State is fully initialized and main thread remains responsive
-            await checkAuthenticationStatus()
+            .task {
+                // Check authentication status asynchronously on app launch
+                // This ensures @State is fully initialized and main thread remains responsive
+                await checkAuthenticationStatus()
+            }
         }
     }
     
