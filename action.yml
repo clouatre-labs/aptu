@@ -153,14 +153,14 @@ runs:
         set -e
         
         ISSUE_REF="${REPO}#${ISSUE_NUMBER}"
-        ARGS="--yes"
+        ARGS=""
         
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"
         fi
         
-        if [[ "$APPLY_LABELS" == "true" ]]; then
-          ARGS="$ARGS --apply"
+        if [[ "$APPLY_LABELS" == "false" ]]; then
+          ARGS="$ARGS --no-apply"
         fi
         
         if [[ "$NO_COMMENT" == "true" ]]; then
@@ -200,7 +200,7 @@ runs:
         set -e
         
         PR_REF="${REPO}#${PR_NUMBER}"
-        ARGS="--comment --yes"
+        ARGS="--comment --force"
         
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"
