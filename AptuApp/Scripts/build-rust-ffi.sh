@@ -76,14 +76,19 @@ if command -v uniffi-bindgen &> /dev/null; then
     GENERATED_DIR="$SRCROOT/AptuApp/Generated"
     mkdir -p "$GENERATED_DIR"
     
-    if [ -f "$BUILD_DIR/AptuCore.swift" ]; then
-        cp "$BUILD_DIR/AptuCore.swift" "$GENERATED_DIR/AptuCore.swift"
-        echo "Copied AptuCore.swift to $GENERATED_DIR"
+    if [ -f "$BUILD_DIR/aptu_ffi.swift" ]; then
+        cp "$BUILD_DIR/aptu_ffi.swift" "$GENERATED_DIR/aptu_ffi.swift"
+        echo "Copied aptu_ffi.swift to $GENERATED_DIR"
     fi
     
-    if [ -f "$BUILD_DIR/AptuCoreFFI.swift" ]; then
-        cp "$BUILD_DIR/AptuCoreFFI.swift" "$GENERATED_DIR/AptuCoreFFI.swift"
-        echo "Copied AptuCoreFFI.swift to $GENERATED_DIR"
+    if [ -f "$BUILD_DIR/aptu_ffiFFI.h" ]; then
+        cp "$BUILD_DIR/aptu_ffiFFI.h" "$GENERATED_DIR/aptu_ffiFFI.h"
+        echo "Copied aptu_ffiFFI.h to $GENERATED_DIR"
+    fi
+    
+    if [ -f "$BUILD_DIR/aptu_ffiFFI.modulemap" ]; then
+        cp "$BUILD_DIR/aptu_ffiFFI.modulemap" "$GENERATED_DIR/aptu_ffiFFI.modulemap"
+        echo "Copied aptu_ffiFFI.modulemap to $GENERATED_DIR"
     fi
 else
     echo "Warning: uniffi-bindgen not found, skipping Swift binding generation"

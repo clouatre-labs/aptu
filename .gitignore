@@ -42,3 +42,6 @@ AptuApp/*.xcodeproj/xcuserdata/
 AptuApp/*.xcworkspace/xcuserdata/
 .bats-libs/
 SPEC.md
+AptuApp/AptuApp/Generated/*.swift
+AptuApp/AptuApp/Generated/*.h
+AptuApp/AptuApp/Generated/*.modulemap

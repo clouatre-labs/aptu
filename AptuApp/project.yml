@@ -28,9 +28,10 @@ targets:
       BUNDLE_ID: com.block.aptu
       INFOPLIST_FILE: AptuApp/Info.plist
       SWIFT_OBJC_BRIDGING_HEADER: AptuApp-Bridging-Header.h
-      OTHER_LDFLAGS: "-lSystem"
-      LIBRARY_SEARCH_PATHS: "$(SRCROOT)/build/$(CONFIGURATION)-$(PLATFORM_NAME)"
-      HEADER_SEARCH_PATHS: "$(SRCROOT)/build/$(CONFIGURATION)-$(PLATFORM_NAME)"
+      OTHER_LDFLAGS: "-lSystem -laptu_ffi"
+      LIBRARY_SEARCH_PATHS: "$(SRCROOT)/build/$(CONFIGURATION)-$(PLATFORM_NAME) $(SRCROOT)/AptuApp/Generated"
+      HEADER_SEARCH_PATHS: "$(SRCROOT)/build/$(CONFIGURATION)-$(PLATFORM_NAME) $(SRCROOT)/AptuApp/Generated"
+      SWIFT_INCLUDE_PATHS: "$(SRCROOT)/AptuApp/Generated"
     
     preBuildScripts:
       - name: "Build Rust FFI"
