@@ -16,10 +16,10 @@ targets:
     type: application
     platform: iOS
     sources:
+      - path: AptuApp/Generated
       - path: AptuApp
         excludes:
           - "*.xcodeproj"
-      - path: AptuApp/Generated
     resources:
       - path: AptuApp/Assets.xcassets
       - path: AptuApp/Preview\ Content
