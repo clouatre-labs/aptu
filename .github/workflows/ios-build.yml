@@ -65,6 +65,11 @@ jobs:
             echo "uniffi-bindgen already cached"
           fi
       
+      - name: Build Rust FFI and generate Swift bindings
+        working-directory: AptuApp
+        run: |
+          ./Scripts/build-rust-ffi.sh
+      
       - name: Generate Xcode project
         working-directory: AptuApp
         run: |
