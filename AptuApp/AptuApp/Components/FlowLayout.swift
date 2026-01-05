@@ -15,7 +15,7 @@ struct FlowLayout: Layout {
         self.spacing = spacing
     }
     
-    func sizeThatFits(proposal: ProposedSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard !subviews.isEmpty else { return .zero }
         
         var totalHeight: CGFloat = 0
@@ -46,7 +46,7 @@ struct FlowLayout: Layout {
         return CGSize(width: maxWidth, height: totalHeight)
     }
     
-    func placeSubviews(in bounds: CGRect, proposal: ProposedSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard !subviews.isEmpty else { return }
         
         var currentX = bounds.minX
@@ -66,7 +66,7 @@ struct FlowLayout: Layout {
             
             // Place the subview
             let point = CGPoint(x: currentX, y: currentY)
-            subview.place(at: point, proposal: ProposedSize(width: size.width, height: size.height))
+            subview.place(at: point, proposal: ProposedViewSize(width: size.width, height: size.height))
             
             // Update position for next subview
             currentX += size.width + spacing

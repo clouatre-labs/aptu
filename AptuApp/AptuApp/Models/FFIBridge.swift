@@ -7,6 +7,10 @@
 
 import Foundation
 
+// Import the generated FFI bindings (contains KeychainProvider protocol)
+// The generated file is in AptuApp/Generated/aptu_ffi.swift
+// and is included via the bridging header
+
 // MARK: - Models
 
 struct Repository: Identifiable, Hashable {
