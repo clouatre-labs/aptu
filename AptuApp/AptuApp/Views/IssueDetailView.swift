@@ -1,11 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
 //
-//  IssueDetailView.swift
-//  AptuApp
+// IssueDetailView.swift
+// Aptu
 //
-//  SPDX-License-Identifier: Apache-2.0
-//
-//  Detailed issue view showing full issue metadata with action buttons.
-//
+// Detailed issue view showing full issue metadata with action buttons
 
 import SwiftUI
 
@@ -46,7 +44,7 @@ struct IssueDetailView: View {
                         Text("Labels")
                             .font(.headline)
                         
-                        FlowLayoutView {
+                        FlowLayout {
                             ForEach(issue.labels) { label in
                                 LabelBadge(label: label)
                             }
@@ -150,20 +148,6 @@ struct MetadataRow: View {
                 .fontWeight(.semibold)
             
             Spacer()
-        }
-    }
-}
-
-struct FlowLayoutView<Content: View>: View {
-    let content: Content
-    
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            content
         }
     }
 }
