@@ -2,6 +2,8 @@
 //  AptuApp.swift
 //  AptuApp
 //
+//  SPDX-License-Identifier: Apache-2.0
+//
 //  Main SwiftUI app entry point with Rust FFI initialization.
 //
 
