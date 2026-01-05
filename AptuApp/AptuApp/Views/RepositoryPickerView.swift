@@ -19,45 +19,43 @@ struct RepositoryPickerView: View {
     let onRepositorySelected: (Repository) -> Void
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                if isLoading {
-                    LoadingState(state: .loading, retryAction: nil)
-                } else if let error = errorMessage {
-                    LoadingState(state: .error(message: error), retryAction: loadRepositories)
-                } else if filteredRepositories.isEmpty {
-                    LoadingState(state: .empty(message: "No repositories found"), retryAction: nil)
-                } else {
-                    List(filteredRepositories) { repo in
-                        Button(action: {
-                            onRepositorySelected(repo)
-                        }) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(repo.displayName)
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                
-                                if let description = repo.description {
-                                    Text(description)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                        .lineLimit(2)
-                                }
+        ZStack {
+            if isLoading {
+                LoadingState(state: .loading, retryAction: nil)
+            } else if let error = errorMessage {
+                LoadingState(state: .error(message: error), retryAction: loadRepositories)
+            } else if filteredRepositories.isEmpty {
+                LoadingState(state: .empty(message: "No repositories found"), retryAction: nil)
+            } else {
+                List(filteredRepositories) { repo in
+                    Button(action: {
+                        onRepositorySelected(repo)
+                    }) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(repo.displayName)
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            if let description = repo.description {
+                                Text(description)
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                    .lineLimit(2)
                             }
-                            .padding(.vertical, 8)
                         }
-                    }
-                    .searchable(text: $searchText, prompt: "Search repositories")
-                    .onChange(of: searchText) { _, newValue in
-                        filterRepositories(newValue)
+                        .padding(.vertical, 8)
                     }
                 }
+                .searchable(text: $searchText, prompt: "Search repositories")
+                .onChange(of: searchText) { _, newValue in
+                    filterRepositories(newValue)
+                }
             }
-            .navigationTitle("Select Repository")
-            .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                loadRepositories()
-            }
+        }
+        .navigationTitle("Select Repository")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            loadRepositories()
         }
     }
     

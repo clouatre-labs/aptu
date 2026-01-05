@@ -52,21 +52,17 @@ struct IssueListView: View {
         isLoading = true
         errorMessage = nil
         
-        Task {
+        Task { @MainActor in
             do {
                 let fetchedIssues = try await FFIBridge.shared.fetchIssues(
                     owner: repository.owner,
                     repo: repository.name
                 )
-                await MainActor.run {
-                    issues = fetchedIssues
-                    isLoading = false
-                }
+                issues = fetchedIssues
+                isLoading = false
             } catch {
-                await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    isLoading = false
-                }
+                errorMessage = error.localizedDescription
+                isLoading = false
             }
         }
     }
