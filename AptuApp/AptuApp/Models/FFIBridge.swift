@@ -79,7 +79,7 @@ class FFIBridge {
     func fetchIssues(owner: String, repo: String) async throws -> [Issue] {
         // Call actual UniFFI binding
         do {
-            let ffiIssues = try fetchIssues(keychain: keychainProvider)
+            let ffiIssues = try fetchIssuesFFI(keychain: keychainProvider)
             
             // Map FfiIssueNode to Swift Issue models
             return ffiIssues.compactMap { ffiIssue -> Issue? in
