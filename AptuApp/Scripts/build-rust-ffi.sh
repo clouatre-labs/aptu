@@ -70,6 +70,21 @@ if command -v uniffi-bindgen &> /dev/null; then
         --library "$LIB_PATH" \
         --language swift \
         --out-dir "$BUILD_DIR"
+    
+    # Copy generated Swift bindings to AptuApp/Generated/
+    echo "Copying generated Swift bindings to AptuApp/Generated/..."
+    GENERATED_DIR="$SRCROOT/AptuApp/Generated"
+    mkdir -p "$GENERATED_DIR"
+    
+    if [ -f "$BUILD_DIR/AptuCore.swift" ]; then
+        cp "$BUILD_DIR/AptuCore.swift" "$GENERATED_DIR/AptuCore.swift"
+        echo "Copied AptuCore.swift to $GENERATED_DIR"
+    fi
+    
+    if [ -f "$BUILD_DIR/AptuCoreFFI.swift" ]; then
+        cp "$BUILD_DIR/AptuCoreFFI.swift" "$GENERATED_DIR/AptuCoreFFI.swift"
+        echo "Copied AptuCoreFFI.swift to $GENERATED_DIR"
+    fi
 else
     echo "Warning: uniffi-bindgen not found, skipping Swift binding generation"
     echo "Install with: cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen uniffi"

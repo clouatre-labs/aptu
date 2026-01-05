@@ -1,6 +1,24 @@
 import Foundation
 import Security
 
+/// SwiftKeychainProvider conforms to the UniFFI-generated KeychainProvider protocol
+/// This bridges Swift's system keychain to the Rust FFI layer
+final class SwiftKeychainProvider: KeychainProvider {
+    private let keychain = SwiftKeychain.shared
+    
+    func getToken(service: String, account: String) throws -> String? {
+        return keychain.getToken(service: service, account: account)
+    }
+    
+    func setToken(service: String, account: String, token: String) throws {
+        try keychain.setToken(service: service, account: account, token: token)
+    }
+    
+    func deleteToken(service: String, account: String) throws {
+        try keychain.deleteToken(service: service, account: account)
+    }
+}
+
 final class SwiftKeychain: @unchecked Sendable {
     static let shared = SwiftKeychain()
 

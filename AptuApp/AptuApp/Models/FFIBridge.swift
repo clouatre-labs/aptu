@@ -69,81 +69,77 @@ enum FFIBridgeError: Error {
 class FFIBridge {
     static let shared = FFIBridge()
     
-    private init() {}
+    private let keychainProvider: SwiftKeychainProvider
+    
+    private init() {
+        self.keychainProvider = SwiftKeychainProvider()
+    }
     
     /// Fetch issues for a repository using FFI binding
     func fetchIssues(owner: String, repo: String) async throws -> [Issue] {
-        // TODO: Call actual FFI binding when available
-        // For now, return mock data for UI development
-        let repository = "\(owner)/\(repo)"
-        return mockIssues(for: repository)
+        // Call actual UniFFI binding
+        do {
+            let ffiIssues = try fetchIssues(keychain: keychainProvider)
+            
+            // Map FfiIssueNode to Swift Issue models
+            return ffiIssues.compactMap { ffiIssue -> Issue? in
+                // Extract repository info from URL
+                // URL format: https://github.com/owner/repo/issues/number
+                let urlComponents = ffiIssue.url.components(separatedBy: "/")
+                guard urlComponents.count >= 5 else { return nil }
+                
+                let repoOwner = urlComponents[3]
+                let repoName = urlComponents[4]
+                
+                // Filter by requested owner/repo
+                guard repoOwner == owner && repoName == repo else { return nil }
+                
+                // Map labels (FFI returns simple string array)
+                let labels = ffiIssue.labels.enumerated().map { index, labelName in
+                    IssueLabel(
+                        id: "\(ffiIssue.number)-\(index)",
+                        name: labelName,
+                        color: "808080", // Default gray color
+                        description: nil
+                    )
+                }
+                
+                return Issue(
+                    id: "\(ffiIssue.number)",
+                    number: Int(ffiIssue.number),
+                    title: ffiIssue.title,
+                    body: ffiIssue.body.isEmpty ? nil : ffiIssue.body,
+                    author: "unknown", // FfiIssueNode doesn't include author
+                    createdAt: ffiIssue.createdAt,
+                    updatedAt: ffiIssue.updatedAt,
+                    labels: labels,
+                    repositoryName: repoName,
+                    repositoryOwner: repoOwner,
+                    url: ffiIssue.url
+                )
+            }
+        } catch {
+            throw FFIBridgeError.fetchFailed(error.localizedDescription)
+        }
     }
     
     /// List curated repositories using FFI binding
     func listCuratedRepositories() async throws -> [Repository] {
-        // TODO: Call actual FFI binding when available
-        // For now, return mock data for UI development
-        return mockRepositories()
-    }
-    
-    // MARK: - Mock Data (temporary)
-    
-    private func mockRepositories() -> [Repository] {
-        [
-            Repository(
-                id: "1",
-                name: "aptu",
-                owner: "clouatre-labs",
-                description: "Gamified OSS issue triage with AI assistance"
-            ),
-            Repository(
-                id: "2",
-                name: "goose",
-                owner: "block",
-                description: "AI-powered development agent"
-            ),
-            Repository(
-                id: "3",
-                name: "swift",
-                owner: "apple",
-                description: "The Swift Programming Language"
-            )
-        ]
-    }
-    
-    private func mockIssues(for repository: String) -> [Issue] {
-        [
-            Issue(
-                id: "1",
-                number: 100,
-                title: "Add dark mode support",
-                body: "Users have requested dark mode support for better accessibility and reduced eye strain.",
-                author: "user123",
-                createdAt: "2024-01-01T10:00:00Z",
-                updatedAt: "2024-01-02T15:30:00Z",
-                labels: [
-                    IssueLabel(id: "1", name: "enhancement", color: "00FF00", description: "New feature"),
-                    IssueLabel(id: "2", name: "good first issue", color: "90EE90", description: "Good for newcomers")
-                ],
-                repositoryName: repository.components(separatedBy: "/").last ?? "",
-                repositoryOwner: repository.components(separatedBy: "/").first ?? "",
-                url: "https://github.com/\(repository)/issues/100"
-            ),
-            Issue(
-                id: "2",
-                number: 101,
-                title: "Fix crash on iOS 17",
-                body: "App crashes when launched on iOS 17 devices.",
-                author: "developer456",
-                createdAt: "2024-01-03T09:00:00Z",
-                updatedAt: "2024-01-03T12:00:00Z",
-                labels: [
-                    IssueLabel(id: "3", name: "bug", color: "FF0000", description: "Something isn't working")
-                ],
-                repositoryName: repository.components(separatedBy: "/").last ?? "",
-                repositoryOwner: repository.components(separatedBy: "/").first ?? "",
-                url: "https://github.com/\(repository)/issues/101"
-            )
-        ]
+        // Call actual UniFFI binding
+        do {
+            let ffiRepos = try listCuratedRepos()
+            
+            // Map FfiCuratedRepo to Swift Repository models
+            return ffiRepos.map { ffiRepo in
+                Repository(
+                    id: "\(ffiRepo.owner)/\(ffiRepo.name)",
+                    name: ffiRepo.name,
+                    owner: ffiRepo.owner,
+                    description: ffiRepo.description.isEmpty ? nil : ffiRepo.description
+                )
+            }
+        } catch {
+            throw FFIBridgeError.fetchFailed(error.localizedDescription)
+        }
     }
 }
