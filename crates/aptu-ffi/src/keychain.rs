@@ -60,10 +60,7 @@ pub fn store_github_token(
 /// or an error if the operation failed.
 #[uniffi::export]
 pub fn get_github_token(keychain: KeychainProviderRef) -> Result<Option<String>, AptuFfiError> {
-    keychain.get_token(
-        "com.block.aptu".to_string(),
-        "github_token".to_string(),
-    )
+    keychain.get_token("com.block.aptu".to_string(), "github_token".to_string())
 }
 
 /// Delete a GitHub OAuth token from the system keychain
@@ -77,8 +74,5 @@ pub fn get_github_token(keychain: KeychainProviderRef) -> Result<Option<String>,
 /// Returns `Ok(())` if the token was successfully deleted, or an error if the operation failed.
 #[uniffi::export]
 pub fn delete_github_token(keychain: KeychainProviderRef) -> Result<(), AptuFfiError> {
-    keychain.delete_token(
-        "com.block.aptu".to_string(),
-        "github_token".to_string(),
-    )
+    keychain.delete_token("com.block.aptu".to_string(), "github_token".to_string())
 }

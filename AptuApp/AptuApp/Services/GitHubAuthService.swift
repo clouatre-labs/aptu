@@ -24,6 +24,7 @@ struct PollResponse: Codable {
 
 // MARK: - GitHub Auth Service
 
+@MainActor
 class GitHubAuthService {
     private let clientId: String
     private let session: URLSession
@@ -71,7 +72,7 @@ class GitHubAuthService {
     func pollForToken(
         deviceCode: String,
         maxAttempts: Int = 120,
-        onProgress: @escaping (Int, Int) -> Void
+        onProgress: @escaping @Sendable (Int, Int) -> Void
     ) async throws -> String {
         var pollInterval = minPollInterval
         var attempt = 0
