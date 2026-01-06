@@ -1,44 +1,78 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Block, Inc.
 set -euo pipefail
 
 # Build script for Rust FFI library (aptu-ffi)
-# Usage: build-rust-ffi.sh <SRCROOT> <CONFIGURATION> <PLATFORM_NAME> <ARCHS>
+#
+# Usage:
+#   CI/Manual:  ./Scripts/build-rust-ffi.sh [platform] [config]
+#   Xcode:      Called via environment variables (SRCROOT, CONFIGURATION, etc.)
+#
+# Arguments (CI/Manual mode):
+#   platform: iphonesimulator (default) | iphoneos
+#   config:   Debug (default) | Release
 
-SRCROOT="${1:-.}"
-CONFIGURATION="${2:-Debug}"
-PLATFORM_NAME="${3:-iphoneos}"
-ARCHS="${4:-arm64}"
-
-# Determine build type
-if [ "$CONFIGURATION" = "Debug" ]; then
-    RUST_BUILD_TYPE=""
+# Detect execution context
+if [ -n "${SRCROOT:-}" ] && [ -n "${CONFIGURATION:-}" ]; then
+    # Xcode build phase context
+    echo "Running in Xcode build phase context"
+    APTUAPP_DIR="$SRCROOT"
+    PROJECT_ROOT="$(cd "$SRCROOT/.." && pwd)"
+    CONFIG="$CONFIGURATION"
+    PLATFORM="${PLATFORM_NAME:-iphonesimulator}"
+    ARCH="${ARCHS:-arm64}"
 else
-    RUST_BUILD_TYPE="--release"
+    # CI or manual invocation
+    echo "Running in CI/manual context"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    APTUAPP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+    PROJECT_ROOT="$(cd "$APTUAPP_DIR/.." && pwd)"
+    PLATFORM="${1:-iphonesimulator}"
+    CONFIG="${2:-Debug}"
+    ARCH="arm64"
 fi
 
-# Build output directory
-BUILD_DIR="${SRCROOT}/build/${CONFIGURATION}-${PLATFORM_NAME}"
+echo "APTUAPP_DIR: $APTUAPP_DIR"
+echo "PROJECT_ROOT: $PROJECT_ROOT"
+echo "PLATFORM: $PLATFORM"
+echo "CONFIG: $CONFIG"
+
+# Determine Rust build type
+if [ "$CONFIG" = "Debug" ]; then
+    RUST_BUILD_TYPE=""
+    RUST_PROFILE="debug"
+else
+    RUST_BUILD_TYPE="--release"
+    RUST_PROFILE="release"
+fi
+
+# Build output directory (for compiled library)
+BUILD_DIR="${APTUAPP_DIR}/build/${CONFIG}-${PLATFORM}"
 mkdir -p "$BUILD_DIR"
 
-# Get the root project directory (parent of AptuApp)
-PROJECT_ROOT="$(cd "$SRCROOT/.." && pwd)"
+# Generated Swift bindings directory (must exist before xcodegen)
+GENERATED_DIR="${APTUAPP_DIR}/AptuApp/Generated"
+mkdir -p "$GENERATED_DIR"
 
 # Determine target triple based on platform and architecture
 declare -a TARGETS=()
-if [ "$PLATFORM_NAME" = "iphoneos" ]; then
+if [ "$PLATFORM" = "iphoneos" ]; then
     TARGETS=("aarch64-apple-ios")
-elif [ "$PLATFORM_NAME" = "iphonesimulator" ]; then
-    if [[ "$ARCHS" == *"arm64"* ]]; then
+elif [ "$PLATFORM" = "iphonesimulator" ]; then
+    if [[ "$ARCH" == *"arm64"* ]]; then
         TARGETS+=("aarch64-apple-ios-sim")
     fi
-    if [[ "$ARCHS" == *"x86_64"* ]]; then
+    if [[ "$ARCH" == *"x86_64"* ]]; then
         TARGETS+=("x86_64-apple-ios")
     fi
-    # Default to x86_64 if no specific arch
+    # Default to arm64 simulator (Apple Silicon)
     if [ ${#TARGETS[@]} -eq 0 ]; then
-        TARGETS=("x86_64-apple-ios")
+        TARGETS=("aarch64-apple-ios-sim")
     fi
 fi
+
+echo "Building for targets: ${TARGETS[*]}"
 
 # Build for each target
 for TARGET in "${TARGETS[@]}"; do
@@ -56,70 +90,56 @@ done
 echo "Generating Swift bindings..."
 cd "$PROJECT_ROOT"
 
-# Determine the library path (use first target for binding generation)
 FIRST_TARGET="${TARGETS[0]}"
-if [ "$CONFIGURATION" = "Debug" ]; then
-    LIB_PATH="$PROJECT_ROOT/target/${FIRST_TARGET}/debug/libaptu_ffi.a"
-else
-    LIB_PATH="$PROJECT_ROOT/target/${FIRST_TARGET}/release/libaptu_ffi.a"
+LIB_PATH="$PROJECT_ROOT/target/${FIRST_TARGET}/${RUST_PROFILE}/libaptu_ffi.a"
+
+if ! command -v uniffi-bindgen &> /dev/null; then
+    echo "Error: uniffi-bindgen not found"
+    echo "Install with: cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen --features cli uniffi"
+    exit 1
 fi
 
-# Run uniffi-bindgen to generate Swift bindings
-if command -v uniffi-bindgen &> /dev/null; then
-    uniffi-bindgen generate \
-        --library "$LIB_PATH" \
-        --language swift \
-        --out-dir "$BUILD_DIR"
-else
-    echo "Warning: uniffi-bindgen not found, skipping Swift binding generation"
-    echo "Install with: cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen uniffi"
-fi
+uniffi-bindgen generate \
+    --library "$LIB_PATH" \
+    --language swift \
+    --out-dir "$BUILD_DIR"
+
+# Copy generated Swift bindings to AptuApp/Generated/
+echo "Copying generated Swift bindings to $GENERATED_DIR"
+
+for FILE in aptu_ffi.swift aptu_ffiFFI.h aptu_ffiFFI.modulemap; do
+    if [ -f "$BUILD_DIR/$FILE" ]; then
+        cp "$BUILD_DIR/$FILE" "$GENERATED_DIR/$FILE"
+        echo "  Copied $FILE"
+    else
+        echo "  Warning: $FILE not found in $BUILD_DIR"
+    fi
+done
 
 # Copy compiled library to build directory
 echo "Copying compiled library to build directory..."
-if [ ${#TARGETS[@]} -eq 1 ]; then
-    # Single target: copy directly
-    TARGET="${TARGETS[0]}"
-    if [ "$CONFIGURATION" = "Debug" ]; then
-        SRC_LIB="$PROJECT_ROOT/target/${TARGET}/debug/libaptu_ffi.a"
-    else
-        SRC_LIB="$PROJECT_ROOT/target/${TARGET}/release/libaptu_ffi.a"
-    fi
-    
-    if [ -f "$SRC_LIB" ]; then
-        cp "$SRC_LIB" "$BUILD_DIR/libaptu_ffi.a"
-        echo "Copied $SRC_LIB to $BUILD_DIR/libaptu_ffi.a"
-    fi
+FIRST_TARGET="${TARGETS[0]}"
+SRC_LIB="$PROJECT_ROOT/target/${FIRST_TARGET}/${RUST_PROFILE}/libaptu_ffi.a"
+
+if [ -f "$SRC_LIB" ]; then
+    cp "$SRC_LIB" "$BUILD_DIR/libaptu_ffi.a"
+    echo "  Copied libaptu_ffi.a"
 else
-    # Multiple targets: copy each separately with platform-specific naming
-    # This avoids arm64 collision between device and simulator
-    echo "Copying libraries for multiple targets..."
+    echo "  Error: $SRC_LIB not found"
+    exit 1
+fi
+
+# For multi-target builds, also copy with target-specific names
+if [ ${#TARGETS[@]} -gt 1 ]; then
     for TARGET in "${TARGETS[@]}"; do
-        if [ "$CONFIGURATION" = "Debug" ]; then
-            SRC_LIB="$PROJECT_ROOT/target/${TARGET}/debug/libaptu_ffi.a"
-        else
-            SRC_LIB="$PROJECT_ROOT/target/${TARGET}/release/libaptu_ffi.a"
-        fi
+        SRC_LIB="$PROJECT_ROOT/target/${TARGET}/${RUST_PROFILE}/libaptu_ffi.a"
         if [ -f "$SRC_LIB" ]; then
-            # Use target-specific naming to avoid collisions
             cp "$SRC_LIB" "$BUILD_DIR/libaptu_ffi_${TARGET}.a"
-            echo "Copied $SRC_LIB to $BUILD_DIR/libaptu_ffi_${TARGET}.a"
+            echo "  Copied libaptu_ffi_${TARGET}.a"
         fi
     done
-    
-    # For single-platform builds (simulator only), also create the default name
-    if [ ${#TARGETS[@]} -eq 1 ] || [ "$PLATFORM_NAME" = "iphonesimulator" ]; then
-        FIRST_TARGET="${TARGETS[0]}"
-        if [ "$CONFIGURATION" = "Debug" ]; then
-            SRC_LIB="$PROJECT_ROOT/target/${FIRST_TARGET}/debug/libaptu_ffi.a"
-        else
-            SRC_LIB="$PROJECT_ROOT/target/${FIRST_TARGET}/release/libaptu_ffi.a"
-        fi
-        if [ -f "$SRC_LIB" ]; then
-            cp "$SRC_LIB" "$BUILD_DIR/libaptu_ffi.a"
-            echo "Also copied to $BUILD_DIR/libaptu_ffi.a for compatibility"
-        fi
-    fi
 fi
 
 echo "Rust FFI build complete!"
+echo "Generated files in: $GENERATED_DIR"
+echo "Library in: $BUILD_DIR"

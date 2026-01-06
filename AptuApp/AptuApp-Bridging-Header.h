@@ -10,7 +10,7 @@
 #ifndef AptuApp_Bridging_Header_h
 #define AptuApp_Bridging_Header_h
 
-// Import any C headers needed for FFI interop here
-// Example: #include "aptu_ffi.h"
+// Import UniFFI-generated C header for Rust FFI interop
+#include "aptu_ffiFFI.h"
 
 #endif /* AptuApp_Bridging_Header_h */

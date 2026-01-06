@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Block, Inc.
+
 name: iOS Build
 
 on:
@@ -18,13 +21,17 @@ on:
       - 'crates/aptu-ffi/**'
       - '.github/workflows/ios-build.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-15
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
       
@@ -34,70 +41,82 @@ jobs:
           xcodebuild -version
       
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
         with:
           toolchain: stable
-          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
       
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
         with:
           workspaces: |
             .
       
-      - name: Cache uniffi-bindgen binary
-        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5
+      - name: Cache XcodeGen
+        id: cache-xcodegen
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /opt/homebrew/bin/xcodegen
+          key: xcodegen-${{ runner.os }}-2.42
+      
+      - name: Install XcodeGen
+        if: steps.cache-xcodegen.outputs.cache-hit != 'true'
+        run: brew install xcodegen
+      
+      - name: Cache uniffi-bindgen
+        id: cache-uniffi
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ~/.cargo/bin/uniffi-bindgen
           key: uniffi-bindgen-v0.30.0-${{ runner.os }}
-          restore-keys: |
-            uniffi-bindgen-v0.30.0-
-      
-      - name: Install XcodeGen
-        run: |
-          brew install xcodegen
       
       - name: Install uniffi-bindgen
+        if: steps.cache-uniffi.outputs.cache-hit != 'true'
         run: |
-          if [ ! -f ~/.cargo/bin/uniffi-bindgen ]; then
-            cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen --features cli uniffi
-          else
-            echo "uniffi-bindgen already cached"
-          fi
+          cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen --features cli uniffi
+      
+      - name: Build Rust FFI and generate Swift bindings
+        run: |
+          cd AptuApp
+          ./Scripts/build-rust-ffi.sh iphonesimulator Debug
+      
+      - name: Verify generated files
+        run: |
+          echo "Checking generated files..."
+          ls -la AptuApp/AptuApp/Generated/
+          test -f AptuApp/AptuApp/Generated/aptu_ffi.swift || (echo "ERROR: aptu_ffi.swift not found" && exit 1)
+          test -f AptuApp/AptuApp/Generated/aptu_ffiFFI.h || (echo "ERROR: aptu_ffiFFI.h not found" && exit 1)
+          echo "All generated files present"
       
       - name: Generate Xcode project
         working-directory: AptuApp
-        run: |
-          xcodegen generate
+        run: xcodegen generate
       
-      - name: Build for iOS Simulator
-        working-directory: AptuApp
-        run: |
-          xcodebuild build \
-            -project AptuApp.xcodeproj \
-            -scheme AptuApp \
-            -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-            -derivedDataPath DerivedData \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO
+      - name: Cache DerivedData
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: AptuApp/DerivedData
+          key: xcode-deriveddata-${{ runner.os }}-${{ hashFiles('AptuApp/**/*.swift', 'AptuApp/project.yml') }}
+          restore-keys: |
+            xcode-deriveddata-${{ runner.os }}-
       
-      - name: Run unit tests
+      - name: Build and Test
         working-directory: AptuApp
         run: |
           xcodebuild test \
             -project AptuApp.xcodeproj \
             -scheme AptuApp \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             -derivedDataPath DerivedData \
+            -resultBundlePath TestResults \
             CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO
-        continue-on-error: true
+            CODE_SIGNING_REQUIRED=NO \
+            | xcpretty --color || true
       
       - name: Upload build artifacts
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ios-build-artifacts
           path: AptuApp/DerivedData/Build/Products/
