@@ -16,38 +16,27 @@ targets:
     type: application
     platform: iOS
     sources:
+      # Generated files must be listed first so KeychainProvider protocol
+      # is available when SwiftKeychain.swift compiles
       - path: AptuApp/Generated
+        optional: true
+        buildPhase: sources
       - path: AptuApp
         excludes:
           - "*.xcodeproj"
+          - "Generated"
     resources:
       - path: AptuApp/Assets.xcassets
-      - path: AptuApp/Preview\ Content
+      - path: AptuApp/Preview Content
     settings:
       PRODUCT_NAME: AptuApp
       BUNDLE_ID: com.block.aptu
       INFOPLIST_FILE: AptuApp/Info.plist
       SWIFT_OBJC_BRIDGING_HEADER: AptuApp-Bridging-Header.h
       OTHER_LDFLAGS: "-lSystem -laptu_ffi"
-      LIBRARY_SEARCH_PATHS: "$(SRCROOT)/build/$(CONFIGURATION)-$(PLATFORM_NAME) $(SRCROOT)/AptuApp/Generated"
+      LIBRARY_SEARCH_PATHS: "$(SRCROOT)/build/$(CONFIGURATION)-$(PLATFORM_NAME)"
       HEADER_SEARCH_PATHS: "$(SRCROOT)/build/$(CONFIGURATION)-$(PLATFORM_NAME) $(SRCROOT)/AptuApp/Generated"
       SWIFT_INCLUDE_PATHS: "$(SRCROOT)/AptuApp/Generated"
-    
-    preBuildScripts:
-      - name: "Build Rust FFI"
-        script: |
-          set -e
-          bash "${SRCROOT}/Scripts/build-rust-ffi.sh" "${SRCROOT}" "${CONFIGURATION}" "${PLATFORM_NAME}" "${ARCHS}"
-      
-    buildPhases:
-      - type: sources
-      - type: frameworks
-      - type: resourceBundles
-      - type: copyFiles
-        destination: frameworks
-        files:
-          - path: build/$(CONFIGURATION)-$(PLATFORM_NAME)/libaptu_ffi.xcframework
-            subPath: true
 
   AptuAppTests:
     type: bundle.unit-test
