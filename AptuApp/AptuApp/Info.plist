@@ -65,5 +65,16 @@
 		<string>_http._tcp</string>
 		<string>_https._tcp</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.block.aptu.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>aptu</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

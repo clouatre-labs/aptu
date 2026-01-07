@@ -5,6 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var navigationPath: [Repository] = []
+    @State private var showSettings = false
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -13,6 +14,18 @@ struct ContentView: View {
             }
             .navigationDestination(for: Repository.self) { repository in
                 IssueListView(repository: repository)
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                OpenRouterAuthView()
             }
         }
     }
