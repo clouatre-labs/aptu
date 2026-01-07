@@ -54,14 +54,17 @@ jobs:
       
       - name: Cache XcodeGen
         id: cache-xcodegen
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5
         with:
-          path: /opt/homebrew/bin/xcodegen
-          key: xcodegen-${{ runner.os }}-2.42
+          path: /usr/local/bin/xcodegen
+          key: xcodegen-2.44.1
       
-      - name: Install XcodeGen
+      - name: Download XcodeGen 2.44.1
         if: steps.cache-xcodegen.outputs.cache-hit != 'true'
-        run: brew install xcodegen
+        run: curl -L -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip && unzip -o /tmp/xcodegen.zip -d /tmp && sudo mv /tmp/xcodegen/bin/xcodegen /usr/local/bin/xcodegen && sudo chmod +x /usr/local/bin/xcodegen
+      
+      - name: Verify XcodeGen installation
+        run: xcodegen --version
       
       - name: Cache uniffi-bindgen
         id: cache-uniffi
