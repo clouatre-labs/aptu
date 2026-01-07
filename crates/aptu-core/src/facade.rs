@@ -11,6 +11,7 @@ use chrono::Duration;
 use tracing::{debug, info, instrument, warn};
 
 use crate::ai::provider::MAX_LABELS;
+use crate::ai::registry::get_provider;
 use crate::ai::types::{CreateIssueResponse, PrDetails, ReviewEvent, TriageResponse};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
@@ -327,11 +328,8 @@ where
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
     let api_key = provider.ai_api_key(primary_provider).ok_or_else(|| {
-        let env_var = match primary_provider {
-            "openrouter" => "OPENROUTER_API_KEY",
-            "ollama" => "OLLAMA_API_KEY",
-            _ => "API_KEY",
-        };
+        let env_var = get_provider(primary_provider)
+            .map_or("API_KEY", |p| p.api_key_env);
         AptuError::AiProviderNotAuthenticated {
             provider: primary_provider.to_string(),
             env_var: env_var.to_string(),
