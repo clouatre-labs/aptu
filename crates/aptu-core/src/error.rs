@@ -34,6 +34,15 @@ pub enum AptuError {
     )]
     NotAuthenticated,
 
+    /// AI provider is not authenticated - missing API key.
+    #[error("AI provider '{provider}' is not authenticated - set {env_var} environment variable")]
+    AiProviderNotAuthenticated {
+        /// Name of the AI provider (e.g., `OpenRouter`, `Ollama`).
+        provider: String,
+        /// Environment variable name to set (e.g., `OPENROUTER_API_KEY`).
+        env_var: String,
+    },
+
     /// Rate limit exceeded from an AI provider.
     #[error("Rate limit exceeded on {provider}, retry after {retry_after}s")]
     RateLimited {

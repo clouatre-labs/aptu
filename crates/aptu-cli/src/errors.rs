@@ -35,6 +35,11 @@ pub fn format_error(error: &Error) -> String {
             AptuError::NotAuthenticated => {
                 "Authentication required - run `aptu auth login` first".to_string()
             }
+            AptuError::AiProviderNotAuthenticated { provider, env_var } => {
+                format!(
+                    "AI provider '{provider}' is not authenticated\n\nTip: Set the {env_var} environment variable with your API key."
+                )
+            }
             AptuError::AI {
                 message,
                 status,
