@@ -328,8 +328,7 @@ where
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
     let api_key = provider.ai_api_key(primary_provider).ok_or_else(|| {
-        let env_var = get_provider(primary_provider)
-            .map_or("API_KEY", |p| p.api_key_env);
+        let env_var = get_provider(primary_provider).map_or("API_KEY", |p| p.api_key_env);
         AptuError::AiProviderNotAuthenticated {
             provider: primary_provider.to_string(),
             env_var: env_var.to_string(),
