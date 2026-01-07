@@ -6,6 +6,7 @@ import SwiftUI
 @main
 struct AptuApp: App {
     @State private var isAuthenticated: Bool = false
+    @State private var openRouterAuthView: OpenRouterAuthView?
     
     init() {
         // Initialize Rust FFI bindings
@@ -26,6 +27,9 @@ struct AptuApp: App {
                 // Check authentication status asynchronously on app launch
                 // This ensures @State is fully initialized and main thread remains responsive
                 await checkAuthenticationStatus()
+            }
+            .onOpenURL { url in
+                handleOpenURL(url)
             }
         }
     }
@@ -67,5 +71,29 @@ struct AptuApp: App {
             isAuthenticated = false
             print("Authentication check failed: \(error.localizedDescription)")
         }
+    }
+    
+    /// Handle OAuth callback URLs
+    private func handleOpenURL(_ url: URL) {
+        guard url.scheme == "aptu", url.host == "oauth" else {
+            print("Ignoring non-OAuth URL: \(url)")
+            return
+        }
+        
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let queryItems = components.queryItems,
+              let code = queryItems.first(where: { $0.name == "code" })?.value else {
+            print("OAuth callback missing code parameter")
+            return
+        }
+        
+        print("OAuth callback received with code")
+        
+        // Notify OpenRouterAuthView if it exists
+        NotificationCenter.default.post(
+            name: NSNotification.Name("OpenRouterOAuthCallback"),
+            object: nil,
+            userInfo: ["code": code]
+        )
     }
 }
