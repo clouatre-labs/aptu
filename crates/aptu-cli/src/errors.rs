@@ -36,9 +36,14 @@ pub fn format_error(error: &Error) -> String {
                 "Authentication required - run `aptu auth login` first".to_string()
             }
             AptuError::AiProviderNotAuthenticated { provider, env_var } => {
-                format!(
-                    "AI provider '{provider}' is not authenticated\n\nTip: Set the {env_var} environment variable with your API key."
-                )
+                let mut msg = format!("AI provider '{provider}' is not authenticated\n");
+                let _ = write!(
+                    msg,
+                    "\nTo fix this, set the {env_var} environment variable:\n"
+                );
+                let _ = writeln!(msg, "  export {env_var}=your_api_key_here");
+                let _ = write!(msg, "\nThen run your command again.");
+                msg
             }
             AptuError::AI {
                 message,
@@ -188,6 +193,21 @@ mod tests {
 
         assert!(formatted.contains("Authentication required"));
         assert!(formatted.contains("aptu auth login"));
+    }
+
+    #[test]
+    fn test_format_ai_provider_not_authenticated() {
+        let error = AptuError::AiProviderNotAuthenticated {
+            provider: "openrouter".to_string(),
+            env_var: "OPENROUTER_API_KEY".to_string(),
+        };
+        let anyhow_err = anyhow::Error::new(error);
+        let formatted = format_error(&anyhow_err);
+
+        assert!(formatted.contains("AI provider 'openrouter' is not authenticated"));
+        assert!(formatted.contains("OPENROUTER_API_KEY"));
+        assert!(formatted.contains("export"));
+        assert!(formatted.contains("To fix this"));
     }
 
     #[test]
