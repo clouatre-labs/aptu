@@ -7,6 +7,9 @@ pub enum AptuFfiError {
     #[error("Not authenticated - run auth first")]
     NotAuthenticated,
 
+    #[error("AI provider '{provider}' is not authenticated - set {env_var} environment variable")]
+    AiProviderNotAuthenticated { provider: String, env_var: String },
+
     #[error("Network error: {message}")]
     NetworkError { message: String },
 

@@ -326,9 +326,17 @@ where
     F: Fn(AiClient) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
-    let api_key = provider
-        .ai_api_key(primary_provider)
-        .ok_or(AptuError::NotAuthenticated)?;
+    let api_key = provider.ai_api_key(primary_provider).ok_or_else(|| {
+        let env_var = match primary_provider {
+            "openrouter" => "OPENROUTER_API_KEY",
+            "ollama" => "OLLAMA_API_KEY",
+            _ => "API_KEY",
+        };
+        AptuError::AiProviderNotAuthenticated {
+            provider: primary_provider.to_string(),
+            env_var: env_var.to_string(),
+        }
+    })?;
 
     if ai_config.validation_enabled {
         validate_provider_model(primary_provider, model_name)?;
