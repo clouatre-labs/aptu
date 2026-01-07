@@ -2,16 +2,16 @@
 // Copyright 2025 Block, Inc.
 
 import SwiftUI
+import AuthenticationServices
 
-struct OpenRouterAuthView: View {
+struct OpenRouterAuthView: View, ASWebAuthenticationPresentationContextProviding {
     @StateObject private var authService = OpenRouterAuthService()
-    @Environment(\.openURL) var openURL
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showSuccess = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section {
                     if authService.isAuthenticated {
@@ -42,13 +42,17 @@ struct OpenRouterAuthView: View {
             } message: {
                 Text("Successfully connected to OpenRouter")
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenRouterOAuthCallback"))) { notification in
-                if let userInfo = notification.userInfo,
-                   let code = userInfo["code"] as? String {
-                    handleOAuthCallback(code: code)
-                }
-            }
         }
+    }
+    
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows
+            .first(where: { $0.isKeyWindow }) else {
+            fatalError("No key window found")
+        }
+        return window
     }
     
     private var authenticatedContent: some View {
@@ -139,10 +143,16 @@ struct OpenRouterAuthView: View {
         isLoading = true
         errorMessage = nil
         
-        let authURL = authService.generateAuthURL()
-        openURL(authURL)
-        
-        isLoading = false
+        Task {
+            do {
+                try await authService.authenticate(presentationContextProvider: self)
+                showSuccess = true
+                try await authService.fetchUsage()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isLoading = false
+        }
     }
     
     private func disconnect() {
@@ -165,23 +175,6 @@ struct OpenRouterAuthView: View {
         }
         
         isLoading = false
-    }
-    
-    func handleOAuthCallback(code: String) {
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                _ = try await authService.exchangeCodeForKey(code: code)
-                showSuccess = true
-                try await authService.fetchUsage()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            
-            isLoading = false
-        }
     }
 }
 
