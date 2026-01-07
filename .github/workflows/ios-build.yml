@@ -68,7 +68,7 @@ jobs:
       
       - name: Cache uniffi-bindgen
         id: cache-uniffi
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: ~/.cargo/bin/uniffi-bindgen
           key: uniffi-bindgen-v0.30.0-${{ runner.os }}
@@ -96,7 +96,7 @@ jobs:
         run: xcodegen generate
       
       - name: Cache DerivedData
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: AptuApp/DerivedData
           key: xcode-deriveddata-${{ runner.os }}-${{ hashFiles('AptuApp/**/*.swift', 'AptuApp/project.yml') }}
