@@ -61,7 +61,7 @@ jobs:
       
       - name: Download XcodeGen 2.44.1
         if: steps.cache-xcodegen.outputs.cache-hit != 'true'
-        run: curl -L -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip && unzip -o /tmp/xcodegen.zip -d /tmp && sudo mv /tmp/xcodegen /usr/local/bin/xcodegen && sudo chmod +x /usr/local/bin/xcodegen
+        run: curl -L -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip && unzip -o /tmp/xcodegen.zip -d /tmp && sudo mv /tmp/xcodegen/bin/xcodegen /usr/local/bin/xcodegen && sudo chmod +x /usr/local/bin/xcodegen
       
       - name: Verify XcodeGen installation
         run: xcodegen --version
