@@ -84,4 +84,81 @@ final class OpenRouterAuthServiceTests: XCTestCase {
         XCTAssertTrue(queryItems.contains(where: { $0.name == "code_challenge" }), "Should include code challenge")
         XCTAssertTrue(queryItems.contains(where: { $0.name == "code_challenge_method" && $0.value == "S256" }), "Should use S256 method")
     }
+    
+    // MARK: - Base64URL Encoding Tests
+    
+    func testBase64URLEncoding() {
+        // Arrange
+        let testData = Data("test_string".utf8)
+        
+        // Act
+        let encoded = testData.base64URLEncoded()
+        
+        // Assert
+        XCTAssertFalse(encoded.contains("+"), "Should not contain +")
+        XCTAssertFalse(encoded.contains("/"), "Should not contain /")
+        XCTAssertFalse(encoded.contains("="), "Should not contain padding")
+    }
+    
+    func testBase64URLDecoding() {
+        // Arrange
+        let originalData = Data("test_string".utf8)
+        let encoded = originalData.base64URLEncoded()
+        
+        // Act
+        let decoded = Data.base64URLDecoded(encoded)
+        
+        // Assert
+        XCTAssertEqual(decoded, originalData, "Decoded data should match original")
+    }
+    
+    // MARK: - Token Exchange Tests
+    
+    func testExchangeCodeForKeyAsync() async {
+        // Arrange
+        let mockSession = MockURLSession()
+        let service = OpenRouterAuthService(session: mockSession)
+        
+        // Generate auth URL to set code verifier
+        _ = service.generateAuthURL()
+        
+        // Act & Assert
+        do {
+            let key = try await service.exchangeCodeForKey(code: "test_code")
+            XCTAssertEqual(key, "test_api_key", "Should return the API key from response")
+        } catch {
+            XCTFail("Should not throw error: \(error)")
+        }
+    }
+    
+    func testExchangeCodeForKeyMissingVerifier() async {
+        // Arrange
+        let service = OpenRouterAuthService()
+        
+        // Act & Assert
+        do {
+            _ = try await service.exchangeCodeForKey(code: "test_code")
+            XCTFail("Should throw missingCodeVerifier error")
+        } catch OpenRouterAuthError.missingCodeVerifier {
+            // Expected
+        } catch {
+            XCTFail("Should throw missingCodeVerifier, not \(error)")
+        }
+    }
+}
+
+// MARK: - Mock URLSession
+
+class MockURLSession: URLSession {
+    override func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        
+        let responseData = try JSONEncoder().encode(OpenRouterTokenResponse(key: "test_api_key"))
+        return (responseData, response)
+    }
 }

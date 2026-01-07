@@ -28,11 +28,6 @@ class OpenRouterAuthService: ObservableObject {
     @Published var limit: Double?
     
     private let session: URLSession
-    
-    private let authEndpoint = "https://openrouter.ai/auth"
-    private let tokenEndpoint = "https://openrouter.ai/api/v1/auth/keys"
-    private let usageEndpoint = "https://openrouter.ai/api/v1/auth/key"
-    
     private var codeVerifier: String?
     
     init(session: URLSession = .shared) {
@@ -44,12 +39,12 @@ class OpenRouterAuthService: ObservableObject {
     
     /// Check if API key is stored
     func hasStoredKey() -> Bool {
-        return SwiftKeychain.shared.getToken(service: "aptu", account: "openrouter") != nil
+        return SwiftKeychain.shared.getToken(service: AuthConstants.keychainService, account: AuthConstants.openRouterAccount) != nil
     }
     
     /// Get stored API key
     func getStoredKey() throws -> String {
-        guard let key = SwiftKeychain.shared.getToken(service: "aptu", account: "openrouter") else {
+        guard let key = SwiftKeychain.shared.getToken(service: AuthConstants.keychainService, account: AuthConstants.openRouterAccount) else {
             throw OpenRouterAuthError.noStoredKey
         }
         return key
@@ -57,13 +52,13 @@ class OpenRouterAuthService: ObservableObject {
     
     /// Store API key in keychain
     func storeKey(_ key: String) throws {
-        try SwiftKeychain.shared.setToken(service: "aptu", account: "openrouter", token: key)
+        try SwiftKeychain.shared.setToken(service: AuthConstants.keychainService, account: AuthConstants.openRouterAccount, token: key)
         isAuthenticated = true
     }
     
     /// Remove stored API key
     func removeKey() throws {
-        try SwiftKeychain.shared.deleteToken(service: "aptu", account: "openrouter")
+        try SwiftKeychain.shared.deleteToken(service: AuthConstants.keychainService, account: AuthConstants.openRouterAccount)
         isAuthenticated = false
         usage = nil
         limit = nil
@@ -76,23 +71,23 @@ class OpenRouterAuthService: ObservableObject {
         
         let challenge = generateCodeChallenge(from: verifier)
         
-        var components = URLComponents(string: authEndpoint)!
+        var components = URLComponents(string: AuthConstants.authEndpoint)!
         components.queryItems = [
-            URLQueryItem(name: "callback_url", value: "aptu://oauth"),
+            URLQueryItem(name: "callback_url", value: AuthConstants.redirectUri),
             URLQueryItem(name: "code_challenge", value: challenge),
-            URLQueryItem(name: "code_challenge_method", value: "S256")
+            URLQueryItem(name: "code_challenge_method", value: AuthConstants.codeChallengeMethod)
         ]
         
         return components.url!
     }
     
-    /// Exchange authorization code for API key
-    func exchangeCodeForKey(code: String) async throws -> String {
+    /// Exchange authorization code for API key with timeout
+    func exchangeCodeForKey(code: String, timeout: TimeInterval = AuthConstants.defaultTimeout) async throws -> String {
         guard let verifier = codeVerifier else {
             throw OpenRouterAuthError.missingCodeVerifier
         }
         
-        var request = URLRequest(url: URL(string: tokenEndpoint)!)
+        var request = URLRequest(url: URL(string: AuthConstants.tokenEndpoint)!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
@@ -128,7 +123,7 @@ class OpenRouterAuthService: ObservableObject {
     func fetchUsage() async throws {
         let apiKey = try getStoredKey()
         
-        var request = URLRequest(url: URL(string: usageEndpoint)!)
+        var request = URLRequest(url: URL(string: AuthConstants.usageEndpoint)!)
         request.httpMethod = "GET"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         
@@ -151,26 +146,18 @@ class OpenRouterAuthService: ObservableObject {
     
     // MARK: - PKCE Helpers
     
-    /// Generate a cryptographically secure code verifier
+    /// Generate a cryptographically secure code verifier using RFC 7636 base64URL encoding
     func generateCodeVerifier() -> String {
-        var bytes = [UInt8](repeating: 0, count: 32)
+        var bytes = [UInt8](repeating: 0, count: AuthConstants.codeVerifierLength)
         _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        return Data(bytes).base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-            .trimmingCharacters(in: .whitespaces)
+        return Data(bytes).base64URLEncoded()
     }
     
-    /// Generate code challenge from verifier using SHA256
+    /// Generate code challenge from verifier using SHA256 and RFC 7636 base64URL encoding
     func generateCodeChallenge(from verifier: String) -> String {
         let data = Data(verifier.utf8)
         let hash = SHA256.hash(data: data)
-        return Data(hash).base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-            .trimmingCharacters(in: .whitespaces)
+        return Data(hash).base64URLEncoded()
     }
 }
 

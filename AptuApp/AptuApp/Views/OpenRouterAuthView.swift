@@ -2,13 +2,15 @@
 // Copyright 2025 Block, Inc.
 
 import SwiftUI
+import AuthenticationServices
 
-struct OpenRouterAuthView: View {
+struct OpenRouterAuthView: View, ASWebAuthenticationPresentationContextProviding {
     @StateObject private var authService = OpenRouterAuthService()
-    @Environment(\.openURL) var openURL
+    @State private var authState: AuthState = .idle
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showSuccess = false
+    @State private var authSession: ASWebAuthenticationSession?
     
     var body: some View {
         NavigationView {
@@ -42,11 +44,19 @@ struct OpenRouterAuthView: View {
             } message: {
                 Text("Successfully connected to OpenRouter")
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenRouterOAuthCallback"))) { notification in
-                if let userInfo = notification.userInfo,
-                   let code = userInfo["code"] as? String {
-                    handleOAuthCallback(code: code)
+            .alert("Authentication Timeout", isPresented: .constant(authState == .timeout)) {
+                Button("OK", role: .cancel) {
+                    authState = .idle
                 }
+            } message: {
+                Text("Authentication took too long. Please try again.")
+            }
+            .alert("Authentication Cancelled", isPresented: .constant(authState == .cancelled)) {
+                Button("OK", role: .cancel) {
+                    authState = .idle
+                }
+            } message: {
+                Text("You cancelled the authentication flow.")
             }
         }
     }
@@ -78,9 +88,9 @@ struct OpenRouterAuthView: View {
             }
             
             Button {
-                connect()
+                startAuthentication()
             } label: {
-                if isLoading {
+                if authState.isAuthenticating {
                     HStack {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
@@ -90,7 +100,7 @@ struct OpenRouterAuthView: View {
                     Text("Connect to OpenRouter")
                 }
             }
-            .disabled(isLoading)
+            .disabled(authState.isAuthenticating)
         }
     }
     
@@ -135,22 +145,70 @@ struct OpenRouterAuthView: View {
         }
     }
     
-    private func connect() {
-        isLoading = true
+    private func startAuthentication() {
+        authState = .authenticating
         errorMessage = nil
         
         let authURL = authService.generateAuthURL()
-        openURL(authURL)
         
-        isLoading = false
+        authSession = ASWebAuthenticationSession(
+            url: authURL,
+            callbackURLScheme: AuthConstants.redirectScheme
+        ) { callbackURL, error in
+            handleAuthenticationResult(callbackURL: callbackURL, error: error)
+        }
+        
+        authSession?.presentationContextProvider = self
+        
+        // Set timeout for authentication
+        Task {
+            try? await Task.sleep(nanoseconds: UInt64(AuthConstants.defaultTimeout * 1_000_000_000))
+            if authState.isAuthenticating {
+                authState = .timeout
+                authSession?.cancel()
+            }
+        }
+        
+        authSession?.start()
+    }
+    
+    private func handleAuthenticationResult(callbackURL: URL?, error: Error?) {
+        if let error = error as? ASWebAuthenticationSessionError {
+            if error.code == .cancelledByUser {
+                authState = .cancelled
+            } else {
+                authState = .error("Authentication failed: \(error.localizedDescription)")
+                errorMessage = error.localizedDescription
+            }
+            return
+        }
+        
+        if let error = error {
+            authState = .error("Authentication failed: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+            return
+        }
+        
+        guard let callbackURL = callbackURL,
+              let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
+              let queryItems = components.queryItems,
+              let code = queryItems.first(where: { $0.name == "code" })?.value else {
+            authState = .error("Missing authorization code")
+            errorMessage = "Missing authorization code in callback"
+            return
+        }
+        
+        handleOAuthCallback(code: code)
     }
     
     private func disconnect() {
         do {
             try authService.removeKey()
             errorMessage = nil
+            authState = .idle
         } catch {
             errorMessage = error.localizedDescription
+            authState = .error(error.localizedDescription)
         }
     }
     
@@ -167,21 +225,34 @@ struct OpenRouterAuthView: View {
         isLoading = false
     }
     
-    func handleOAuthCallback(code: String) {
+    private func handleOAuthCallback(code: String) {
         Task {
-            isLoading = true
+            authState = .authenticating
             errorMessage = nil
             
             do {
                 _ = try await authService.exchangeCodeForKey(code: code)
+                authState = .success(credentials: code)
                 showSuccess = true
                 try await authService.fetchUsage()
+                authState = .idle
             } catch {
                 errorMessage = error.localizedDescription
+                authState = .error(error.localizedDescription)
             }
-            
-            isLoading = false
         }
+    }
+    
+    // MARK: - ASWebAuthenticationPresentationContextProviding
+    
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) else {
+            return ASPresentationAnchor()
+        }
+        return window
     }
 }
 
