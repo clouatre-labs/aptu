@@ -34,7 +34,6 @@ struct AptuApp: App {
     private func initializeRustFFI() {
         // UniFFI bindings are automatically initialized when imported
         // Any additional setup can be done here
-        print("Rust FFI bindings initialized")
     }
     
     /// Check authentication status by verifying GitHub token in keychain
@@ -56,16 +55,13 @@ struct AptuApp: App {
             if let token = token, !token.isEmpty {
                 // Token exists and is non-empty, user is authenticated
                 isAuthenticated = true
-                print("Authentication check: Token found, user is authenticated")
             } else {
                 // No token found, user needs to authenticate
                 isAuthenticated = false
-                print("Authentication check: No token found, user needs to login")
             }
         } catch {
             // Gracefully handle keychain access failures
             isAuthenticated = false
-            print("Authentication check failed: \(error.localizedDescription)")
         }
     }
 }
