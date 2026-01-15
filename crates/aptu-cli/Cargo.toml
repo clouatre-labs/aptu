@@ -75,9 +75,12 @@ assets = [
 ]
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/aptu-{ target }.tar.gz"
+pkg-url = "{ repo }/releases/download/v{version}/aptu-{target}.tar.gz"
 bin-dir = "aptu"
 pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{version}/aptu-x86_64-unknown-linux-musl.tar.gz"
 
 [lints]
 workspace = true
