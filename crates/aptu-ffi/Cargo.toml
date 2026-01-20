@@ -19,7 +19,7 @@ secrecy = { workspace = true }
 lazy_static = "1.4"
 
 [build-dependencies]
-uniffi = { version = "0.30", features = ["build"] }
+uniffi = { version = "0.31", features = ["build"] }
 
 [lib]
 crate-type = ["staticlib", "cdylib", "lib"]
