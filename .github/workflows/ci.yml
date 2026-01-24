@@ -89,7 +89,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - name: Install cargo-deny
-        uses: taiki-e/install-action@a632d43378d77581e7441d0833ad517e52ca1fef # v2
+        uses: taiki-e/install-action@8444b4f2165ec93147f3ee41e06495653063ad11 # v2
         with:
           tool: cargo-deny
       - name: Run cargo-deny
