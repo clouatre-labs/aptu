@@ -35,10 +35,11 @@ pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) -> Result<()> {
             println!("{yaml}");
         }
         OutputFormat::Sarif => {
-            // SARIF format is only supported for PrReviewResult with security findings
-            // For other types, fall back to JSON
-            let json =
-                serde_json::to_string_pretty(result).context("Failed to serialize to JSON")?;
+            // SARIF format is only meaningful for PrReviewResult with security findings
+            // For other types, return a valid empty SARIF structure
+            let empty_sarif = aptu_core::SarifReport::from(vec![]);
+            let json = serde_json::to_string_pretty(&empty_sarif)
+                .context("Failed to serialize empty SARIF report")?;
             println!("{json}");
         }
         OutputFormat::Markdown => {
