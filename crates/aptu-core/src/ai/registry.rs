@@ -26,10 +26,10 @@ use async_trait::async_trait;
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 use crate::auth::TokenProvider;
+use crate::cache::FileCache;
 
 /// Metadata for a single AI model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -198,15 +198,6 @@ pub struct CachedModel {
     pub context_window: Option<u32>,
 }
 
-/// Cache metadata for TTL validation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CacheMetadata {
-    /// Unix timestamp when the cache entry was created.
-    pub timestamp: u64,
-    /// Time-to-live in seconds.
-    pub ttl_seconds: u64,
-}
-
 /// Trait for runtime model validation and listing.
 #[async_trait]
 pub trait ModelRegistry: Send + Sync {
@@ -222,8 +213,7 @@ pub trait ModelRegistry: Send + Sync {
 
 /// Cached model registry with HTTP client and TTL support.
 pub struct CachedModelRegistry<'a> {
-    cache_dir: PathBuf,
-    ttl_seconds: u64,
+    cache: crate::cache::FileCacheImpl<Vec<CachedModel>>,
     client: reqwest::Client,
     token_provider: &'a dyn TokenProvider,
 }
@@ -242,103 +232,15 @@ impl CachedModelRegistry<'_> {
         ttl_seconds: u64,
         token_provider: &dyn TokenProvider,
     ) -> CachedModelRegistry<'_> {
+        let ttl = chrono::Duration::seconds(ttl_seconds.try_into().unwrap_or(86400));
         CachedModelRegistry {
-            cache_dir,
-            ttl_seconds,
+            cache: crate::cache::FileCacheImpl::with_dir(cache_dir, "models", ttl),
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(10))
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
             token_provider,
         }
-    }
-
-    /// Get the cache file path for a provider.
-    fn cache_path(&self, provider: &str) -> PathBuf {
-        self.cache_dir.join(format!("models_{provider}.json"))
-    }
-
-    /// Check if cache is still valid.
-    fn is_cache_valid(metadata: &CacheMetadata) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        now < metadata.timestamp + metadata.ttl_seconds
-    }
-
-    /// Load models from cache, respecting TTL.
-    fn load_from_cache(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
-        let path = self.cache_path(provider);
-        if !path.exists() {
-            return Err(RegistryError::CacheError(
-                "Cache file not found".to_string(),
-            ));
-        }
-
-        let content = std::fs::read_to_string(&path)?;
-        let data: serde_json::Value =
-            serde_json::from_str(&content).map_err(|e| RegistryError::ParseError(e.to_string()))?;
-
-        // Check TTL and extract models in one step
-        if let Some(metadata) = data
-            .get("metadata")
-            .and_then(|m| serde_json::from_value::<CacheMetadata>(m.clone()).ok())
-        {
-            if Self::is_cache_valid(&metadata) {
-                return data
-                    .get("models")
-                    .and_then(|m| serde_json::from_value::<Vec<CachedModel>>(m.clone()).ok())
-                    .ok_or_else(|| RegistryError::ParseError("Invalid cache format".to_string()));
-            }
-            return Err(RegistryError::CacheError("Cache expired".to_string()));
-        }
-
-        // Extract models if no metadata
-        data.get("models")
-            .and_then(|m| serde_json::from_value::<Vec<CachedModel>>(m.clone()).ok())
-            .ok_or_else(|| RegistryError::ParseError("Invalid cache format".to_string()))
-    }
-
-    /// Load models from cache regardless of TTL (stale fallback).
-    fn load_stale_cache(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
-        let path = self.cache_path(provider);
-        if !path.exists() {
-            return Err(RegistryError::CacheError(
-                "Cache file not found".to_string(),
-            ));
-        }
-
-        let content = std::fs::read_to_string(&path)?;
-        let data: serde_json::Value =
-            serde_json::from_str(&content).map_err(|e| RegistryError::ParseError(e.to_string()))?;
-
-        // Extract models regardless of TTL
-        data.get("models")
-            .and_then(|m| serde_json::from_value::<Vec<CachedModel>>(m.clone()).ok())
-            .ok_or_else(|| RegistryError::ParseError("Invalid cache format".to_string()))
-    }
-
-    /// Save models to cache.
-    fn save_to_cache(&self, provider: &str, models: &[CachedModel]) -> Result<(), RegistryError> {
-        std::fs::create_dir_all(&self.cache_dir)?;
-
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
-        let cache_data = serde_json::json!({
-            "metadata": {
-                "timestamp": now,
-                "ttl_seconds": self.ttl_seconds,
-            },
-            "models": models,
-        });
-
-        let path = self.cache_path(provider);
-        std::fs::write(&path, cache_data.to_string())?;
-        Ok(())
     }
 
     /// Parse `OpenRouter` API response into models.
@@ -472,7 +374,7 @@ impl CachedModelRegistry<'_> {
 impl ModelRegistry for CachedModelRegistry<'_> {
     async fn list_models(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         // Try fresh cache first
-        if let Ok(models) = self.load_from_cache(provider) {
+        if let Ok(Some(models)) = self.cache.get(provider) {
             return Ok(models);
         }
 
@@ -480,13 +382,13 @@ impl ModelRegistry for CachedModelRegistry<'_> {
         match self.fetch_from_api(provider).await {
             Ok(models) => {
                 // Save to cache (ignore errors)
-                let _ = self.save_to_cache(provider, &models);
+                let _ = self.cache.set(provider, &models);
                 Ok(models)
             }
             Err(api_error) => {
                 // Try stale cache as fallback
-                match self.load_stale_cache(provider) {
-                    Ok(models) => {
+                match self.cache.get_stale(provider) {
+                    Ok(Some(models)) => {
                         tracing::warn!(
                             provider = provider,
                             error = %api_error,
@@ -494,7 +396,7 @@ impl ModelRegistry for CachedModelRegistry<'_> {
                         );
                         Ok(models)
                     }
-                    Err(_) => {
+                    _ => {
                         // No stale cache available, return original API error
                         Err(api_error)
                     }
@@ -522,63 +424,6 @@ impl ModelRegistry for CachedModelRegistry<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_load_stale_cache_ignores_ttl() {
-        // Arrange: Create a temporary cache file with expired TTL
-        let temp_dir = std::env::temp_dir().join("aptu_test_stale_cache");
-        let _ = std::fs::create_dir_all(&temp_dir);
-
-        // Create a mock token provider
-        #[allow(clippy::items_after_statements)]
-        struct MockTokenProvider;
-        #[allow(clippy::items_after_statements)]
-        impl crate::auth::TokenProvider for MockTokenProvider {
-            fn github_token(&self) -> Option<secrecy::SecretString> {
-                None
-            }
-            fn ai_api_key(&self, _provider: &str) -> Option<secrecy::SecretString> {
-                None
-            }
-        }
-
-        let mock_provider = MockTokenProvider;
-        let registry = CachedModelRegistry::new(temp_dir.clone(), 1, &mock_provider); // 1 second TTL
-
-        let models = vec![
-            CachedModel {
-                id: "test-model-1".to_string(),
-                name: Some("Test Model 1".to_string()),
-                is_free: Some(true),
-                context_window: Some(4096),
-            },
-            CachedModel {
-                id: "test-model-2".to_string(),
-                name: Some("Test Model 2".to_string()),
-                is_free: Some(false),
-                context_window: Some(8192),
-            },
-        ];
-
-        // Save to cache
-        let _ = registry.save_to_cache("test_provider", &models);
-
-        // Wait for TTL to expire
-        std::thread::sleep(std::time::Duration::from_secs(2));
-
-        // Act: Load stale cache (should succeed despite expired TTL)
-        let result = registry.load_stale_cache("test_provider");
-
-        // Assert
-        assert!(result.is_ok(), "load_stale_cache should succeed");
-        let loaded_models = result.unwrap();
-        assert_eq!(loaded_models.len(), 2);
-        assert_eq!(loaded_models[0].id, "test-model-1");
-        assert_eq!(loaded_models[1].id, "test-model-2");
-
-        // Cleanup
-        let _ = std::fs::remove_dir_all(&temp_dir);
-    }
 
     #[test]
     fn test_get_provider_gemini() {

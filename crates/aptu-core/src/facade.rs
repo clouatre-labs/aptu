@@ -15,7 +15,7 @@ use crate::ai::registry::get_provider;
 use crate::ai::types::{CreateIssueResponse, PrDetails, ReviewEvent, TriageResponse};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
-use crate::cache::{self, CacheEntry};
+use crate::cache::{FileCache, FileCacheImpl};
 use crate::config::{AiConfig, TaskType, load_config};
 use crate::error::AptuError;
 use crate::github::auth::{create_client_from_provider, create_client_with_token};
@@ -81,18 +81,16 @@ pub async fn fetch_issues(
 
     // Try to read from cache if enabled
     if use_cache {
+        let cache: FileCacheImpl<Vec<IssueNode>> = FileCacheImpl::new("issues", ttl);
         let mut cached_results = Vec::new();
         let mut repos_to_fetch = Vec::new();
 
         for repo in &repos_to_query {
-            let cache_key = cache::cache_key_issues(&repo.owner, &repo.name);
-            match cache::read_cache::<Vec<IssueNode>>(&cache_key) {
-                Ok(Some(entry)) if entry.is_valid(ttl) => {
-                    cached_results.push((repo.full_name(), entry.data));
-                }
-                _ => {
-                    repos_to_fetch.push(repo.clone());
-                }
+            let cache_key = format!("{}_{}", repo.owner, repo.name);
+            if let Ok(Some(issues)) = cache.get(&cache_key) {
+                cached_results.push((repo.full_name(), issues));
+            } else {
+                repos_to_fetch.push(repo.clone());
             }
         }
 
@@ -116,9 +114,8 @@ pub async fn fetch_issues(
         // Write fetched results to cache
         for (repo_name, issues) in &api_results {
             if let Some(repo) = repos_to_fetch.iter().find(|r| r.full_name() == *repo_name) {
-                let cache_key = cache::cache_key_issues(&repo.owner, &repo.name);
-                let entry = CacheEntry::new(issues.clone());
-                let _ = cache::write_cache(&cache_key, &entry);
+                let cache_key = format!("{}_{}", repo.owner, repo.name);
+                let _ = cache.set(&cache_key, issues);
             }
         }
 

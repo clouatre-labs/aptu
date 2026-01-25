@@ -10,7 +10,7 @@ use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
-use crate::cache::{self, CacheEntry};
+use crate::cache::FileCache;
 use crate::config::load_config;
 use crate::error::AptuError;
 use crate::github::auth::create_client_with_token;
@@ -186,11 +186,11 @@ pub async fn search_repositories(
     let config = load_config()?;
     let ttl = Duration::hours(config.cache.repo_ttl_hours.try_into().unwrap_or(24));
 
-    if let Ok(Some(entry)) = cache::read_cache::<Vec<DiscoveredRepo>>(&cache_key)
-        && entry.is_valid(ttl)
-    {
+    let cache: crate::cache::FileCacheImpl<Vec<DiscoveredRepo>> =
+        crate::cache::FileCacheImpl::new("discovery", ttl);
+    if let Ok(Some(repos)) = cache.get(&cache_key) {
         debug!("Using cached discovered repositories");
-        return Ok(entry.data);
+        return Ok(repos);
     }
 
     // Create GitHub client
@@ -249,8 +249,7 @@ pub async fn search_repositories(
     discovered.truncate(filter.limit as usize);
 
     // Cache the results
-    let entry = CacheEntry::new(discovered.clone());
-    let _ = cache::write_cache(&cache_key, &entry);
+    let _ = cache.set(&cache_key, &discovered);
 
     debug!(
         "Found and cached {} discovered repositories",

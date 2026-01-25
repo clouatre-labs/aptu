@@ -33,7 +33,7 @@ pub use config::{
 // Caching
 // ============================================================================
 
-pub use cache::CacheEntry;
+pub use cache::{CacheEntry, FileCache, FileCacheImpl};
 
 // ============================================================================
 // AI Triage
