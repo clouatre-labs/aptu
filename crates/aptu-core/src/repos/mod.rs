@@ -18,7 +18,7 @@ use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::cache::{self, CacheEntry};
+use crate::cache::FileCache;
 use crate::config::load_config;
 
 /// Embedded curated repositories as fallback when network fetch fails.
@@ -80,12 +80,11 @@ pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
     let ttl = Duration::hours(config.cache.repo_ttl_hours.try_into().unwrap_or(24));
 
     // Try cache first
-    let cache_key = "curated_repos.json";
-    if let Ok(Some(entry)) = cache::read_cache::<Vec<CuratedRepo>>(cache_key)
-        && entry.is_valid(ttl)
-    {
+    let cache: crate::cache::FileCacheImpl<Vec<CuratedRepo>> =
+        crate::cache::FileCacheImpl::new("repos", ttl);
+    if let Ok(Some(repos)) = cache.get("curated_repos") {
         debug!("Using cached curated repositories");
-        return Ok(entry.data);
+        return Ok(repos);
     }
 
     // Fetch from remote
@@ -98,8 +97,7 @@ pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
     };
 
     // Cache the result
-    let entry = CacheEntry::new(repos.clone());
-    let _ = cache::write_cache(cache_key, &entry);
+    let _ = cache.set("curated_repos", &repos);
     debug!("Fetched and cached {} curated repositories", repos.len());
 
     Ok(repos)

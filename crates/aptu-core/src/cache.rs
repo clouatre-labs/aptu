@@ -73,114 +73,188 @@ pub fn cache_dir() -> PathBuf {
         .join("aptu")
 }
 
-/// Generate a cache key for an issue list.
+/// Trait for TTL-based filesystem caching.
 ///
-/// # Arguments
-///
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-///
-/// # Returns
-///
-/// Cache key in format: `issues/{owner}_{repo}.json`
-/// Generates a cache key for repository metadata (labels and milestones).
-///
-/// # Arguments
-///
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-///
-/// # Returns
-///
-/// A cache key string in the format `repo_metadata/{owner}_{repo}.json`
-#[must_use]
-pub fn cache_key_repo_metadata(owner: &str, repo: &str) -> String {
-    format!("repo_metadata/{owner}_{repo}.json")
+/// Provides a unified interface for caching serializable data with time-to-live validation.
+pub trait FileCache<V> {
+    /// Get a cached value if it exists and is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Cache key (filename without extension)
+    ///
+    /// # Returns
+    ///
+    /// The cached value if it exists and is within TTL, `None` otherwise.
+    fn get(&self, key: &str) -> Result<Option<V>>;
+
+    /// Get a cached value regardless of TTL (stale fallback).
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Cache key (filename without extension)
+    ///
+    /// # Returns
+    ///
+    /// The cached value if it exists, `None` otherwise.
+    fn get_stale(&self, key: &str) -> Result<Option<V>>;
+
+    /// Set a cached value.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Cache key (filename without extension)
+    /// * `value` - Value to cache
+    fn set(&self, key: &str, value: &V) -> Result<()>;
+
+    /// Remove a cached value.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Cache key (filename without extension)
+    fn remove(&self, key: &str) -> Result<()>;
 }
 
-/// A cache key string in the format `issues/{owner}_{repo}.json`
-#[must_use]
-pub fn cache_key_issues(owner: &str, repo: &str) -> String {
-    format!("issues/{owner}_{repo}.json")
+/// File-based cache implementation with TTL support.
+///
+/// Stores serialized data in JSON files with embedded metadata.
+pub struct FileCacheImpl<V> {
+    cache_dir: PathBuf,
+    ttl: Duration,
+    subdirectory: String,
+    _phantom: std::marker::PhantomData<V>,
 }
 
-/// Generate a cache key for model lists.
-///
-/// # Arguments
-///
-/// * `provider` - Provider name (e.g., "openrouter", "gemini")
-///
-/// # Returns
-///
-/// A cache key string in the format `models/{provider}.json`
-#[must_use]
-pub fn cache_key_models(provider: &str) -> String {
-    format!("models/{provider}.json")
-}
-
-/// Read a cache entry from disk.
-///
-/// # Arguments
-///
-/// * `key` - Cache key (relative path within cache directory)
-///
-/// # Returns
-///
-/// The deserialized cache entry, or `None` if the file doesn't exist.
-///
-/// # Errors
-///
-/// Returns an error if the file exists but cannot be read or parsed.
-pub fn read_cache<T: for<'de> Deserialize<'de>>(key: &str) -> Result<Option<CacheEntry<T>>> {
-    let path = cache_dir().join(key);
-
-    if !path.exists() {
-        return Ok(None);
+impl<V> FileCacheImpl<V>
+where
+    V: Serialize + for<'de> Deserialize<'de>,
+{
+    /// Create a new file cache with default cache directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `subdirectory` - Subdirectory within cache directory
+    /// * `ttl` - Time-to-live for cache entries
+    #[must_use]
+    pub fn new(subdirectory: impl Into<String>, ttl: Duration) -> Self {
+        Self::with_dir(cache_dir(), subdirectory, ttl)
     }
 
-    let contents = fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read cache file: {}", path.display()))?;
-
-    let entry: CacheEntry<T> = serde_json::from_str(&contents)
-        .with_context(|| format!("Failed to parse cache file: {}", path.display()))?;
-
-    Ok(Some(entry))
-}
-
-/// Write a cache entry to disk.
-///
-/// Creates parent directories if they don't exist.
-/// Uses atomic write pattern (write to temp, rename) to prevent corruption.
-///
-/// # Arguments
-///
-/// * `key` - Cache key (relative path within cache directory)
-/// * `entry` - Cache entry to write
-///
-/// # Errors
-///
-/// Returns an error if the file cannot be written.
-pub fn write_cache<T: Serialize>(key: &str, entry: &CacheEntry<T>) -> Result<()> {
-    let path = cache_dir().join(key);
-
-    // Create parent directories if needed
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create cache directory: {}", parent.display()))?;
+    /// Create a new file cache with custom cache directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `cache_dir` - Base cache directory
+    /// * `subdirectory` - Subdirectory within cache directory
+    /// * `ttl` - Time-to-live for cache entries
+    #[must_use]
+    pub fn with_dir(cache_dir: PathBuf, subdirectory: impl Into<String>, ttl: Duration) -> Self {
+        Self {
+            cache_dir,
+            ttl,
+            subdirectory: subdirectory.into(),
+            _phantom: std::marker::PhantomData,
+        }
     }
 
-    let contents =
-        serde_json::to_string_pretty(entry).context("Failed to serialize cache entry")?;
+    /// Get the full path for a cache key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the key contains path separators or parent directory references,
+    /// which could lead to path traversal vulnerabilities.
+    fn cache_path(&self, key: &str) -> PathBuf {
+        // Validate key to prevent path traversal
+        assert!(
+            !key.contains('/') && !key.contains('\\') && !key.contains(".."),
+            "cache key must not contain path separators or '..': {key}"
+        );
 
-    // Atomic write: write to temp file, then rename
-    let temp_path = path.with_extension("tmp");
-    fs::write(&temp_path, contents)
-        .with_context(|| format!("Failed to write cache temp file: {}", temp_path.display()))?;
+        let filename = if std::path::Path::new(key)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        {
+            key.to_string()
+        } else {
+            format!("{key}.json")
+        };
+        self.cache_dir.join(&self.subdirectory).join(filename)
+    }
+}
 
-    fs::rename(&temp_path, &path)
-        .with_context(|| format!("Failed to rename cache file: {}", path.display()))?;
+impl<V> FileCache<V> for FileCacheImpl<V>
+where
+    V: Serialize + for<'de> Deserialize<'de>,
+{
+    fn get(&self, key: &str) -> Result<Option<V>> {
+        let path = self.cache_path(key);
 
-    Ok(())
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let contents = fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read cache file: {}", path.display()))?;
+
+        let entry: CacheEntry<V> = serde_json::from_str(&contents)
+            .with_context(|| format!("Failed to parse cache file: {}", path.display()))?;
+
+        if entry.is_valid(self.ttl) {
+            Ok(Some(entry.data))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_stale(&self, key: &str) -> Result<Option<V>> {
+        let path = self.cache_path(key);
+
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let contents = fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read cache file: {}", path.display()))?;
+
+        let entry: CacheEntry<V> = serde_json::from_str(&contents)
+            .with_context(|| format!("Failed to parse cache file: {}", path.display()))?;
+
+        Ok(Some(entry.data))
+    }
+
+    fn set(&self, key: &str, value: &V) -> Result<()> {
+        let path = self.cache_path(key);
+
+        // Create parent directories if needed
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create cache directory: {}", parent.display())
+            })?;
+        }
+
+        let entry = CacheEntry::new(value);
+        let contents =
+            serde_json::to_string_pretty(&entry).context("Failed to serialize cache entry")?;
+
+        // Atomic write: write to temp file, then rename
+        let temp_path = path.with_extension("tmp");
+        fs::write(&temp_path, contents)
+            .with_context(|| format!("Failed to write cache temp file: {}", temp_path.display()))?;
+
+        fs::rename(&temp_path, &path)
+            .with_context(|| format!("Failed to rename cache file: {}", path.display()))?;
+
+        Ok(())
+    }
+
+    fn remove(&self, key: &str) -> Result<()> {
+        let path = self.cache_path(key);
+        if path.exists() {
+            fs::remove_file(&path)
+                .with_context(|| format!("Failed to remove cache file: {}", path.display()))?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -245,12 +319,6 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_key_issues() {
-        let key = cache_key_issues("owner", "repo");
-        assert_eq!(key, "issues/owner_repo.json");
-    }
-
-    #[test]
     fn test_cache_dir_path() {
         let dir = cache_dir();
         assert!(dir.ends_with("aptu"));
@@ -273,35 +341,99 @@ mod tests {
     }
 
     #[test]
-    fn test_read_cache_nonexistent() {
-        let result: Result<Option<CacheEntry<TestData>>> = read_cache("nonexistent/file.json");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none());
+    fn test_file_cache_get_set() {
+        let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
+        let data = TestData {
+            value: "test".to_string(),
+            count: 42,
+        };
+
+        // Set value
+        cache.set("test_key", &data).expect("set cache");
+
+        // Get value
+        let result = cache.get("test_key").expect("get cache");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), data);
+
+        // Cleanup
+        cache.remove("test_key").ok();
     }
 
     #[test]
-    fn test_write_and_read_cache() {
+    fn test_file_cache_get_miss() {
+        let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
+
+        let result = cache.get("nonexistent").expect("get cache");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_file_cache_get_stale() {
+        let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::seconds(0));
         let data = TestData {
-            value: "cached".to_string(),
+            value: "stale".to_string(),
             count: 99,
         };
-        let entry = CacheEntry::new(data.clone());
-        let key = "test/data.json";
 
-        // Write cache
-        write_cache(key, &entry).expect("write cache");
+        // Set value
+        cache.set("stale_key", &data).expect("set cache");
 
-        // Read cache
-        let read_entry: CacheEntry<TestData> =
-            read_cache(key).expect("read cache").expect("cache exists");
+        // Wait for TTL to expire
+        std::thread::sleep(std::time::Duration::from_millis(10));
 
-        assert_eq!(read_entry.data, data);
-        assert_eq!(read_entry.etag, entry.etag);
+        // get() should return None (expired)
+        let result = cache.get("stale_key").expect("get cache");
+        assert!(result.is_none());
+
+        // get_stale() should return the value
+        let stale_result = cache.get_stale("stale_key").expect("get stale cache");
+        assert!(stale_result.is_some());
+        assert_eq!(stale_result.unwrap(), data);
 
         // Cleanup
-        let path = cache_dir().join(key);
-        if path.exists() {
-            fs::remove_file(path).ok();
-        }
+        cache.remove("stale_key").ok();
+    }
+
+    #[test]
+    fn test_file_cache_remove() {
+        let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
+        let data = TestData {
+            value: "remove_me".to_string(),
+            count: 1,
+        };
+
+        // Set value
+        cache.set("remove_key", &data).expect("set cache");
+
+        // Verify it exists
+        assert!(cache.get("remove_key").expect("get cache").is_some());
+
+        // Remove it
+        cache.remove("remove_key").expect("remove cache");
+
+        // Verify it's gone
+        assert!(cache.get("remove_key").expect("get cache").is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "cache key must not contain path separators")]
+    fn test_cache_key_rejects_forward_slash() {
+        let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
+        let _ = cache.get("../etc/passwd");
+    }
+
+    #[test]
+    #[should_panic(expected = "cache key must not contain path separators")]
+    fn test_cache_key_rejects_backslash() {
+        let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
+        let _ = cache.get("..\\windows\\system32");
+    }
+
+    #[test]
+    #[should_panic(expected = "cache key must not contain path separators")]
+    fn test_cache_key_rejects_parent_dir() {
+        let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
+        let _ = cache.get("foo..bar");
     }
 }
