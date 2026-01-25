@@ -119,7 +119,8 @@ pub use github::issues::ApplyResult;
 // ============================================================================
 
 pub use security::{
-    Confidence, Finding, PatternEngine, SecurityScanner, Severity, needs_security_scan,
+    Confidence, Finding, FindingCache, PatternEngine, SecurityConfig, SecurityScanner, Severity,
+    needs_security_scan,
 };
 
 // ============================================================================
