@@ -77,7 +77,7 @@ pub async fn fetch_issues(
 
     // Load config for cache TTL
     let config = load_config()?;
-    let ttl = Duration::minutes(config.cache.issue_ttl_minutes.try_into().unwrap_or(60));
+    let ttl = Duration::minutes(config.cache.issue_ttl_minutes);
 
     // Try to read from cache if enabled
     if use_cache {
@@ -1411,7 +1411,8 @@ pub async fn list_models(
     use crate::cache::cache_dir;
 
     let cache_dir = cache_dir();
-    let registry = CachedModelRegistry::new(cache_dir, 86400, provider); // 24h TTL
+    let registry =
+        CachedModelRegistry::new(cache_dir, crate::cache::DEFAULT_MODEL_TTL_SECS, provider);
 
     registry
         .list_models(provider_name)
@@ -1452,7 +1453,8 @@ pub async fn validate_model(
     use crate::cache::cache_dir;
 
     let cache_dir = cache_dir();
-    let registry = CachedModelRegistry::new(cache_dir, 86400, provider); // 24h TTL
+    let registry =
+        CachedModelRegistry::new(cache_dir, crate::cache::DEFAULT_MODEL_TTL_SECS, provider);
 
     registry
         .model_exists(provider_name, model_id)

@@ -184,7 +184,7 @@ pub async fn search_repositories(
     );
 
     let config = load_config()?;
-    let ttl = Duration::hours(config.cache.repo_ttl_hours.try_into().unwrap_or(24));
+    let ttl = Duration::hours(config.cache.repo_ttl_hours);
 
     let cache: crate::cache::FileCacheImpl<Vec<DiscoveredRepo>> =
         crate::cache::FileCacheImpl::new("discovery", ttl);

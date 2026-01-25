@@ -88,7 +88,10 @@ impl FindingCache {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            cache: FileCacheImpl::new("security", Duration::days(7)),
+            cache: FileCacheImpl::new(
+                "security",
+                Duration::days(crate::cache::DEFAULT_SECURITY_TTL_DAYS),
+            ),
         }
     }
 

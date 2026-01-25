@@ -259,9 +259,9 @@ impl Default for UiConfig {
 #[serde(default)]
 pub struct CacheConfig {
     /// Issue cache TTL in minutes.
-    pub issue_ttl_minutes: u64,
+    pub issue_ttl_minutes: i64,
     /// Repository metadata cache TTL in hours.
-    pub repo_ttl_hours: u64,
+    pub repo_ttl_hours: i64,
     /// URL to fetch curated repositories from.
     pub curated_repos_url: String,
 }
@@ -269,8 +269,8 @@ pub struct CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            issue_ttl_minutes: 60,
-            repo_ttl_hours: 24,
+            issue_ttl_minutes: crate::cache::DEFAULT_ISSUE_TTL_MINS,
+            repo_ttl_hours: crate::cache::DEFAULT_REPO_TTL_HOURS,
             curated_repos_url:
                 "https://raw.githubusercontent.com/clouatre-labs/aptu/main/data/curated-repos.json"
                     .to_string(),
