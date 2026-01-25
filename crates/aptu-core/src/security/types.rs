@@ -36,10 +36,8 @@ pub enum Confidence {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Finding {
     /// Pattern ID that matched.
-    #[serde(default)]
     pub pattern_id: String,
     /// Human-readable description of the issue.
-    #[serde(default)]
     pub description: String,
     /// Severity level.
     #[serde(default)]
@@ -48,13 +46,10 @@ pub struct Finding {
     #[serde(default)]
     pub confidence: Confidence,
     /// File path where the finding was detected.
-    #[serde(default)]
     pub file_path: String,
     /// Line number in the file (1-indexed).
-    #[serde(default)]
     pub line_number: usize,
     /// The matched code snippet.
-    #[serde(default)]
     pub matched_text: String,
     /// Optional CWE identifier (e.g., "CWE-798").
     #[serde(skip_serializing_if = "Option::is_none")]
