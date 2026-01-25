@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Severity level of a security finding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     /// Critical security vulnerability requiring immediate attention.
@@ -15,11 +15,12 @@ pub enum Severity {
     /// Medium severity issue.
     Medium,
     /// Low severity issue or informational finding.
+    #[default]
     Low,
 }
 
 /// Confidence level of a security finding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Confidence {
     /// High confidence - very likely a real issue.
@@ -27,19 +28,22 @@ pub enum Confidence {
     /// Medium confidence - may require manual review.
     Medium,
     /// Low confidence - may be a false positive.
+    #[default]
     Low,
 }
 
 /// A security finding from pattern matching.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Finding {
     /// Pattern ID that matched.
     pub pattern_id: String,
     /// Human-readable description of the issue.
     pub description: String,
     /// Severity level.
+    #[serde(default)]
     pub severity: Severity,
     /// Confidence level.
+    #[serde(default)]
     pub confidence: Confidence,
     /// File path where the finding was detected.
     pub file_path: String,
@@ -71,6 +75,34 @@ pub struct PatternDefinition {
     /// File extensions to scan (empty = all files).
     #[serde(default)]
     pub file_extensions: Vec<String>,
+}
+
+/// A security finding that has been validated by LLM.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ValidatedFinding {
+    /// Original finding from pattern matching.
+    #[serde(flatten)]
+    pub finding: Finding,
+    /// Whether the LLM confirmed this as a real issue.
+    #[serde(default)]
+    pub is_valid: bool,
+    /// LLM's reasoning for the validation decision.
+    #[serde(default)]
+    pub reasoning: String,
+    /// Model version used for validation (e.g., "anthropic/claude-3.5-sonnet").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_version: Option<String>,
+}
+
+/// LLM validation result for a single finding.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationResult {
+    /// Index of the finding in the batch (0-based).
+    pub index: usize,
+    /// Whether the finding is valid.
+    pub is_valid: bool,
+    /// Reasoning for the decision.
+    pub reasoning: String,
 }
 
 #[cfg(test)]
@@ -134,5 +166,14 @@ mod tests {
         assert_eq!(pattern.confidence, Confidence::Medium);
         assert_eq!(pattern.cwe, Some("CWE-123".to_string()));
         assert_eq!(pattern.file_extensions, vec![".rs", ".py"]);
+    }
+
+    #[test]
+    fn test_validated_finding_default() {
+        let validated = ValidatedFinding::default();
+        assert_eq!(validated.finding, Finding::default());
+        assert!(!validated.is_valid);
+        assert_eq!(validated.reasoning, "");
+        assert_eq!(validated.model_version, None);
     }
 }
