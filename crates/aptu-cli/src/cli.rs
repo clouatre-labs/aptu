@@ -47,6 +47,8 @@ pub enum OutputFormat {
     Yaml,
     /// Markdown output for GitHub comments
     Markdown,
+    /// SARIF output for security scanning tools
+    Sarif,
 }
 
 /// Issue state filter for triage operations.
@@ -76,11 +78,11 @@ pub struct OutputContext {
 
 impl OutputContext {
     /// Creates an `OutputContext` from CLI arguments.
-    /// Quiet mode is automatically enabled for structured formats (Json, Yaml, Markdown).
+    /// Quiet mode is automatically enabled for structured formats (Json, Yaml, Markdown, Sarif).
     pub fn from_cli(format: OutputFormat, verbose: bool) -> Self {
         let quiet = matches!(
             format,
-            OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown
+            OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown | OutputFormat::Sarif
         );
         Self {
             format,

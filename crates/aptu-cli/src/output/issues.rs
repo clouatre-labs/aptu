@@ -114,6 +114,13 @@ impl IssuesResult {
             if let Some(ref filter) = self.repo_filter {
                 match ctx.format {
                     OutputFormat::Json | OutputFormat::Yaml => println!("[]"),
+                    OutputFormat::Sarif => {
+                        // Return valid empty SARIF structure
+                        let empty_sarif = aptu_core::SarifReport::from(vec![]);
+                        let json = serde_json::to_string_pretty(&empty_sarif)
+                            .context("Failed to serialize empty SARIF report")?;
+                        println!("{json}");
+                    }
                     OutputFormat::Markdown => {
                         println!("No curated repository matches '{filter}'");
                     }

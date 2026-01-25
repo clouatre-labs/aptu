@@ -13,6 +13,7 @@ use crate::commands::types::{
 use crate::output::Renderable;
 
 impl Renderable for PrReviewResult {
+    #[allow(clippy::too_many_lines)]
     fn render_text(&self, w: &mut dyn Write, ctx: &OutputContext) -> io::Result<()> {
         // Verdict
         let verdict_style = match self.review.verdict.as_str() {
@@ -32,6 +33,33 @@ impl Renderable for PrReviewResult {
         if let Some(disclaimer) = &self.review.disclaimer {
             writeln!(w, "{}", style("Disclaimer").yellow().bold())?;
             writeln!(w, "{disclaimer}")?;
+            writeln!(w)?;
+        }
+
+        // Security Findings
+        if let Some(findings) = &self.security_findings
+            && !findings.is_empty()
+        {
+            writeln!(w, "{}", style("Security Findings").red().bold())?;
+            for finding in findings {
+                let severity_style = match finding.severity {
+                    aptu_core::Severity::Critical => style("CRITICAL").red().bold(),
+                    aptu_core::Severity::High => style("HIGH").red(),
+                    aptu_core::Severity::Medium => style("MEDIUM").yellow(),
+                    aptu_core::Severity::Low => style("LOW").dim(),
+                };
+                writeln!(
+                    w,
+                    "  [{}] {}:{}",
+                    severity_style,
+                    style(&finding.file_path).cyan(),
+                    finding.line_number
+                )?;
+                writeln!(w, "    {}", finding.description)?;
+                if let Some(cwe) = &finding.cwe {
+                    writeln!(w, "    {}", style(cwe).dim())?;
+                }
+            }
             writeln!(w)?;
         }
 

@@ -170,6 +170,9 @@ pub struct PrReviewResult {
     pub dry_run: bool,
     /// PR labels.
     pub labels: Vec<String>,
+    /// Security findings from scanning (if any).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub security_findings: Option<Vec<aptu_core::Finding>>,
 }
 
 /// Outcome of a single PR review operation in a bulk operation.

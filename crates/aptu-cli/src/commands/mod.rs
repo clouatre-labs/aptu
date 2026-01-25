@@ -259,6 +259,42 @@ async fn review_single_pr(
         s.finish_and_clear();
     }
 
+    // Security scanning (if PR has code changes)
+    let security_findings = {
+        let file_paths: Vec<String> = pr_details
+            .files
+            .iter()
+            .map(|f| f.filename.clone())
+            .collect();
+
+        if aptu_core::needs_security_scan(&file_paths, &pr_details.labels, &pr_details.body) {
+            let spinner = maybe_spinner(ctx, "Scanning for security issues...");
+
+            // Run security scanner on each file
+            let scanner = aptu_core::SecurityScanner::new();
+            let mut findings = Vec::new();
+
+            for file in &pr_details.files {
+                if let Some(patch) = &file.patch {
+                    let file_findings = scanner.scan_file(patch, &file.filename);
+                    findings.extend(file_findings);
+                }
+            }
+
+            if let Some(s) = &spinner {
+                s.finish_and_clear();
+            }
+
+            if findings.is_empty() {
+                None
+            } else {
+                Some(findings)
+            }
+        } else {
+            None
+        }
+    };
+
     // Build result
     let analyze_result = pr::AnalyzeResult {
         pr_details: pr_details.clone(),
@@ -288,8 +324,9 @@ async fn review_single_pr(
         ai_stats,
         dry_run,
         labels: pr_details.labels,
+        security_findings,
     };
-    output::render(&result, ctx)?;
+    output::render_pr_review(&result, ctx)?;
 
     Ok(Some(result))
 }
