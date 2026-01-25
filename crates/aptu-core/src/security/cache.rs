@@ -32,8 +32,11 @@ impl CachedFinding {
 
 /// Generate a cache key for a security finding.
 ///
-/// Creates a SHA-256 hash of the concatenated string:
+/// Creates a SHA-256 hash of the concatenated components:
 /// `{repo_owner}/{repo_name}:{file_path}:{pattern_id}:{matched_text}`
+///
+/// Uses incremental hashing to avoid allocating a large intermediate string,
+/// which is more memory-efficient when `matched_text` contains large code snippets.
 ///
 /// This ensures that identical findings across scans are cached,
 /// while different contexts (repo, file, pattern, or code) produce unique keys.
@@ -57,9 +60,17 @@ pub fn cache_key(
     pattern_id: &str,
     matched_text: &str,
 ) -> String {
-    let input = format!("{repo_owner}/{repo_name}:{file_path}:{pattern_id}:{matched_text}");
-    let hash = Sha256::digest(input.as_bytes());
-    format!("{hash:x}")
+    let mut hasher = Sha256::new();
+    hasher.update(repo_owner.as_bytes());
+    hasher.update(b"/");
+    hasher.update(repo_name.as_bytes());
+    hasher.update(b":");
+    hasher.update(file_path.as_bytes());
+    hasher.update(b":");
+    hasher.update(pattern_id.as_bytes());
+    hasher.update(b":");
+    hasher.update(matched_text.as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 /// Cache for security finding validation results.
