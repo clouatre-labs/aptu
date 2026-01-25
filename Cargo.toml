@@ -55,6 +55,8 @@ uniffi = { version = "0.31", features = ["cli"] }
 # Dev dependencies
 tokio-test = "0.4"
 assert_cmd = "2"
+criterion = "0.5"
+regex = "1"
 
 [workspace.lints.rust]
 unsafe_code = "warn"

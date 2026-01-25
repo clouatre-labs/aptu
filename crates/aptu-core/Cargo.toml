@@ -52,6 +52,13 @@ regex = "1"
 # URL encoding for tag names with special characters
 percent-encoding = "2"
 
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "security_scan"
+harness = false
+
 [features]
 default = []
 # Enable system keyring for secure token storage

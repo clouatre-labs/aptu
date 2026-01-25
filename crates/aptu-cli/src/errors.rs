@@ -24,6 +24,7 @@ use aptu_core::error::AptuError;
 /// # Returns
 ///
 /// A formatted error message with hints
+#[allow(clippy::too_many_lines)]
 pub fn format_error(error: &Error) -> String {
     // Try to downcast to AptuError
     if let Some(aptu_err) = error.downcast_ref::<AptuError>() {
@@ -124,6 +125,11 @@ pub fn format_error(error: &Error) -> String {
                     }
                 }
                 msg
+            }
+            AptuError::SecurityScan { message: _ } => {
+                format!(
+                    "{aptu_err}\n\nTip: Security scan encountered an error. Check the pattern definitions and try again."
+                )
             }
         }
     } else {
