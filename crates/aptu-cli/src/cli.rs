@@ -47,6 +47,8 @@ pub enum OutputFormat {
     Yaml,
     /// Markdown output for GitHub comments
     Markdown,
+    /// SARIF output for security scanning tools
+    Sarif,
 }
 
 /// Issue state filter for triage operations.
@@ -59,6 +61,19 @@ pub enum IssueState {
     Closed,
     /// Both open and closed issues
     All,
+}
+
+/// Security finding severity level for filtering.
+#[derive(Clone, Copy, ValueEnum)]
+pub enum SeverityLevel {
+    /// Critical security vulnerability
+    Critical,
+    /// High severity issue
+    High,
+    /// Medium severity issue
+    Medium,
+    /// Low severity issue
+    Low,
 }
 
 /// Global output configuration passed to commands.
@@ -76,11 +91,11 @@ pub struct OutputContext {
 
 impl OutputContext {
     /// Creates an `OutputContext` from CLI arguments.
-    /// Quiet mode is automatically enabled for structured formats (Json, Yaml, Markdown).
+    /// Quiet mode is automatically enabled for structured formats (Json, Yaml, Markdown, Sarif).
     pub fn from_cli(format: OutputFormat, verbose: bool) -> Self {
         let quiet = matches!(
             format,
-            OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown
+            OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown | OutputFormat::Sarif
         );
         Self {
             format,
@@ -418,6 +433,14 @@ pub enum PrCommand {
         /// Bypass confirmation prompts
         #[arg(short, long)]
         force: bool,
+
+        /// Validate security findings with LLM to reduce false positives
+        #[arg(long)]
+        llm_validate: bool,
+
+        /// Minimum severity level for security findings (critical, high, medium, low)
+        #[arg(long, value_enum)]
+        min_severity: Option<SeverityLevel>,
     },
     /// Auto-label a pull request based on conventional commit prefix and file paths
     Label {

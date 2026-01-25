@@ -10,6 +10,7 @@ pub mod cache;
 pub mod detection;
 pub mod ignore;
 pub mod patterns;
+pub mod sarif;
 pub mod scanner;
 pub mod types;
 pub mod validator;
@@ -18,6 +19,7 @@ pub use cache::{CachedFinding, FindingCache, cache_key};
 pub use detection::needs_security_scan;
 pub use ignore::SecurityConfig;
 pub use patterns::PatternEngine;
+pub use sarif::SarifReport;
 pub use scanner::SecurityScanner;
 pub use types::{
     Confidence, Finding, PatternDefinition, Severity, ValidatedFinding, ValidationResult,

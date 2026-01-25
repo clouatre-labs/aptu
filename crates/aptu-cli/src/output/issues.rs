@@ -113,7 +113,7 @@ impl IssuesResult {
         if self.no_repos_matched {
             if let Some(ref filter) = self.repo_filter {
                 match ctx.format {
-                    OutputFormat::Json | OutputFormat::Yaml => println!("[]"),
+                    OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Sarif => println!("[]"),
                     OutputFormat::Markdown => {
                         println!("No curated repository matches '{filter}'");
                     }

@@ -60,6 +60,35 @@ aptu issue triage block/goose#123 --dry-run                        # Preview
 aptu history                                                       # View your contributions
 ```
 
+## Security Scanning
+
+Aptu includes built-in security pattern detection for pull request reviews. Scanning is performed locally using pattern matching - no code is sent to external services unless you explicitly enable LLM validation.
+
+```bash
+# Review PR with security scanning
+aptu pr review owner/repo#123
+
+# Filter by minimum severity level
+aptu pr review owner/repo#123 --min-severity high
+
+# Output SARIF format for GitHub Code Scanning
+aptu pr review owner/repo#123 --output sarif > results.sarif
+
+# Optional: Validate findings with AI (requires API key)
+aptu pr review owner/repo#123 --llm-validate
+```
+
+**Privacy Note**: Security scanning uses local pattern matching only. Your code stays on your machine unless you use `--llm-validate`, which sends findings (not full code) to your configured AI provider for validation.
+
+**GitHub Integration**: Upload SARIF results to enable Code Scanning alerts:
+
+```bash
+gh api repos/OWNER/REPO/code-scanning/sarifs \
+  -F sarif=@results.sarif \
+  -F ref=refs/heads/BRANCH \
+  -F commit_sha=COMMIT_SHA
+```
+
 ## GitHub Action
 
 Auto-triage new issues with AI using any supported provider.

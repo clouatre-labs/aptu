@@ -243,6 +243,8 @@ async fn review_single_pr(
     review_type: Option<aptu_core::ReviewEvent>,
     dry_run: bool,
     yes: bool,
+    llm_validate: bool,
+    min_severity: Option<crate::cli::SeverityLevel>,
     ctx: &OutputContext,
     config: &AppConfig,
 ) -> Result<Option<PrReviewResult>> {
@@ -258,6 +260,82 @@ async fn review_single_pr(
     if let Some(s) = spinner {
         s.finish_and_clear();
     }
+
+    // Security scanning (if PR has code changes)
+    let security_findings = {
+        let file_paths: Vec<String> = pr_details
+            .files
+            .iter()
+            .map(|f| f.filename.clone())
+            .collect();
+
+        if aptu_core::needs_security_scan(&file_paths, &pr_details.labels, &pr_details.body) {
+            let spinner = maybe_spinner(ctx, "Scanning for security issues...");
+
+            // Run security scanner on each file
+            let scanner = aptu_core::SecurityScanner::new();
+            let mut findings = Vec::new();
+
+            for file in &pr_details.files {
+                if let Some(patch) = &file.patch {
+                    let file_findings = scanner.scan_file(patch, &file.filename);
+                    findings.extend(file_findings);
+                }
+            }
+
+            if let Some(s) = &spinner {
+                s.finish_and_clear();
+            }
+
+            // Filter by minimum severity if specified
+            if let Some(min_sev) = min_severity {
+                let min_severity_core = match min_sev {
+                    crate::cli::SeverityLevel::Critical => aptu_core::Severity::Critical,
+                    crate::cli::SeverityLevel::High => aptu_core::Severity::High,
+                    crate::cli::SeverityLevel::Medium => aptu_core::Severity::Medium,
+                    crate::cli::SeverityLevel::Low => aptu_core::Severity::Low,
+                };
+
+                findings.retain(|f| {
+                    matches!(
+                        (f.severity, min_severity_core),
+                        (aptu_core::Severity::Critical, _)
+                            | (
+                                aptu_core::Severity::High,
+                                aptu_core::Severity::High
+                                    | aptu_core::Severity::Medium
+                                    | aptu_core::Severity::Low
+                            )
+                            | (
+                                aptu_core::Severity::Medium,
+                                aptu_core::Severity::Medium | aptu_core::Severity::Low
+                            )
+                            | (aptu_core::Severity::Low, aptu_core::Severity::Low)
+                    )
+                });
+            }
+
+            // LLM validation if requested (placeholder - not implemented in core yet)
+            if llm_validate && !findings.is_empty() {
+                // TODO: Implement LLM validation when SecurityValidator is integrated
+                // For now, we skip this feature
+                if ctx.is_verbose() && matches!(ctx.format, crate::cli::OutputFormat::Text) {
+                    println!(
+                        "{}",
+                        console::style("Note: LLM validation not yet implemented").yellow()
+                    );
+                }
+            }
+
+            if findings.is_empty() {
+                None
+            } else {
+                Some(findings)
+            }
+        } else {
+            None
+        }
+    };
 
     // Build result
     let analyze_result = pr::AnalyzeResult {
@@ -288,8 +366,9 @@ async fn review_single_pr(
         ai_stats,
         dry_run,
         labels: pr_details.labels,
+        security_findings,
     };
-    output::render(&result, ctx)?;
+    output::render_pr_review(&result, ctx)?;
 
     Ok(Some(result))
 }
@@ -575,6 +654,8 @@ pub async fn run(
                 no_apply: _,
                 no_comment: _,
                 force: _,
+                llm_validate,
+                min_severity,
             } => {
                 let repo_context = repo
                     .as_deref()
@@ -620,6 +701,8 @@ pub async fn run(
                                 review_type,
                                 dry_run,
                                 false,
+                                llm_validate,
+                                min_severity,
                                 &ctx,
                                 &config,
                             )

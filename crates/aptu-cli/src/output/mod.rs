@@ -34,6 +34,13 @@ pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) -> Result<()> {
             let yaml = serde_saphyr::to_string(result).context("Failed to serialize to YAML")?;
             println!("{yaml}");
         }
+        OutputFormat::Sarif => {
+            // SARIF format is only supported for PrReviewResult with security findings
+            // For other types, fall back to JSON
+            let json =
+                serde_json::to_string_pretty(result).context("Failed to serialize to JSON")?;
+            println!("{json}");
+        }
         OutputFormat::Markdown => {
             result
                 .render_markdown(&mut io::stdout(), ctx)
@@ -46,6 +53,32 @@ pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Specialized render function for `PrReviewResult` that supports SARIF output.
+pub fn render_pr_review(
+    result: &crate::commands::types::PrReviewResult,
+    ctx: &OutputContext,
+) -> Result<()> {
+    if matches!(ctx.format, OutputFormat::Sarif) {
+        // Convert security findings to SARIF format
+        if let Some(findings) = &result.security_findings {
+            let sarif_report = aptu_core::SarifReport::from(findings.clone());
+            let json = serde_json::to_string_pretty(&sarif_report)
+                .context("Failed to serialize SARIF report")?;
+            println!("{json}");
+            return Ok(());
+        }
+        // No security findings, output empty SARIF report
+        let sarif_report = aptu_core::SarifReport::from(vec![]);
+        let json = serde_json::to_string_pretty(&sarif_report)
+            .context("Failed to serialize SARIF report")?;
+        println!("{json}");
+        return Ok(());
+    }
+
+    // For other formats, use the generic render function
+    render(result, ctx)
 }
 
 mod auth;
