@@ -37,18 +37,26 @@ impl SecurityConfig {
     /// Loaded configuration or default on error.
     #[must_use]
     pub fn load() -> Self {
-        Self::load_from_path(&Self::config_path()).unwrap_or_default()
+        if let Some(path) = Self::config_path() {
+            match Self::load_from_path(&path) {
+                Ok(config) => config,
+                Err(e) => {
+                    tracing::warn!("Failed to load security config: {:#}", e);
+                    Self::default()
+                }
+            }
+        } else {
+            tracing::warn!("Config directory not available, using default security config");
+            Self::default()
+        }
     }
 
     /// Get the configuration file path.
     ///
-    /// Returns `~/.config/aptu/security.toml`.
+    /// Returns `~/.config/aptu/security.toml` or `None` if config directory cannot be determined.
     #[must_use]
-    pub fn config_path() -> PathBuf {
-        dirs::config_dir()
-            .expect("Failed to determine config directory")
-            .join("aptu")
-            .join("security.toml")
+    pub fn config_path() -> Option<PathBuf> {
+        dirs::config_dir().map(|dir| dir.join("aptu").join("security.toml"))
     }
 
     /// Load configuration from a specific path.
@@ -236,7 +244,9 @@ mod tests {
 
     #[test]
     fn test_config_path() {
-        let path = SecurityConfig::config_path();
-        assert!(path.ends_with("aptu/security.toml"));
+        if let Some(path) = SecurityConfig::config_path() {
+            assert!(path.ends_with("aptu/security.toml"));
+        }
+        // If None, test passes (config dir not available in environment)
     }
 }
