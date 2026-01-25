@@ -109,6 +109,13 @@ pub enum AptuError {
         /// Suggested valid model IDs based on fuzzy matching.
         suggestions: String,
     },
+
+    /// Security scan error.
+    #[error("Security scan error: {message}")]
+    SecurityScan {
+        /// Error message.
+        message: String,
+    },
 }
 
 /// GitHub resource type for type mismatch errors.

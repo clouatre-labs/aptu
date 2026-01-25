@@ -115,6 +115,14 @@ pub use facade::{
 pub use github::issues::ApplyResult;
 
 // ============================================================================
+// Security Scanning
+// ============================================================================
+
+pub use security::{
+    Confidence, Finding, PatternEngine, SecurityScanner, Severity, needs_security_scan,
+};
+
+// ============================================================================
 // Modules
 // ============================================================================
 
@@ -129,5 +137,6 @@ pub mod github;
 pub mod history;
 pub mod repos;
 pub mod retry;
+pub mod security;
 pub mod triage;
 pub mod utils;

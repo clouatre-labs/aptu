@@ -1,0 +1,128 @@
+[
+  {
+    "id": "hardcoded-api-key",
+    "description": "Hardcoded API key or secret token detected",
+    "pattern": "(?i)(api[_-]?key|secret[_-]?key|access[_-]?token)\\s*[=:]\\s*[\"'][a-zA-Z0-9_-]{20,}[\"']",
+    "severity": "critical",
+    "confidence": "high",
+    "cwe": "CWE-798",
+    "file_extensions": []
+  },
+  {
+    "id": "hardcoded-password",
+    "description": "Hardcoded password detected",
+    "pattern": "(?i)(password|passwd|pwd)\\s*[=:]\\s*[\"'][^\"']{8,}[\"']",
+    "severity": "critical",
+    "confidence": "medium",
+    "cwe": "CWE-798",
+    "file_extensions": []
+  },
+  {
+    "id": "sql-injection-concat",
+    "description": "Potential SQL injection via string concatenation",
+    "pattern": "(?i)(execute|query|exec)\\s*\\([^)]*\\+[^)]*\\)",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-89",
+    "file_extensions": [".rs", ".py", ".js", ".ts", ".java", ".php"]
+  },
+  {
+    "id": "sql-injection-format",
+    "description": "Potential SQL injection via string formatting",
+    "pattern": "(?i)(execute|query|exec)\\s*\\([^)]*format[^)]*\\)",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-89",
+    "file_extensions": [".rs", ".py", ".js", ".ts", ".java", ".php"]
+  },
+  {
+    "id": "path-traversal",
+    "description": "Potential path traversal vulnerability",
+    "pattern": "(?i)(open|read|write|include|require)\\s*\\([^)]*\\.\\.[/\\\\]",
+    "severity": "high",
+    "confidence": "high",
+    "cwe": "CWE-22",
+    "file_extensions": []
+  },
+  {
+    "id": "command-injection",
+    "description": "Potential command injection via shell execution",
+    "pattern": "(?i)(exec|system|shell|popen|spawn)\\s*\\([^)]*\\+[^)]*\\)",
+    "severity": "critical",
+    "confidence": "medium",
+    "cwe": "CWE-78",
+    "file_extensions": []
+  },
+  {
+    "id": "xss-innerhtml",
+    "description": "Potential XSS via innerHTML assignment",
+    "pattern": "(?i)innerHTML\\s*[=]\\s*[^;]*\\+",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-79",
+    "file_extensions": [".js", ".ts", ".jsx", ".tsx"]
+  },
+  {
+    "id": "insecure-random",
+    "description": "Use of insecure random number generator",
+    "pattern": "(?i)(Math\\.random|rand\\(\\)|random\\.randint)",
+    "severity": "medium",
+    "confidence": "low",
+    "cwe": "CWE-338",
+    "file_extensions": [".js", ".ts", ".py", ".java"]
+  },
+  {
+    "id": "weak-crypto-md5",
+    "description": "Use of weak cryptographic hash MD5",
+    "pattern": "(?i)(md5|MD5)\\s*\\(",
+    "severity": "medium",
+    "confidence": "high",
+    "cwe": "CWE-327",
+    "file_extensions": []
+  },
+  {
+    "id": "weak-crypto-sha1",
+    "description": "Use of weak cryptographic hash SHA1",
+    "pattern": "(?i)(sha1|SHA1)\\s*\\(",
+    "severity": "medium",
+    "confidence": "high",
+    "cwe": "CWE-327",
+    "file_extensions": []
+  },
+  {
+    "id": "unsafe-deserialization",
+    "description": "Unsafe deserialization of untrusted data",
+    "pattern": "(?i)(pickle\\.loads|yaml\\.load|unserialize)\\s*\\(",
+    "severity": "critical",
+    "confidence": "high",
+    "cwe": "CWE-502",
+    "file_extensions": [".py", ".php", ".java"]
+  },
+  {
+    "id": "xxe-vulnerability",
+    "description": "Potential XML External Entity (XXE) vulnerability",
+    "pattern": "(?i)(XMLReader|DocumentBuilder|SAXParser).*setFeature.*false",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-611",
+    "file_extensions": [".java", ".xml"]
+  },
+  {
+    "id": "insecure-tls",
+    "description": "Insecure TLS/SSL configuration",
+    "pattern": "(?i)(SSLv2|SSLv3|TLSv1\\.0|verify[_-]?mode.*NONE)",
+    "severity": "high",
+    "confidence": "high",
+    "cwe": "CWE-327",
+    "file_extensions": []
+  },
+  {
+    "id": "debug-enabled",
+    "description": "Debug mode enabled in production code",
+    "pattern": "(?i)(debug\\s*[=:]\\s*true|DEBUG\\s*[=:]\\s*True)",
+    "severity": "low",
+    "confidence": "low",
+    "cwe": "CWE-489",
+    "file_extensions": []
+  }
+]
