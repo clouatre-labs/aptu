@@ -77,7 +77,7 @@ fn embedded_defaults() -> Vec<CuratedRepo> {
 pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
     let config = load_config()?;
     let url = &config.cache.curated_repos_url;
-    let ttl = Duration::hours(config.cache.repo_ttl_hours.try_into().unwrap_or(24));
+    let ttl = Duration::hours(config.cache.repo_ttl_hours);
 
     // Try cache first
     let cache: crate::cache::FileCacheImpl<Vec<CuratedRepo>> =

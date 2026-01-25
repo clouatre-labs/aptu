@@ -224,7 +224,7 @@ impl CachedModelRegistry<'_> {
     /// # Arguments
     ///
     /// * `cache_dir` - Directory for storing cached model lists
-    /// * `ttl_seconds` - Time-to-live for cache entries (default: 86400 = 24 hours)
+    /// * `ttl_seconds` - Time-to-live for cache entries (see `DEFAULT_MODEL_TTL_SECS`)
     /// * `token_provider` - Token provider for API credentials
     #[must_use]
     pub fn new(
@@ -232,7 +232,11 @@ impl CachedModelRegistry<'_> {
         ttl_seconds: u64,
         token_provider: &dyn TokenProvider,
     ) -> CachedModelRegistry<'_> {
-        let ttl = chrono::Duration::seconds(ttl_seconds.try_into().unwrap_or(86400));
+        let ttl = chrono::Duration::seconds(
+            ttl_seconds
+                .try_into()
+                .unwrap_or(crate::cache::DEFAULT_MODEL_TTL_SECS.cast_signed()),
+        );
         CachedModelRegistry {
             cache: crate::cache::FileCacheImpl::with_dir(cache_dir, "models", ttl),
             client: reqwest::Client::builder()
