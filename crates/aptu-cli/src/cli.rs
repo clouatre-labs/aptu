@@ -63,19 +63,6 @@ pub enum IssueState {
     All,
 }
 
-/// Security finding severity level for filtering.
-#[derive(Clone, Copy, ValueEnum)]
-pub enum SeverityLevel {
-    /// Critical security vulnerability
-    Critical,
-    /// High severity issue
-    High,
-    /// Medium severity issue
-    Medium,
-    /// Low severity issue
-    Low,
-}
-
 /// Global output configuration passed to commands.
 #[derive(Clone)]
 pub struct OutputContext {
@@ -433,14 +420,6 @@ pub enum PrCommand {
         /// Bypass confirmation prompts
         #[arg(short, long)]
         force: bool,
-
-        /// Validate security findings with LLM to reduce false positives
-        #[arg(long)]
-        llm_validate: bool,
-
-        /// Minimum severity level for security findings (critical, high, medium, low)
-        #[arg(long, value_enum)]
-        min_severity: Option<SeverityLevel>,
     },
     /// Auto-label a pull request based on conventional commit prefix and file paths
     Label {

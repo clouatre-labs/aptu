@@ -62,23 +62,17 @@ aptu history                                                       # View your c
 
 ## Security Scanning
 
-Aptu includes built-in security pattern detection for pull request reviews. Scanning is performed locally using pattern matching - no code is sent to external services unless you explicitly enable LLM validation.
+Aptu includes built-in security pattern detection for pull request reviews. Scanning is performed locally using pattern matching - no code is sent to external services.
 
 ```bash
-# Review PR with security scanning
+# Review PR with automatic security scanning
 aptu pr review owner/repo#123
-
-# Filter by minimum severity level
-aptu pr review owner/repo#123 --min-severity high
 
 # Output SARIF format for GitHub Code Scanning
 aptu pr review owner/repo#123 --output sarif > results.sarif
-
-# Optional: Validate findings with AI (requires API key)
-aptu pr review owner/repo#123 --llm-validate
 ```
 
-**Privacy Note**: Security scanning uses local pattern matching only. Your code stays on your machine unless you use `--llm-validate`, which sends findings (not full code) to your configured AI provider for validation.
+**Privacy Note**: Security scanning uses local pattern matching only. Your code stays on your machine.
 
 **GitHub Integration**: Upload SARIF results to enable Code Scanning alerts:
 
