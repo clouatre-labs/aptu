@@ -127,7 +127,9 @@ pub fn format_error(error: &Error) -> String {
                 msg
             }
             AptuError::SecurityScan { message: _ } => {
-                format!("{aptu_err}\n\nTip: Security scan encountered an error. Check the pattern definitions and try again.")
+                format!(
+                    "{aptu_err}\n\nTip: Security scan encountered an error. Check the pattern definitions and try again."
+                )
             }
         }
     } else {

@@ -20,7 +20,7 @@
   {
     "id": "sql-injection-concat",
     "description": "Potential SQL injection via string concatenation",
-    "pattern": "(?i)(execute|query|exec)\\s*\\([^)]*\\+[^)]*\\)",
+    "pattern": "(?i)(execute|query|exec)\\s*\\([^)]*(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)[^)]*\\+[^)]*\\)",
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-89",

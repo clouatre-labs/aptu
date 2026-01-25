@@ -43,6 +43,10 @@ pub fn needs_security_scan(file_paths: &[String], labels: &[String], description
         || desc_lower.contains("password")
         || desc_lower.contains("secret")
         || desc_lower.contains("token")
+        || desc_lower.contains("jwt")
+        || desc_lower.contains("oauth")
+        || desc_lower.contains("session")
+        || desc_lower.contains("mfa")
     {
         return true;
     }
@@ -56,6 +60,9 @@ pub fn needs_security_scan(file_paths: &[String], labels: &[String], description
             || path_lower.contains("/security")
             || path_lower.contains("/crypto")
             || path_lower.contains("/password")
+            || path_lower.contains("/session")
+            || path_lower.contains("/oauth")
+            || path_lower.contains("/jwt")
         {
             return true;
         }
@@ -208,6 +215,33 @@ mod tests {
             &[],
             &[],
             "Update cryptographic library"
+        ));
+    }
+
+    #[test]
+    fn test_identity_related_keywords() {
+        assert!(needs_security_scan(&[], &[], "Update JWT token handling"));
+        assert!(needs_security_scan(&[], &[], "Fix OAuth2 flow"));
+        assert!(needs_security_scan(
+            &[],
+            &[],
+            "Session management improvements"
+        ));
+        assert!(needs_security_scan(&[], &[], "Add MFA support"));
+        assert!(needs_security_scan(
+            &["src/session/store.rs".to_string()],
+            &[],
+            ""
+        ));
+        assert!(needs_security_scan(
+            &["src/oauth/provider.rs".to_string()],
+            &[],
+            ""
+        ));
+        assert!(needs_security_scan(
+            &["src/jwt/validator.rs".to_string()],
+            &[],
+            ""
         ));
     }
 }
