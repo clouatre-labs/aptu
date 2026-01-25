@@ -13,6 +13,9 @@ readme = "README.md"
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 
+# Hashing
+sha2 = { workspace = true }
+
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
