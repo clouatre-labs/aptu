@@ -223,12 +223,12 @@ impl CachedModelRegistry<'_> {
     ///
     /// # Arguments
     ///
-    /// * `cache_dir` - Directory for storing cached model lists
+    /// * `cache_dir` - Directory for storing cached model lists (None to disable caching)
     /// * `ttl_seconds` - Time-to-live for cache entries (see `DEFAULT_MODEL_TTL_SECS`)
     /// * `token_provider` - Token provider for API credentials
     #[must_use]
     pub fn new(
-        cache_dir: PathBuf,
+        cache_dir: Option<PathBuf>,
         ttl_seconds: u64,
         token_provider: &dyn TokenProvider,
     ) -> CachedModelRegistry<'_> {
