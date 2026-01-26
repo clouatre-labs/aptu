@@ -271,8 +271,8 @@ async fn review_single_pr(
         if aptu_core::needs_security_scan(&file_paths, &pr_details.labels, &pr_details.body) {
             let spinner = maybe_spinner(ctx, "Scanning for security issues...");
 
-            // Run security scanner on each file in parallel
-            let scanner = aptu_core::SecurityScanner::new();
+            // Run security scanner on each file in parallel with default ignore rules
+            let scanner = aptu_core::SecurityScanner::default();
             let findings: Vec<_> = pr_details
                 .files
                 .par_iter()
@@ -288,11 +288,8 @@ async fn review_single_pr(
                 s.finish_and_clear();
             }
 
-            if findings.is_empty() {
-                None
-            } else {
-                Some(findings)
-            }
+            // Return Some(findings) even if empty to show "No issues found" message
+            Some(findings)
         } else {
             None
         }

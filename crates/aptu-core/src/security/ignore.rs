@@ -16,7 +16,10 @@ use super::Finding;
 /// Security configuration for ignore rules.
 ///
 /// Loaded from `~/.config/aptu/security.toml` with fallback to defaults.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+///
+/// By default, includes sensible ignore paths for common test and vendor directories.
+/// Use `SecurityConfig::empty()` for a configuration with no ignore rules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityConfig {
     /// Pattern IDs to ignore (e.g., `["hardcoded-secret", "sql-injection"]`).
     #[serde(default)]
@@ -27,7 +30,65 @@ pub struct SecurityConfig {
     pub ignore_paths: Vec<String>,
 }
 
+impl Default for SecurityConfig {
+    /// Returns configuration with sensible default ignore paths.
+    ///
+    /// Includes common test and vendor directories that typically contain
+    /// test fixtures or third-party code that should not be scanned.
+    fn default() -> Self {
+        Self {
+            ignore_patterns: vec![],
+            ignore_paths: vec![
+                "tests/".to_string(),
+                "test/".to_string(),
+                "benches/".to_string(),
+                "fixtures/".to_string(),
+                "vendor/".to_string(),
+            ],
+        }
+    }
+}
+
 impl SecurityConfig {
+    /// Create configuration with sensible default ignore paths.
+    ///
+    /// This is an alias for `Default::default()`.
+    #[must_use]
+    #[deprecated(since = "0.6.0", note = "Use `SecurityConfig::default()` instead")]
+    pub fn with_defaults() -> Self {
+        Self::default()
+    }
+
+    /// Create an empty configuration with no ignore rules.
+    ///
+    /// Use this when you want to scan all files without any filtering.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            ignore_patterns: vec![],
+            ignore_paths: vec![],
+        }
+    }
+
+    /// Check if a file path should be ignored based on configuration.
+    ///
+    /// This is a fast check that can be used before scanning to avoid
+    /// running expensive regex patterns on files in ignored directories.
+    ///
+    /// # Arguments
+    ///
+    /// * `file_path` - The file path to check
+    ///
+    /// # Returns
+    ///
+    /// `true` if the path should be ignored, `false` otherwise.
+    #[must_use]
+    pub fn should_ignore_path(&self, file_path: &str) -> bool {
+        self.ignore_paths
+            .iter()
+            .any(|prefix| file_path.starts_with(prefix))
+    }
+
     /// Load configuration from `~/.config/aptu/security.toml`.
     ///
     /// Returns default configuration if file doesn't exist or parse fails.
@@ -117,10 +178,45 @@ mod tests {
     use crate::security::{Confidence, Severity};
 
     #[test]
-    fn test_security_config_default() {
+    fn test_security_config_default_has_sensible_paths() {
         let config = SecurityConfig::default();
         assert!(config.ignore_patterns.is_empty());
+        assert_eq!(config.ignore_paths.len(), 5);
+        assert!(config.ignore_paths.contains(&"tests/".to_string()));
+        assert!(config.ignore_paths.contains(&"test/".to_string()));
+        assert!(config.ignore_paths.contains(&"benches/".to_string()));
+        assert!(config.ignore_paths.contains(&"fixtures/".to_string()));
+        assert!(config.ignore_paths.contains(&"vendor/".to_string()));
+    }
+
+    #[test]
+    fn test_empty_config() {
+        let config = SecurityConfig::empty();
+        assert!(config.ignore_patterns.is_empty());
         assert!(config.ignore_paths.is_empty());
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_with_defaults_deprecated() {
+        // with_defaults is deprecated but should still work
+        let config = SecurityConfig::with_defaults();
+        assert!(config.ignore_patterns.is_empty());
+        assert_eq!(config.ignore_paths.len(), 5);
+    }
+
+    #[test]
+    fn test_should_ignore_path_method() {
+        let config = SecurityConfig::default();
+
+        // Should ignore test paths
+        assert!(config.should_ignore_path("tests/unit/test.rs"));
+        assert!(config.should_ignore_path("test/fixtures/data.rs"));
+        assert!(config.should_ignore_path("vendor/lib.rs"));
+
+        // Should not ignore src paths
+        assert!(!config.should_ignore_path("src/main.rs"));
+        assert!(!config.should_ignore_path("src/test.rs"));
     }
 
     #[test]
@@ -235,11 +331,12 @@ mod tests {
     }
 
     #[test]
-    fn test_load_nonexistent_file() {
+    fn test_load_nonexistent_file_returns_defaults() {
         let path = PathBuf::from("/nonexistent/path/security.toml");
         let config = SecurityConfig::load_from_path(&path).expect("load default");
+        // When file doesn't exist, should return sensible defaults
         assert!(config.ignore_patterns.is_empty());
-        assert!(config.ignore_paths.is_empty());
+        assert_eq!(config.ignore_paths.len(), 5);
     }
 
     #[test]

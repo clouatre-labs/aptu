@@ -24,6 +24,80 @@ impl Renderable for PrReviewResult {
         writeln!(w, "{}: {}", style("Verdict").bold(), verdict_style)?;
         writeln!(w)?;
 
+        // Security Findings (shown early for visibility)
+        if let Some(findings) = &self.security_findings {
+            if findings.is_empty() {
+                // No findings - show clean status
+                writeln!(
+                    w,
+                    "{}: {}",
+                    style("Security Scan").green().bold(),
+                    style("No issues found").green()
+                )?;
+                writeln!(w)?;
+            } else if ctx.verbose {
+                // Verbose mode: show all findings with details
+                writeln!(w, "{}", style("Security Findings").red().bold())?;
+                for finding in findings {
+                    let severity_style = match finding.severity {
+                        aptu_core::Severity::Critical => style("CRITICAL").red().bold(),
+                        aptu_core::Severity::High => style("HIGH").red(),
+                        aptu_core::Severity::Medium => style("MEDIUM").yellow(),
+                        aptu_core::Severity::Low => style("LOW").dim(),
+                    };
+                    writeln!(
+                        w,
+                        "  [{}] {}:{}",
+                        severity_style,
+                        style(&finding.file_path).cyan(),
+                        finding.line_number
+                    )?;
+                    writeln!(w, "    {}", finding.description)?;
+                    if let Some(cwe) = &finding.cwe {
+                        writeln!(w, "    {}", style(cwe).dim())?;
+                    }
+                }
+                writeln!(w)?;
+            } else {
+                // Normal mode: show concise summary
+                let count = findings.len();
+                let critical_count = findings
+                    .iter()
+                    .filter(|f| matches!(f.severity, aptu_core::Severity::Critical))
+                    .count();
+                let high_count = findings
+                    .iter()
+                    .filter(|f| matches!(f.severity, aptu_core::Severity::High))
+                    .count();
+
+                let summary = if critical_count > 0 || high_count > 0 {
+                    let mut parts = vec![];
+                    if critical_count > 0 {
+                        parts.push(format!("{critical_count} CRITICAL"));
+                    }
+                    if high_count > 0 {
+                        parts.push(format!("{high_count} HIGH"));
+                    }
+                    format!(
+                        "{} finding{} ({})",
+                        count,
+                        if count == 1 { "" } else { "s" },
+                        parts.join(", ")
+                    )
+                } else {
+                    format!("{} finding{}", count, if count == 1 { "" } else { "s" })
+                };
+
+                writeln!(
+                    w,
+                    "{}: {}",
+                    style("Security Scan").red().bold(),
+                    style(summary).red()
+                )?;
+                writeln!(w)?;
+            }
+        }
+
         // Summary
         writeln!(w, "{}", style("Summary").cyan().bold())?;
         writeln!(w, "{}", self.review.summary)?;
@@ -33,33 +107,6 @@ impl Renderable for PrReviewResult {
         if let Some(disclaimer) = &self.review.disclaimer {
             writeln!(w, "{}", style("Disclaimer").yellow().bold())?;
             writeln!(w, "{disclaimer}")?;
-            writeln!(w)?;
-        }
-
-        // Security Findings
-        if let Some(findings) = &self.security_findings
-            && !findings.is_empty()
-        {
-            writeln!(w, "{}", style("Security Findings").red().bold())?;
-            for finding in findings {
-                let severity_style = match finding.severity {
-                    aptu_core::Severity::Critical => style("CRITICAL").red().bold(),
-                    aptu_core::Severity::High => style("HIGH").red(),
-                    aptu_core::Severity::Medium => style("MEDIUM").yellow(),
-                    aptu_core::Severity::Low => style("LOW").dim(),
-                };
-                writeln!(
-                    w,
-                    "  [{}] {}:{}",
-                    severity_style,
-                    style(&finding.file_path).cyan(),
-                    finding.line_number
-                )?;
-                writeln!(w, "    {}", finding.description)?;
-                if let Some(cwe) = &finding.cwe {
-                    writeln!(w, "    {}", style(cwe).dim())?;
-                }
-            }
             writeln!(w)?;
         }
 

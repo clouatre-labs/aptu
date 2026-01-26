@@ -2,6 +2,7 @@
 
 //! Security scanner orchestration for PR diffs.
 
+use crate::security::ignore::SecurityConfig;
 use crate::security::patterns::PatternEngine;
 use crate::security::types::Finding;
 
@@ -9,6 +10,7 @@ use crate::security::types::Finding;
 #[derive(Debug)]
 pub struct SecurityScanner {
     engine: &'static PatternEngine,
+    config: SecurityConfig,
 }
 
 impl SecurityScanner {
@@ -17,6 +19,24 @@ impl SecurityScanner {
     pub fn new() -> Self {
         Self {
             engine: PatternEngine::global(),
+            config: SecurityConfig::default(),
+        }
+    }
+
+    /// Creates a new security scanner with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Security configuration for ignore rules
+    ///
+    /// # Returns
+    ///
+    /// A new scanner instance with the provided configuration.
+    #[must_use]
+    pub fn with_config(config: SecurityConfig) -> Self {
+        Self {
+            engine: PatternEngine::global(),
+            config,
         }
     }
 
@@ -87,6 +107,9 @@ impl SecurityScanner {
 
     /// Scans file content directly (not a diff).
     ///
+    /// Skips scanning entirely if the file path is in an ignored directory.
+    /// Otherwise, filters out findings based on configured ignore rules.
+    ///
     /// # Arguments
     ///
     /// * `content` - The file content to scan
@@ -94,10 +117,19 @@ impl SecurityScanner {
     ///
     /// # Returns
     ///
-    /// A vector of security findings.
+    /// A vector of security findings, excluding ignored patterns and paths.
     #[must_use]
     pub fn scan_file(&self, content: &str, file_path: &str) -> Vec<Finding> {
-        self.engine.scan(content, file_path)
+        // Early exit: skip scanning if path is in an ignored directory
+        if self.config.should_ignore_path(file_path) {
+            return Vec::new();
+        }
+
+        let findings = self.engine.scan(content, file_path);
+        findings
+            .into_iter()
+            .filter(|finding| !self.config.should_ignore(finding))
+            .collect()
     }
 }
 
@@ -240,5 +272,34 @@ diff --git a/test.rs b/test.rs
     fn test_default_constructor() {
         let scanner = SecurityScanner::default();
         assert!(scanner.engine.pattern_count() > 0);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_with_config() {
+        let config = SecurityConfig::with_defaults();
+        let scanner = SecurityScanner::with_config(config);
+        assert!(scanner.engine.pattern_count() > 0);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_scan_file_filters_ignored_paths() {
+        let config = SecurityConfig::with_defaults();
+        let scanner = SecurityScanner::with_config(config);
+
+        let code = r#"let api_key = "sk-1234567890abcdefghijklmnopqrstuvwxyz";"#;
+
+        // Should detect in normal file
+        let findings = scanner.scan_file(code, "src/config.rs");
+        assert!(!findings.is_empty(), "Should detect in src/");
+
+        // Should ignore in test file
+        let findings = scanner.scan_file(code, "tests/config.rs");
+        assert!(findings.is_empty(), "Should ignore in tests/");
+
+        // Should ignore in vendor file
+        let findings = scanner.scan_file(code, "vendor/lib.rs");
+        assert!(findings.is_empty(), "Should ignore in vendor/");
     }
 }
