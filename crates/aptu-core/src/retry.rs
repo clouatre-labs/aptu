@@ -121,6 +121,35 @@ pub fn retry_backoff() -> ExponentialBuilder {
         .with_jitter()
 }
 
+/// Maximum retry-after delay to prevent excessive waits (120 seconds).
+const MAX_RETRY_AFTER_SECS: u64 = 120;
+
+/// Extracts `retry_after` value from a `RateLimited` error if present.
+///
+/// Checks the top-level error for an `AptuError::RateLimited` variant and returns
+/// its `retry_after` value. Caps the value at `MAX_RETRY_AFTER_SECS` to prevent
+/// excessive waits.
+///
+/// # Arguments
+///
+/// * `e` - Reference to an anyhow error
+///
+/// # Returns
+///
+/// `Some(duration)` if a `RateLimited` error is found with `retry_after` > 0,
+/// `None` otherwise
+#[must_use]
+pub fn extract_retry_after(e: &anyhow::Error) -> Option<std::time::Duration> {
+    if let Some(crate::error::AptuError::RateLimited { retry_after, .. }) =
+        e.downcast_ref::<crate::error::AptuError>()
+        && *retry_after > 0
+    {
+        let capped = (*retry_after).min(MAX_RETRY_AFTER_SECS);
+        return Some(std::time::Duration::from_secs(capped));
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,5 +236,51 @@ mod tests {
             retry_after: 60,
         });
         assert!(is_retryable_anyhow(&err));
+    }
+
+    #[test]
+    fn test_extract_retry_after_with_valid_value() {
+        let err = anyhow::anyhow!(crate::error::AptuError::RateLimited {
+            provider: "OpenRouter".to_string(),
+            retry_after: 60,
+        });
+        let duration = extract_retry_after(&err);
+        assert_eq!(duration, Some(std::time::Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn test_extract_retry_after_with_zero_value() {
+        let err = anyhow::anyhow!(crate::error::AptuError::RateLimited {
+            provider: "OpenRouter".to_string(),
+            retry_after: 0,
+        });
+        let duration = extract_retry_after(&err);
+        assert_eq!(duration, None);
+    }
+
+    #[test]
+    fn test_extract_retry_after_with_capped_value() {
+        let err = anyhow::anyhow!(crate::error::AptuError::RateLimited {
+            provider: "OpenRouter".to_string(),
+            retry_after: 300,
+        });
+        let duration = extract_retry_after(&err);
+        assert_eq!(duration, Some(std::time::Duration::from_secs(120)));
+    }
+
+    #[test]
+    fn test_extract_retry_after_with_non_rate_limited_error() {
+        let err = anyhow::anyhow!("some other error");
+        let duration = extract_retry_after(&err);
+        assert_eq!(duration, None);
+    }
+
+    #[test]
+    fn test_extract_retry_after_with_truncated_response() {
+        let err = anyhow::anyhow!(crate::error::AptuError::TruncatedResponse {
+            provider: "OpenRouter".to_string(),
+        });
+        let duration = extract_retry_after(&err);
+        assert_eq!(duration, None);
     }
 }

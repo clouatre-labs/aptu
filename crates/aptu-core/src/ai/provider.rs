@@ -101,6 +101,14 @@ pub trait AiProvider: Send + Sync {
     /// Returns the temperature for API requests.
     fn temperature(&self) -> f32;
 
+    /// Returns the maximum retry attempts for rate-limited requests.
+    ///
+    /// Default implementation returns 3. Providers can override
+    /// to use a different retry limit.
+    fn max_attempts(&self) -> u32 {
+        3
+    }
+
     /// Returns the circuit breaker for this provider (optional).
     ///
     /// Default implementation returns None. Providers can override
@@ -224,15 +232,14 @@ pub trait AiProvider: Send + Sync {
     /// - API request fails (network, timeout, rate limit)
     /// - Response cannot be parsed as valid JSON (including truncated responses)
     #[instrument(skip(self, request), fields(provider = self.name(), model = self.model()))]
-    async fn send_and_parse<T: serde::de::DeserializeOwned>(
+    async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
         &self,
         request: &ChatCompletionRequest,
     ) -> Result<(T, AiStats)> {
-        use backon::Retryable;
         use tracing::{info, warn};
 
         use crate::error::AptuError;
-        use crate::retry::{is_retryable_anyhow, retry_backoff};
+        use crate::retry::{extract_retry_after, is_retryable_anyhow};
 
         // Check circuit breaker before attempting request
         if let Some(cb) = self.circuit_breaker()
@@ -244,9 +251,18 @@ pub trait AiProvider: Send + Sync {
         // Start timing (outside retry loop to measure total time including retries)
         let start = std::time::Instant::now();
 
-        let (parsed, completion): (T, ChatCompletionResponse) = (|| async {
+        // Custom retry loop that respects retry_after from RateLimited errors
+        let mut attempt: u32 = 0;
+        let max_attempts: u32 = self.max_attempts();
+
+        // Helper function to avoid closure-in-expression clippy warning
+        #[allow(clippy::items_after_statements)]
+        async fn try_request<T: serde::de::DeserializeOwned>(
+            provider: &(impl AiProvider + ?Sized),
+            request: &ChatCompletionRequest,
+        ) -> Result<(T, ChatCompletionResponse)> {
             // Send HTTP request
-            let completion = self.send_request_inner(request).await?;
+            let completion = provider.send_request_inner(request).await?;
 
             // Extract message content
             let content = completion
@@ -258,14 +274,53 @@ pub trait AiProvider: Send + Sync {
             debug!(response_length = content.len(), "Received AI response");
 
             // Parse JSON response (inside retry loop, so truncated responses are retried)
-            let parsed: T = parse_ai_json(&content, self.name())?;
+            let parsed: T = parse_ai_json(&content, provider.name())?;
 
             Ok((parsed, completion))
-        })
-        .retry(retry_backoff())
-        .when(is_retryable_anyhow)
-        .notify(|err, dur| warn!(error = %err, delay = ?dur, "Retrying after error"))
-        .await?;
+        }
+
+        let (parsed, completion): (T, ChatCompletionResponse) = loop {
+            attempt += 1;
+
+            let result = try_request(self, request).await;
+
+            match result {
+                Ok(success) => break success,
+                Err(err) => {
+                    // Check if error is retryable
+                    if !is_retryable_anyhow(&err) || attempt >= max_attempts {
+                        return Err(err);
+                    }
+
+                    // Extract retry_after if present, otherwise use exponential backoff
+                    let delay = if let Some(retry_after_duration) = extract_retry_after(&err) {
+                        debug!(
+                            retry_after_secs = retry_after_duration.as_secs(),
+                            "Using Retry-After value from rate limit error"
+                        );
+                        retry_after_duration
+                    } else {
+                        // Use exponential backoff with jitter: 1s, 2s, 4s + 0-500ms
+                        let backoff_secs = 2_u64.pow(attempt.saturating_sub(1));
+                        let jitter_ms = fastrand::u64(0..500);
+                        std::time::Duration::from_millis(backoff_secs * 1000 + jitter_ms)
+                    };
+
+                    let error_msg = err.to_string();
+                    warn!(
+                        error = %error_msg,
+                        delay_secs = delay.as_secs(),
+                        attempt,
+                        max_attempts,
+                        "Retrying after error"
+                    );
+
+                    // Drop err before await to avoid holding non-Send value across await
+                    drop(err);
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        };
 
         // Record success in circuit breaker
         if let Some(cb) = self.circuit_breaker() {

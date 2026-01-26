@@ -49,6 +49,9 @@ async-trait = { workspace = true }
 # Builder
 bon = { workspace = true }
 
+# Random number generation
+fastrand = "2"
+
 # Regex for git URL parsing
 regex = "1"
 

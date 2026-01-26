@@ -126,6 +126,11 @@ pub struct FallbackConfig {
     pub chain: Vec<FallbackEntry>,
 }
 
+/// Default value for `retry_max_attempts`.
+fn default_retry_max_attempts() -> u32 {
+    3
+}
+
 /// AI provider settings.
 #[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
@@ -146,6 +151,9 @@ pub struct AiConfig {
     pub circuit_breaker_threshold: u32,
     /// Circuit breaker reset timeout in seconds (default: 60).
     pub circuit_breaker_reset_seconds: u64,
+    /// Maximum retry attempts for rate-limited requests (default: 3).
+    #[serde(default = "default_retry_max_attempts")]
+    pub retry_max_attempts: u32,
     /// Task-specific model overrides.
     pub tasks: Option<TasksConfig>,
     /// Fallback provider chain for resilience.
@@ -175,6 +183,7 @@ impl Default for AiConfig {
             temperature: 0.3,
             circuit_breaker_threshold: 3,
             circuit_breaker_reset_seconds: 60,
+            retry_max_attempts: default_retry_max_attempts(),
             tasks: None,
             fallback: None,
             custom_guidance: None,

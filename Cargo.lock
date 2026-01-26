@@ -156,6 +156,7 @@ dependencies = [
  "config",
  "criterion",
  "dirs",
+ "fastrand",
  "futures",
  "keyring",
  "octocrab",
