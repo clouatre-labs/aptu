@@ -132,6 +132,7 @@ dependencies = [
  "futures",
  "indicatif",
  "predicates",
+ "rayon",
  "secrecy",
  "serde",
  "serde-saphyr",

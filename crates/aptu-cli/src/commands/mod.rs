@@ -20,6 +20,7 @@ use anyhow::{Context, Result};
 use console::style;
 use dialoguer::Confirm;
 use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use tracing::debug;
 
 use crate::cli::{
@@ -270,16 +271,18 @@ async fn review_single_pr(
         if aptu_core::needs_security_scan(&file_paths, &pr_details.labels, &pr_details.body) {
             let spinner = maybe_spinner(ctx, "Scanning for security issues...");
 
-            // Run security scanner on each file
+            // Run security scanner on each file in parallel
             let scanner = aptu_core::SecurityScanner::new();
-            let mut findings = Vec::new();
-
-            for file in &pr_details.files {
-                if let Some(patch) = &file.patch {
-                    let file_findings = scanner.scan_file(patch, &file.filename);
-                    findings.extend(file_findings);
-                }
-            }
+            let findings: Vec<_> = pr_details
+                .files
+                .par_iter()
+                .filter_map(|file| {
+                    file.patch
+                        .as_ref()
+                        .map(|patch| scanner.scan_file(patch, &file.filename))
+                })
+                .flatten()
+                .collect();
 
             if let Some(s) = &spinner {
                 s.finish_and_clear();
