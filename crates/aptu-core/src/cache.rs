@@ -8,10 +8,15 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Once;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
+
+/// Ensures the cache unavailable warning is only emitted once.
+static CACHE_UNAVAILABLE_WARNING: Once = Once::new();
 
 /// Default TTL for issue cache entries (in minutes).
 pub const DEFAULT_ISSUE_TTL_MINS: i64 = 60;
@@ -78,11 +83,11 @@ impl<T> CacheEntry<T> {
 /// - Linux: `~/.cache/aptu`
 /// - macOS: `~/Library/Caches/aptu`
 /// - Windows: `C:\Users\<User>\AppData\Local\aptu`
+///
+/// Returns `None` if the cache directory cannot be determined.
 #[must_use]
-pub fn cache_dir() -> PathBuf {
-    dirs::cache_dir()
-        .expect("Failed to determine cache directory")
-        .join("aptu")
+pub fn cache_dir() -> Option<PathBuf> {
+    dirs::cache_dir().map(|dir| dir.join("aptu"))
 }
 
 /// Trait for TTL-based filesystem caching.
@@ -130,8 +135,9 @@ pub trait FileCache<V> {
 /// File-based cache implementation with TTL support.
 ///
 /// Stores serialized data in JSON files with embedded metadata.
+/// When cache directory is unavailable (None), all operations become no-ops.
 pub struct FileCacheImpl<V> {
-    cache_dir: PathBuf,
+    cache_dir: Option<PathBuf>,
     ttl: Duration,
     subdirectory: String,
     _phantom: std::marker::PhantomData<V>,
@@ -147,20 +153,33 @@ where
     ///
     /// * `subdirectory` - Subdirectory within cache directory
     /// * `ttl` - Time-to-live for cache entries
+    ///
+    /// If the cache directory cannot be determined, caching is disabled
+    /// and a warning is emitted.
     #[must_use]
     pub fn new(subdirectory: impl Into<String>, ttl: Duration) -> Self {
-        Self::with_dir(cache_dir(), subdirectory, ttl)
+        let cache_dir = cache_dir();
+        if cache_dir.is_none() {
+            CACHE_UNAVAILABLE_WARNING.call_once(|| {
+                warn!("Cache directory unavailable, caching disabled");
+            });
+        }
+        Self::with_dir(cache_dir, subdirectory, ttl)
     }
 
     /// Create a new file cache with custom cache directory.
     ///
     /// # Arguments
     ///
-    /// * `cache_dir` - Base cache directory
+    /// * `cache_dir` - Base cache directory (None to disable caching)
     /// * `subdirectory` - Subdirectory within cache directory
     /// * `ttl` - Time-to-live for cache entries
     #[must_use]
-    pub fn with_dir(cache_dir: PathBuf, subdirectory: impl Into<String>, ttl: Duration) -> Self {
+    pub fn with_dir(
+        cache_dir: Option<PathBuf>,
+        subdirectory: impl Into<String>,
+        ttl: Duration,
+    ) -> Self {
         Self {
             cache_dir,
             ttl,
@@ -169,13 +188,18 @@ where
         }
     }
 
+    /// Check if caching is enabled.
+    fn is_enabled(&self) -> bool {
+        self.cache_dir.is_some()
+    }
+
     /// Get the full path for a cache key.
     ///
     /// # Panics
     ///
     /// Panics if the key contains path separators or parent directory references,
     /// which could lead to path traversal vulnerabilities.
-    fn cache_path(&self, key: &str) -> PathBuf {
+    fn cache_path(&self, key: &str) -> Option<PathBuf> {
         // Validate key to prevent path traversal
         assert!(
             !key.contains('/') && !key.contains('\\') && !key.contains(".."),
@@ -190,7 +214,9 @@ where
         } else {
             format!("{key}.json")
         };
-        self.cache_dir.join(&self.subdirectory).join(filename)
+        self.cache_dir
+            .as_ref()
+            .map(|dir| dir.join(&self.subdirectory).join(filename))
     }
 }
 
@@ -199,7 +225,13 @@ where
     V: Serialize + for<'de> Deserialize<'de>,
 {
     fn get(&self, key: &str) -> Result<Option<V>> {
-        let path = self.cache_path(key);
+        if !self.is_enabled() {
+            return Ok(None);
+        }
+
+        let Some(path) = self.cache_path(key) else {
+            return Ok(None);
+        };
 
         if !path.exists() {
             return Ok(None);
@@ -219,7 +251,13 @@ where
     }
 
     fn get_stale(&self, key: &str) -> Result<Option<V>> {
-        let path = self.cache_path(key);
+        if !self.is_enabled() {
+            return Ok(None);
+        }
+
+        let Some(path) = self.cache_path(key) else {
+            return Ok(None);
+        };
 
         if !path.exists() {
             return Ok(None);
@@ -235,7 +273,13 @@ where
     }
 
     fn set(&self, key: &str, value: &V) -> Result<()> {
-        let path = self.cache_path(key);
+        if !self.is_enabled() {
+            return Ok(());
+        }
+
+        let Some(path) = self.cache_path(key) else {
+            return Ok(());
+        };
 
         // Create parent directories if needed
         if let Some(parent) = path.parent() {
@@ -260,7 +304,14 @@ where
     }
 
     fn remove(&self, key: &str) -> Result<()> {
-        let path = self.cache_path(key);
+        if !self.is_enabled() {
+            return Ok(());
+        }
+
+        let Some(path) = self.cache_path(key) else {
+            return Ok(());
+        };
+
         if path.exists() {
             fs::remove_file(&path)
                 .with_context(|| format!("Failed to remove cache file: {}", path.display()))?;
@@ -333,7 +384,8 @@ mod tests {
     #[test]
     fn test_cache_dir_path() {
         let dir = cache_dir();
-        assert!(dir.ends_with("aptu"));
+        assert!(dir.is_some());
+        assert!(dir.unwrap().ends_with("aptu"));
     }
 
     #[test]
@@ -447,5 +499,41 @@ mod tests {
     fn test_cache_key_rejects_parent_dir() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
         let _ = cache.get("foo..bar");
+    }
+
+    #[test]
+    fn test_disabled_cache_get_returns_none() {
+        let cache: FileCacheImpl<TestData> =
+            FileCacheImpl::with_dir(None, "test_cache", Duration::hours(1));
+        let result = cache.get("any_key").expect("get should succeed");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_disabled_cache_set_succeeds_silently() {
+        let cache: FileCacheImpl<TestData> =
+            FileCacheImpl::with_dir(None, "test_cache", Duration::hours(1));
+        let data = TestData {
+            value: "test".to_string(),
+            count: 42,
+        };
+        cache.set("any_key", &data).expect("set should succeed");
+    }
+
+    #[test]
+    fn test_disabled_cache_remove_succeeds_silently() {
+        let cache: FileCacheImpl<TestData> =
+            FileCacheImpl::with_dir(None, "test_cache", Duration::hours(1));
+        cache.remove("any_key").expect("remove should succeed");
+    }
+
+    #[test]
+    fn test_disabled_cache_get_stale_returns_none() {
+        let cache: FileCacheImpl<TestData> =
+            FileCacheImpl::with_dir(None, "test_cache", Duration::hours(1));
+        let result = cache
+            .get_stale("any_key")
+            .expect("get_stale should succeed");
+        assert!(result.is_none());
     }
 }
