@@ -36,6 +36,8 @@ pub struct AiClient {
     max_tokens: u32,
     /// Temperature for API requests.
     temperature: f32,
+    /// Maximum retry attempts for rate-limited requests.
+    max_attempts: u32,
     /// Circuit breaker for resilience.
     circuit_breaker: CircuitBreaker,
 }
@@ -100,6 +102,7 @@ impl AiClient {
             model: config.model.clone(),
             max_tokens: config.max_tokens,
             temperature: config.temperature,
+            max_attempts: config.retry_max_attempts,
             circuit_breaker: CircuitBreaker::new(
                 config.circuit_breaker_threshold,
                 config.circuit_breaker_reset_seconds,
@@ -164,6 +167,7 @@ impl AiClient {
             model: model_name.to_string(),
             max_tokens: config.max_tokens,
             temperature: config.temperature,
+            max_attempts: config.retry_max_attempts,
             circuit_breaker: CircuitBreaker::new(
                 config.circuit_breaker_threshold,
                 config.circuit_breaker_reset_seconds,
@@ -212,6 +216,10 @@ impl AiProvider for AiClient {
         self.temperature
     }
 
+    fn max_attempts(&self) -> u32 {
+        self.max_attempts
+    }
+
     fn circuit_breaker(&self) -> Option<&super::CircuitBreaker> {
         Some(&self.circuit_breaker)
     }
@@ -251,6 +259,7 @@ mod tests {
             allow_paid_models: false,
             circuit_breaker_threshold: 3,
             circuit_breaker_reset_seconds: 60,
+            retry_max_attempts: 3,
             tasks: None,
             fallback: None,
             custom_guidance: None,
@@ -300,5 +309,19 @@ mod tests {
             &config,
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_max_attempts_from_config() {
+        let mut config = test_config();
+        config.retry_max_attempts = 5;
+        let client = AiClient::with_api_key(
+            "openrouter",
+            SecretString::from("key"),
+            "test-model:free",
+            &config,
+        )
+        .expect("should create client");
+        assert_eq!(client.max_attempts(), 5);
     }
 }
