@@ -135,3 +135,36 @@ fn test_safe_patterns_no_findings() {
         "Safe fixture should produce zero findings, but got: {findings:#?}"
     );
 }
+
+/// Test documenting a known limitation: multi-line SQL injection detection.
+///
+/// The SecurityScanner currently detects SQL injection patterns when the source
+/// and sink are on the same line (e.g., `query("SELECT * FROM users WHERE id = " + id)`).
+/// However, it does not detect multi-line patterns where the source and sink are
+/// separated across multiple lines, as the scanner operates on a line-by-line basis.
+///
+/// This test documents this limitation and should be updated if the scanner's
+/// detection capabilities are enhanced to handle multi-line patterns.
+#[test]
+fn test_multi_line_vulnerability_not_detected() {
+    let scanner = SecurityScanner::new();
+
+    // Multi-line SQL injection: source and sink on different lines
+    let multi_line_code = r#"
+fn vulnerable_query(id: &str) -> String {
+    let query = "SELECT * FROM users WHERE id = "
+        + id;
+    query
+}
+"#;
+
+    let diff = create_test_diff(multi_line_code, "test.rs");
+    let findings = scanner.scan_diff(&diff);
+
+    // Document the known limitation: multi-line patterns are not detected
+    assert!(
+        findings.is_empty(),
+        "Known limitation: SecurityScanner does not detect multi-line SQL injection \
+         where source and sink are on different lines. This test documents the limitation."
+    );
+}
