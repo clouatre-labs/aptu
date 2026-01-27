@@ -9,29 +9,20 @@
 
 /// SQL injection via string concatenation (CWE-89).
 fn sql_injection_concat(user_id: &str) {
-    let query = "SELECT * FROM users WHERE id = " + user_id;
-    execute(query);
-    
-    let delete_query = "DELETE FROM sessions WHERE user_id = " + user_id;
-    execute(delete_query);
+    execute("SELECT * FROM users WHERE id = " + user_id);
+    execute("DELETE FROM sessions WHERE user_id = " + user_id);
 }
 
 /// SQL injection via format string (CWE-89).
 fn sql_injection_format(username: &str, table: &str) {
-    let query = format!("SELECT * FROM {} WHERE username = '{}'", table, username);
-    execute(query);
-    
-    let update = format!("UPDATE users SET active = 1 WHERE name = '{}'", username);
-    execute(update);
+    execute(format!("SELECT * FROM {} WHERE username = '{}'", table, username));
+    execute(format!("UPDATE users SET active = 1 WHERE name = '{}'", username));
 }
 
 /// Command injection (CWE-78).
 fn command_injection(filename: &str) {
-    let cmd = "cat /var/log/" + filename;
-    system(cmd);
-    
-    let exec_cmd = "rm -rf " + filename;
-    exec(exec_cmd);
+    system("cat /var/log/" + filename);
+    exec("rm -rf " + filename);
 }
 
 /// Weak cryptography (CWE-327).
