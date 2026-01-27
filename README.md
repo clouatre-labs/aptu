@@ -14,11 +14,25 @@
 
 <p align="center"><strong>AI-Powered Triage Utility</strong> - A CLI for OSS issue triage with AI assistance.</p>
 
-Aptu is a context-engineering experiment: instead of throwing big models at problems, it crafts tight prompts that let smaller models (Devstral, Llama 3.3, Qwen) do the job with fewer tokens and surprising precision.
+Aptu is a context-engineering experiment: instead of throwing big models at problems, it crafts tight prompts that let smaller models do the job with fewer tokens and surprising precision.
 
 ## Demo
 
 ![Aptu Demo](https://raw.githubusercontent.com/clouatre-labs/aptu/main/assets/demo.gif)
+
+## Why It Works
+
+Aptu uses **task specialization** over raw model capability:
+
+| Factor | Aptu | General Agent |
+|--------|------|---------------|
+| Context | Only the diff | Entire conversation + tools |
+| Prompt | Tuned for code review patterns | General reasoning |
+| Attention | 100% on code quality | Split across many tasks |
+
+In real-world testing, gemini-3-flash-preview running aptu's PR review caught regex-based HTML parsing and missing error handling that claude-opus-4.5 shipped as "done."
+
+> "The small specialized model is not smarter - it is less distracted."
 
 ## Features
 
@@ -50,36 +64,24 @@ cargo install aptu-cli
 ## Quick Start
 
 ```bash
-aptu auth login                                                    # Authenticate with GitHub
-aptu repo list                                                     # List curated repositories
-aptu issue list block/goose                                        # Browse issues
-aptu issue triage block/goose#123                                  # Triage with AI
-aptu issue triage block/goose#123 --dry-run                        # Preview
-aptu history                                                       # View your contributions
+aptu auth login            # Authenticate with GitHub
+aptu repo list             # List curated repositories
+aptu issue list block/goose          # Browse issues
+aptu issue triage block/goose#123    # Triage with AI
+aptu issue triage block/goose#123 --dry-run  # Preview
+aptu history               # View your contributions
 ```
 
 ## Security Scanning
 
-Aptu includes built-in security pattern detection for pull request reviews. Scanning is performed locally using pattern matching - no code is sent to external services.
+Aptu includes built-in security pattern detection for PR reviews. Scanning is performed locally, and no code is sent to external services.
 
 ```bash
-# Review PR with automatic security scanning
-aptu pr review owner/repo#123
-
-# Output SARIF format for GitHub Code Scanning
-aptu pr review owner/repo#123 --output sarif > results.sarif
+aptu pr review owner/repo#123                       # Review with security scanning
+aptu pr review owner/repo#123 --output sarif        # SARIF for GitHub Code Scanning
 ```
 
-**Privacy Note**: Security scanning uses local pattern matching only. Your code stays on your machine.
-
-**GitHub Integration**: Upload SARIF results to enable Code Scanning alerts:
-
-```bash
-gh api repos/OWNER/REPO/code-scanning/sarifs \
-  -F sarif=@results.sarif \
-  -F ref=refs/heads/BRANCH \
-  -F commit_sha=COMMIT_SHA
-```
+See [docs/SECURITY_SCANNING.md](docs/SECURITY_SCANNING.md) for SARIF upload and GitHub integration.
 
 ## GitHub Action
 
