@@ -195,6 +195,36 @@ impl Renderable for PrReviewResult {
         writeln!(w, "{}", self.review.summary)?;
         writeln!(w)?;
 
+        // Security Findings
+        if let Some(findings) = &self.security_findings {
+            if findings.is_empty() {
+                writeln!(w, "### Security Scan")?;
+                writeln!(w, "No issues found")?;
+                writeln!(w)?;
+            } else {
+                writeln!(w, "### Security Findings")?;
+                for finding in findings {
+                    writeln!(
+                        w,
+                        "- **[{}]** `{}:{}`",
+                        match finding.severity {
+                            aptu_core::Severity::Critical => "CRITICAL",
+                            aptu_core::Severity::High => "HIGH",
+                            aptu_core::Severity::Medium => "MEDIUM",
+                            aptu_core::Severity::Low => "LOW",
+                        },
+                        finding.file_path,
+                        finding.line_number
+                    )?;
+                    writeln!(w, "  {}", finding.description)?;
+                    if let Some(cwe) = &finding.cwe {
+                        writeln!(w, "  {cwe}")?;
+                    }
+                }
+                writeln!(w)?;
+            }
+        }
+
         if let Some(disclaimer) = &self.review.disclaimer {
             writeln!(w, "### Disclaimer")?;
             writeln!(w, "> {disclaimer}")?;
@@ -388,5 +418,91 @@ impl Renderable for PrLabelResult {
         writeln!(w)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_test_result(security_findings: Option<Vec<aptu_core::Finding>>) -> PrReviewResult {
+        PrReviewResult {
+            pr_title: "Test PR".to_string(),
+            pr_number: 42,
+            pr_url: "https://github.com/test/repo/pull/42".to_string(),
+            review: aptu_core::ai::types::PrReviewResponse {
+                verdict: "approve".to_string(),
+                summary: "Test summary".to_string(),
+                strengths: vec![],
+                concerns: vec![],
+                comments: vec![],
+                suggestions: vec![],
+                disclaimer: None,
+            },
+            ai_stats: aptu_core::history::AiStats {
+                model: "test-model".to_string(),
+                input_tokens: 100,
+                output_tokens: 50,
+                duration_ms: 1000,
+                cost_usd: None,
+                fallback_provider: None,
+            },
+            security_findings,
+            dry_run: false,
+            labels: vec![],
+        }
+    }
+
+    #[test]
+    fn test_render_markdown_security_findings_none() {
+        let result = build_test_result(None);
+        let mut output = Vec::new();
+        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
+
+        result.render_markdown(&mut output, &ctx).unwrap();
+        let text = String::from_utf8(output).unwrap();
+
+        assert!(!text.contains("Security Scan"));
+        assert!(!text.contains("Security Findings"));
+    }
+
+    #[test]
+    fn test_render_markdown_security_findings_empty() {
+        let result = build_test_result(Some(vec![]));
+        let mut output = Vec::new();
+        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
+
+        result.render_markdown(&mut output, &ctx).unwrap();
+        let text = String::from_utf8(output).unwrap();
+
+        assert!(text.contains("### Security Scan"));
+        assert!(text.contains("No issues found"));
+    }
+
+    #[test]
+    fn test_render_markdown_security_findings_populated() {
+        let finding = aptu_core::Finding {
+            pattern_id: "test-pattern".to_string(),
+            description: "Test vulnerability".to_string(),
+            severity: aptu_core::Severity::High,
+            confidence: aptu_core::Confidence::High,
+            file_path: "src/main.rs".to_string(),
+            line_number: 42,
+            matched_text: "unsafe { }".to_string(),
+            cwe: Some("CWE-123".to_string()),
+        };
+
+        let result = build_test_result(Some(vec![finding]));
+        let mut output = Vec::new();
+        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
+
+        result.render_markdown(&mut output, &ctx).unwrap();
+        let text = String::from_utf8(output).unwrap();
+
+        assert!(text.contains("### Security Findings"));
+        assert!(text.contains("[HIGH]"));
+        assert!(text.contains("src/main.rs:42"));
+        assert!(text.contains("Test vulnerability"));
+        assert!(text.contains("CWE-123"));
     }
 }
