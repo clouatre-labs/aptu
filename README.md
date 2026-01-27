@@ -30,9 +30,7 @@ Aptu uses **task specialization** over raw model capability:
 | Prompt | Tuned for code review patterns | General reasoning |
 | Attention | 100% on code quality | Split across many tasks |
 
-In real-world testing, gemini-3-flash-preview running aptu's PR review caught regex-based HTML parsing and missing error handling that claude-opus-4.5 shipped as "done."
-
-> "The small specialized model is not smarter - it is less distracted."
+The small specialized model is not smarter, just less distracted. In real-world testing, aptu's PR review (using the default gemini-3-flash-preview) caught regex-based HTML parsing and missing error handling that claude-opus-4.5 shipped as "done".
 
 ## Features
 
