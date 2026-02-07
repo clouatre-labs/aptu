@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "crates/aptu-ffi"]
+members = ["crates/*", "crates/aptu-ffi", "crates/aptu-mcp"]
 resolver = "3"
 
 [workspace.package]
@@ -53,6 +53,10 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 # FFI
 uniffi = { version = "0.31", features = ["cli"] }
+
+# MCP
+rmcp = { version = "0.14", features = ["server", "transport-io"] }
+schemars = { version = "1.0" }
 
 # Dev dependencies
 tokio-test = "0.4"
