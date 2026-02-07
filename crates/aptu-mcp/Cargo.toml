@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "aptu-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MCP server exposing aptu-core functionality for AI-powered GitHub triage and review"
+
+[[bin]]
+name = "aptu-mcp"
+path = "src/main.rs"
+
+[dependencies]
+aptu-core = { path = "../aptu-core" }
+anyhow = { workspace = true }
+rmcp = { workspace = true }
+schemars = { workspace = true }
+secrecy = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true
