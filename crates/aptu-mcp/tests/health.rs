@@ -62,7 +62,9 @@ fn github_token_format_valid_tokens() {
     assert!(AptuServer::is_valid_github_token_format("ghu_1234567890"));
     assert!(AptuServer::is_valid_github_token_format("ghs_1234567890"));
     assert!(AptuServer::is_valid_github_token_format("ghr_1234567890"));
-    assert!(AptuServer::is_valid_github_token_format("github_pat_1234567890"));
+    assert!(AptuServer::is_valid_github_token_format(
+        "github_pat_1234567890"
+    ));
 }
 
 #[test]
