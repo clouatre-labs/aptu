@@ -19,6 +19,7 @@ use rmcp::{
     service::RequestContext,
     tool, tool_handler, tool_router,
 };
+use secrecy::ExposeSecret;
 use serde::Deserialize;
 
 use crate::auth::EnvTokenProvider;
@@ -276,19 +277,32 @@ impl AptuServer {
     ) -> Result<CallToolResult, McpError> {
         let provider = EnvTokenProvider;
 
-        // Check GitHub token presence and validity
+        // Check GitHub token presence and format
         let github_token_status = match provider.github_token() {
             None => CredentialStatus::Missing,
-            Some(_) => {
-                // Token exists; assume valid (full validation would require API call)
-                CredentialStatus::Valid
+            Some(token) => {
+                let token_str = token.expose_secret();
+                if token_str.is_empty() {
+                    CredentialStatus::Missing
+                } else if Self::is_valid_github_token_format(token_str) {
+                    CredentialStatus::Valid
+                } else {
+                    CredentialStatus::Invalid
+                }
             }
         };
 
         // Check AI API key presence
-        let ai_api_key_status = match provider.ai_api_key("openrouter") {
+        let ai_api_key_status = match provider.ai_api_key("gemini") {
             None => CredentialStatus::Missing,
-            Some(_) => CredentialStatus::Valid,
+            Some(key) => {
+                let key_str = key.expose_secret();
+                if key_str.is_empty() {
+                    CredentialStatus::Missing
+                } else {
+                    CredentialStatus::Valid
+                }
+            }
         };
 
         let response = HealthCheckResponse {
@@ -298,6 +312,25 @@ impl AptuServer {
 
         let json = serde_json::to_string_pretty(&response).map_err(generic_to_mcp_error)?;
         Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Validate GitHub token format without making API calls.
+    ///
+    /// Checks for known GitHub token prefixes:
+    /// - `ghp_` - Personal Access Tokens
+    /// - `gho_` - OAuth Access Tokens
+    /// - `ghu_` - User-to-Server Tokens
+    /// - `ghs_` - Server-to-Server Tokens
+    /// - `ghr_` - Refresh Tokens
+    /// - `github_pat_` - Fine-grained Personal Access Tokens (93 chars)
+    #[must_use]
+    pub fn is_valid_github_token_format(token: &str) -> bool {
+        token.starts_with("ghp_")
+            || token.starts_with("gho_")
+            || token.starts_with("ghu_")
+            || token.starts_with("ghs_")
+            || token.starts_with("ghr_")
+            || token.starts_with("github_pat_")
     }
 }
 

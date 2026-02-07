@@ -2,7 +2,7 @@
 
 //! Integration tests for the health check MCP tool.
 
-use aptu_mcp::{CredentialStatus, HealthCheckResponse};
+use aptu_mcp::{AptuServer, CredentialStatus, HealthCheckResponse};
 
 #[test]
 fn credential_status_valid_variant() {
@@ -139,4 +139,72 @@ fn health_check_response_json_schema() {
     let props = json.get("properties").unwrap();
     assert!(props.get("github_token").is_some());
     assert!(props.get("ai_api_key").is_some());
+}
+
+// ---------------------------------------------------------------------------
+// Token Format Validation Tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn github_token_format_valid_personal_access_token() {
+    assert!(AptuServer::is_valid_github_token_format(
+        "ghp_1234567890abcdefghijklmnopqrstuvwxyz"
+    ));
+}
+
+#[test]
+fn github_token_format_valid_oauth_token() {
+    assert!(AptuServer::is_valid_github_token_format(
+        "gho_1234567890abcdefghijklmnopqrstuvwxyz"
+    ));
+}
+
+#[test]
+fn github_token_format_valid_user_to_server() {
+    assert!(AptuServer::is_valid_github_token_format(
+        "ghu_1234567890abcdefghijklmnopqrstuvwxyz"
+    ));
+}
+
+#[test]
+fn github_token_format_valid_server_to_server() {
+    assert!(AptuServer::is_valid_github_token_format(
+        "ghs_1234567890abcdefghijklmnopqrstuvwxyz"
+    ));
+}
+
+#[test]
+fn github_token_format_valid_refresh_token() {
+    assert!(AptuServer::is_valid_github_token_format(
+        "ghr_1234567890abcdefghijklmnopqrstuvwxyz"
+    ));
+}
+
+#[test]
+fn github_token_format_valid_fine_grained() {
+    assert!(AptuServer::is_valid_github_token_format(
+        "github_pat_1234567890abcdefghijklmnopqrstuvwxyz"
+    ));
+}
+
+#[test]
+fn github_token_format_invalid_prefix() {
+    assert!(!AptuServer::is_valid_github_token_format(
+        "invalid_token_format"
+    ));
+    assert!(!AptuServer::is_valid_github_token_format("abc_1234567890"));
+    assert!(!AptuServer::is_valid_github_token_format("token_xyz"));
+}
+
+#[test]
+fn github_token_format_empty_string() {
+    assert!(!AptuServer::is_valid_github_token_format(""));
+}
+
+#[test]
+fn github_token_format_partial_prefix() {
+    assert!(!AptuServer::is_valid_github_token_format("gh"));
+    assert!(!AptuServer::is_valid_github_token_format("ghp"));
+    assert!(!AptuServer::is_valid_github_token_format("github_"));
+    assert!(!AptuServer::is_valid_github_token_format("github_pa"));
 }
