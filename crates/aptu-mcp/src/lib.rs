@@ -10,7 +10,7 @@ mod auth;
 mod error;
 mod server;
 
-pub use server::AptuServer;
+pub use server::{AptuServer, CredentialStatus, HealthCheckParams, HealthCheckResponse};
 
 /// Run the MCP server over stdio transport.
 ///

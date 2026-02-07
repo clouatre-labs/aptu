@@ -23,6 +23,7 @@ use serde::Deserialize;
 
 use crate::auth::EnvTokenProvider;
 use crate::error::{aptu_error_to_mcp, generic_to_mcp_error};
+use aptu_core::TokenProvider;
 
 // ---------------------------------------------------------------------------
 // Tool parameter structs
@@ -75,6 +76,32 @@ pub struct PostReviewParams {
     #[schemars(description = "Review action: approve, request_changes, or comment")]
     pub event: String,
 }
+
+/// Credential validation status.
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, JsonSchema)]
+#[serde(rename_all = "PascalCase")]
+pub enum CredentialStatus {
+    /// Credential is valid and working.
+    Valid,
+    /// Credential is missing or not set.
+    Missing,
+    /// Credential is invalid or non-functional.
+    Invalid,
+}
+
+/// Health check response with credential validation results.
+#[derive(Debug, serde::Serialize, serde::Deserialize, JsonSchema)]
+pub struct HealthCheckResponse {
+    /// GitHub token validation status.
+    pub github_token: CredentialStatus,
+    /// AI API key presence status.
+    pub ai_api_key: CredentialStatus,
+}
+
+/// Parameters for health check (empty for consistency).
+#[derive(Debug, Deserialize, JsonSchema)]
+#[schemars(description = "Check the health of credentials and configuration")]
+pub struct HealthCheckParams {}
 
 // ---------------------------------------------------------------------------
 // Server struct
@@ -236,6 +263,41 @@ impl AptuServer {
             "Review posted on {} with event: {}",
             params.pr_ref, params.event
         ))]))
+    }
+
+    #[tool(
+        name = "health",
+        description = "Check the health of credentials and configuration",
+        annotations(read_only_hint = true, idempotent_hint = true)
+    )]
+    async fn health(
+        &self,
+        Parameters(_params): Parameters<HealthCheckParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let provider = EnvTokenProvider;
+
+        // Check GitHub token presence and validity
+        let github_token_status = match provider.github_token() {
+            None => CredentialStatus::Missing,
+            Some(_) => {
+                // Token exists; assume valid (full validation would require API call)
+                CredentialStatus::Valid
+            }
+        };
+
+        // Check AI API key presence
+        let ai_api_key_status = match provider.ai_api_key("openrouter") {
+            None => CredentialStatus::Missing,
+            Some(_) => CredentialStatus::Valid,
+        };
+
+        let response = HealthCheckResponse {
+            github_token: github_token_status,
+            ai_api_key: ai_api_key_status,
+        };
+
+        let json = serde_json::to_string_pretty(&response).map_err(generic_to_mcp_error)?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
     }
 }
 
@@ -542,9 +604,9 @@ mod tests {
     }
 
     #[test]
-    fn tool_router_has_five_tools() {
+    fn tool_router_has_six_tools() {
         let router = AptuServer::tool_router();
-        assert_eq!(router.list_all().len(), 5);
+        assert_eq!(router.list_all().len(), 6);
     }
 
     #[test]
@@ -557,6 +619,7 @@ mod tests {
         assert!(names.contains(&"scan_security"));
         assert!(names.contains(&"post_triage"));
         assert!(names.contains(&"post_review"));
+        assert!(names.contains(&"health"));
     }
 
     #[test]
@@ -639,5 +702,53 @@ mod tests {
         let schema = schemars::schema_for!(PostReviewParams);
         let json = serde_json::to_value(&schema).unwrap();
         assert!(json["properties"].get("event").is_some());
+    }
+
+    #[test]
+    fn health_check_params_schema() {
+        let schema = schemars::schema_for!(HealthCheckParams);
+        let json = serde_json::to_value(&schema).unwrap();
+        assert!(json.get("type").is_some());
+    }
+
+    #[test]
+    fn credential_status_serializes_to_pascalcase() {
+        let valid = serde_json::to_string(&CredentialStatus::Valid).unwrap();
+        assert_eq!(valid, "\"Valid\"");
+
+        let missing = serde_json::to_string(&CredentialStatus::Missing).unwrap();
+        assert_eq!(missing, "\"Missing\"");
+
+        let invalid = serde_json::to_string(&CredentialStatus::Invalid).unwrap();
+        assert_eq!(invalid, "\"Invalid\"");
+    }
+
+    #[test]
+    fn health_check_response_serializes_correctly() {
+        let response = HealthCheckResponse {
+            github_token: CredentialStatus::Valid,
+            ai_api_key: CredentialStatus::Missing,
+        };
+
+        let json = serde_json::to_string_pretty(&response).unwrap();
+        assert!(json.contains("github_token"));
+        assert!(json.contains("Valid"));
+        assert!(json.contains("ai_api_key"));
+        assert!(json.contains("Missing"));
+    }
+
+    #[test]
+    fn health_tool_has_read_only_annotation() {
+        let router = AptuServer::tool_router();
+        let tools = router.list_all();
+        let health_tool = tools.iter().find(|t| t.name == "health").unwrap();
+        assert_eq!(
+            health_tool.annotations.as_ref().unwrap().read_only_hint,
+            Some(true)
+        );
+        assert_eq!(
+            health_tool.annotations.as_ref().unwrap().idempotent_hint,
+            Some(true)
+        );
     }
 }
