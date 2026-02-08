@@ -341,6 +341,7 @@ pub trait AiProvider: Send + Sync {
         };
 
         let ai_stats = AiStats {
+            provider: self.name().to_string(),
             model: self.model().to_string(),
             input_tokens,
             output_tokens,
