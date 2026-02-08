@@ -77,8 +77,8 @@ async fn triage_single_issue(
     // Phase 1a.5: Display issue preview (title and labels) immediately after fetch
     crate::output::common::show_preview(ctx, &issue_details.title, &issue_details.labels);
 
-    // Phase 1b: Check if already triaged (unless force is true)
-    if !force {
+    // Phase 1b: Check if already triaged (unless force or dry_run is true)
+    if !force && !dry_run {
         let triage_status = check_already_triaged(&issue_details);
         if triage_status.is_triaged() {
             if matches!(ctx.format, OutputFormat::Text) {
