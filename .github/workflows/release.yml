@@ -312,3 +312,11 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: cargo publish -p aptu-cli
+
+      - name: Wait for index propagation
+        run: sleep 30
+
+      - name: Publish aptu-mcp
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: cargo publish -p aptu-mcp
