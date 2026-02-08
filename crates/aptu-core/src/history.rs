@@ -18,6 +18,8 @@ use crate::config::data_dir;
 /// AI usage statistics for a contribution.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AiStats {
+    /// Provider name (e.g., "openrouter", "anthropic").
+    pub provider: String,
     /// Model used for analysis.
     pub model: String,
     /// Number of input tokens.
@@ -268,6 +270,7 @@ mod tests {
     #[test]
     fn test_ai_stats_serialization_roundtrip() {
         let stats = AiStats {
+            provider: "openrouter".to_string(),
             model: "google/gemini-2.0-flash-exp:free".to_string(),
             input_tokens: 1000,
             output_tokens: 500,
@@ -286,6 +289,7 @@ mod tests {
     fn test_contribution_with_ai_stats() {
         let mut contribution = test_contribution();
         contribution.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "google/gemini-2.0-flash-exp:free".to_string(),
             input_tokens: 1000,
             output_tokens: 500,
@@ -326,6 +330,7 @@ mod tests {
 
         let mut c1 = test_contribution();
         c1.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "model1".to_string(),
             input_tokens: 100,
             output_tokens: 50,
@@ -336,6 +341,7 @@ mod tests {
 
         let mut c2 = test_contribution();
         c2.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "model2".to_string(),
             input_tokens: 200,
             output_tokens: 100,
@@ -357,6 +363,7 @@ mod tests {
 
         let mut c1 = test_contribution();
         c1.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "model1".to_string(),
             input_tokens: 100,
             output_tokens: 50,
@@ -367,6 +374,7 @@ mod tests {
 
         let mut c2 = test_contribution();
         c2.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "model2".to_string(),
             input_tokens: 200,
             output_tokens: 100,
@@ -387,6 +395,7 @@ mod tests {
 
         let mut c1 = test_contribution();
         c1.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "model1".to_string(),
             input_tokens: 100,
             output_tokens: 50,
@@ -397,6 +406,7 @@ mod tests {
 
         let mut c2 = test_contribution();
         c2.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "model2".to_string(),
             input_tokens: 200,
             output_tokens: 100,
@@ -423,6 +433,7 @@ mod tests {
 
         let mut c1 = test_contribution();
         c1.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "model1".to_string(),
             input_tokens: 100,
             output_tokens: 50,
@@ -433,6 +444,7 @@ mod tests {
 
         let mut c2 = test_contribution();
         c2.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "model1".to_string(),
             input_tokens: 200,
             output_tokens: 100,
@@ -443,6 +455,7 @@ mod tests {
 
         let mut c3 = test_contribution();
         c3.ai_stats = Some(AiStats {
+            provider: "openrouter".to_string(),
             model: "model2".to_string(),
             input_tokens: 150,
             output_tokens: 75,

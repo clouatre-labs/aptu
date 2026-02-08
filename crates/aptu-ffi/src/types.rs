@@ -388,6 +388,8 @@ impl From<aptu_core::ai::types::PrReviewComment> for FfiPrReviewComment {
 /// FFI wrapper for AI usage statistics.
 #[derive(Clone, Debug, uniffi::Record, Serialize, Deserialize)]
 pub struct FfiAiStats {
+    /// AI provider used (e.g., "openrouter", "anthropic").
+    pub provider: String,
     /// Model used for analysis.
     pub model: String,
     /// Number of input tokens.
@@ -405,6 +407,7 @@ pub struct FfiAiStats {
 impl From<aptu_core::history::AiStats> for FfiAiStats {
     fn from(stats: aptu_core::history::AiStats) -> Self {
         FfiAiStats {
+            provider: stats.provider,
             model: stats.model,
             input_tokens: stats.input_tokens,
             output_tokens: stats.output_tokens,

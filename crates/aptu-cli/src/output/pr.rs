@@ -440,7 +440,9 @@ mod tests {
                 suggestions: vec![],
                 disclaimer: None,
             },
+            verdict: "approve".to_string(),
             ai_stats: aptu_core::history::AiStats {
+                provider: "openrouter".to_string(),
                 model: "test-model".to_string(),
                 input_tokens: 100,
                 output_tokens: 50,
