@@ -47,11 +47,35 @@ async fn main() -> Result<()> {
         registry::get_provider(provider)
             .ok_or_else(|| anyhow::anyhow!("Unknown AI provider: {provider}"))?;
         config.ai.provider.clone_from(provider);
+        // Also override task-specific configs to ensure CLI flags take precedence
+        if let Some(ref mut tasks) = config.ai.tasks {
+            if let Some(ref mut triage) = tasks.triage {
+                triage.provider.clone_from(&Some(provider.clone()));
+            }
+            if let Some(ref mut review) = tasks.review {
+                review.provider.clone_from(&Some(provider.clone()));
+            }
+            if let Some(ref mut create) = tasks.create {
+                create.provider.clone_from(&Some(provider.clone()));
+            }
+        }
         debug!("Overriding AI provider to: {provider}");
     }
 
     if let Some(model) = &cli.model {
         config.ai.model.clone_from(model);
+        // Also override task-specific configs to ensure CLI flags take precedence
+        if let Some(ref mut tasks) = config.ai.tasks {
+            if let Some(ref mut triage) = tasks.triage {
+                triage.model.clone_from(&Some(model.clone()));
+            }
+            if let Some(ref mut review) = tasks.review {
+                review.model.clone_from(&Some(model.clone()));
+            }
+            if let Some(ref mut create) = tasks.create {
+                create.model.clone_from(&Some(model.clone()));
+            }
+        }
         debug!("Overriding AI model to: {model}");
     }
 
