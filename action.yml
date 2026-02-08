@@ -45,11 +45,11 @@ inputs:
     required: false
     default: 'false'
   apply-labels:
-    description: Apply AI-suggested labels and milestone to the issue
+    description: Apply AI-suggested labels and milestone (issue triage and PR review)
     required: false
     default: 'true'
   no-comment:
-    description: Skip posting triage comment to GitHub (only apply labels/milestone)
+    description: Skip posting comment to GitHub (issue triage and PR review)
     required: false
     default: 'false'
   command:
@@ -204,6 +204,14 @@ runs:
         
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"
+        fi
+        
+        if [[ "$APPLY_LABELS" == "false" ]]; then
+          ARGS="$ARGS --no-apply"
+        fi
+        
+        if [[ "$NO_COMMENT" == "true" ]]; then
+          ARGS="$ARGS --no-comment"
         fi
         
         echo "Running: aptu pr review $ARGS $PR_REF"
