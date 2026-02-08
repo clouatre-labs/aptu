@@ -3,66 +3,37 @@
 
 # aptu-mcp
 
-MCP (Model Context Protocol) server for aptu -- exposes GitHub issue triage,
-PR review, and security scanning capabilities to AI assistants.
+MCP server for Aptu - AI-Powered Triage Utility.
 
-Built with [RMCP](https://github.com/modelcontextprotocol/rust-sdk) v0.14.
+[![docs.rs](https://img.shields.io/badge/docs.rs-aptu--mcp-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs)](https://docs.rs/aptu-mcp)
+[![Core crate](https://img.shields.io/badge/Core-aptu--core-fc8d62?style=flat-square&labelColor=555555&logo=rust)](https://crates.io/crates/aptu-core)
+[![REUSE](https://api.reuse.software/badge/github.com/clouatre-labs/aptu)](https://api.reuse.software/info/github.com/clouatre-labs/aptu)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11662/badge)](https://www.bestpractices.dev/projects/11662)
 
 ## Features
 
-### Tools (5)
+- **5 Tools** - triage_issue, review_pr, scan_security, post_triage, post_review
+- **2 Prompts** - triage_guide and review_checklist for guided workflows
+- **4 Resources** - curated repos, good first issues, config, and repo detail template
+- **Dual Transport** - stdio for local editors, HTTP for remote deployments
+- **Multiple Providers** - Gemini (default), Cerebras, Groq, `OpenRouter`, `Z.AI`, and `ZenMux`
 
-| Tool | Description | Annotations |
-|------|-------------|-------------|
-| `triage_issue` | Fetch and analyze a GitHub issue for triage using AI | read-only, open-world |
-| `review_pr` | Fetch and analyze a GitHub pull request for review using AI | read-only, open-world |
-| `scan_security` | Scan a unified diff for security vulnerabilities and secrets | read-only, idempotent |
-| `post_triage` | Analyze a GitHub issue and post a triage comment with AI insights | destructive, open-world |
-| `post_review` | Analyze a GitHub PR and post a review with AI insights | destructive, open-world |
-
-### Prompts (2)
-
-| Prompt | Description |
-|--------|-------------|
-| `triage_guide` | Step-by-step guide for triaging a GitHub issue |
-| `review_checklist` | Checklist for reviewing a GitHub pull request |
-
-### Resources (3 + 1 template)
-
-| Resource | URI | Description |
-|----------|-----|-------------|
-| Curated Repositories | `aptu://repos` | List of curated open-source repositories |
-| Good First Issues | `aptu://issues` | Good first issues from curated repositories |
-| Configuration | `aptu://config` | Current aptu configuration settings |
-| Repository Detail | `aptu://repos/{owner}/{name}` | Details for a specific curated repository |
-
-## Usage
-
-### Running the Server
+## Installation
 
 ```bash
-cargo run --bin aptu-mcp
+cargo install aptu-mcp
 ```
 
-The server communicates over stdio using the MCP protocol.
+## Configuration
 
-### Environment Variables
-
-Required:
-- `GITHUB_TOKEN` -- GitHub personal access token
-- `AI_API_KEY` -- AI provider API key (e.g. OpenRouter)
-
-Optional:
-- `RUST_LOG` -- Logging level (default: `info`)
-
-### MCP Client Configuration
+Add to your MCP client configuration:
 
 ```json
 {
   "mcpServers": {
     "aptu": {
-      "command": "cargo",
-      "args": ["run", "--bin", "aptu-mcp"],
+      "command": "aptu-mcp",
+      "args": ["run"],
       "env": {
         "GITHUB_TOKEN": "ghp_...",
         "AI_API_KEY": "sk-or-..."
@@ -72,6 +43,15 @@ Optional:
 }
 ```
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_TOKEN` | Yes | GitHub personal access token |
+| `AI_API_KEY` | Yes | AI provider API key (fallback for all providers) |
+| `OPENROUTER_API_KEY` | No | Provider-specific key (takes precedence over `AI_API_KEY`) |
+| `RUST_LOG` | No | Logging level (default: `info`) |
+
 ## Development
 
 ```bash
@@ -80,6 +60,10 @@ cargo clippy -p aptu-mcp -- -D warnings
 cargo fmt -p aptu-mcp --check
 ```
 
+## Support
+
+For questions and support, visit [clouatre.ca](https://clouatre.ca/about/).
+
 ## License
 
-Apache-2.0
+Apache-2.0. See [LICENSE](https://github.com/clouatre-labs/aptu/blob/main/LICENSE).

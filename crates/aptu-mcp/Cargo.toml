@@ -15,7 +15,7 @@ name = "aptu-mcp"
 path = "src/main.rs"
 
 [dependencies]
-aptu-core = { path = "../aptu-core" }
+aptu-core = { path = "../aptu-core", version = "0.2" }
 anyhow = { workspace = true }
 axum = "0.8"
 clap = { workspace = true }
