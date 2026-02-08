@@ -184,7 +184,14 @@ impl Default for AiConfig {
             circuit_breaker_threshold: 3,
             circuit_breaker_reset_seconds: 60,
             retry_max_attempts: default_retry_max_attempts(),
-            tasks: None,
+            tasks: Some(TasksConfig {
+                triage: None,
+                review: Some(TaskOverride {
+                    provider: Some("groq".to_string()),
+                    model: Some("openai/gpt-oss-120b".to_string()),
+                }),
+                create: None,
+            }),
             fallback: None,
             custom_guidance: None,
             validation_enabled: true,
@@ -534,7 +541,7 @@ model = "gemini-3-pro-preview"
 
     #[test]
     fn test_config_without_tasks_section() {
-        // Test that default config loads without tasks section
+        // Test that config without explicit tasks section uses defaults
         let config_str = r#"
 [ai]
 provider = "gemini"
@@ -550,21 +557,29 @@ model = "gemini-3-flash-preview"
 
         assert_eq!(app_config.ai.provider, "gemini");
         assert_eq!(app_config.ai.model, "gemini-3-flash-preview");
-        assert!(app_config.ai.tasks.is_none());
+        // When no tasks section is provided, defaults are used (which include review override)
+        assert!(app_config.ai.tasks.is_some());
+        let tasks = app_config.ai.tasks.unwrap();
+        assert!(tasks.review.is_some());
+        let review = tasks.review.unwrap();
+        assert_eq!(review.provider, Some("groq".to_string()));
+        assert_eq!(review.model, Some("openai/gpt-oss-120b".to_string()));
     }
 
     #[test]
-    fn test_resolve_for_task_no_overrides() {
-        // Test that resolve_for_task returns defaults when no task overrides exist
+    fn test_resolve_for_task_with_defaults() {
+        // Test that resolve_for_task returns correct defaults including review override
         let ai_config = AiConfig::default();
 
+        // Triage and Create use global defaults
         let (provider, model) = ai_config.resolve_for_task(TaskType::Triage);
         assert_eq!(provider, "gemini");
         assert_eq!(model, "gemini-3-flash-preview");
 
+        // Review uses task-specific override
         let (provider, model) = ai_config.resolve_for_task(TaskType::Review);
-        assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3-flash-preview");
+        assert_eq!(provider, "groq");
+        assert_eq!(model, "openai/gpt-oss-120b");
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "gemini");
