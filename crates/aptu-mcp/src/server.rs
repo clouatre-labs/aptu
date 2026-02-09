@@ -138,7 +138,9 @@ impl AptuServer {
         if read_only {
             tool_router.remove_route("post_triage");
             tool_router.remove_route("post_review");
-            tracing::info!("Read-only mode enabled: write tools disabled (post_triage, post_review)");
+            tracing::info!(
+                "Read-only mode enabled: write tools disabled (post_triage, post_review)"
+            );
         }
 
         Self {
