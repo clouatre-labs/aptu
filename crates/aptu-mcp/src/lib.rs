@@ -15,12 +15,15 @@ pub use server::{AptuServer, CredentialStatus, HealthCheckParams, HealthCheckRes
 /// Run the MCP server over stdio transport.
 ///
 /// Serves the MCP protocol over stdin/stdout.
-pub async fn run_stdio() -> anyhow::Result<()> {
+///
+/// # Arguments
+/// * `read_only` - If true, disables write tools (`post_triage`, `post_review`)
+pub async fn run_stdio(read_only: bool) -> anyhow::Result<()> {
     use rmcp::{ServiceExt, transport::stdio};
 
     tracing::info!("Starting aptu MCP server (stdio)");
 
-    let server = AptuServer::new();
+    let server = AptuServer::new(read_only);
     let service = server.serve(stdio()).await.inspect_err(|e| {
         tracing::error!("Server error: {:?}", e);
     })?;
@@ -33,7 +36,12 @@ pub async fn run_stdio() -> anyhow::Result<()> {
 ///
 /// Starts an HTTP server on the specified host and port, serving the MCP protocol
 /// at the /mcp endpoint. Gracefully shuts down on Ctrl+C.
-pub async fn run_http(host: &str, port: u16) -> anyhow::Result<()> {
+///
+/// # Arguments
+/// * `host` - Host to bind to
+/// * `port` - Port to bind to
+/// * `read_only` - If true, disables write tools (`post_triage`, `post_review`)
+pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<()> {
     use axum::Router;
     use rmcp::transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
@@ -48,8 +56,8 @@ pub async fn run_http(host: &str, port: u16) -> anyhow::Result<()> {
     let config = StreamableHttpServerConfig::default();
 
     let service = StreamableHttpService::new(
-        || {
-            let server = AptuServer::new();
+        move || {
+            let server = AptuServer::new(read_only);
             Ok(server)
         },
         session_manager,

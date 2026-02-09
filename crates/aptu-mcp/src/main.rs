@@ -25,6 +25,10 @@ struct Cli {
     /// Port to bind to (HTTP mode only)
     #[arg(long, default_value = "3000")]
     port: u16,
+
+    /// Enable read-only mode (disables write tools: `post_triage`, `post_review`)
+    #[arg(long)]
+    read_only: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -53,8 +57,8 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Some(Command::Run) | None => match cli.transport {
-            Transport::Stdio => aptu_mcp::run_stdio().await,
-            Transport::Http => aptu_mcp::run_http(&cli.host, cli.port).await,
+            Transport::Stdio => aptu_mcp::run_stdio(cli.read_only).await,
+            Transport::Http => aptu_mcp::run_http(&cli.host, cli.port, cli.read_only).await,
         },
     }
 }
