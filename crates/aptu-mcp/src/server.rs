@@ -117,7 +117,7 @@ pub struct AptuServer {
 
 impl Default for AptuServer {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
@@ -128,10 +128,23 @@ impl Default for AptuServer {
 #[tool_router]
 impl AptuServer {
     /// Create a new `AptuServer` with initialized routers.
+    ///
+    /// # Arguments
+    /// * `read_only` - If true, disables write tools (`post_triage`, `post_review`)
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(read_only: bool) -> Self {
+        let mut tool_router = Self::tool_router();
+
+        if read_only {
+            tool_router.remove_route("post_triage");
+            tool_router.remove_route("post_review");
+            tracing::info!(
+                "Read-only mode enabled: write tools disabled (post_triage, post_review)"
+            );
+        }
+
         Self {
-            tool_router: Self::tool_router(),
+            tool_router,
             prompt_router: Self::prompt_router(),
         }
     }
@@ -581,7 +594,7 @@ mod tests {
 
     #[test]
     fn server_info_has_all_capabilities() {
-        let server = AptuServer::new();
+        let server = AptuServer::new(false);
         let info = server.get_info();
         let caps = &info.capabilities;
         assert!(caps.tools.is_some());
@@ -591,7 +604,7 @@ mod tests {
 
     #[test]
     fn server_info_has_instructions() {
-        let server = AptuServer::new();
+        let server = AptuServer::new(false);
         let info = server.get_info();
         assert!(info.instructions.is_some());
         let instructions = info.instructions.unwrap();
@@ -783,5 +796,29 @@ mod tests {
             health_tool.annotations.as_ref().unwrap().idempotent_hint,
             Some(true)
         );
+    }
+
+    #[test]
+    fn read_only_false_includes_all_tools() {
+        let server = AptuServer::new(false);
+        let tools = server.tool_router.list_all();
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
+        assert_eq!(names.len(), 6);
+        assert!(names.contains(&"post_triage"));
+        assert!(names.contains(&"post_review"));
+    }
+
+    #[test]
+    fn read_only_true_removes_write_tools() {
+        let server = AptuServer::new(true);
+        let tools = server.tool_router.list_all();
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
+        assert_eq!(names.len(), 4);
+        assert!(!names.contains(&"post_triage"));
+        assert!(!names.contains(&"post_review"));
+        assert!(names.contains(&"triage_issue"));
+        assert!(names.contains(&"review_pr"));
+        assert!(names.contains(&"scan_security"));
+        assert!(names.contains(&"health"));
     }
 }
