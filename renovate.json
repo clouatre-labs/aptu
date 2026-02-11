@@ -3,6 +3,7 @@
   "extends": ["config:best-practices"],
   "labels": ["dependencies"],
   "platformAutomerge": true,
+  "ignorePaths": ["fuzz/**"],
   "packageRules": [
     {
       "matchUpdateTypes": ["patch"],
