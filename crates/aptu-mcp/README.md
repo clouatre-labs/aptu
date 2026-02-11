@@ -16,7 +16,7 @@ MCP server for Aptu - AI-Powered Triage Utility.
 - **2 Prompts** - triage_guide and review_checklist for guided workflows
 - **4 Resources** - curated repos, good first issues, config, and repo detail template
 - **Dual Transport** - stdio for local editors, HTTP for remote deployments
-- **Multiple Providers** - Gemini (default), Cerebras, Groq, `OpenRouter`, `Z.AI`, and `ZenMux`
+- **Multiple Providers** - Groq (default), Cerebras, Gemini, `OpenRouter`, `Z.AI`, and `ZenMux`
 - **Read-Only Mode** - Use --read-only flag to disable write operations (post_triage, post_review)
 
 ## Installation
@@ -37,7 +37,7 @@ Add to your MCP client configuration:
       "args": ["run"],
       "env": {
         "GITHUB_TOKEN": "ghp_...",
-        "AI_API_KEY": "sk-or-..."
+        "GROQ_API_KEY": "gsk_..."
       }
     }
   }
@@ -49,7 +49,8 @@ Add to your MCP client configuration:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GITHUB_TOKEN` | Yes | GitHub personal access token |
-| `AI_API_KEY` | Yes | AI provider API key (fallback for all providers) |
+| `GROQ_API_KEY` | Yes | Groq API key (default provider) |
+| `AI_API_KEY` | No | AI provider API key (fallback for all providers) |
 | `OPENROUTER_API_KEY` | No | Provider-specific key (takes precedence over `AI_API_KEY`) |
 | `RUST_LOG` | No | Logging level (default: `info`) |
 

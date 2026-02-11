@@ -30,7 +30,7 @@ Aptu uses **task specialization** over raw model capability:
 | Prompt | Tuned for code review patterns | General reasoning |
 | Attention | 100% on code quality | Split across many tasks |
 
-The small specialized model is not smarter, just less distracted. In real-world testing, aptu's PR review (using the default gemini-3-flash-preview) caught regex-based HTML parsing and missing error handling that claude-opus-4.5 shipped as "done".
+The small specialized model is not smarter, just less distracted. In real-world testing, aptu's PR review (using the default groq/openai/gpt-oss-120b) caught regex-based HTML parsing and missing error handling that claude-opus-4.5 shipped as "done".
 
 ## Features
 
@@ -40,7 +40,7 @@ The small specialized model is not smarter, just less distracted. In real-world 
 - **Release Notes** - AI-curated changelogs from merged PRs
 - **GitHub Action** - Auto-triage incoming issues with labels and comments
 - **MCP Server** - Model Context Protocol integration for AI assistants
-- **Multiple Providers** - Gemini (default), Cerebras, Groq, OpenRouter, Z.AI, and ZenMux
+- **Multiple Providers** - Groq (default), Cerebras, Gemini, OpenRouter, Z.AI, and ZenMux
 - **Local History** - Track your contributions offline
 - **Multiple Outputs** - Text, JSON, YAML, Markdown, and SARIF
 
@@ -90,7 +90,7 @@ Auto-triage new issues with AI using any supported provider.
 - uses: clouatre-labs/aptu@v0
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
-    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+    groq-api-key: ${{ secrets.GROQ_API_KEY }}
 ```
 
 Options: `apply-labels`, `no-comment`, `skip-labeled`, `dry-run`, `model`, `provider`.
