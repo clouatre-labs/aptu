@@ -184,14 +184,7 @@ impl Default for AiConfig {
             circuit_breaker_threshold: 3,
             circuit_breaker_reset_seconds: 60,
             retry_max_attempts: default_retry_max_attempts(),
-            tasks: Some(TasksConfig {
-                triage: None,
-                review: Some(TaskOverride {
-                    provider: Some("groq".to_string()),
-                    model: Some("openai/gpt-oss-120b".to_string()),
-                }),
-                create: None,
-            }),
+            tasks: None,
             fallback: None,
             custom_guidance: None,
             validation_enabled: true,
@@ -557,29 +550,23 @@ model = "gemini-3-flash-preview"
 
         assert_eq!(app_config.ai.provider, "gemini");
         assert_eq!(app_config.ai.model, "gemini-3-flash-preview");
-        // When no tasks section is provided, defaults are used (which include review override)
-        assert!(app_config.ai.tasks.is_some());
-        let tasks = app_config.ai.tasks.unwrap();
-        assert!(tasks.review.is_some());
-        let review = tasks.review.unwrap();
-        assert_eq!(review.provider, Some("groq".to_string()));
-        assert_eq!(review.model, Some("openai/gpt-oss-120b".to_string()));
+        // When no tasks section is provided, tasks should be None
+        assert!(app_config.ai.tasks.is_none());
     }
 
     #[test]
     fn test_resolve_for_task_with_defaults() {
-        // Test that resolve_for_task returns correct defaults including review override
+        // Test that resolve_for_task returns unified gemini defaults for all tasks
         let ai_config = AiConfig::default();
 
-        // Triage and Create use global defaults
+        // All tasks use global defaults
         let (provider, model) = ai_config.resolve_for_task(TaskType::Triage);
         assert_eq!(provider, "gemini");
         assert_eq!(model, "gemini-3-flash-preview");
 
-        // Review uses task-specific override
         let (provider, model) = ai_config.resolve_for_task(TaskType::Review);
-        assert_eq!(provider, "groq");
-        assert_eq!(model, "openai/gpt-oss-120b");
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3-flash-preview");
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "gemini");

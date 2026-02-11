@@ -37,7 +37,7 @@ Add to your MCP client configuration:
       "args": ["run"],
       "env": {
         "GITHUB_TOKEN": "ghp_...",
-        "AI_API_KEY": "sk-or-..."
+        "GEMINI_API_KEY": "..."
       }
     }
   }
@@ -49,8 +49,10 @@ Add to your MCP client configuration:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GITHUB_TOKEN` | Yes | GitHub personal access token |
-| `AI_API_KEY` | Yes | AI provider API key (fallback for all providers) |
-| `OPENROUTER_API_KEY` | No | Provider-specific key (takes precedence over `AI_API_KEY`) |
+| `GEMINI_API_KEY` | Yes | Gemini API key (primary provider) |
+| `GROQ_API_KEY` | No | Groq API key (provider-specific, optional) |
+| `CEREBRAS_API_KEY` | No | Cerebras API key (provider-specific, optional) |
+| `OPENROUTER_API_KEY` | No | OpenRouter API key (provider-specific, optional) |
 | `RUST_LOG` | No | Logging level (default: `info`) |
 
 ## Development
