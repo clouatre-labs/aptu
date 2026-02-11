@@ -45,7 +45,7 @@ gh attestation verify aptu-<target>.tar.gz --owner clouatre-labs
 
 ### Branch Protection
 
-Rulesets enforce signed commits, required status checks, CODEOWNERS review, and merge queue. As a solo-maintained project, multi-reviewer requirements are not practical, which limits the OpenSSF Scorecard Branch-Protection score.
+Rulesets enforce signed commits, required status checks, CODEOWNERS review, and strict branch freshness (branches must be up-to-date with main before merging). As a solo-maintained project, multi-reviewer requirements are not practical, which limits the OpenSSF Scorecard Branch-Protection score.
 
 ### Artifact Signing
 
