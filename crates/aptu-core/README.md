@@ -15,6 +15,7 @@ Core library for Aptu - AI-Powered Triage Utility.
 - **AI Triage** - Analyze issues with summaries, labels, and contributor guidance
 - **PR Review** - AI-powered pull request analysis and feedback
 - **Release Notes** - AI-generated release notes from PRs between tags
+- **Security Scanning** - Built-in security pattern detection with SARIF output
 - **Multiple Providers** - Gemini (default), Cerebras, Groq, `OpenRouter`, `Z.AI`, and `ZenMux`
 - **GitHub Integration** - Auth, issues, PRs, and GraphQL queries
 - **Resilient** - Exponential backoff, circuit breaker, rate limit handling
@@ -77,9 +78,11 @@ async fn main() -> Result<()> {
 
 - [`ai`](https://docs.rs/aptu-core/latest/aptu_core/ai/) - AI integration and triage analysis
 - [`config`](https://docs.rs/aptu-core/latest/aptu_core/config/) - Configuration loading and XDG paths
+- [`facade`](https://docs.rs/aptu-core/latest/aptu_core/facade/) - High-level platform-agnostic API
 - [`github`](https://docs.rs/aptu-core/latest/aptu_core/github/) - GitHub API and authentication
 - [`history`](https://docs.rs/aptu-core/latest/aptu_core/history/) - Contribution history tracking
 - [`repos`](https://docs.rs/aptu-core/latest/aptu_core/repos/) - Curated repository list
+- [`security`](https://docs.rs/aptu-core/latest/aptu_core/security/) - Security pattern detection and SARIF output
 
 ## Support
 

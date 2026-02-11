@@ -17,6 +17,7 @@ MCP server for Aptu - AI-Powered Triage Utility.
 - **4 Resources** - curated repos, good first issues, config, and repo detail template
 - **Dual Transport** - stdio for local editors, HTTP for remote deployments
 - **Multiple Providers** - Gemini (default), Cerebras, Groq, `OpenRouter`, `Z.AI`, and `ZenMux`
+- **Read-Only Mode** - Use --read-only flag to disable write operations (post_triage, post_review)
 
 ## Installation
 
