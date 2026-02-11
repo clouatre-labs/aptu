@@ -55,7 +55,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 uniffi = { version = "0.31", features = ["cli"] }
 
 # MCP
-rmcp = { version = "0.14", features = ["server", "transport-io"] }
+rmcp = { version = "0.15", features = ["server", "transport-io"] }
 schemars = { version = "1.0" }
 
 # Dev dependencies
