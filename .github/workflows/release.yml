@@ -206,6 +206,7 @@ jobs:
             
             def install
               bin.install "aptu"
+              bin.install "aptu-mcp"
             end
             
             test do

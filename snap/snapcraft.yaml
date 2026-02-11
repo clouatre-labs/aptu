@@ -26,6 +26,7 @@ parts:
     source: .
     rust-path:
       - crates/aptu-cli
+      - crates/aptu-mcp
     build-packages:
       - pkg-config
       - libdbus-1-dev
@@ -36,6 +37,12 @@ parts:
 apps:
   aptu:
     command: bin/aptu
+    plugs:
+      - network
+      - home
+      - password-manager-service
+  aptu-mcp:
+    command: bin/aptu-mcp
     plugs:
       - network
       - home

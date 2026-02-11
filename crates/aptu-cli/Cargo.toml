@@ -71,6 +71,7 @@ section = "utility"
 priority = "optional"
 assets = [
   ["target/release/aptu", "usr/bin/", "755"],
+  ["target/release/aptu-mcp", "usr/bin/", "755"],
   ["../../README.md", "usr/share/doc/aptu/", "644"],
   ["../../LICENSE", "usr/share/doc/aptu/", "644"]
 ]
