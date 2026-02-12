@@ -97,6 +97,12 @@ Options: `apply-labels`, `no-comment`, `skip-labeled`, `dry-run`, `model`, `prov
 
 See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for setup and examples.
 
+## MCP Server
+
+Integrate aptu with AI tools via the Model Context Protocol (MCP). Supports stdio (goose, Claude Desktop) and HTTP (remote/containerized).
+
+See [docs/MCP_SERVER.md](docs/mcp.md) for client configuration and Docker deployment.
+
 ## Configuration
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for AI provider setup.

@@ -1,0 +1,10 @@
+target/
+.git/
+.github/
+.worktrees/
+.handoff/
+assets/
+tests/
+docs/
+*.md
+LICENSE
