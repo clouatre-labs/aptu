@@ -23,7 +23,7 @@ struct Cli {
     host: String,
 
     /// Port to bind to (HTTP mode only)
-    #[arg(long, default_value = "3000")]
+    #[arg(long, default_value = "8080")]
     port: u16,
 
     /// Enable read-only mode (disables write tools: `post_triage`, `post_review`)

@@ -121,7 +121,7 @@ SPDX-FileCopyrightText = "2025 Aptu Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = [".gitignore", ".gitattributes", ".editorconfig"]
+path = [".gitignore", ".gitattributes", ".editorconfig", ".dockerignore"]
 precedence = "override"
 SPDX-FileCopyrightText = "2025 Aptu Contributors"
 SPDX-License-Identifier = "Apache-2.0"
