@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-FROM rust:1.92.0-alpine AS chef
+FROM rust:1.93.0-alpine@sha256:69d7b9d9aeaf108a1419d9a7fcf7860dcc043e9dbd1ab7ce88e44228774d99e9 AS chef
 RUN apk add --no-cache musl-dev && cargo install cargo-chef
 WORKDIR /app
 
