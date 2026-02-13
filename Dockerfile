@@ -14,7 +14,7 @@ RUN cargo chef cook --release --recipe-path recipe.json -p aptu-mcp
 COPY . .
 RUN cargo build --release -p aptu-mcp
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:cba10d7abd3e203428e86f5b2d7fd5eb7d8987c387864ae4996cf97191b33764
 
 LABEL org.opencontainers.image.title="aptu-mcp" \
       org.opencontainers.image.description="MCP server for AI-powered GitHub triage and review" \
