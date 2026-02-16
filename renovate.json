@@ -6,7 +6,7 @@
   "ignorePaths": ["fuzz/**"],
   "packageRules": [
     {
-      "matchUpdateTypes": ["patch", "minor", "digest", "pin"],
+      "matchUpdateTypes": ["patch", "minor", "digest", "pin", "lockFileMaintenance"],
       "automerge": true
     },
     {
