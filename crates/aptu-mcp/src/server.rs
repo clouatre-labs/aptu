@@ -113,6 +113,7 @@ pub struct HealthCheckParams {}
 pub struct AptuServer {
     tool_router: ToolRouter<Self>,
     prompt_router: PromptRouter<Self>,
+    ai_config: aptu_core::config::AiConfig,
 }
 
 impl Default for AptuServer {
@@ -127,12 +128,13 @@ impl Default for AptuServer {
 
 #[tool_router]
 impl AptuServer {
-    /// Create a new `AptuServer` with initialized routers.
+    /// Create a new `AptuServer` with custom AI configuration.
     ///
     /// # Arguments
     /// * `read_only` - If true, disables write tools (`post_triage`, `post_review`)
+    /// * `ai_config` - AI provider configuration to use for all tool handlers
     #[must_use]
-    pub fn new(read_only: bool) -> Self {
+    pub fn with_config(read_only: bool, ai_config: aptu_core::config::AiConfig) -> Self {
         let mut tool_router = Self::tool_router();
 
         if read_only {
@@ -146,7 +148,20 @@ impl AptuServer {
         Self {
             tool_router,
             prompt_router: Self::prompt_router(),
+            ai_config,
         }
+    }
+
+    /// Create a new `AptuServer` with default AI configuration.
+    ///
+    /// This is a backward-compatible wrapper around `with_config()` that uses
+    /// `AiConfig::default()`. For custom configuration, use `with_config()` instead.
+    ///
+    /// # Arguments
+    /// * `read_only` - If true, disables write tools (`post_triage`, `post_review`)
+    #[must_use]
+    pub fn new(read_only: bool) -> Self {
+        Self::with_config(read_only, aptu_core::config::AiConfig::default())
     }
 
     #[tool(
@@ -159,7 +174,7 @@ impl AptuServer {
         Parameters(params): Parameters<TriageIssueParams>,
     ) -> Result<CallToolResult, McpError> {
         let provider = EnvTokenProvider;
-        let ai_config = aptu_core::config::AiConfig::default();
+        let ai_config = self.ai_config.clone();
 
         let issue = aptu_core::facade::fetch_issue_for_triage(&provider, &params.issue_ref, None)
             .await
@@ -183,7 +198,7 @@ impl AptuServer {
         Parameters(params): Parameters<ReviewPrParams>,
     ) -> Result<CallToolResult, McpError> {
         let provider = EnvTokenProvider;
-        let ai_config = aptu_core::config::AiConfig::default();
+        let ai_config = self.ai_config.clone();
 
         let pr = aptu_core::facade::fetch_pr_for_review(&provider, &params.pr_ref, None)
             .await
@@ -223,7 +238,7 @@ impl AptuServer {
         Parameters(params): Parameters<PostTriageParams>,
     ) -> Result<CallToolResult, McpError> {
         let provider = EnvTokenProvider;
-        let ai_config = aptu_core::config::AiConfig::default();
+        let ai_config = self.ai_config.clone();
 
         let issue = aptu_core::facade::fetch_issue_for_triage(&provider, &params.issue_ref, None)
             .await
@@ -253,7 +268,7 @@ impl AptuServer {
         Parameters(params): Parameters<PostReviewParams>,
     ) -> Result<CallToolResult, McpError> {
         let provider = EnvTokenProvider;
-        let ai_config = aptu_core::config::AiConfig::default();
+        let ai_config = self.ai_config.clone();
 
         let pr = aptu_core::facade::fetch_pr_for_review(&provider, &params.pr_ref, None)
             .await
@@ -820,5 +835,26 @@ mod tests {
         assert!(names.contains(&"review_pr"));
         assert!(names.contains(&"scan_security"));
         assert!(names.contains(&"health"));
+    }
+
+    #[test]
+    fn with_config_stores_custom_config() {
+        let custom_config = aptu_core::config::AiConfig {
+            provider: "custom-provider".to_string(),
+            model: "custom-model".to_string(),
+            ..Default::default()
+        };
+
+        let server = AptuServer::with_config(false, custom_config.clone());
+        assert_eq!(server.ai_config.provider, "custom-provider");
+        assert_eq!(server.ai_config.model, "custom-model");
+    }
+
+    #[test]
+    fn new_wraps_with_config_default() {
+        let server = AptuServer::new(false);
+        let default_config = aptu_core::config::AiConfig::default();
+        assert_eq!(server.ai_config.provider, default_config.provider);
+        assert_eq!(server.ai_config.model, default_config.model);
     }
 }
