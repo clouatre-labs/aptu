@@ -19,11 +19,16 @@ pub use server::{AptuServer, CredentialStatus, HealthCheckParams, HealthCheckRes
 /// # Arguments
 /// * `read_only` - If true, disables write tools (`post_triage`, `post_review`)
 pub async fn run_stdio(read_only: bool) -> anyhow::Result<()> {
+    use anyhow::Context;
     use rmcp::{ServiceExt, transport::stdio};
 
     tracing::info!("Starting aptu MCP server (stdio)");
 
-    let server = AptuServer::new(read_only);
+    let ai_config = aptu_core::config::load_config()
+        .context("Failed to load configuration")?
+        .ai;
+
+    let server = AptuServer::with_config(read_only, ai_config);
     let service = server.serve(stdio()).await.inspect_err(|e| {
         tracing::error!("Server error: {:?}", e);
     })?;
@@ -42,6 +47,7 @@ pub async fn run_stdio(read_only: bool) -> anyhow::Result<()> {
 /// * `port` - Port to bind to
 /// * `read_only` - If true, disables write tools (`post_triage`, `post_review`)
 pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<()> {
+    use anyhow::Context;
     use axum::Router;
     use rmcp::transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
@@ -52,12 +58,16 @@ pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<
 
     tracing::info!("Starting aptu MCP HTTP server on {}:{}", host, port);
 
+    let ai_config = aptu_core::config::load_config()
+        .context("Failed to load configuration")?
+        .ai;
+
     let session_manager = Arc::new(LocalSessionManager::default());
     let config = StreamableHttpServerConfig::default();
 
     let service = StreamableHttpService::new(
         move || {
-            let server = AptuServer::new(read_only);
+            let server = AptuServer::with_config(read_only, ai_config.clone());
             Ok(server)
         },
         session_manager,
