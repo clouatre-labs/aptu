@@ -59,7 +59,7 @@ jobs:
           key: ${{ inputs.target }}
       - name: Install cargo-deb
         if: ${{ startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux') }}
-        uses: taiki-e/install-action@4a136ceac97fe29b942ff3b6c749a46c7950d853 # v2
+        uses: taiki-e/install-action@f23382d582832e41d5eb4fff2bddb06bc5adf8d3 # v2
         with:
           tool: cargo-deb
       - name: Build and upload binary
