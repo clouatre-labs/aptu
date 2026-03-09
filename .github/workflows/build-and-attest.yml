@@ -65,7 +65,7 @@ jobs:
       - name: Build and upload binary
         if: ${{ !inputs.dry_run }}
         id: upload
-        uses: taiki-e/upload-rust-binary-action@f391289bcff6a7f36b6301c0a74199657bbb4561 # v1
+        uses: taiki-e/upload-rust-binary-action@381995c84a8e242b8736ec80211c563d7bd07ce7 # v1
         with:
           bin: aptu,aptu-mcp
           target: ${{ inputs.target }}
