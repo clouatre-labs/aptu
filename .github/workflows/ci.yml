@@ -126,7 +126,7 @@ jobs:
           toolchain: stable
           components: clippy
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@c676846f29d98ff6b0106d3608c7ffd4048af17b # v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -149,7 +149,7 @@ jobs:
         with:
           toolchain: stable
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@c676846f29d98ff6b0106d3608c7ffd4048af17b # v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -170,7 +170,7 @@ jobs:
         with:
           toolchain: stable
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@c676846f29d98ff6b0106d3608c7ffd4048af17b # v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
