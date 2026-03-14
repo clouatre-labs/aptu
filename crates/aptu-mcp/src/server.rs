@@ -9,10 +9,10 @@ use rmcp::{
     },
     model::{
         AnnotateAble, CallToolResult, Content, GetPromptRequestParams, GetPromptResult,
-        Implementation, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
-        PaginatedRequestParams, PromptMessage, PromptMessageRole, ProtocolVersion, RawResource,
-        RawResourceTemplate, ReadResourceRequestParams, ReadResourceResult, Resource,
-        ResourceContents, ResourceTemplate, ServerCapabilities, ServerInfo,
+        ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+        PaginatedRequestParams, PromptMessage, PromptMessageRole, RawResource, RawResourceTemplate,
+        ReadResourceRequestParams, ReadResourceResult, Resource, ResourceContents,
+        ResourceTemplate, ServerCapabilities, ServerInfo,
     },
     prompt, prompt_handler, prompt_router,
     schemars::JsonSchema,
@@ -484,9 +484,9 @@ async fn read_resource_by_uri(uri: &str) -> Result<ReadResourceResult, McpError>
                 .await
                 .map_err(|e| aptu_error_to_mcp(&e))?;
             let json = serde_json::to_string_pretty(&repos).map_err(generic_to_mcp_error)?;
-            Ok(ReadResourceResult {
-                contents: vec![ResourceContents::text(json, uri)],
-            })
+            Ok(ReadResourceResult::new(vec![ResourceContents::text(
+                json, uri,
+            )]))
         }
         "aptu://issues" => {
             let provider = EnvTokenProvider;
@@ -494,17 +494,17 @@ async fn read_resource_by_uri(uri: &str) -> Result<ReadResourceResult, McpError>
                 .await
                 .map_err(|e| aptu_error_to_mcp(&e))?;
             let json = serde_json::to_string_pretty(&issues).map_err(generic_to_mcp_error)?;
-            Ok(ReadResourceResult {
-                contents: vec![ResourceContents::text(json, uri)],
-            })
+            Ok(ReadResourceResult::new(vec![ResourceContents::text(
+                json, uri,
+            )]))
         }
         "aptu://config" => {
             let config = aptu_core::config::load_config().map_err(|e| aptu_error_to_mcp(&e))?;
             // AppConfig derives Debug but not Serialize; use debug format
             let text = format!("{config:#?}");
-            Ok(ReadResourceResult {
-                contents: vec![ResourceContents::text(text, uri)],
-            })
+            Ok(ReadResourceResult::new(vec![ResourceContents::text(
+                text, uri,
+            )]))
         }
         _ => {
             // Try template: aptu://repos/{owner}/{name}
@@ -527,9 +527,9 @@ async fn read_resource_by_uri(uri: &str) -> Result<ReadResourceResult, McpError>
                             )
                         })?;
                     let json = serde_json::to_string_pretty(repo).map_err(generic_to_mcp_error)?;
-                    return Ok(ReadResourceResult {
-                        contents: vec![ResourceContents::text(json, uri)],
-                    });
+                    return Ok(ReadResourceResult::new(vec![ResourceContents::text(
+                        json, uri,
+                    )]));
                 }
             }
             Err(McpError::resource_not_found(
@@ -548,22 +548,19 @@ async fn read_resource_by_uri(uri: &str) -> Result<ReadResourceResult, McpError>
 #[prompt_handler]
 impl ServerHandler for AptuServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: ProtocolVersion::V_2024_11_05,
-            capabilities: ServerCapabilities::builder()
+        ServerInfo::new(
+            ServerCapabilities::builder()
                 .enable_tools()
                 .enable_prompts()
                 .enable_resources()
                 .build(),
-            server_info: Implementation::from_build_env(),
-            instructions: Some(
-                "Aptu MCP server for AI-powered GitHub issue triage and PR review. \
-                 Tools: triage_issue, review_pr, scan_security, post_triage, post_review. \
-                 Resources: repos, issues, config. \
-                 Prompts: triage_guide, review_checklist."
-                    .to_string(),
-            ),
-        }
+        )
+        .with_instructions(
+            "Aptu MCP server for AI-powered GitHub issue triage and PR review. \
+             Tools: triage_issue, review_pr, scan_security, post_triage, post_review. \
+             Resources: repos, issues, config. \
+             Prompts: triage_guide, review_checklist.",
+        )
     }
 
     async fn list_resources(
