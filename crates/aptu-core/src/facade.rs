@@ -313,17 +313,14 @@ fn validate_provider_model(provider: &str, model: &str) -> crate::Result<()> {
 }
 
 /// Result of the AI operation, or error if all providers fail.
-async fn try_with_fallback<T, F, Fut>(
+/// Setup and validate primary AI provider synchronously.
+/// Returns the created AI client or an error.
+fn try_setup_primary_client(
     provider: &dyn TokenProvider,
     primary_provider: &str,
     model_name: &str,
     ai_config: &AiConfig,
-    operation: F,
-) -> crate::Result<T>
-where
-    F: Fn(AiClient) -> Fut,
-    Fut: std::future::Future<Output = anyhow::Result<T>>,
-{
+) -> crate::Result<AiClient> {
     let api_key = provider.ai_api_key(primary_provider).ok_or_else(|| {
         let env_var = get_provider(primary_provider).map_or("API_KEY", |p| p.api_key_env);
         AptuError::AiProviderNotAuthenticated {
@@ -336,12 +333,138 @@ where
         validate_provider_model(primary_provider, model_name)?;
     }
 
-    let ai_client = AiClient::with_api_key(primary_provider, api_key, model_name, ai_config)
-        .map_err(|e| AptuError::AI {
+    AiClient::with_api_key(primary_provider, api_key, model_name, ai_config).map_err(|e| {
+        AptuError::AI {
             message: e.to_string(),
             status: None,
             provider: primary_provider.to_string(),
-        })?;
+        }
+    })
+}
+
+/// Set up an AI client for a single fallback provider entry.
+///
+/// Returns `Ok(Some(client))` on success, `Ok(None)` if the entry should be skipped.
+fn setup_fallback_client(
+    provider: &dyn TokenProvider,
+    entry: &crate::config::FallbackEntry,
+    model_name: &str,
+    ai_config: &AiConfig,
+) -> Option<AiClient> {
+    let Some(api_key) = provider.ai_api_key(&entry.provider) else {
+        warn!(
+            fallback_provider = entry.provider,
+            "No API key available for fallback provider"
+        );
+        return None;
+    };
+
+    let fallback_model = entry.model.as_deref().unwrap_or(model_name);
+
+    if ai_config.validation_enabled
+        && validate_provider_model(&entry.provider, fallback_model).is_err()
+    {
+        warn!(
+            fallback_provider = entry.provider,
+            fallback_model = fallback_model,
+            "Fallback provider model validation failed, continuing to next provider"
+        );
+        return None;
+    }
+
+    if let Ok(client) = AiClient::with_api_key(&entry.provider, api_key, fallback_model, ai_config)
+    {
+        Some(client)
+    } else {
+        warn!(
+            fallback_provider = entry.provider,
+            "Failed to create AI client for fallback provider"
+        );
+        None
+    }
+}
+
+/// Try a single fallback provider entry.
+async fn try_fallback_entry<T, F, Fut>(
+    provider: &dyn TokenProvider,
+    entry: &crate::config::FallbackEntry,
+    model_name: &str,
+    ai_config: &AiConfig,
+    operation: &F,
+) -> crate::Result<Option<T>>
+where
+    F: Fn(AiClient) -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    warn!(
+        fallback_provider = entry.provider,
+        "Attempting fallback provider"
+    );
+
+    let Some(ai_client) = setup_fallback_client(provider, entry, model_name, ai_config) else {
+        return Ok(None);
+    };
+
+    match operation(ai_client).await {
+        Ok(response) => {
+            info!(
+                fallback_provider = entry.provider,
+                "Successfully completed operation with fallback provider"
+            );
+            Ok(Some(response))
+        }
+        Err(e) => {
+            warn!(
+                fallback_provider = entry.provider,
+                error = %e,
+                "Fallback provider failed"
+            );
+            Ok(None)
+        }
+    }
+}
+
+/// Execute fallback chain when primary provider fails with non-retryable error.
+async fn execute_fallback_chain<T, F, Fut>(
+    provider: &dyn TokenProvider,
+    primary_provider: &str,
+    model_name: &str,
+    ai_config: &AiConfig,
+    operation: F,
+) -> crate::Result<T>
+where
+    F: Fn(AiClient) -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    if let Some(fallback_config) = &ai_config.fallback {
+        for entry in &fallback_config.chain {
+            if let Some(response) =
+                try_fallback_entry(provider, entry, model_name, ai_config, &operation).await?
+            {
+                return Ok(response);
+            }
+        }
+    }
+
+    Err(AptuError::AI {
+        message: "All AI providers failed (primary and fallback chain)".to_string(),
+        status: None,
+        provider: primary_provider.to_string(),
+    })
+}
+
+async fn try_with_fallback<T, F, Fut>(
+    provider: &dyn TokenProvider,
+    primary_provider: &str,
+    model_name: &str,
+    ai_config: &AiConfig,
+    operation: F,
+) -> crate::Result<T>
+where
+    F: Fn(AiClient) -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    let ai_client = try_setup_primary_client(provider, primary_provider, model_name, ai_config)?;
 
     match operation(ai_client).await {
         Ok(response) => return Ok(response),
@@ -361,68 +484,7 @@ where
         }
     }
 
-    if let Some(fallback_config) = &ai_config.fallback {
-        for entry in &fallback_config.chain {
-            warn!(
-                fallback_provider = entry.provider,
-                "Attempting fallback provider"
-            );
-
-            let Some(api_key) = provider.ai_api_key(&entry.provider) else {
-                warn!(
-                    fallback_provider = entry.provider,
-                    "No API key available for fallback provider"
-                );
-                continue;
-            };
-
-            let fallback_model = entry.model.as_deref().unwrap_or(model_name);
-
-            if ai_config.validation_enabled
-                && validate_provider_model(&entry.provider, fallback_model).is_err()
-            {
-                warn!(
-                    fallback_provider = entry.provider,
-                    fallback_model = fallback_model,
-                    "Fallback provider model validation failed, continuing to next provider"
-                );
-                continue;
-            }
-
-            let Ok(ai_client) =
-                AiClient::with_api_key(&entry.provider, api_key, fallback_model, ai_config)
-            else {
-                warn!(
-                    fallback_provider = entry.provider,
-                    "Failed to create AI client for fallback provider"
-                );
-                continue;
-            };
-
-            match operation(ai_client).await {
-                Ok(response) => {
-                    info!(
-                        fallback_provider = entry.provider,
-                        "Successfully completed operation with fallback provider"
-                    );
-                    return Ok(response);
-                }
-                Err(e) => {
-                    warn!(
-                        fallback_provider = entry.provider,
-                        error = %e,
-                        "Fallback provider failed"
-                    );
-                }
-            }
-        }
-    }
-
-    Err(AptuError::AI {
-        message: "All AI providers failed (primary and fallback chain)".to_string(),
-        status: None,
-        provider: primary_provider.to_string(),
-    })
+    execute_fallback_chain(provider, primary_provider, model_name, ai_config, operation).await
 }
 
 /// Analyzes a GitHub issue and generates triage suggestions.

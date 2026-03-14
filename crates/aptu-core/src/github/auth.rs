@@ -102,6 +102,29 @@ pub fn get_stored_token() -> Option<SecretString> {
     Some(SecretString::from(password))
 }
 
+/// Parse GitHub CLI output and extract token.
+/// Returns Some(token) if output is successful and non-empty, None otherwise.
+fn parse_gh_cli_output(output: &std::process::Output) -> Option<SecretString> {
+    if output.status.success() {
+        let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if token.is_empty() {
+            debug!("gh auth token returned empty output");
+            None
+        } else {
+            debug!("Successfully retrieved token from gh CLI");
+            Some(SecretString::from(token))
+        }
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        debug!(
+            status = ?output.status,
+            stderr = %stderr.trim(),
+            "gh auth token failed"
+        );
+        None
+    }
+}
+
 /// Attempts to get a token from the GitHub CLI (`gh auth token`).
 ///
 /// Returns `None` if:
@@ -117,30 +140,23 @@ fn get_token_from_gh_cli() -> Option<SecretString> {
     let output = Command::new("gh").args(["auth", "token"]).output();
 
     match output {
-        Ok(output) if output.status.success() => {
-            let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if token.is_empty() {
-                debug!("gh auth token returned empty output");
-                None
-            } else {
-                debug!("Successfully retrieved token from gh CLI");
-                Some(SecretString::from(token))
-            }
-        }
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            debug!(
-                status = ?output.status,
-                stderr = %stderr.trim(),
-                "gh auth token failed"
-            );
-            None
-        }
+        Ok(output) => parse_gh_cli_output(&output),
         Err(e) => {
             debug!(error = %e, "Failed to execute gh command");
             None
         }
     }
+}
+
+/// Check environment variable for token.
+fn check_env_token<F>(env_reader: &F, var_name: &str) -> Option<SecretString>
+where
+    F: Fn(&str) -> Result<String, std::env::VarError>,
+{
+    env_reader(var_name)
+        .ok()
+        .filter(|token| !token.is_empty())
+        .map(SecretString::from)
 }
 
 /// Generic token resolution logic that accepts an environment variable reader.
@@ -164,36 +180,40 @@ where
     F: Fn(&str) -> Result<String, std::env::VarError>,
 {
     // Priority 1: GH_TOKEN environment variable
-    if let Ok(token) = env_reader("GH_TOKEN")
-        && !token.is_empty()
-    {
+    let result = check_env_token(&env_reader, "GH_TOKEN").map(|t| {
         debug!("Using token from GH_TOKEN environment variable");
-        return Some((SecretString::from(token), TokenSource::Environment));
-    }
+        (t, TokenSource::Environment)
+    });
 
     // Priority 2: GITHUB_TOKEN environment variable
-    if let Ok(token) = env_reader("GITHUB_TOKEN")
-        && !token.is_empty()
-    {
-        debug!("Using token from GITHUB_TOKEN environment variable");
-        return Some((SecretString::from(token), TokenSource::Environment));
-    }
+    let result = result.or_else(|| {
+        check_env_token(&env_reader, "GITHUB_TOKEN").map(|t| {
+            debug!("Using token from GITHUB_TOKEN environment variable");
+            (t, TokenSource::Environment)
+        })
+    });
 
     // Priority 3: GitHub CLI
-    if let Some(token) = get_token_from_gh_cli() {
-        debug!("Using token from GitHub CLI");
-        return Some((token, TokenSource::GhCli));
-    }
+    let result = result.or_else(|| {
+        get_token_from_gh_cli().map(|t| {
+            debug!("Using token from GitHub CLI");
+            (t, TokenSource::GhCli)
+        })
+    });
 
     // Priority 4: System keyring
     #[cfg(feature = "keyring")]
-    if let Some(token) = get_stored_token() {
-        debug!("Using token from system keyring");
-        return Some((token, TokenSource::Keyring));
-    }
+    let result = result.or_else(|| {
+        get_stored_token().map(|t| {
+            debug!("Using token from system keyring");
+            (t, TokenSource::Keyring)
+        })
+    });
 
-    debug!("No token found in any source");
-    None
+    if result.is_none() {
+        debug!("No token found in any source");
+    }
+    result
 }
 
 /// Internal token resolution logic without caching.

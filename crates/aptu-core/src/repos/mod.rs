@@ -58,6 +58,23 @@ fn embedded_defaults() -> Vec<CuratedRepo> {
     serde_json::from_str(EMBEDDED_REPOS).expect("embedded repos JSON is valid")
 }
 
+/// Fetch repositories from remote URL.
+async fn fetch_from_remote(url: &str) -> Vec<CuratedRepo> {
+    debug!("Fetching curated repositories from {}", url);
+
+    if let Some(repos) = async {
+        let response = reqwest::Client::new().get(url).send().await.ok()?;
+        response.json::<Vec<CuratedRepo>>().await.ok()
+    }
+    .await
+    {
+        repos
+    } else {
+        warn!("Failed to fetch or parse remote curated repositories, using embedded defaults");
+        embedded_defaults()
+    }
+}
+
 /// Fetch curated repositories from remote URL with TTL-based caching.
 ///
 /// Fetches the curated repository list from a remote JSON file
@@ -87,16 +104,8 @@ pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
         return Ok(repos);
     }
 
-    // Fetch from remote
-    debug!("Fetching curated repositories from {}", url);
-    let repos = if let Ok(repos) = reqwest::Client::new().get(url).send().await?.json().await {
-        repos
-    } else {
-        warn!("Failed to fetch remote curated repositories, using embedded defaults");
-        embedded_defaults()
-    };
-
-    // Cache the result
+    // Fetch from remote and cache the result
+    let repos = fetch_from_remote(url).await;
     let _ = cache.set("curated_repos", &repos);
     debug!("Fetched and cached {} curated repositories", repos.len());
 
@@ -112,6 +121,19 @@ pub enum RepoFilter {
     Curated,
     /// Include only custom repositories.
     Custom,
+}
+
+/// Add filtered repositories to result, deduplicating by full name.
+fn add_filtered_repos(
+    repos: &mut Vec<CuratedRepo>,
+    seen: &mut std::collections::HashSet<String>,
+    new_repos: Vec<CuratedRepo>,
+) {
+    for repo in new_repos {
+        if seen.insert(repo.full_name()) {
+            repos.push(repo);
+        }
+    }
 }
 
 /// Fetch repositories based on filter and configuration.
@@ -140,11 +162,7 @@ pub async fn fetch_all(filter: RepoFilter) -> crate::Result<Vec<CuratedRepo>> {
         RepoFilter::All | RepoFilter::Curated => {
             if config.repos.curated {
                 let curated = fetch().await?;
-                for repo in curated {
-                    if seen.insert(repo.full_name()) {
-                        repos.push(repo);
-                    }
-                }
+                add_filtered_repos(&mut repos, &mut seen, curated);
             }
         }
         RepoFilter::Custom => {}
@@ -154,11 +172,7 @@ pub async fn fetch_all(filter: RepoFilter) -> crate::Result<Vec<CuratedRepo>> {
     match filter {
         RepoFilter::All | RepoFilter::Custom => {
             let custom = custom::read_custom_repos()?;
-            for repo in custom {
-                if seen.insert(repo.full_name()) {
-                    repos.push(repo);
-                }
-            }
+            add_filtered_repos(&mut repos, &mut seen, custom);
         }
         RepoFilter::Curated => {}
     }
