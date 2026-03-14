@@ -96,9 +96,7 @@ pub fn has_keyring_token() -> bool {
 #[cfg(feature = "keyring")]
 pub fn get_stored_token() -> Option<SecretString> {
     let entry = keyring_entry().ok()?;
-    let password = entry.get_password().ok()?;
-    debug!("Retrieved token from keyring");
-    Some(SecretString::from(password))
+    Some(SecretString::from(entry.get_password().ok()?))
 }
 
 /// Parse GitHub CLI output and extract token.
