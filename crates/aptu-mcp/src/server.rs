@@ -9,7 +9,7 @@ use rmcp::{
     },
     model::{
         AnnotateAble, CallToolResult, Content, GetPromptRequestParams, GetPromptResult,
-        Implementation, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+        ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
         PaginatedRequestParams, PromptMessage, PromptMessageRole, RawResource, RawResourceTemplate,
         ReadResourceRequestParams, ReadResourceResult, Resource, ResourceContents,
         ResourceTemplate, ServerCapabilities, ServerInfo,
