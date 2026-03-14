@@ -213,13 +213,13 @@ pub fn parse_github_reference(
     }
 
     // Try short form: owner/repo#123
-    if let Ok(result) = parse_short_ref(kind, input) {
-        return Ok(result);
+    if input.contains('#') {
+        return parse_short_ref(kind, input);
     }
 
     // Try bare number: 123 (requires repo_context)
-    if let Ok(result) = parse_bare_ref(kind, input, repo_context) {
-        return Ok(result);
+    if input.parse::<u64>().is_ok() {
+        return parse_bare_ref(kind, input, repo_context);
     }
 
     // If we get here, it's an invalid format

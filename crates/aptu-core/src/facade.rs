@@ -312,7 +312,6 @@ fn validate_provider_model(provider: &str, model: &str) -> crate::Result<()> {
     Ok(())
 }
 
-/// Result of the AI operation, or error if all providers fail.
 /// Setup and validate primary AI provider synchronously.
 /// Returns the created AI client or an error.
 fn try_setup_primary_client(
@@ -344,7 +343,7 @@ fn try_setup_primary_client(
 
 /// Set up an AI client for a single fallback provider entry.
 ///
-/// Returns `Ok(Some(client))` on success, `Ok(None)` if the entry should be skipped.
+/// Returns `Some(client)` on success, `None` if the entry should be skipped.
 fn setup_fallback_client(
     provider: &dyn TokenProvider,
     entry: &crate::config::FallbackEntry,
@@ -414,10 +413,17 @@ where
             Ok(Some(response))
         }
         Err(e) => {
+            if is_retryable_anyhow(&e) {
+                return Err(AptuError::AI {
+                    message: e.to_string(),
+                    status: None,
+                    provider: entry.provider.clone(),
+                });
+            }
             warn!(
                 fallback_provider = entry.provider,
                 error = %e,
-                "Fallback provider failed"
+                "Fallback provider failed with non-retryable error"
             );
             Ok(None)
         }

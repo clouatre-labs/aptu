@@ -59,19 +59,16 @@ fn embedded_defaults() -> Vec<CuratedRepo> {
 }
 
 /// Fetch repositories from remote URL.
-async fn fetch_from_remote(url: &str) -> Vec<CuratedRepo> {
+///
+/// Network errors propagate; JSON parse failures fall back to embedded defaults.
+async fn fetch_from_remote(url: &str) -> crate::Result<Vec<CuratedRepo>> {
     debug!("Fetching curated repositories from {}", url);
-
-    if let Some(repos) = async {
-        let response = reqwest::Client::new().get(url).send().await.ok()?;
-        response.json::<Vec<CuratedRepo>>().await.ok()
-    }
-    .await
-    {
-        repos
+    let response = reqwest::Client::new().get(url).send().await?;
+    if let Ok(repos) = response.json::<Vec<CuratedRepo>>().await {
+        Ok(repos)
     } else {
-        warn!("Failed to fetch or parse remote curated repositories, using embedded defaults");
-        embedded_defaults()
+        warn!("Failed to parse remote curated repositories, using embedded defaults");
+        Ok(embedded_defaults())
     }
 }
 
@@ -105,7 +102,7 @@ pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
     }
 
     // Fetch from remote and cache the result
-    let repos = fetch_from_remote(url).await;
+    let repos = fetch_from_remote(url).await?;
     let _ = cache.set("curated_repos", &repos);
     debug!("Fetched and cached {} curated repositories", repos.len());
 
