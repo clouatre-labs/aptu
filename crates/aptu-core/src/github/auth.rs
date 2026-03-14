@@ -202,9 +202,7 @@ where
 
     // Priority 4: System keyring
     #[cfg(feature = "keyring")]
-    let result = result.or_else(|| {
-        get_stored_token().map(|t| (t, TokenSource::Keyring))
-    });
+    let result = result.or_else(|| get_stored_token().map(|t| (t, TokenSource::Keyring)));
 
     if result.is_none() {
         debug!("No token found in any source");
