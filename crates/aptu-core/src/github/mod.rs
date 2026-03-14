@@ -77,6 +77,113 @@ pub fn parse_owner_repo(s: &str) -> Result<(String, String)> {
     Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
+/// Parse full URL format: <https://github.com/owner/repo/issues/123>
+fn parse_url_ref(kind: ReferenceKind, input: &str) -> Result<(String, String, u64)> {
+    // Remove trailing fragments and query params
+    let clean_url = input.split('#').next().unwrap_or(input);
+    let clean_url = clean_url.split('?').next().unwrap_or(clean_url);
+
+    // Parse the URL path
+    let parts: Vec<&str> = clean_url.trim_end_matches('/').split('/').collect();
+
+    // Expected: ["https:", "", "github.com", "owner", "repo", "issues/pull", "123"]
+    if parts.len() < 7 {
+        anyhow::bail!(
+            "Invalid GitHub {} URL format.\n\
+             Expected: https://github.com/owner/repo/{}/123\n\
+             Got: {input}",
+            kind.display_name(),
+            kind.url_segment()
+        );
+    }
+
+    // Verify it's a github.com URL
+    if !parts[2].contains("github.com") {
+        anyhow::bail!(
+            "URL must be a GitHub {} URL.\n\
+             Expected: https://github.com/owner/repo/{}/123\n\
+             Got: {input}",
+            kind.display_name(),
+            kind.url_segment()
+        );
+    }
+
+    // Verify it's the correct path segment
+    if parts[5] != kind.url_segment() {
+        anyhow::bail!(
+            "URL must point to a GitHub {}.\n\
+             Expected: https://github.com/owner/repo/{}/123\n\
+             Got: {input}",
+            kind.display_name(),
+            kind.url_segment()
+        );
+    }
+
+    let owner = parts[3].to_string();
+    let repo = parts[4].to_string();
+    let number: u64 = parts[6].parse().with_context(|| {
+        format!(
+            "Invalid {} number '{}' in URL.\n\
+             Expected a numeric {} number.",
+            kind.display_name(),
+            parts[6],
+            kind.display_name()
+        )
+    })?;
+
+    debug!(owner = %owner, repo = %repo, number = number, "Parsed {} URL", kind.display_name());
+    Ok((owner, repo, number))
+}
+
+/// Parse short form: owner/repo#123
+fn parse_short_ref(kind: ReferenceKind, input: &str) -> Result<(String, String, u64)> {
+    if let Some(hash_pos) = input.find('#') {
+        let owner_repo_part = &input[..hash_pos];
+        let number_part = &input[hash_pos + 1..];
+
+        let (owner, repo) = parse_owner_repo(owner_repo_part)?;
+        let number: u64 = number_part.parse().with_context(|| {
+            format!(
+                "Invalid {} number '{number_part}' in short form.\n\
+                 Expected: owner/repo#123\n\
+                 Got: {input}",
+                kind.display_name()
+            )
+        })?;
+
+        debug!(owner = %owner, repo = %repo, number = number, "Parsed short-form {} reference", kind.display_name());
+        return Ok((owner, repo, number));
+    }
+    anyhow::bail!("Not a short form reference")
+}
+
+/// Parse bare number: `123` (requires `repo_context`)
+fn parse_bare_ref(
+    kind: ReferenceKind,
+    input: &str,
+    repo_context: Option<&str>,
+) -> Result<(String, String, u64)> {
+    if let Ok(number) = input.parse::<u64>() {
+        let repo_context = repo_context.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Bare {} number requires repository context.\n\
+                 Use one of:\n\
+                 - Full URL: https://github.com/owner/repo/{}/123\n\
+                 - Short form: owner/repo#123\n\
+                 - Bare number with --repo flag: 123 --repo owner/repo\n\
+                 Got: {input}",
+                kind.display_name(),
+                kind.url_segment()
+            )
+        })?;
+
+        let (owner, repo) = parse_owner_repo(repo_context)?;
+        debug!(owner = %owner, repo = %repo, number = number, "Parsed bare {} number", kind.display_name());
+        return Ok((owner, repo, number));
+    }
+    anyhow::bail!("Not a bare number reference")
+}
+
 /// Parses a GitHub reference (issue or PR) in multiple formats.
 ///
 /// Supports:
@@ -102,99 +209,17 @@ pub fn parse_github_reference(
 
     // Try full URL first
     if input.starts_with("https://") || input.starts_with("http://") {
-        // Remove trailing fragments and query params
-        let clean_url = input.split('#').next().unwrap_or(input);
-        let clean_url = clean_url.split('?').next().unwrap_or(clean_url);
-
-        // Parse the URL path
-        let parts: Vec<&str> = clean_url.trim_end_matches('/').split('/').collect();
-
-        // Expected: ["https:", "", "github.com", "owner", "repo", "issues/pull", "123"]
-        if parts.len() < 7 {
-            anyhow::bail!(
-                "Invalid GitHub {} URL format.\n\
-                 Expected: https://github.com/owner/repo/{}/123\n\
-                 Got: {input}",
-                kind.display_name(),
-                kind.url_segment()
-            );
-        }
-
-        // Verify it's a github.com URL
-        if !parts[2].contains("github.com") {
-            anyhow::bail!(
-                "URL must be a GitHub {} URL.\n\
-                 Expected: https://github.com/owner/repo/{}/123\n\
-                 Got: {input}",
-                kind.display_name(),
-                kind.url_segment()
-            );
-        }
-
-        // Verify it's the correct path segment
-        if parts[5] != kind.url_segment() {
-            anyhow::bail!(
-                "URL must point to a GitHub {}.\n\
-                 Expected: https://github.com/owner/repo/{}/123\n\
-                 Got: {input}",
-                kind.display_name(),
-                kind.url_segment()
-            );
-        }
-
-        let owner = parts[3].to_string();
-        let repo = parts[4].to_string();
-        let number: u64 = parts[6].parse().with_context(|| {
-            format!(
-                "Invalid {} number '{}' in URL.\n\
-                 Expected a numeric {} number.",
-                kind.display_name(),
-                parts[6],
-                kind.display_name()
-            )
-        })?;
-
-        debug!(owner = %owner, repo = %repo, number = number, "Parsed {} URL", kind.display_name());
-        return Ok((owner, repo, number));
+        return parse_url_ref(kind, input);
     }
 
     // Try short form: owner/repo#123
-    if let Some(hash_pos) = input.find('#') {
-        let owner_repo_part = &input[..hash_pos];
-        let number_part = &input[hash_pos + 1..];
-
-        let (owner, repo) = parse_owner_repo(owner_repo_part)?;
-        let number: u64 = number_part.parse().with_context(|| {
-            format!(
-                "Invalid {} number '{number_part}' in short form.\n\
-                 Expected: owner/repo#123\n\
-                 Got: {input}",
-                kind.display_name()
-            )
-        })?;
-
-        debug!(owner = %owner, repo = %repo, number = number, "Parsed short-form {} reference", kind.display_name());
-        return Ok((owner, repo, number));
+    if input.contains('#') {
+        return parse_short_ref(kind, input);
     }
 
     // Try bare number: 123 (requires repo_context)
-    if let Ok(number) = input.parse::<u64>() {
-        let repo_context = repo_context.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Bare {} number requires repository context.\n\
-                 Use one of:\n\
-                 - Full URL: https://github.com/owner/repo/{}/123\n\
-                 - Short form: owner/repo#123\n\
-                 - Bare number with --repo flag: 123 --repo owner/repo\n\
-                 Got: {input}",
-                kind.display_name(),
-                kind.url_segment()
-            )
-        })?;
-
-        let (owner, repo) = parse_owner_repo(repo_context)?;
-        debug!(owner = %owner, repo = %repo, number = number, "Parsed bare {} number", kind.display_name());
-        return Ok((owner, repo, number));
+    if input.parse::<u64>().is_ok() {
+        return parse_bare_ref(kind, input, repo_context);
     }
 
     // If we get here, it's an invalid format
