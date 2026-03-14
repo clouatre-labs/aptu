@@ -203,10 +203,7 @@ where
     // Priority 4: System keyring
     #[cfg(feature = "keyring")]
     let result = result.or_else(|| {
-        get_stored_token().map(|t| {
-            debug!("Using token from system keyring");
-            (t, TokenSource::Keyring)
-        })
+        get_stored_token().map(|t| (t, TokenSource::Keyring))
     });
 
     if result.is_none() {
