@@ -94,7 +94,6 @@ pub fn has_keyring_token() -> bool {
 ///
 /// Returns `None` if no token is stored or if keyring access fails.
 #[cfg(feature = "keyring")]
-#[instrument]
 pub fn get_stored_token() -> Option<SecretString> {
     let entry = keyring_entry().ok()?;
     let password = entry.get_password().ok()?;
