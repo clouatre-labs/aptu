@@ -179,25 +179,28 @@ where
     F: Fn(&str) -> Result<String, std::env::VarError>,
 {
     // Priority 1: GH_TOKEN environment variable
-    let result = check_env_token(&env_reader, "GH_TOKEN").map(|t| {
+    let token = check_env_token(&env_reader, "GH_TOKEN");
+    if token.is_some() {
         debug!("Using token from GH_TOKEN environment variable");
-        (t, TokenSource::Environment)
-    });
+    }
+    let result = token.map(|t| (t, TokenSource::Environment));
 
     // Priority 2: GITHUB_TOKEN environment variable
     let result = result.or_else(|| {
-        check_env_token(&env_reader, "GITHUB_TOKEN").map(|t| {
+        let token = check_env_token(&env_reader, "GITHUB_TOKEN");
+        if token.is_some() {
             debug!("Using token from GITHUB_TOKEN environment variable");
-            (t, TokenSource::Environment)
-        })
+        }
+        token.map(|t| (t, TokenSource::Environment))
     });
 
     // Priority 3: GitHub CLI
     let result = result.or_else(|| {
-        get_token_from_gh_cli().map(|t| {
+        let token = get_token_from_gh_cli();
+        if token.is_some() {
             debug!("Using token from GitHub CLI");
-            (t, TokenSource::GhCli)
-        })
+        }
+        token.map(|t| (t, TokenSource::GhCli))
     });
 
     // Priority 4: System keyring
@@ -237,13 +240,11 @@ fn resolve_token_inner() -> Option<(SecretString, TokenSource)> {
 /// Returns the token and its source, or `None` if no token is found.
 #[instrument]
 pub fn resolve_token() -> Option<(SecretString, TokenSource)> {
-    TOKEN_CACHE
-        .get_or_init(resolve_token_inner)
-        .as_ref()
-        .map(|(token, source)| {
-            debug!(source = %source, "Cache hit for token resolution");
-            (token.clone(), *source)
-        })
+    let cached = TOKEN_CACHE.get_or_init(resolve_token_inner).as_ref();
+    if let Some((_, source)) = cached {
+        debug!(source = %source, "Cache hit for token resolution");
+    }
+    cached.map(|(token, source)| (token.clone(), *source))
 }
 
 /// Stores a GitHub token in the system keyring.
