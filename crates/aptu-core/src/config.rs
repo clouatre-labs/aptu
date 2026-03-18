@@ -175,10 +175,10 @@ pub struct AiConfig {
 impl Default for AiConfig {
     fn default() -> Self {
         Self {
-            provider: "groq".to_string(),
-            model: "openai/gpt-oss-120b".to_string(),
+            provider: "openrouter".to_string(),
+            model: "mistral/mistral-small-2603".to_string(),
             timeout_seconds: 30,
-            allow_paid_models: false,
+            allow_paid_models: true,
             max_tokens: 4096,
             temperature: 0.3,
             circuit_breaker_threshold: 3,
@@ -376,13 +376,25 @@ mod tests {
 
     #[test]
     fn test_load_config_defaults() {
-        // Without any config file or env vars, should return defaults
+        // Without any config file or env vars, should return defaults.
+        // Point XDG_CONFIG_HOME to a guaranteed-empty temp dir so the real
+        // user config (~/.config/aptu/config.toml) is not loaded.
+        let tmp_dir = std::env::temp_dir().join("aptu_test_defaults_no_config");
+        std::fs::create_dir_all(&tmp_dir).expect("create tmp dir");
+        // SAFETY: single-threaded test process; no concurrent env reads.
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", &tmp_dir);
+        }
         let config = load_config().expect("should load with defaults");
+        unsafe {
+            std::env::remove_var("XDG_CONFIG_HOME");
+        }
 
-        assert_eq!(config.ai.provider, "groq");
-        assert_eq!(config.ai.model, "openai/gpt-oss-120b");
+        assert_eq!(config.ai.provider, "openrouter");
+        assert_eq!(config.ai.model, "mistral/mistral-small-2603");
         assert_eq!(config.ai.timeout_seconds, 30);
         assert_eq!(config.ai.max_tokens, 4096);
+        assert_eq!(config.ai.allow_paid_models, true);
         #[allow(clippy::float_cmp)]
         {
             assert_eq!(config.ai.temperature, 0.3);
@@ -417,7 +429,7 @@ mod tests {
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 
 [ai.tasks.triage]
 model = "gemini-2.5-flash-lite-preview-09-2025"
@@ -431,7 +443,7 @@ model = "gemini-2.5-flash-lite-preview-09-2025"
         let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
 
         assert_eq!(app_config.ai.provider, "gemini");
-        assert_eq!(app_config.ai.model, "gemini-3-flash-preview");
+        assert_eq!(app_config.ai.model, "gemini-3.1-flash-lite-preview");
         assert!(app_config.ai.tasks.is_some());
 
         let tasks = app_config.ai.tasks.unwrap();
@@ -503,13 +515,13 @@ model = "anthropic/claude-sonnet-4.5"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 
 [ai.tasks.triage]
 provider = "gemini"
 
 [ai.tasks.review]
-model = "gemini-3-pro-preview"
+model = "gemini-3.1-flash-lite-preview"
 "#;
 
         let config = Config::builder()
@@ -529,7 +541,10 @@ model = "gemini-3-pro-preview"
         // Review: only model
         let review = tasks.review.expect("review should exist");
         assert_eq!(review.provider, None);
-        assert_eq!(review.model, Some("gemini-3-pro-preview".to_string()));
+        assert_eq!(
+            review.model,
+            Some("gemini-3.1-flash-lite-preview".to_string())
+        );
     }
 
     #[test]
@@ -538,7 +553,7 @@ model = "gemini-3-pro-preview"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 "#;
 
         let config = Config::builder()
@@ -549,28 +564,31 @@ model = "gemini-3-flash-preview"
         let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
 
         assert_eq!(app_config.ai.provider, "gemini");
-        assert_eq!(app_config.ai.model, "gemini-3-flash-preview");
+        assert_eq!(app_config.ai.model, "gemini-3.1-flash-lite-preview");
         // When no tasks section is provided, defaults are used (tasks: None)
         assert!(app_config.ai.tasks.is_none());
     }
 
     #[test]
     fn test_resolve_for_task_with_defaults() {
-        // Test that resolve_for_task returns correct defaults (all tasks use groq)
+        // Test that resolve_for_task returns correct defaults (all tasks use openrouter)
         let ai_config = AiConfig::default();
 
-        // All tasks use global defaults (groq/openai/gpt-oss-120b)
+        // All tasks use global defaults (openrouter/mistral/mistral-small-2603)
         let (provider, model) = ai_config.resolve_for_task(TaskType::Triage);
-        assert_eq!(provider, "groq");
-        assert_eq!(model, "openai/gpt-oss-120b");
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistral/mistral-small-2603");
+        assert_eq!(ai_config.allow_paid_models, true);
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Review);
-        assert_eq!(provider, "groq");
-        assert_eq!(model, "openai/gpt-oss-120b");
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistral/mistral-small-2603");
+        assert_eq!(ai_config.allow_paid_models, true);
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Create);
-        assert_eq!(provider, "groq");
-        assert_eq!(model, "openai/gpt-oss-120b");
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistral/mistral-small-2603");
+        assert_eq!(ai_config.allow_paid_models, true);
     }
 
     #[test]
@@ -579,7 +597,7 @@ model = "gemini-3-flash-preview"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 
 [ai.tasks.triage]
 model = "gemini-2.5-flash-lite-preview-09-2025"
@@ -600,11 +618,11 @@ model = "gemini-2.5-flash-lite-preview-09-2025"
         // Review and Create should use defaults
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3-flash-preview");
+        assert_eq!(model, "gemini-3.1-flash-lite-preview");
 
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3-flash-preview");
+        assert_eq!(model, "gemini-3.1-flash-lite-preview");
     }
 
     #[test]
@@ -613,7 +631,7 @@ model = "gemini-2.5-flash-lite-preview-09-2025"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 
 [ai.tasks.review]
 provider = "openrouter"
@@ -629,16 +647,16 @@ provider = "openrouter"
         // Review should use provider override but default model
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "gemini-3-flash-preview");
+        assert_eq!(model, "gemini-3.1-flash-lite-preview");
 
         // Triage and Create should use defaults
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Triage);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3-flash-preview");
+        assert_eq!(model, "gemini-3.1-flash-lite-preview");
 
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3-flash-preview");
+        assert_eq!(model, "gemini-3.1-flash-lite-preview");
     }
 
     #[test]
@@ -647,7 +665,7 @@ provider = "openrouter"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 
 [ai.tasks.triage]
 provider = "openrouter"
@@ -659,7 +677,7 @@ model = "anthropic/claude-haiku-4.5"
 
 [ai.tasks.create]
 provider = "gemini"
-model = "gemini-3-pro-preview"
+model = "gemini-3.1-flash-lite-preview"
 "#;
 
         let config = Config::builder()
@@ -682,7 +700,7 @@ model = "gemini-3-pro-preview"
         // Create
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3-pro-preview");
+        assert_eq!(model, "gemini-3.1-flash-lite-preview");
     }
 
     #[test]
@@ -731,7 +749,7 @@ provider = "openrouter"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 
 [ai.fallback]
 chain = ["openrouter", "anthropic"]
@@ -745,7 +763,7 @@ chain = ["openrouter", "anthropic"]
         let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
 
         assert_eq!(app_config.ai.provider, "gemini");
-        assert_eq!(app_config.ai.model, "gemini-3-flash-preview");
+        assert_eq!(app_config.ai.model, "gemini-3.1-flash-lite-preview");
         assert!(app_config.ai.fallback.is_some());
 
         let fallback = app_config.ai.fallback.unwrap();
@@ -760,7 +778,7 @@ chain = ["openrouter", "anthropic"]
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 
 [ai.fallback]
 chain = []
@@ -784,7 +802,7 @@ chain = []
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 
 [ai.fallback]
 chain = ["openrouter"]
@@ -809,7 +827,7 @@ chain = ["openrouter"]
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.1-flash-lite-preview"
 "#;
 
         let config = Config::builder()
