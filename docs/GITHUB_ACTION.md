@@ -85,7 +85,7 @@ Provide **one** API key. The action auto-detects the provider:
 | Provider | Input | Default Model |
 |----------|-------|---------------|
 | OpenRouter | `openrouter-api-key` | `mistral/mistral-small-2603` |
-| Google Gemini | `gemini-api-key` | `gemini-3-flash-preview` |
+| Google Gemini | `gemini-api-key` | `gemini-3.1-flash-lite-preview` |
 | Groq | `groq-api-key` | `llama-3.3-70b-versatile` |
 | Cerebras | `cerebras-api-key` | `qwen-3-32b` |
 | Z.AI | `zai-api-key` | `glm-4.5-air` |

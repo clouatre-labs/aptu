@@ -83,7 +83,7 @@ Each function accepts a `&dyn TokenProvider` for credential resolution.
 │   └── github_token (via keychain, not file)
 ├── [ai]
 │   ├── provider = "gemini"
-│   └── model = "gemini-3-flash-preview"
+│   └── model = "gemini-3.1-flash-lite-preview"
 └── [repos]
     └── curated = ["block/goose", ...]
 ```
