@@ -124,6 +124,12 @@ pub fn aptu_error_to_mcp(err: &AptuError) -> ErrorData {
             false,
             "Check system keyring configuration",
         )),
+        #[allow(unreachable_patterns)]
+        _ => Some(error_meta(
+            "INTERNAL_ERROR",
+            false,
+            "An unexpected error occurred",
+        )),
     };
 
     match code {
