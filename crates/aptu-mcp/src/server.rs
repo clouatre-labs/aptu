@@ -66,6 +66,38 @@ pub struct PostTriageParams {
     pub issue_ref: String,
 }
 
+/// Review event type for posting PR reviews.
+#[derive(Debug, Deserialize, JsonSchema, Copy, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewEventParam {
+    /// Approve the pull request.
+    Approve,
+    /// Request changes on the pull request.
+    RequestChanges,
+    /// Comment on the pull request without approval or changes.
+    Comment,
+}
+
+impl From<ReviewEventParam> for aptu_core::ReviewEvent {
+    fn from(e: ReviewEventParam) -> Self {
+        match e {
+            ReviewEventParam::Approve => aptu_core::ReviewEvent::Approve,
+            ReviewEventParam::RequestChanges => aptu_core::ReviewEvent::RequestChanges,
+            ReviewEventParam::Comment => aptu_core::ReviewEvent::Comment,
+        }
+    }
+}
+
+impl std::fmt::Display for ReviewEventParam {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReviewEventParam::Approve => write!(f, "approve"),
+            ReviewEventParam::RequestChanges => write!(f, "request_changes"),
+            ReviewEventParam::Comment => write!(f, "comment"),
+        }
+    }
+}
+
 /// Parameters for posting a PR review.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(description = "Post an AI review on a GitHub pull request")]
@@ -75,7 +107,7 @@ pub struct PostReviewParams {
     pub pr_ref: String,
     /// Review event type.
     #[schemars(description = "Review action: approve, request_changes, or comment")]
-    pub event: String,
+    pub event: ReviewEventParam,
 }
 
 /// Credential validation status.
@@ -278,11 +310,7 @@ impl AptuServer {
             .await
             .map_err(|e| aptu_error_to_mcp(&e))?;
 
-        let event = match params.event.to_lowercase().as_str() {
-            "approve" => aptu_core::ReviewEvent::Approve,
-            "request_changes" => aptu_core::ReviewEvent::RequestChanges,
-            _ => aptu_core::ReviewEvent::Comment,
-        };
+        let event = params.event.into();
 
         aptu_core::facade::post_pr_review(&provider, &params.pr_ref, None, &review.summary, event)
             .await
@@ -760,6 +788,32 @@ mod tests {
         let schema = schemars::schema_for!(PostReviewParams);
         let json = serde_json::to_value(&schema).unwrap();
         assert!(json["properties"].get("event").is_some());
+
+        // Event is a $ref to ReviewEventParam in $defs, need to check the definition
+        let defs = &json["$defs"];
+        assert!(defs.get("ReviewEventParam").is_some());
+
+        let event_param_schema = &defs["ReviewEventParam"];
+        // Verify it uses oneOf with const values
+        assert!(event_param_schema.get("oneOf").is_some());
+
+        let one_of = &event_param_schema["oneOf"];
+        assert!(one_of.is_array());
+        let one_of_arr = one_of.as_array().unwrap();
+        assert_eq!(one_of_arr.len(), 3);
+
+        // Extract the const values
+        let const_values: Vec<&str> = one_of_arr
+            .iter()
+            .filter_map(|v| v.get("const").and_then(|c| c.as_str()))
+            .collect();
+        assert_eq!(const_values, vec!["approve", "request_changes", "comment"]);
+    }
+
+    #[test]
+    fn review_event_param_rejects_invalid_value() {
+        let result = serde_json::from_str::<ReviewEventParam>("\"invalid_event\"");
+        assert!(result.is_err());
     }
 
     #[test]
