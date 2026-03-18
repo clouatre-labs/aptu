@@ -30,7 +30,7 @@ Aptu uses **task specialization** over raw model capability:
 | Prompt | Tuned for code review patterns | General reasoning |
 | Attention | 100% on code quality | Split across many tasks |
 
-The small specialized model is not smarter, just less distracted. In real-world testing, aptu's PR review (using the default groq/openai/gpt-oss-120b) caught regex-based HTML parsing and missing error handling that claude-opus-4.5 shipped as "done".
+The small specialized model is not smarter, just less distracted. In real-world testing, aptu's PR review (using the default openrouter/mistral-small-2603) caught regex-based HTML parsing and missing error handling that claude-opus-4.5 shipped as "done".
 
 ## Features
 
@@ -90,7 +90,7 @@ Auto-triage new issues with AI using any supported provider.
 - uses: clouatre-labs/aptu@v0
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
-    groq-api-key: ${{ secrets.GROQ_API_KEY }}
+    openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
 Options: `apply-labels`, `no-comment`, `skip-labeled`, `dry-run`, `model`, `provider`.

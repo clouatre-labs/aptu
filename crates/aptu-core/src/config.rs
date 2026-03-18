@@ -175,10 +175,10 @@ pub struct AiConfig {
 impl Default for AiConfig {
     fn default() -> Self {
         Self {
-            provider: "groq".to_string(),
-            model: "openai/gpt-oss-120b".to_string(),
+            provider: "openrouter".to_string(),
+            model: "mistral/mistral-small-2603".to_string(),
             timeout_seconds: 30,
-            allow_paid_models: false,
+            allow_paid_models: true,
             max_tokens: 4096,
             temperature: 0.3,
             circuit_breaker_threshold: 3,
@@ -376,13 +376,25 @@ mod tests {
 
     #[test]
     fn test_load_config_defaults() {
-        // Without any config file or env vars, should return defaults
+        // Without any config file or env vars, should return defaults.
+        // Point XDG_CONFIG_HOME to a guaranteed-empty temp dir so the real
+        // user config (~/.config/aptu/config.toml) is not loaded.
+        let tmp_dir = std::env::temp_dir().join("aptu_test_defaults_no_config");
+        std::fs::create_dir_all(&tmp_dir).expect("create tmp dir");
+        // SAFETY: single-threaded test process; no concurrent env reads.
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", &tmp_dir);
+        }
         let config = load_config().expect("should load with defaults");
+        unsafe {
+            std::env::remove_var("XDG_CONFIG_HOME");
+        }
 
-        assert_eq!(config.ai.provider, "groq");
-        assert_eq!(config.ai.model, "openai/gpt-oss-120b");
+        assert_eq!(config.ai.provider, "openrouter");
+        assert_eq!(config.ai.model, "mistral/mistral-small-2603");
         assert_eq!(config.ai.timeout_seconds, 30);
         assert_eq!(config.ai.max_tokens, 4096);
+        assert_eq!(config.ai.allow_paid_models, true);
         #[allow(clippy::float_cmp)]
         {
             assert_eq!(config.ai.temperature, 0.3);
@@ -556,21 +568,24 @@ model = "gemini-3-flash-preview"
 
     #[test]
     fn test_resolve_for_task_with_defaults() {
-        // Test that resolve_for_task returns correct defaults (all tasks use groq)
+        // Test that resolve_for_task returns correct defaults (all tasks use openrouter)
         let ai_config = AiConfig::default();
 
-        // All tasks use global defaults (groq/openai/gpt-oss-120b)
+        // All tasks use global defaults (openrouter/mistral/mistral-small-2603)
         let (provider, model) = ai_config.resolve_for_task(TaskType::Triage);
-        assert_eq!(provider, "groq");
-        assert_eq!(model, "openai/gpt-oss-120b");
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistral/mistral-small-2603");
+        assert_eq!(ai_config.allow_paid_models, true);
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Review);
-        assert_eq!(provider, "groq");
-        assert_eq!(model, "openai/gpt-oss-120b");
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistral/mistral-small-2603");
+        assert_eq!(ai_config.allow_paid_models, true);
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Create);
-        assert_eq!(provider, "groq");
-        assert_eq!(model, "openai/gpt-oss-120b");
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistral/mistral-small-2603");
+        assert_eq!(ai_config.allow_paid_models, true);
     }
 
     #[test]

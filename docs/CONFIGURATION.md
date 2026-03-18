@@ -6,7 +6,7 @@ Config file: `~/.config/aptu/config.toml`
 [ai]
 provider = "gemini"  # or "cerebras", "groq", "openrouter", "zai", "zenmux"
 model = "gemini-3-flash-preview"
-allow_paid_models = false  # default: blocks paid OpenRouter models
+allow_paid_models = true  # default: allows paid OpenRouter models
 
 [ui]
 confirm_before_post = true
