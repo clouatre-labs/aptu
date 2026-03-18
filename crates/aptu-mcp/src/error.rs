@@ -4,11 +4,14 @@
 
 use aptu_core::error::AptuError;
 use rmcp::model::{ErrorCode, ErrorData};
-use std::borrow::Cow;
 
-/// Helper function to create structured error metadata.
-#[allow(clippy::needless_pass_by_value)]
-fn error_meta(category: &'static str, retryable: bool, action: Cow<'_, str>) -> serde_json::Value {
+/// Build the structured metadata that goes into the `data` field of an MCP error response.
+///
+/// Returns a JSON object with three machine-readable fields:
+/// - `errorCategory`: stable uppercase string an orchestrator can switch on (e.g. `"RATE_LIMITED"`)
+/// - `isRetryable`: `true` when the same request may succeed if retried without modification
+/// - `suggestedAction`: human-readable hint (may include dynamic context such as retry delay)
+fn error_meta(category: &'static str, retryable: bool, action: &str) -> serde_json::Value {
     serde_json::json!({
         "errorCategory": category,
         "isRetryable": retryable,
@@ -42,24 +45,22 @@ pub fn aptu_error_to_mcp(err: &AptuError) -> ErrorData {
         AptuError::GitHub { .. } => Some(error_meta(
             "GITHUB_ERROR",
             false,
-            Cow::Borrowed("Check GitHub API status or verify the repository/issue reference"),
+            "Check GitHub API status or verify the repository/issue reference",
         )),
         AptuError::AI { .. } => Some(error_meta(
             "AI_ERROR",
             false,
-            Cow::Borrowed("Check AI provider status"),
+            "Check AI provider status",
         )),
         AptuError::NotAuthenticated => Some(error_meta(
             "NOT_AUTHENTICATED",
             false,
-            Cow::Borrowed("Run aptu auth login to authenticate"),
+            "Run aptu auth login to authenticate",
         )),
         AptuError::AiProviderNotAuthenticated { provider, env_var } => Some(error_meta(
             "AI_NOT_AUTHENTICATED",
             false,
-            Cow::Owned(format!(
-                "Set the {env_var} environment variable for {provider}"
-            )),
+            &format!("Set the {env_var} environment variable for {provider}"),
         )),
         AptuError::RateLimited {
             provider,
@@ -67,46 +68,42 @@ pub fn aptu_error_to_mcp(err: &AptuError) -> ErrorData {
         } => Some(error_meta(
             "RATE_LIMITED",
             true,
-            Cow::Owned(format!(
-                "Retry after {retry_after} seconds (provider: {provider})"
-            )),
+            &format!("Retry after {retry_after} seconds (provider: {provider})"),
         )),
         AptuError::TruncatedResponse { provider } => Some(error_meta(
             "TRUNCATED_RESPONSE",
             true,
-            Cow::Owned(format!(
-                "Retry with a longer max_tokens limit (provider: {provider})"
-            )),
+            &format!("Retry with a longer max_tokens limit (provider: {provider})"),
         )),
         AptuError::Config { .. } => Some(error_meta(
             "CONFIG_ERROR",
             false,
-            Cow::Borrowed("Fix the configuration and retry"),
+            "Fix the configuration and retry",
         )),
         AptuError::InvalidAIResponse(_) => Some(error_meta(
             "INVALID_AI_RESPONSE",
             true,
-            Cow::Borrowed("Retry with a different model or prompt"),
+            "Retry with a different model or prompt",
         )),
         AptuError::Network(_) => Some(error_meta(
             "NETWORK_ERROR",
             true,
-            Cow::Borrowed("Check network connectivity and retry"),
+            "Check network connectivity and retry",
         )),
         AptuError::CircuitOpen => Some(error_meta(
             "CIRCUIT_OPEN",
             true,
-            Cow::Borrowed("Wait for the circuit breaker to reset and retry"),
+            "Wait for the circuit breaker to reset and retry",
         )),
         AptuError::TypeMismatch { .. } => Some(error_meta(
             "TYPE_MISMATCH",
             false,
-            Cow::Borrowed("Use the correct resource type"),
+            "Use the correct resource type",
         )),
         AptuError::ModelRegistry { .. } => Some(error_meta(
             "MODEL_REGISTRY_ERROR",
             false,
-            Cow::Borrowed("Check model configuration"),
+            "Check model configuration",
         )),
         AptuError::ModelValidation {
             model_id,
@@ -114,22 +111,22 @@ pub fn aptu_error_to_mcp(err: &AptuError) -> ErrorData {
         } => Some(error_meta(
             "MODEL_VALIDATION_ERROR",
             false,
-            Cow::Owned(if suggestions.is_empty() {
+            &if suggestions.is_empty() {
                 format!("Invalid model ID: {model_id}")
             } else {
                 format!("Invalid model ID: {model_id}. Suggestions: {suggestions}")
-            }),
+            },
         )),
         AptuError::SecurityScan { .. } => Some(error_meta(
             "SECURITY_SCAN_ERROR",
             false,
-            Cow::Borrowed("Fix the security issues identified in the diff"),
+            "Fix the security issues identified in the diff",
         )),
         #[cfg(feature = "keyring")]
         AptuError::Keyring(_) => Some(error_meta(
             "KEYRING_ERROR",
             false,
-            Cow::Borrowed("Check system keyring configuration"),
+            "Check system keyring configuration",
         )),
     };
 
