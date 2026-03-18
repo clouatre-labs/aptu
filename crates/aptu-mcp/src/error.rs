@@ -47,11 +47,7 @@ pub fn aptu_error_to_mcp(err: &AptuError) -> ErrorData {
             false,
             "Check GitHub API status or verify the repository/issue reference",
         )),
-        AptuError::AI { .. } => Some(error_meta(
-            "AI_ERROR",
-            false,
-            "Check AI provider status",
-        )),
+        AptuError::AI { .. } => Some(error_meta("AI_ERROR", false, "Check AI provider status")),
         AptuError::NotAuthenticated => Some(error_meta(
             "NOT_AUTHENTICATED",
             false,
