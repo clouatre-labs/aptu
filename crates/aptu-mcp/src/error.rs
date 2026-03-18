@@ -193,7 +193,12 @@ mod tests {
         let data = mcp_err.data.unwrap();
         assert_eq!(data["errorCategory"], "RATE_LIMITED");
         assert_eq!(data["isRetryable"], true);
-        assert!(data["suggestedAction"].as_str().unwrap().contains("60 seconds"));
+        assert!(
+            data["suggestedAction"]
+                .as_str()
+                .unwrap()
+                .contains("60 seconds")
+        );
     }
 
     #[test]
@@ -206,7 +211,9 @@ mod tests {
 
     #[test]
     fn truncated_response_is_retryable_and_includes_provider() {
-        let err = AptuError::TruncatedResponse { provider: "ollama".to_string() };
+        let err = AptuError::TruncatedResponse {
+            provider: "ollama".to_string(),
+        };
         let data = aptu_error_to_mcp(&err).data.unwrap();
         assert_eq!(data["errorCategory"], "TRUNCATED_RESPONSE");
         assert_eq!(data["isRetryable"], true);
@@ -222,7 +229,17 @@ mod tests {
         let data = aptu_error_to_mcp(&err).data.unwrap();
         assert_eq!(data["errorCategory"], "MODEL_VALIDATION_ERROR");
         assert_eq!(data["isRetryable"], false);
-        assert!(data["suggestedAction"].as_str().unwrap().contains("bad-model"));
-        assert!(!data["suggestedAction"].as_str().unwrap().contains("Suggestions"));
+        assert!(
+            data["suggestedAction"]
+                .as_str()
+                .unwrap()
+                .contains("bad-model")
+        );
+        assert!(
+            !data["suggestedAction"]
+                .as_str()
+                .unwrap()
+                .contains("Suggestions")
+        );
     }
 }
