@@ -71,7 +71,7 @@ jobs:
           target: ${{ inputs.target }}
           token: ${{ secrets.GITHUB_TOKEN }}
           checksum: sha256
-          archive: aptu-${{ inputs.version }}-$target
+          archive: aptu-cli-${{ inputs.version }}-$target
       - name: Build and upload aptu-mcp
         if: ${{ !inputs.dry_run }}
         id: upload-mcp
