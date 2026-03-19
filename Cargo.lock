@@ -164,6 +164,7 @@ dependencies = [
  "percent-encoding",
  "regex",
  "reqwest",
+ "schemars",
  "secrecy",
  "serde",
  "serde_json",

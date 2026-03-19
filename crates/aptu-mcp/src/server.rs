@@ -53,7 +53,9 @@ pub struct ReviewPrParams {
 #[schemars(description = "Scan a code diff for security vulnerabilities")]
 pub struct ScanSecurityParams {
     /// Unified diff text to scan.
-    #[schemars(description = "Unified diff text to scan for security issues")]
+    #[schemars(
+        description = "Unified diff text to scan for security issues (output of git diff, git diff --staged, or similar). No stated size limit."
+    )]
     pub diff: String,
 }
 
@@ -199,6 +201,7 @@ impl AptuServer {
     #[tool(
         name = "triage_issue",
         description = "Fetch a GitHub issue and run AI triage analysis. Returns analysis only, without posting anything to GitHub; call post_triage to publish the result. Returns a JSON object with fields: summary, suggested_labels, clarifying_questions, potential_duplicates, related_issues, contributor_guidance. issue_ref format: owner/repo#123 or a full GitHub issue URL (e.g. https://github.com/owner/repo/issues/123). Requires GITHUB_TOKEN and an AI API key in the environment.",
+        output_schema = rmcp::handler::server::tool::schema_for_type::<aptu_core::ai::types::TriageResponse>(),
         annotations(read_only_hint = true, idempotent_hint = true, open_world_hint = true)
     )]
     async fn triage_issue(
@@ -223,6 +226,7 @@ impl AptuServer {
     #[tool(
         name = "review_pr",
         description = "Fetch a GitHub pull request and run AI code review analysis. Returns analysis only, without posting anything to GitHub; call post_review to publish the result. Returns a JSON object with fields: summary, verdict, strengths, concerns, comments (array of {file, line, severity, comment}), suggestions. pr_ref format: owner/repo#456 or a full GitHub PR URL (e.g. https://github.com/owner/repo/pull/456). Requires GITHUB_TOKEN and an AI API key in the environment.",
+        output_schema = rmcp::handler::server::tool::schema_for_type::<aptu_core::ai::types::PrReviewResponse>(),
         annotations(read_only_hint = true, idempotent_hint = true, open_world_hint = true)
     )]
     async fn review_pr(
@@ -246,7 +250,8 @@ impl AptuServer {
 
     #[tool(
         name = "scan_security",
-        description = "Scan a unified diff for security vulnerabilities and secrets",
+        description = "Scan a unified diff for security vulnerabilities and secrets without making API calls or running AI inference. Returns structured JSON findings. Use alongside review_pr for full coverage: scan_security detects patterns locally, review_pr provides AI-powered contextual analysis.",
+        output_schema = rmcp::handler::server::tool::schema_for_type::<Vec<aptu_core::security::types::Finding>>(),
         annotations(read_only_hint = true, idempotent_hint = true)
     )]
     async fn scan_security(
@@ -324,7 +329,8 @@ impl AptuServer {
 
     #[tool(
         name = "health",
-        description = "Check the health of credentials and configuration",
+        description = "Check GitHub token format and AI API key presence. Token validation is format-only (prefix matching: ghp_, gho_, ghu_, ghs_, ghr_, github_pat_) -- does not make a live API call. Returns a JSON object with fields github_token and ai_api_key, each set to Valid, Missing, or Invalid. Call at session start before running analysis tools.",
+        output_schema = rmcp::handler::server::tool::schema_for_type::<HealthCheckResponse>(),
         annotations(read_only_hint = true, idempotent_hint = true)
     )]
     async fn health(
@@ -584,10 +590,13 @@ impl ServerHandler for AptuServer {
                 .build(),
         )
         .with_instructions(
-            "Aptu MCP server for AI-powered GitHub issue triage and PR review. \
-             Tools: triage_issue, review_pr, scan_security, post_triage, post_review. \
-             Resources: repos, issues, config. \
-             Prompts: triage_guide, review_checklist.",
+            "Aptu MCP server for AI-powered GitHub issue triage and pull request review. \
+             Use triage_issue to analyze an issue and review_pr to analyze a PR; both are read-only and return analysis only. \
+             Call post_triage or post_review to publish results to GitHub -- these are destructive and cannot be undone; they are absent in read-only mode. \
+             scan_security scans a unified diff locally without any AI call, complementing review_pr. \
+             Call health at session start to validate your GitHub token format and AI API key presence before running analysis tools. \
+             Resources: repos (curated repository list), issues (good first issues), config (current configuration). \
+             Prompts: triage_guide and review_checklist provide step-by-step guided workflows.",
         )
     }
 
@@ -848,7 +857,6 @@ mod tests {
         assert!(json.contains("ai_api_key"));
         assert!(json.contains("Missing"));
     }
-
     #[test]
     fn health_tool_has_read_only_annotation() {
         let router = AptuServer::tool_router();
@@ -862,6 +870,20 @@ mod tests {
             health_tool.annotations.as_ref().unwrap().idempotent_hint,
             Some(true)
         );
+    }
+
+    #[test]
+    fn tool_output_schemas_present() {
+        let router = AptuServer::tool_router();
+        let tools: Vec<_> = router.list_all();
+        let schema_tools = ["triage_issue", "review_pr", "scan_security", "health"];
+        for name in schema_tools {
+            let tool = tools.iter().find(|t| t.name == name).unwrap();
+            assert!(
+                tool.output_schema.is_some(),
+                "tool {name} missing output_schema"
+            );
+        }
     }
 
     #[test]
