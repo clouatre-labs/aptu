@@ -31,3 +31,26 @@ tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{version}/aptu-mcp-{version}-{target}.tar.gz"
+bin-dir = "aptu-mcp"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{version}/aptu-mcp-{version}-x86_64-unknown-linux-musl.tar.gz"
+
+[package.metadata.deb]
+maintainer = "Hugues Clouâtre <hugues@linux.com>"
+copyright = "2025 Hugues Clouâtre <hugues@linux.com>"
+license-file = ["../../LICENSE", "4"]
+extended-description = """\
+Aptu MCP server exposing aptu-core functionality \
+for AI-powered GitHub issue triage and pull request review."""
+section = "utility"
+priority = "optional"
+assets = [
+  ["target/release/aptu-mcp", "usr/bin/", "755"],
+  ["../../README.md", "usr/share/doc/aptu-mcp/", "644"],
+  ["../../LICENSE", "usr/share/doc/aptu-mcp/", "644"]
+]

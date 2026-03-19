@@ -161,25 +161,33 @@ jobs:
           RELEASE_URL="https://api.github.com/repos/clouatre-labs/aptu/releases/tags/${RELEASE_TAG}"
           
           # Get release assets
-          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$RELEASE_URL" | jq '.assets[] | select(.name | endswith(".tar.gz")) | {name: .name, url: .browser_download_url}')
+          ALL_ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$RELEASE_URL" | jq '.assets[]')
           
-          # Download each asset and compute SHA256
-          echo "$ASSETS" | jq -r '.url' | while read -r url; do
+          # Download CLI tarballs (aptu-* but NOT aptu-mcp-*) and compute SHA256
+          echo "$ALL_ASSETS" | jq -r 'select(.name | startswith("aptu-") and (startswith("aptu-mcp-") | not) and endswith(".tar.gz")) | .browser_download_url' | while read -r url; do
             filename=$(basename "$url")
             curl -sL "$url" -o "/tmp/$filename"
             sha256=$(sha256sum "/tmp/$filename" | cut -d' ' -f1)
-            echo "$filename:$sha256" >> /tmp/checksums.txt
+            echo "$filename:$sha256" >> /tmp/checksums-cli.txt
+          done
+          
+          # Download MCP tarballs (aptu-mcp-*) and compute SHA256
+          echo "$ALL_ASSETS" | jq -r 'select(.name | startswith("aptu-mcp-") and endswith(".tar.gz")) | .browser_download_url' | while read -r url; do
+            filename=$(basename "$url")
+            curl -sL "$url" -o "/tmp/$filename"
+            sha256=$(sha256sum "/tmp/$filename" | cut -d' ' -f1)
+            echo "$filename:$sha256" >> /tmp/checksums-mcp.txt
           done
 
       - name: Update formula with SHA256 values
         run: |
           cd homebrew-tap
           
-          # Read checksums
+          # Read CLI checksums
           declare -A shas
           while IFS=':' read -r filename sha; do
             shas["$filename"]="$sha"
-          done < /tmp/checksums.txt
+          done < /tmp/checksums-cli.txt
           
           # Update formula with if/elsif syntax
           FORMULA="Formula/aptu.rb"
@@ -206,7 +214,6 @@ jobs:
             
             def install
               bin.install "aptu"
-              bin.install "aptu-mcp"
             end
             
             test do
@@ -222,6 +229,51 @@ jobs:
           sed -i "s/SHA256_LINUX_ARM_PLACEHOLDER/${shas["aptu-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
           sed -i "s/SHA256_LINUX_INTEL_PLACEHOLDER/${shas["aptu-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
 
+          # Generate aptu-mcp formula
+          MCP_FORMULA="Formula/aptu-mcp.rb"
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          VERSION_NUMBER="${RELEASE_TAG#v}"
+
+          declare -A mcp_shas
+          if [ -f /tmp/checksums-mcp.txt ]; then
+            while IFS=':' read -r filename sha; do
+              mcp_shas["$filename"]="$sha"
+            done < /tmp/checksums-mcp.txt
+          fi
+
+          cat > "$MCP_FORMULA" << 'MCPFORMULA_EOF'
+          class AptuMcp < Formula
+            desc "MCP server exposing aptu-core functionality for AI-powered GitHub triage and review"
+            homepage "https://github.com/clouatre-labs/aptu"
+            license "Apache-2.0"
+            
+            if OS.mac? && Hardware::CPU.arm?
+              url "https://github.com/clouatre-labs/aptu/releases/download/MCP_TAG_PLACEHOLDER/aptu-mcp-MCP_VERSION_NUMBER_PLACEHOLDER-aarch64-apple-darwin.tar.gz"
+              sha256 "MCP_SHA256_MACOS_ARM_PLACEHOLDER"
+            elsif OS.linux? && Hardware::CPU.arm?
+              url "https://github.com/clouatre-labs/aptu/releases/download/MCP_TAG_PLACEHOLDER/aptu-mcp-MCP_VERSION_NUMBER_PLACEHOLDER-aarch64-unknown-linux-musl.tar.gz"
+              sha256 "MCP_SHA256_LINUX_ARM_PLACEHOLDER"
+            elsif OS.linux? && Hardware::CPU.intel?
+              url "https://github.com/clouatre-labs/aptu/releases/download/MCP_TAG_PLACEHOLDER/aptu-mcp-MCP_VERSION_NUMBER_PLACEHOLDER-x86_64-unknown-linux-musl.tar.gz"
+              sha256 "MCP_SHA256_LINUX_INTEL_PLACEHOLDER"
+            end
+            
+            def install
+              bin.install "aptu-mcp"
+            end
+            
+            test do
+              assert_match version.to_s, shell_output("#{bin}/aptu-mcp --version")
+            end
+          end
+          MCPFORMULA_EOF
+
+          sed -i "s/MCP_VERSION_NUMBER_PLACEHOLDER/${VERSION_NUMBER}/g" "$MCP_FORMULA"
+          sed -i "s/MCP_TAG_PLACEHOLDER/${RELEASE_TAG}/g" "$MCP_FORMULA"
+          sed -i "s/MCP_SHA256_MACOS_ARM_PLACEHOLDER/${mcp_shas["aptu-mcp-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz"]}/g" "$MCP_FORMULA"
+          sed -i "s/MCP_SHA256_LINUX_ARM_PLACEHOLDER/${mcp_shas["aptu-mcp-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}/g" "$MCP_FORMULA"
+          sed -i "s/MCP_SHA256_LINUX_INTEL_PLACEHOLDER/${mcp_shas["aptu-mcp-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}/g" "$MCP_FORMULA"
+
       - name: Create feature branch and commit formula update
         run: |
           cd homebrew-tap
@@ -231,8 +283,8 @@ jobs:
           git config user.email "hugues@linux.com"
           git config user.name "Hugues Clouatre"
           git checkout -b "$BRANCH_NAME"
-          git add Formula/aptu.rb
-          git commit --signoff -m "Update aptu formula for ${RELEASE_TAG}"
+          git add Formula/aptu.rb Formula/aptu-mcp.rb
+          git commit --signoff -m "Update aptu and aptu-mcp formulas for ${RELEASE_TAG}"
           git push origin "$BRANCH_NAME"
 
       - name: Create pull request with auto-merge
@@ -244,7 +296,7 @@ jobs:
           BRANCH_NAME="update-aptu-${RELEASE_TAG}"
           
           gh pr create \
-            --title "Update aptu formula for ${RELEASE_TAG}" \
+            --title "Update aptu and aptu-mcp formulas for ${RELEASE_TAG}" \
             --body "Automated formula update with SHA256 checksums for release ${RELEASE_TAG}" \
             --head "$BRANCH_NAME" \
             --base main
