@@ -9,6 +9,7 @@ repository.workspace = true
 readme = "README.md"
 
 [dependencies]
+schemars = { workspace = true }
 # Error handling
 thiserror = { workspace = true }
 anyhow = { workspace = true }

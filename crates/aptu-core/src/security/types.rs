@@ -2,10 +2,11 @@
 
 //! Security scan types and data structures.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Severity level of a security finding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     /// Critical security vulnerability requiring immediate attention.
@@ -20,7 +21,7 @@ pub enum Severity {
 }
 
 /// Confidence level of a security finding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Confidence {
     /// High confidence - very likely a real issue.
@@ -33,7 +34,7 @@ pub enum Confidence {
 }
 
 /// A security finding from pattern matching.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct Finding {
     /// Pattern ID that matched.
     pub pattern_id: String,

@@ -5,6 +5,7 @@
 //! Defines the structures used for communicating with AI provider APIs
 //! and parsing triage responses.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Account credits status for `OpenRouter`.
@@ -95,7 +96,7 @@ pub struct Choice {
 }
 
 /// Guidance for contributors on whether an issue is beginner-friendly.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct ContributorGuidance {
     /// Whether the issue is suitable for beginners.
     pub beginner_friendly: bool,
@@ -104,7 +105,7 @@ pub struct ContributorGuidance {
 }
 
 /// A related issue found via search.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct RelatedIssue {
     /// Issue number.
     pub number: u64,
@@ -137,7 +138,7 @@ pub struct RelatedIssue {
 ///   }
 /// }
 /// ```
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 pub struct TriageResponse {
     /// 2-3 sentence summary of the issue.
     pub summary: String,
@@ -268,7 +269,7 @@ pub struct IssueComment {
 /// Response from AI for creating an issue.
 ///
 /// Contains formatted issue content and suggested labels based on AI analysis.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct CreateIssueResponse {
     /// Formatted issue title (follows conventional commit style).
     pub formatted_title: String,
@@ -320,7 +321,7 @@ pub struct PrFile {
 }
 
 /// Severity level for PR review comments.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum CommentSeverity {
     /// Informational comment.
@@ -353,7 +354,7 @@ impl CommentSeverity {
 }
 
 /// A specific comment on a line of code in a PR review.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct PrReviewComment {
     /// File path the comment applies to.
     pub file: String,
@@ -366,7 +367,7 @@ pub struct PrReviewComment {
 }
 
 /// Structured PR review response from AI.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 pub struct PrReviewResponse {
     /// Overall summary of the PR (2-3 sentences).
     pub summary: String,
@@ -433,7 +434,7 @@ pub struct PrSummary {
 }
 
 /// Structured release notes response from AI.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct ReleaseNotesResponse {
     /// Release theme/title.
     pub theme: String,
