@@ -108,8 +108,8 @@ jobs:
         uses: taiki-e/install-action@e24b8b7a939c6a537188f34a4163cb153dd85cf6 # v2
         with:
           tool: cargo-deny
-      - name: Check advisories and licenses
-        run: cargo deny check advisories licenses
+      - name: Check dependencies
+        run: cargo deny check
 
   format:
     name: Check Format
@@ -207,7 +207,7 @@ jobs:
     timeout-minutes: 15
     if: |
       (needs.changes.outputs.code == 'true' || needs.changes.outputs.tests == 'true') &&
-      !contains(github.event.pull_request.labels.*.name, 'skip-integration') &&
+      !(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'skip-integration')) &&
       (needs.test.result == 'success' || github.event_name != 'pull_request') &&
       (needs.build-release.result == 'success' || github.event_name != 'pull_request') &&
       github.actor != 'renovate[bot]'
