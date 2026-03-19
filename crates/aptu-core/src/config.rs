@@ -21,7 +21,7 @@
 use std::path::PathBuf;
 
 use config::{Config, Environment, File};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::AptuError;
 
@@ -37,7 +37,7 @@ pub enum TaskType {
 }
 
 /// Application configuration.
-#[derive(Debug, Default, Deserialize, Clone)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct AppConfig {
     /// User preferences.
@@ -55,7 +55,7 @@ pub struct AppConfig {
 }
 
 /// User preferences.
-#[derive(Debug, Deserialize, Default, Clone)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct UserConfig {
     /// Default repository to use (skip repo selection).
@@ -63,7 +63,7 @@ pub struct UserConfig {
 }
 
 /// Task-specific AI model override.
-#[derive(Debug, Deserialize, Default, Clone)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct TaskOverride {
     /// Optional provider override for this task.
@@ -73,7 +73,7 @@ pub struct TaskOverride {
 }
 
 /// Task-specific AI configuration.
-#[derive(Debug, Deserialize, Default, Clone)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
 pub struct TasksConfig {
     /// Triage task configuration.
@@ -85,7 +85,7 @@ pub struct TasksConfig {
 }
 
 /// Single entry in the fallback provider chain.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct FallbackEntry {
     /// Provider name (e.g., "openrouter", "anthropic", "gemini").
     pub provider: String,
@@ -119,7 +119,7 @@ impl<'de> Deserialize<'de> for FallbackEntry {
 }
 
 /// Fallback provider chain configuration.
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(default)]
 pub struct FallbackConfig {
     /// Chain of fallback entries to try in order when primary fails.
@@ -132,7 +132,7 @@ fn default_retry_max_attempts() -> u32 {
 }
 
 /// AI provider settings.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct AiConfig {
     /// AI provider: "openrouter" or "ollama".
@@ -226,7 +226,7 @@ impl AiConfig {
 }
 
 /// GitHub API settings.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct GitHubConfig {
     /// API request timeout in seconds.
@@ -242,7 +242,7 @@ impl Default for GitHubConfig {
 }
 
 /// UI preferences.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct UiConfig {
     /// Enable colored output.
@@ -264,7 +264,7 @@ impl Default for UiConfig {
 }
 
 /// Cache settings.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct CacheConfig {
     /// Issue cache TTL in minutes.
@@ -288,7 +288,7 @@ impl Default for CacheConfig {
 }
 
 /// Repository settings.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct ReposConfig {
     /// Include curated repositories (default: true).
