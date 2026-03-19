@@ -433,7 +433,7 @@ impl AptuServer {
                  7. Estimate complexity: simple (< 1 day), medium (1-3 days), complex (> 3 days)\n\
                  8. Add to the relevant milestone if applicable\n\
                  9. Write a triage summary comment with your assessment\n\n\
-                 Two-step workflow for AI-assisted triage:\n\n\
+                 Three-step workflow for AI-assisted triage:\n\n\
                  Step 1: Call `triage_issue` with the issue reference to fetch and analyze the \
                  issue. This is read-only; nothing is posted to GitHub.\n\n\
                  Step 2: Review the analysis returned by `triage_issue`.\n\n\
