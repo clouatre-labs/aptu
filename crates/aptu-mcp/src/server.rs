@@ -9,7 +9,7 @@ use rmcp::{
     },
     model::{
         AnnotateAble, CallToolResult, Content, GetPromptRequestParams, GetPromptResult,
-        ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+        ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, Meta,
         PaginatedRequestParams, PromptMessage, PromptMessageRole, RawResource, RawResourceTemplate,
         ReadResourceRequestParams, ReadResourceResult, Resource, ResourceContents,
         ResourceTemplate, ServerCapabilities, ServerInfo,
@@ -21,6 +21,7 @@ use rmcp::{
 };
 use secrecy::ExposeSecret;
 use serde::Deserialize;
+use serde_json::Value;
 
 use crate::auth::EnvTokenProvider;
 use crate::error::{aptu_error_to_mcp, generic_to_mcp_error};
@@ -69,7 +70,7 @@ pub struct PostTriageParams {
 }
 
 /// Review event type for posting PR reviews.
-#[derive(Debug, Deserialize, JsonSchema, Copy, Clone)]
+#[derive(Debug, Deserialize, JsonSchema, Copy, Clone, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewEventParam {
     /// Approve the pull request.
@@ -157,6 +158,19 @@ impl Default for AptuServer {
 }
 
 // ---------------------------------------------------------------------------
+// no-cache meta helper
+// ---------------------------------------------------------------------------
+
+fn no_cache_meta() -> Meta {
+    let mut m = serde_json::Map::new();
+    m.insert(
+        "cache_hint".to_string(),
+        serde_json::Value::String("no-cache".to_string()),
+    );
+    Meta(m)
+}
+
+// ---------------------------------------------------------------------------
 // Tools (generates Self::tool_router())
 // ---------------------------------------------------------------------------
 
@@ -220,7 +234,11 @@ impl AptuServer {
             .map_err(|e| aptu_error_to_mcp(&e))?;
 
         let json = serde_json::to_string_pretty(&response.triage).map_err(generic_to_mcp_error)?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        let mut result =
+            CallToolResult::success(vec![Content::text(json)]).with_meta(Some(no_cache_meta()));
+        result.structured_content =
+            Some(serde_json::to_value(&response.triage).unwrap_or(Value::Null));
+        Ok(result)
     }
 
     #[tool(
@@ -245,7 +263,10 @@ impl AptuServer {
             .map_err(|e| aptu_error_to_mcp(&e))?;
 
         let json = serde_json::to_string_pretty(&review).map_err(generic_to_mcp_error)?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        let mut result =
+            CallToolResult::success(vec![Content::text(json)]).with_meta(Some(no_cache_meta()));
+        result.structured_content = Some(serde_json::to_value(&review).unwrap_or(Value::Null));
+        Ok(result)
     }
 
     #[tool(
@@ -262,7 +283,10 @@ impl AptuServer {
         let findings = scanner.scan_diff(&params.diff);
 
         let json = serde_json::to_string_pretty(&findings).map_err(generic_to_mcp_error)?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        let mut result =
+            CallToolResult::success(vec![Content::text(json)]).with_meta(Some(no_cache_meta()));
+        result.structured_content = Some(serde_json::to_value(&findings).unwrap_or(Value::Null));
+        Ok(result)
     }
 
     #[tool(
@@ -293,10 +317,17 @@ impl AptuServer {
             .await
             .map_err(|e| aptu_error_to_mcp(&e))?;
 
-        Ok(CallToolResult::success(vec![Content::text(format!(
+        let structured = serde_json::json!({
+            "status": "posted",
+            "issue_ref": params.issue_ref,
+        });
+        let mut result = CallToolResult::success(vec![Content::text(format!(
             "Triage comment posted on {}",
             params.issue_ref
-        ))]))
+        ))])
+        .with_meta(Some(no_cache_meta()));
+        result.structured_content = Some(structured);
+        Ok(result)
     }
 
     #[tool(
@@ -329,10 +360,18 @@ impl AptuServer {
             .await
             .map_err(|e| aptu_error_to_mcp(&e))?;
 
-        Ok(CallToolResult::success(vec![Content::text(format!(
+        let structured = serde_json::json!({
+            "status": "posted",
+            "pr_ref": params.pr_ref,
+            "event": params.event,
+        });
+        let mut result = CallToolResult::success(vec![Content::text(format!(
             "Review posted on {} with event: {}",
             params.pr_ref, params.event
-        ))]))
+        ))])
+        .with_meta(Some(no_cache_meta()));
+        result.structured_content = Some(structured);
+        Ok(result)
     }
 
     #[tool(
@@ -381,7 +420,10 @@ impl AptuServer {
         };
 
         let json = serde_json::to_string_pretty(&response).map_err(generic_to_mcp_error)?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        let mut result =
+            CallToolResult::success(vec![Content::text(json)]).with_meta(Some(no_cache_meta()));
+        result.structured_content = Some(serde_json::to_value(&response).unwrap_or(Value::Null));
+        Ok(result)
     }
 
     /// Validate GitHub token format without making API calls.
@@ -1090,6 +1132,81 @@ mod tests {
             config_resource.mime_type,
             Some("application/json".into()),
             "aptu://config should have mime_type = application/json"
+        );
+    }
+
+    #[tokio::test]
+    async fn scan_security_has_structured_content() {
+        let server = AptuServer::new(false);
+        let params = ScanSecurityParams {
+            diff: "+ let password = \"secret123\";".to_string(),
+        };
+        let result = server
+            .scan_security(rmcp::handler::server::wrapper::Parameters(params))
+            .await
+            .expect("scan_security should not fail");
+        assert!(
+            result.structured_content.is_some(),
+            "scan_security result should have structured_content"
+        );
+    }
+
+    #[tokio::test]
+    async fn scan_security_has_no_cache_meta() {
+        let server = AptuServer::new(false);
+        let params = ScanSecurityParams {
+            diff: "- old line\n+ new line".to_string(),
+        };
+        let result = server
+            .scan_security(rmcp::handler::server::wrapper::Parameters(params))
+            .await
+            .expect("scan_security should not fail");
+        let meta = result.meta.expect("result should have meta");
+        assert_eq!(
+            meta.0.get("cache_hint").and_then(|v| v.as_str()),
+            Some("no-cache"),
+            "meta should have cache_hint=no-cache"
+        );
+    }
+
+    #[tokio::test]
+    async fn health_has_structured_content() {
+        let server = AptuServer::new(false);
+        let result = server
+            .health(rmcp::handler::server::wrapper::Parameters(
+                HealthCheckParams {},
+            ))
+            .await
+            .expect("health should not fail");
+        assert!(
+            result.structured_content.is_some(),
+            "health result should have structured_content"
+        );
+        let sc = result.structured_content.unwrap();
+        assert!(
+            sc.get("github_token").is_some(),
+            "structured_content should have github_token field"
+        );
+        assert!(
+            sc.get("ai_api_key").is_some(),
+            "structured_content should have ai_api_key field"
+        );
+    }
+
+    #[tokio::test]
+    async fn health_has_no_cache_meta() {
+        let server = AptuServer::new(false);
+        let result = server
+            .health(rmcp::handler::server::wrapper::Parameters(
+                HealthCheckParams {},
+            ))
+            .await
+            .expect("health should not fail");
+        let meta = result.meta.expect("result should have meta");
+        assert_eq!(
+            meta.0.get("cache_hint").and_then(|v| v.as_str()),
+            Some("no-cache"),
+            "meta should have cache_hint=no-cache"
         );
     }
 }
