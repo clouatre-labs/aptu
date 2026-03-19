@@ -12,8 +12,110 @@ use crate::commands::types::{
 };
 use crate::output::Renderable;
 
+fn render_security_findings_text(
+    w: &mut dyn Write,
+    findings: &[aptu_core::Finding],
+    ctx: &OutputContext,
+) -> io::Result<()> {
+    if findings.is_empty() {
+        // No findings - show clean status
+        writeln!(
+            w,
+            "{}: {}",
+            style("Security Scan").green().bold(),
+            style("No issues found").green()
+        )?;
+        writeln!(w)?;
+    } else if ctx.verbose {
+        // Verbose mode: show all findings with details
+        writeln!(w, "{}", style("Security Findings").red().bold())?;
+        for finding in findings {
+            let severity_style = match finding.severity {
+                aptu_core::Severity::Critical => style("CRITICAL").red().bold(),
+                aptu_core::Severity::High => style("HIGH").red(),
+                aptu_core::Severity::Medium => style("MEDIUM").yellow(),
+                aptu_core::Severity::Low => style("LOW").dim(),
+            };
+            writeln!(
+                w,
+                "  [{}] {}:{}",
+                severity_style,
+                style(&finding.file_path).cyan(),
+                finding.line_number
+            )?;
+            writeln!(w, "    {}", finding.description)?;
+            if let Some(cwe) = &finding.cwe {
+                writeln!(w, "    {}", style(cwe).dim())?;
+            }
+        }
+        writeln!(w)?;
+    } else {
+        // Normal mode: show concise summary
+        let count = findings.len();
+        let critical_count = findings
+            .iter()
+            .filter(|f| matches!(f.severity, aptu_core::Severity::Critical))
+            .count();
+        let high_count = findings
+            .iter()
+            .filter(|f| matches!(f.severity, aptu_core::Severity::High))
+            .count();
+
+        let summary = if critical_count > 0 || high_count > 0 {
+            let mut parts = vec![];
+            if critical_count > 0 {
+                parts.push(format!("{critical_count} CRITICAL"));
+            }
+            if high_count > 0 {
+                parts.push(format!("{high_count} HIGH"));
+            }
+            format!(
+                "{} finding{} ({})",
+                count,
+                if count == 1 { "" } else { "s" },
+                parts.join(", ")
+            )
+        } else {
+            format!("{} finding{}", count, if count == 1 { "" } else { "s" })
+        };
+
+        writeln!(
+            w,
+            "{}: {} {}",
+            style("Security Scan").red().bold(),
+            style(summary).red(),
+            style("(use --verbose for details)").dim()
+        )?;
+        writeln!(w)?;
+    }
+    Ok(())
+}
+
+fn render_comments_text(
+    w: &mut dyn Write,
+    comments: &[aptu_core::ai::types::PrReviewComment],
+) -> io::Result<()> {
+    for comment in comments {
+        let severity_style = match comment.severity.as_str() {
+            "issue" => style(&comment.severity).red(),
+            "warning" => style(&comment.severity).yellow(),
+            "suggestion" => style(&comment.severity).blue(),
+            _ => style(&comment.severity).dim(),
+        };
+        let line_info = comment.line.map_or(String::new(), |l| format!(":{l}"));
+        writeln!(
+            w,
+            "  [{}] {}{}",
+            severity_style,
+            style(&comment.file).cyan(),
+            line_info
+        )?;
+        writeln!(w, "    {}", comment.comment)?;
+    }
+    Ok(())
+}
+
 impl Renderable for PrReviewResult {
-    #[allow(clippy::too_many_lines)]
     fn render_text(&self, w: &mut dyn Write, ctx: &OutputContext) -> io::Result<()> {
         // Verdict
         let verdict_style = match self.review.verdict.as_str() {
@@ -26,77 +128,8 @@ impl Renderable for PrReviewResult {
 
         // Security Findings (shown early for visibility)
         if let Some(findings) = &self.security_findings {
-            if findings.is_empty() {
-                // No findings - show clean status
-                writeln!(
-                    w,
-                    "{}: {}",
-                    style("Security Scan").green().bold(),
-                    style("No issues found").green()
-                )?;
-                writeln!(w)?;
-            } else if ctx.verbose {
-                // Verbose mode: show all findings with details
-                writeln!(w, "{}", style("Security Findings").red().bold())?;
-                for finding in findings {
-                    let severity_style = match finding.severity {
-                        aptu_core::Severity::Critical => style("CRITICAL").red().bold(),
-                        aptu_core::Severity::High => style("HIGH").red(),
-                        aptu_core::Severity::Medium => style("MEDIUM").yellow(),
-                        aptu_core::Severity::Low => style("LOW").dim(),
-                    };
-                    writeln!(
-                        w,
-                        "  [{}] {}:{}",
-                        severity_style,
-                        style(&finding.file_path).cyan(),
-                        finding.line_number
-                    )?;
-                    writeln!(w, "    {}", finding.description)?;
-                    if let Some(cwe) = &finding.cwe {
-                        writeln!(w, "    {}", style(cwe).dim())?;
-                    }
-                }
-                writeln!(w)?;
-            } else {
-                // Normal mode: show concise summary
-                let count = findings.len();
-                let critical_count = findings
-                    .iter()
-                    .filter(|f| matches!(f.severity, aptu_core::Severity::Critical))
-                    .count();
-                let high_count = findings
-                    .iter()
-                    .filter(|f| matches!(f.severity, aptu_core::Severity::High))
-                    .count();
-
-                let summary = if critical_count > 0 || high_count > 0 {
-                    let mut parts = vec![];
-                    if critical_count > 0 {
-                        parts.push(format!("{critical_count} CRITICAL"));
-                    }
-                    if high_count > 0 {
-                        parts.push(format!("{high_count} HIGH"));
-                    }
-                    format!(
-                        "{} finding{} ({})",
-                        count,
-                        if count == 1 { "" } else { "s" },
-                        parts.join(", ")
-                    )
-                } else {
-                    format!("{} finding{}", count, if count == 1 { "" } else { "s" })
-                };
-
-                writeln!(
-                    w,
-                    "{}: {} {}",
-                    style("Security Scan").red().bold(),
-                    style(summary).red(),
-                    style("(use --verbose for details)").dim()
-                )?;
-                writeln!(w)?;
-            }
+            render_security_findings_text(w, findings, ctx)?;
+            writeln!(w)?;
         }
 
         // Summary
@@ -132,23 +165,7 @@ impl Renderable for PrReviewResult {
         // Line-level comments
         if !self.review.comments.is_empty() {
             writeln!(w, "{}", style("Comments").yellow().bold())?;
-            for comment in &self.review.comments {
-                let severity_style = match comment.severity.as_str() {
-                    "issue" => style(&comment.severity).red(),
-                    "warning" => style(&comment.severity).yellow(),
-                    "suggestion" => style(&comment.severity).blue(),
-                    _ => style(&comment.severity).dim(),
-                };
-                let line_info = comment.line.map_or(String::new(), |l| format!(":{l}"));
-                writeln!(
-                    w,
-                    "  [{}] {}{}",
-                    severity_style,
-                    style(&comment.file).cyan(),
-                    line_info
-                )?;
-                writeln!(w, "    {}", comment.comment)?;
-            }
+            render_comments_text(w, &self.review.comments)?;
             writeln!(w)?;
         }
 
