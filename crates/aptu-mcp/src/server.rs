@@ -198,8 +198,8 @@ impl AptuServer {
 
     #[tool(
         name = "triage_issue",
-        description = "Fetch and analyze a GitHub issue for triage using AI",
-        annotations(read_only_hint = true, open_world_hint = true)
+        description = "Fetch a GitHub issue and run AI triage analysis. Returns analysis only, without posting anything to GitHub; call post_triage to publish the result. Returns a JSON object with fields: summary, suggested_labels, clarifying_questions, potential_duplicates, related_issues, contributor_guidance. issue_ref format: owner/repo#123 or a full GitHub issue URL (e.g. https://github.com/owner/repo/issues/123). Requires GITHUB_TOKEN and an AI API key in the environment.",
+        annotations(read_only_hint = true, idempotent_hint = true, open_world_hint = true)
     )]
     async fn triage_issue(
         &self,
@@ -222,8 +222,8 @@ impl AptuServer {
 
     #[tool(
         name = "review_pr",
-        description = "Fetch and analyze a GitHub pull request for review using AI",
-        annotations(read_only_hint = true, open_world_hint = true)
+        description = "Fetch a GitHub pull request and run AI code review analysis. Returns analysis only, without posting anything to GitHub; call post_review to publish the result. Returns a JSON object with fields: summary, verdict, strengths, concerns, comments (array of {file, line, severity, comment}), suggestions. pr_ref format: owner/repo#456 or a full GitHub PR URL (e.g. https://github.com/owner/repo/pull/456). Requires GITHUB_TOKEN and an AI API key in the environment.",
+        annotations(read_only_hint = true, idempotent_hint = true, open_world_hint = true)
     )]
     async fn review_pr(
         &self,
@@ -262,7 +262,7 @@ impl AptuServer {
 
     #[tool(
         name = "post_triage",
-        description = "Analyze a GitHub issue and post a triage comment with AI insights",
+        description = "Fetch a GitHub issue, run AI triage analysis, and post the result as a new comment on the issue. Writes to GitHub (creates a new comment; cannot be undone). Call triage_issue first to preview the analysis before committing. Calling this twice on the same issue posts duplicate comments. Returns a plain-text confirmation with the issue ref on success. issue_ref format: owner/repo#123 or a full GitHub issue URL. Requires GITHUB_TOKEN (with issue comment write permission) and an AI API key.",
         annotations(destructive_hint = true, open_world_hint = true)
     )]
     async fn post_triage(
@@ -292,7 +292,7 @@ impl AptuServer {
 
     #[tool(
         name = "post_review",
-        description = "Analyze a GitHub PR and post a review with AI insights",
+        description = "Fetch a GitHub pull request, run AI code review analysis, and submit the result as a GitHub review. Writes to GitHub (submits a review; cannot be undone). Call review_pr first to inspect the analysis before committing. event controls the review outcome: approve submits an approval, request_changes blocks merging until resolved, comment posts feedback without a merge decision. Calling this twice on the same PR submits duplicate reviews. Returns a plain-text confirmation with the PR ref and event type on success. pr_ref format: owner/repo#456 or a full GitHub PR URL. Requires GITHUB_TOKEN (with PR review write permission) and an AI API key.",
         annotations(destructive_hint = true, open_world_hint = true)
     )]
     async fn post_review(
@@ -907,5 +907,107 @@ mod tests {
         let default_config = aptu_core::config::AiConfig::default();
         assert_eq!(server.ai_config.provider, default_config.provider);
         assert_eq!(server.ai_config.model, default_config.model);
+    }
+
+    #[test]
+    fn triage_issue_description_is_read_only() {
+        let server = AptuServer::new(false);
+        let tools = server.tool_router.list_all();
+        let triage_issue = tools
+            .iter()
+            .find(|t| t.name == "triage_issue")
+            .expect("triage_issue tool not found");
+        assert!(
+            triage_issue
+                .description
+                .as_ref()
+                .map(|d| d.contains("Returns analysis only"))
+                .unwrap_or(false),
+            "triage_issue description should indicate read-only nature"
+        );
+    }
+
+    #[test]
+    fn review_pr_description_is_read_only() {
+        let server = AptuServer::new(false);
+        let tools = server.tool_router.list_all();
+        let review_pr = tools
+            .iter()
+            .find(|t| t.name == "review_pr")
+            .expect("review_pr tool not found");
+        assert!(
+            review_pr
+                .description
+                .as_ref()
+                .map(|d| d.contains("Returns analysis only"))
+                .unwrap_or(false),
+            "review_pr description should indicate read-only nature"
+        );
+    }
+
+    #[test]
+    fn post_triage_description_warns_of_consequences() {
+        let server = AptuServer::new(false);
+        let tools = server.tool_router.list_all();
+        let post_triage = tools
+            .iter()
+            .find(|t| t.name == "post_triage")
+            .expect("post_triage tool not found");
+        assert!(
+            post_triage
+                .description
+                .as_ref()
+                .map(|d| d.contains("cannot be undone"))
+                .unwrap_or(false),
+            "post_triage description should warn that the action cannot be undone"
+        );
+    }
+
+    #[test]
+    fn post_review_description_warns_of_consequences() {
+        let server = AptuServer::new(false);
+        let tools = server.tool_router.list_all();
+        let post_review = tools
+            .iter()
+            .find(|t| t.name == "post_review")
+            .expect("post_review tool not found");
+        assert!(
+            post_review
+                .description
+                .as_ref()
+                .map(|d| d.contains("cannot be undone"))
+                .unwrap_or(false),
+            "post_review description should warn that the action cannot be undone"
+        );
+    }
+
+    #[test]
+    fn triage_issue_has_idempotent_hint() {
+        let router = AptuServer::tool_router();
+        let tools = router.list_all();
+        let triage_issue = tools
+            .iter()
+            .find(|t| t.name == "triage_issue")
+            .expect("triage_issue tool not found");
+        assert_eq!(
+            triage_issue.annotations.as_ref().unwrap().idempotent_hint,
+            Some(true),
+            "triage_issue should have idempotent_hint = true"
+        );
+    }
+
+    #[test]
+    fn review_pr_has_idempotent_hint() {
+        let router = AptuServer::tool_router();
+        let tools = router.list_all();
+        let review_pr = tools
+            .iter()
+            .find(|t| t.name == "review_pr")
+            .expect("review_pr tool not found");
+        assert_eq!(
+            review_pr.annotations.as_ref().unwrap().idempotent_hint,
+            Some(true),
+            "review_pr should have idempotent_hint = true"
+        );
     }
 }
