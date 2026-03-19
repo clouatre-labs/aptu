@@ -268,7 +268,11 @@ impl AptuServer {
     #[tool(
         name = "post_triage",
         description = "Fetch a GitHub issue, run AI triage analysis, and post the result as a new comment on the issue. Writes to GitHub (creates a new comment; cannot be undone). Call triage_issue first to preview the analysis before committing. Calling this twice on the same issue posts duplicate comments. Returns a plain-text confirmation with the issue ref on success. issue_ref format: owner/repo#123 or a full GitHub issue URL. Requires GITHUB_TOKEN (with issue comment write permission) and an AI API key.",
-        annotations(destructive_hint = true, open_world_hint = true)
+        annotations(
+            destructive_hint = true,
+            open_world_hint = true,
+            idempotent_hint = false
+        )
     )]
     async fn post_triage(
         &self,
@@ -298,7 +302,11 @@ impl AptuServer {
     #[tool(
         name = "post_review",
         description = "Fetch a GitHub pull request, run AI code review analysis, and submit the result as a GitHub review. Writes to GitHub (submits a review; cannot be undone). Call review_pr first to inspect the analysis before committing. event controls the review outcome: approve submits an approval, request_changes blocks merging until resolved, comment posts feedback without a merge decision. Calling this twice on the same PR submits duplicate reviews. Returns a plain-text confirmation with the PR ref and event type on success. pr_ref format: owner/repo#456 or a full GitHub PR URL. Requires GITHUB_TOKEN (with PR review write permission) and an AI API key.",
-        annotations(destructive_hint = true, open_world_hint = true)
+        annotations(
+            destructive_hint = true,
+            open_world_hint = true,
+            idempotent_hint = false
+        )
     )]
     async fn post_review(
         &self,
@@ -425,8 +433,13 @@ impl AptuServer {
                  7. Estimate complexity: simple (< 1 day), medium (1-3 days), complex (> 3 days)\n\
                  8. Add to the relevant milestone if applicable\n\
                  9. Write a triage summary comment with your assessment\n\n\
-                 Use the `triage_issue` tool to get AI-powered analysis, then \
-                 `post_triage` to publish your findings.",
+                 Two-step workflow for AI-assisted triage:\n\n\
+                 Step 1: Call `triage_issue` with the issue reference to fetch and analyze the \
+                 issue. This is read-only; nothing is posted to GitHub.\n\n\
+                 Step 2: Review the analysis returned by `triage_issue`.\n\n\
+                 Step 3: If satisfied, call `post_triage` with the same issue reference to \
+                 publish the triage comment. This is destructive and cannot be undone. \
+                 Calling `post_triage` twice on the same issue posts duplicate comments.",
             ),
         ])
     }
@@ -462,6 +475,9 @@ impl AptuServer {
                  - [ ] Public APIs are documented\n\
                  - [ ] Breaking changes are noted\n\
                  - [ ] CHANGELOG updated if needed\n\n\
+                 To use `scan_security`, first obtain a unified diff: run \
+                 `git diff <base-branch>` or `git diff --staged` locally and pass \
+                 the output as the `diff` parameter.\n\n\
                  Use the `review_pr` tool for AI analysis, `scan_security` to check \
                  for vulnerabilities, then `post_review` to submit your review.",
             ),
@@ -485,7 +501,7 @@ fn resource_list() -> Vec<Resource> {
 
     let mut config = RawResource::new("aptu://config", "Configuration");
     config.description = Some("Current aptu configuration settings".into());
-    config.mime_type = Some("text/plain".into());
+    config.mime_type = Some("application/json".into());
 
     vec![
         repos.no_annotation(),
@@ -534,8 +550,7 @@ async fn read_resource_by_uri(uri: &str) -> Result<ReadResourceResult, McpError>
         }
         "aptu://config" => {
             let config = aptu_core::config::load_config().map_err(|e| aptu_error_to_mcp(&e))?;
-            // AppConfig derives Debug but not Serialize; use debug format
-            let text = format!("{config:#?}");
+            let text = serde_json::to_string_pretty(&config).map_err(generic_to_mcp_error)?;
             Ok(ReadResourceResult::new(vec![ResourceContents::text(
                 text, uri,
             )]))
@@ -681,9 +696,10 @@ mod tests {
         let resources = resource_list();
         for resource in &resources {
             let mime = resource.raw.mime_type.as_deref().unwrap();
-            assert!(
-                mime == "application/json" || mime == "text/plain",
-                "unexpected MIME type: {mime}"
+            assert_eq!(
+                mime, "application/json",
+                "all resources should have mime_type = application/json, got {mime} for {}",
+                resource.uri
             );
         }
     }
@@ -1030,6 +1046,50 @@ mod tests {
             review_pr.annotations.as_ref().unwrap().idempotent_hint,
             Some(true),
             "review_pr should have idempotent_hint = true"
+        );
+    }
+
+    #[test]
+    fn post_triage_has_idempotent_hint_false() {
+        let router = AptuServer::tool_router();
+        let tools = router.list_all();
+        let post_triage = tools
+            .iter()
+            .find(|t| t.name == "post_triage")
+            .expect("post_triage tool not found");
+        assert_eq!(
+            post_triage.annotations.as_ref().unwrap().idempotent_hint,
+            Some(false),
+            "post_triage should have idempotent_hint = false"
+        );
+    }
+
+    #[test]
+    fn post_review_has_idempotent_hint_false() {
+        let router = AptuServer::tool_router();
+        let tools = router.list_all();
+        let post_review = tools
+            .iter()
+            .find(|t| t.name == "post_review")
+            .expect("post_review tool not found");
+        assert_eq!(
+            post_review.annotations.as_ref().unwrap().idempotent_hint,
+            Some(false),
+            "post_review should have idempotent_hint = false"
+        );
+    }
+
+    #[test]
+    fn config_resource_has_json_mime_type() {
+        let resources = resource_list();
+        let config_resource = resources
+            .iter()
+            .find(|r| r.uri == "aptu://config")
+            .expect("aptu://config resource not found");
+        assert_eq!(
+            config_resource.mime_type,
+            Some("application/json".into()),
+            "aptu://config should have mime_type = application/json"
         );
     }
 }
