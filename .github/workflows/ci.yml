@@ -148,7 +148,7 @@ jobs:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run Clippy lints
-        run: cargo clippy -- -D warnings
+        run: cargo clippy -- -D warnings -W clippy::cognitive_complexity
       - name: Build examples
         run: cargo build --examples -p aptu-core
 
