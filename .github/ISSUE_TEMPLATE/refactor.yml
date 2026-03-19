@@ -1,0 +1,40 @@
+name: Refactor
+description: Propose a code restructuring or cleanup with no behavior change
+labels: ["refactor"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Refactors improve code quality without changing behavior.
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this refactor needed? What pain point does the current code cause?
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-state
+    attributes:
+      label: Current State
+      description: Describe the current code structure. Include file paths and line ranges if applicable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-changes
+    attributes:
+      label: Proposed Changes
+      description: What should the code look like after the refactor?
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: What must NOT change? Public APIs, behavior, backward compatibility?
+    validations:
+      required: false
