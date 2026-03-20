@@ -59,6 +59,13 @@ pub fn load_custom_guidance(custom_guidance: Option<&str>) -> String {
     }
 }
 
+/// Load a system prompt override from `~/.config/aptu/prompts/<name>.md`.
+/// Returns the file content if the file exists and is readable, or `None` otherwise.
+pub async fn load_system_prompt_override(name: &str) -> Option<String> {
+    let path = crate::config::prompts_dir().join(format!("{name}.md"));
+    tokio::fs::read_to_string(&path).await.ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,5 +113,24 @@ mod tests {
         assert!(result.contains(TOOLING_CONTEXT));
         assert!(result.contains("Custom Guidance"));
         assert!(result.contains(custom));
+    }
+
+    #[tokio::test]
+    async fn test_load_system_prompt_override_returns_none_when_absent() {
+        let result = load_system_prompt_override("__nonexistent_test_override__").await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_load_system_prompt_override_returns_content_when_present() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let file_path = dir.path().join("test_override.md");
+        let mut f = std::fs::File::create(&file_path).expect("create file");
+        writeln!(f, "Custom override content").expect("write file");
+        drop(f);
+
+        let content = tokio::fs::read_to_string(&file_path).await.ok();
+        assert_eq!(content.as_deref(), Some("Custom override content\n"));
     }
 }
