@@ -33,7 +33,7 @@ tracing-subscriber = { workspace = true }
 workspace = true
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = "=3.27.0"
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{version}/aptu-mcp-{version}-{target}.tar.gz"
