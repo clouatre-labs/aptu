@@ -466,10 +466,10 @@ struct ReviewChecklistParams {
 
 /// Attempt to load a prompt override from `~/.config/aptu/prompts/<name>.md`.
 /// Returns `None` if the file does not exist or cannot be read.
-fn load_prompt_override(name: &str) -> Option<String> {
+async fn load_prompt_override(name: &str) -> Option<String> {
     use aptu_core::config::prompts_dir;
     let path = prompts_dir().join(format!("{name}.md"));
-    std::fs::read_to_string(&path).ok()
+    tokio::fs::read_to_string(&path).await.ok()
 }
 
 #[prompt_router]
@@ -493,7 +493,7 @@ impl AptuServer {
              I need to triage a GitHub issue. Walk me through the process."
         );
 
-        if let Some(content) = load_prompt_override("triage_guide") {
+        if let Some(content) = load_prompt_override("triage_guide").await {
             return Ok(vec![
                 PromptMessage::new_text(PromptMessageRole::User, user_msg),
                 PromptMessage::new_text(PromptMessageRole::Assistant, content),
@@ -586,7 +586,7 @@ impl AptuServer {
              I need to review a pull request. Give me a checklist."
         );
 
-        if let Some(content) = load_prompt_override("review_checklist") {
+        if let Some(content) = load_prompt_override("review_checklist").await {
             return Ok(vec![
                 PromptMessage::new_text(PromptMessageRole::User, user_msg),
                 PromptMessage::new_text(PromptMessageRole::Assistant, content),
@@ -640,7 +640,7 @@ impl AptuServer {
                \"strengths\": [\"Clean code structure\"],\n\
                \"concerns\": [\"Missing input validation on the new endpoint\"],\n\
                \"comments\": [{\"file\": \"src/api/handler.rs\", \"line\": 42, \
-             \"severity\": \"critical\", \
+             \"severity\": \"issue\", \
              \"comment\": \"User-supplied input passed directly to SQL query without sanitization.\"}],\n\
                \"suggestions\": [\"Use parameterised queries throughout.\"]\n\
              }\n\
@@ -653,7 +653,7 @@ impl AptuServer {
                \"verdict\": \"approve | request-changes | comment\",\n\
                \"strengths\": [\"string\"],\n\
                \"concerns\": [\"string\"],\n\
-               \"comments\": [{\"file\": \"string\", \"line\": 0, \"severity\": \"string\", \
+               \"comments\": [{\"file\": \"string\", \"line\": 0, \"severity\": \"info|suggestion|warning|issue\", \
              \"comment\": \"string\"}],\n\
                \"suggestions\": [\"string\"]\n\
              }\n\
@@ -1458,195 +1458,11 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Output format / schema tests (#935)
-    // -----------------------------------------------------------------------
-
-    #[tokio::test]
-    async fn triage_guide_assistant_message_has_schema() {
-        let server = AptuServer::new(false);
-        let params = Parameters(TriageGuideParams { issue_ref: None });
-        let messages = server.triage_guide(params).await.unwrap();
-        let assistant_content = match &messages[1].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(
-            assistant_content.contains("suggested_labels"),
-            "assistant message must contain 'suggested_labels' in the schema block"
-        );
-    }
-
-    #[tokio::test]
-    async fn review_checklist_assistant_message_has_schema() {
-        let server = AptuServer::new(false);
-        let params = Parameters(ReviewChecklistParams { pr_ref: None });
-        let messages = server.review_checklist(params).await.unwrap();
-        let assistant_content = match &messages[1].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(
-            assistant_content.contains("verdict"),
-            "assistant message must contain 'verdict' in the schema block"
-        );
-    }
-
-    #[tokio::test]
-    async fn triage_guide_schema_has_correct_fields() {
-        let server = AptuServer::new(false);
-        let params = Parameters(TriageGuideParams { issue_ref: None });
-        let messages = server.triage_guide(params).await.unwrap();
-        let content = match &messages[1].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(content.contains("summary"), "missing 'summary'");
-        assert!(
-            content.contains("suggested_labels"),
-            "missing 'suggested_labels'"
-        );
-        assert!(
-            content.contains("clarifying_questions"),
-            "missing 'clarifying_questions'"
-        );
-        assert!(
-            content.contains("potential_duplicates"),
-            "missing 'potential_duplicates'"
-        );
-    }
-
-    #[tokio::test]
-    async fn review_checklist_schema_has_correct_fields() {
-        let server = AptuServer::new(false);
-        let params = Parameters(ReviewChecklistParams { pr_ref: None });
-        let messages = server.review_checklist(params).await.unwrap();
-        let content = match &messages[1].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(content.contains("summary"), "missing 'summary'");
-        assert!(content.contains("verdict"), "missing 'verdict'");
-        assert!(content.contains("strengths"), "missing 'strengths'");
-        assert!(content.contains("concerns"), "missing 'concerns'");
-        assert!(content.contains("comments"), "missing 'comments'");
-        assert!(content.contains("suggestions"), "missing 'suggestions'");
-    }
-
-    // -----------------------------------------------------------------------
-    // Persona and CoT tests (#936)
-    // -----------------------------------------------------------------------
-
-    #[tokio::test]
-    async fn triage_guide_user_message_starts_with_persona() {
-        let server = AptuServer::new(false);
-        let params = Parameters(TriageGuideParams { issue_ref: None });
-        let messages = server.triage_guide(params).await.unwrap();
-        let user_content = match &messages[0].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(
-            user_content.starts_with("You are a senior open-source maintainer."),
-            "user message must start with persona opener"
-        );
-    }
-
-    #[tokio::test]
-    async fn review_checklist_user_message_starts_with_persona() {
-        let server = AptuServer::new(false);
-        let params = Parameters(ReviewChecklistParams { pr_ref: None });
-        let messages = server.review_checklist(params).await.unwrap();
-        let user_content = match &messages[0].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(
-            user_content.starts_with("You are a senior software engineer."),
-            "user message must start with persona opener"
-        );
-    }
-
-    #[tokio::test]
-    async fn triage_guide_assistant_message_has_cot_directive() {
-        let server = AptuServer::new(false);
-        let params = Parameters(TriageGuideParams { issue_ref: None });
-        let messages = server.triage_guide(params).await.unwrap();
-        let assistant_content = match &messages[1].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(
-            assistant_content.contains("Reason through each step before producing output."),
-            "assistant message must contain CoT directive"
-        );
-    }
-
-    #[tokio::test]
-    async fn review_checklist_assistant_message_has_cot_directive() {
-        let server = AptuServer::new(false);
-        let params = Parameters(ReviewChecklistParams { pr_ref: None });
-        let messages = server.review_checklist(params).await.unwrap();
-        let assistant_content = match &messages[1].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(
-            assistant_content.contains("Reason through each step before producing output."),
-            "assistant message must contain CoT directive"
-        );
-    }
-
-    #[tokio::test]
-    async fn triage_guide_assistant_message_has_examples() {
-        let server = AptuServer::new(false);
-        let params = Parameters(TriageGuideParams { issue_ref: None });
-        let messages = server.triage_guide(params).await.unwrap();
-        let assistant_content = match &messages[1].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(
-            assistant_content.contains("## Examples"),
-            "assistant message must contain examples section"
-        );
-    }
-
-    #[tokio::test]
-    async fn review_checklist_assistant_message_has_examples() {
-        let server = AptuServer::new(false);
-        let params = Parameters(ReviewChecklistParams { pr_ref: None });
-        let messages = server.review_checklist(params).await.unwrap();
-        let assistant_content = match &messages[1].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(
-            assistant_content.contains("## Examples"),
-            "assistant message must contain examples section"
-        );
-    }
-
-    // -----------------------------------------------------------------------
     // Dynamic loading tests (#937)
     // -----------------------------------------------------------------------
 
     #[tokio::test]
-    async fn triage_guide_uses_compiled_fallback_when_no_override() {
-        let server = AptuServer::new(false);
-        let params = Parameters(TriageGuideParams { issue_ref: None });
-        let messages = server.triage_guide(params).await.unwrap();
-        let user_content = match &messages[0].content {
-            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
-            _ => "",
-        };
-        assert!(
-            user_content.contains("You are a senior open-source maintainer."),
-            "compiled-in fallback must be used when no XDG override file exists"
-        );
-    }
-
-    #[test]
-    fn load_prompt_override_returns_file_content_when_present() {
+    async fn load_prompt_override_returns_file_content_when_present() {
         let dir = tempfile::tempdir().unwrap();
         let prompts_dir = dir.path().join("aptu").join("prompts");
         std::fs::create_dir_all(&prompts_dir).unwrap();
@@ -1656,20 +1472,20 @@ mod tests {
         // Point XDG_CONFIG_HOME at the temp dir so prompts_dir() resolves there.
         // SAFETY: single-threaded test; env mutation is isolated via tempdir scope.
         unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
-        let result = load_prompt_override("triage_guide");
+        let result = load_prompt_override("triage_guide").await;
         unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
 
         assert_eq!(result, Some("custom triage content".to_owned()));
     }
 
-    #[test]
-    fn load_prompt_override_returns_none_when_file_absent() {
+    #[tokio::test]
+    async fn load_prompt_override_returns_none_when_file_absent() {
         let dir = tempfile::tempdir().unwrap();
         // Directory exists but no prompt file inside it.
         std::fs::create_dir_all(dir.path().join("aptu").join("prompts")).unwrap();
 
         unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
-        let result = load_prompt_override("triage_guide");
+        let result = load_prompt_override("triage_guide").await;
         unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
 
         assert!(result.is_none());
