@@ -32,6 +32,9 @@ tracing-subscriber = { workspace = true }
 [lints]
 workspace = true
 
+[dev-dependencies]
+tempfile = "3"
+
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{version}/aptu-mcp-{version}-{target}.tar.gz"
 bin-dir = "aptu-mcp"

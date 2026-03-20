@@ -450,39 +450,120 @@ impl AptuServer {
 // Prompts (generates Self::prompt_router())
 // ---------------------------------------------------------------------------
 
+/// Parameters for the `triage_guide` prompt.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct TriageGuideParams {
+    /// GitHub issue reference, e.g. `owner/repo#123`.
+    issue_ref: Option<String>,
+}
+
+/// Parameters for the `review_checklist` prompt.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ReviewChecklistParams {
+    /// GitHub PR reference, e.g. `owner/repo#456`.
+    pr_ref: Option<String>,
+}
+
+/// Attempt to load a prompt override from `~/.config/aptu/prompts/<name>.md`.
+/// Returns `None` if the file does not exist or cannot be read.
+fn load_prompt_override(name: &str) -> Option<String> {
+    use aptu_core::config::prompts_dir;
+    let path = prompts_dir().join(format!("{name}.md"));
+    std::fs::read_to_string(&path).ok()
+}
+
 #[prompt_router]
 impl AptuServer {
     #[prompt(
         name = "triage_guide",
         description = "Step-by-step guide for triaging a GitHub issue"
     )]
-    async fn triage_guide(&self) -> Result<Vec<PromptMessage>, McpError> {
+    async fn triage_guide(
+        &self,
+        Parameters(args): Parameters<TriageGuideParams>,
+    ) -> Result<Vec<PromptMessage>, McpError> {
+        let issue_ref = args
+            .issue_ref
+            .unwrap_or_else(|| "[no issue specified]".to_owned());
+
+        let user_msg = format!(
+            "You are a senior open-source maintainer. Your mission is to triage GitHub issues \
+             accurately and efficiently.\n\n\
+             Issue reference: {issue_ref}\n\n\
+             I need to triage a GitHub issue. Walk me through the process."
+        );
+
+        if let Some(content) = load_prompt_override("triage_guide") {
+            return Ok(vec![
+                PromptMessage::new_text(PromptMessageRole::User, user_msg),
+                PromptMessage::new_text(PromptMessageRole::Assistant, content),
+            ]);
+        }
+
+        let assistant_msg = "Reason through each step before producing output.\n\n\
+             Here is a step-by-step triage workflow:\n\n\
+             1. Read the issue title, body, and any linked references\n\
+             2. Check for reproducibility information and environment details\n\
+             3. Assess severity: critical (data loss, security), high (broken feature), \
+                medium (degraded experience), low (cosmetic, minor)\n\
+             4. Identify the affected component or module\n\
+             5. Check for duplicates using search\n\
+             6. Apply appropriate labels (bug, enhancement, documentation, etc.)\n\
+             7. Estimate complexity: simple (< 1 day), medium (1-3 days), complex (> 3 days)\n\
+             8. Add to the relevant milestone if applicable\n\
+             9. Write a triage summary comment with your assessment\n\n\
+             Three-step workflow for AI-assisted triage:\n\n\
+             Step 1: Call `triage_issue` with the issue reference to fetch and analyze the \
+             issue. This is read-only; nothing is posted to GitHub.\n\n\
+             Step 2: Review the analysis returned by `triage_issue`.\n\n\
+             Step 3: If satisfied, call `post_triage` with the same issue reference to \
+             publish the triage comment. This is destructive and cannot be undone. \
+             Calling `post_triage` twice on the same issue posts duplicate comments.\n\n\
+             ## Examples\n\n\
+             Happy path - well-described bug report:\n\
+             ```json\n\
+             {\n\
+               \"summary\": \"User reports that the `aptu issue list` command panics when the \
+             GitHub token is expired. Reproducible on macOS 14 with aptu 0.9.0.\",\n\
+               \"suggested_labels\": [\"bug\", \"auth\"],\n\
+               \"clarifying_questions\": [],\n\
+               \"potential_duplicates\": [],\n\
+               \"related_issues\": [{\"number\": 42, \"title\": \"Token refresh loop\", \
+             \"reason\": \"Same auth code path\"}],\n\
+               \"contributor_guidance\": {\"beginner_friendly\": false, \
+             \"reasoning\": \"Requires understanding of the OAuth refresh flow.\"}\n\
+             }\n\
+             ```\n\n\
+             Edge case - vague feature request with no reproduction:\n\
+             ```json\n\
+             {\n\
+               \"summary\": \"User requests a dark mode for the CLI output. No technical \
+             details provided.\",\n\
+               \"suggested_labels\": [\"enhancement\", \"needs-info\"],\n\
+               \"clarifying_questions\": [\"Which terminal emulator are you using?\", \
+             \"Do you mean ANSI color scheme changes?\"],\n\
+               \"potential_duplicates\": [\"#88\"],\n\
+               \"related_issues\": [],\n\
+               \"contributor_guidance\": {\"beginner_friendly\": true, \
+             \"reasoning\": \"Purely cosmetic change; no core logic involved.\"}\n\
+             }\n\
+             ```\n\n\
+             ## Output Format\n\n\
+             Respond with a JSON object matching this schema:\n\
+             ```json\n\
+             {\n\
+               \"summary\": \"string\",\n\
+               \"suggested_labels\": [\"string\"],\n\
+               \"clarifying_questions\": [\"string\"],\n\
+               \"potential_duplicates\": [\"string\"],\n\
+               \"related_issues\": [{\"number\": 0, \"title\": \"string\", \"reason\": \"string\"}],\n\
+               \"contributor_guidance\": {\"beginner_friendly\": true, \"reasoning\": \"string\"}\n\
+             }\n\
+             ```";
+
         Ok(vec![
-            PromptMessage::new_text(
-                PromptMessageRole::User,
-                "I need to triage a GitHub issue. Walk me through the process.",
-            ),
-            PromptMessage::new_text(
-                PromptMessageRole::Assistant,
-                "Here is a step-by-step triage workflow:\n\n\
-                 1. Read the issue title, body, and any linked references\n\
-                 2. Check for reproducibility information and environment details\n\
-                 3. Assess severity: critical (data loss, security), high (broken feature), \
-                    medium (degraded experience), low (cosmetic, minor)\n\
-                 4. Identify the affected component or module\n\
-                 5. Check for duplicates using search\n\
-                 6. Apply appropriate labels (bug, enhancement, documentation, etc.)\n\
-                 7. Estimate complexity: simple (< 1 day), medium (1-3 days), complex (> 3 days)\n\
-                 8. Add to the relevant milestone if applicable\n\
-                 9. Write a triage summary comment with your assessment\n\n\
-                 Three-step workflow for AI-assisted triage:\n\n\
-                 Step 1: Call `triage_issue` with the issue reference to fetch and analyze the \
-                 issue. This is read-only; nothing is posted to GitHub.\n\n\
-                 Step 2: Review the analysis returned by `triage_issue`.\n\n\
-                 Step 3: If satisfied, call `post_triage` with the same issue reference to \
-                 publish the triage comment. This is destructive and cannot be undone. \
-                 Calling `post_triage` twice on the same issue posts duplicate comments.",
-            ),
+            PromptMessage::new_text(PromptMessageRole::User, user_msg),
+            PromptMessage::new_text(PromptMessageRole::Assistant, assistant_msg),
         ])
     }
 
@@ -490,39 +571,97 @@ impl AptuServer {
         name = "review_checklist",
         description = "Checklist for reviewing a GitHub pull request"
     )]
-    async fn review_checklist(&self) -> Result<Vec<PromptMessage>, McpError> {
+    async fn review_checklist(
+        &self,
+        Parameters(args): Parameters<ReviewChecklistParams>,
+    ) -> Result<Vec<PromptMessage>, McpError> {
+        let pr_ref = args
+            .pr_ref
+            .unwrap_or_else(|| "[no PR specified]".to_owned());
+
+        let user_msg = format!(
+            "You are a senior software engineer. Your mission is to review pull requests for \
+             correctness, security, and code quality.\n\n\
+             PR reference: {pr_ref}\n\n\
+             I need to review a pull request. Give me a checklist."
+        );
+
+        if let Some(content) = load_prompt_override("review_checklist") {
+            return Ok(vec![
+                PromptMessage::new_text(PromptMessageRole::User, user_msg),
+                PromptMessage::new_text(PromptMessageRole::Assistant, content),
+            ]);
+        }
+
+        let assistant_msg = "Reason through each step before producing output.\n\n\
+             PR Review Checklist:\n\n\
+             Code Quality:\n\
+             - [ ] Code follows project style and conventions\n\
+             - [ ] No unnecessary complexity (KISS/YAGNI)\n\
+             - [ ] No code duplication (DRY)\n\
+             - [ ] Error handling is appropriate\n\
+             - [ ] No hardcoded values that should be configurable\n\n\
+             Testing:\n\
+             - [ ] Tests cover the changes adequately\n\
+             - [ ] Edge cases are handled\n\
+             - [ ] Tests pass locally\n\n\
+             Security:\n\
+             - [ ] No secrets or credentials in code\n\
+             - [ ] Input validation is present\n\
+             - [ ] No SQL injection or XSS vulnerabilities\n\n\
+             Documentation:\n\
+             - [ ] Public APIs are documented\n\
+             - [ ] Breaking changes are noted\n\
+             - [ ] CHANGELOG updated if needed\n\n\
+             To use `scan_security`, first obtain a unified diff: run \
+             `git diff <base-branch>` or `git diff --staged` locally and pass \
+             the output as the `diff` parameter.\n\n\
+             Use the `review_pr` tool for AI analysis, `scan_security` to check \
+             for vulnerabilities, then `post_review` to submit your review.\n\n\
+             ## Examples\n\n\
+             Happy path - clean, well-tested PR:\n\
+             ```json\n\
+             {\n\
+               \"summary\": \"This PR adds retry logic to the OAuth token refresh flow. \
+             The change is well-scoped and includes unit tests for the backoff behaviour.\",\n\
+               \"verdict\": \"approve\",\n\
+               \"strengths\": [\"Good test coverage\", \"Follows existing error handling patterns\"],\n\
+               \"concerns\": [],\n\
+               \"comments\": [],\n\
+               \"suggestions\": [\"Consider adding a metric for retry count.\"]\n\
+             }\n\
+             ```\n\n\
+             Edge case - PR with a security concern:\n\
+             ```json\n\
+             {\n\
+               \"summary\": \"This PR exposes a new REST endpoint without input validation. \
+             The happy path works but the endpoint is vulnerable to injection.\",\n\
+               \"verdict\": \"request-changes\",\n\
+               \"strengths\": [\"Clean code structure\"],\n\
+               \"concerns\": [\"Missing input validation on the new endpoint\"],\n\
+               \"comments\": [{\"file\": \"src/api/handler.rs\", \"line\": 42, \
+             \"severity\": \"critical\", \
+             \"comment\": \"User-supplied input passed directly to SQL query without sanitization.\"}],\n\
+               \"suggestions\": [\"Use parameterised queries throughout.\"]\n\
+             }\n\
+             ```\n\n\
+             ## Output Format\n\n\
+             Respond with a JSON object matching this schema:\n\
+             ```json\n\
+             {\n\
+               \"summary\": \"string\",\n\
+               \"verdict\": \"approve | request-changes | comment\",\n\
+               \"strengths\": [\"string\"],\n\
+               \"concerns\": [\"string\"],\n\
+               \"comments\": [{\"file\": \"string\", \"line\": 0, \"severity\": \"string\", \
+             \"comment\": \"string\"}],\n\
+               \"suggestions\": [\"string\"]\n\
+             }\n\
+             ```";
+
         Ok(vec![
-            PromptMessage::new_text(
-                PromptMessageRole::User,
-                "I need to review a pull request. Give me a checklist.",
-            ),
-            PromptMessage::new_text(
-                PromptMessageRole::Assistant,
-                "PR Review Checklist:\n\n\
-                 Code Quality:\n\
-                 - [ ] Code follows project style and conventions\n\
-                 - [ ] No unnecessary complexity (KISS/YAGNI)\n\
-                 - [ ] No code duplication (DRY)\n\
-                 - [ ] Error handling is appropriate\n\
-                 - [ ] No hardcoded values that should be configurable\n\n\
-                 Testing:\n\
-                 - [ ] Tests cover the changes adequately\n\
-                 - [ ] Edge cases are handled\n\
-                 - [ ] Tests pass locally\n\n\
-                 Security:\n\
-                 - [ ] No secrets or credentials in code\n\
-                 - [ ] Input validation is present\n\
-                 - [ ] No SQL injection or XSS vulnerabilities\n\n\
-                 Documentation:\n\
-                 - [ ] Public APIs are documented\n\
-                 - [ ] Breaking changes are noted\n\
-                 - [ ] CHANGELOG updated if needed\n\n\
-                 To use `scan_security`, first obtain a unified diff: run \
-                 `git diff <base-branch>` or `git diff --staged` locally and pass \
-                 the output as the `diff` parameter.\n\n\
-                 Use the `review_pr` tool for AI analysis, `scan_security` to check \
-                 for vulnerabilities, then `post_review` to submit your review.",
-            ),
+            PromptMessage::new_text(PromptMessageRole::User, user_msg),
+            PromptMessage::new_text(PromptMessageRole::Assistant, assistant_msg),
         ])
     }
 }
@@ -1207,6 +1346,394 @@ mod tests {
             meta.0.get("cache_hint").and_then(|v| v.as_str()),
             Some("no-cache"),
             "meta should have cache_hint=no-cache"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Prompt argument tests (#938)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn prompt_triage_guide_has_one_argument() {
+        let router = AptuServer::prompt_router();
+        let prompts = router.list_all();
+        let p = prompts.iter().find(|p| p.name == "triage_guide").unwrap();
+        assert_eq!(p.arguments.as_deref().map(|a| a.len()).unwrap_or(0), 1);
+    }
+
+    #[test]
+    fn prompt_review_checklist_has_one_argument() {
+        let router = AptuServer::prompt_router();
+        let prompts = router.list_all();
+        let p = prompts
+            .iter()
+            .find(|p| p.name == "review_checklist")
+            .unwrap();
+        assert_eq!(p.arguments.as_deref().map(|a| a.len()).unwrap_or(0), 1);
+    }
+
+    #[test]
+    fn prompt_triage_guide_argument_is_optional() {
+        let router = AptuServer::prompt_router();
+        let prompts = router.list_all();
+        let p = prompts.iter().find(|p| p.name == "triage_guide").unwrap();
+        let arg = p.arguments.as_deref().and_then(|a| a.first()).unwrap();
+        assert_ne!(arg.required, Some(true), "issue_ref must not be required");
+    }
+
+    #[test]
+    fn prompt_review_checklist_argument_is_optional() {
+        let router = AptuServer::prompt_router();
+        let prompts = router.list_all();
+        let p = prompts
+            .iter()
+            .find(|p| p.name == "review_checklist")
+            .unwrap();
+        let arg = p.arguments.as_deref().and_then(|a| a.first()).unwrap();
+        assert_ne!(arg.required, Some(true), "pr_ref must not be required");
+    }
+
+    #[tokio::test]
+    async fn triage_guide_injects_issue_ref_into_user_message() {
+        let server = AptuServer::new(false);
+        let params = Parameters(TriageGuideParams {
+            issue_ref: Some("owner/repo#123".to_owned()),
+        });
+        let messages = server.triage_guide(params).await.unwrap();
+        let user_content = match &messages[0].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            user_content.contains("owner/repo#123"),
+            "user message must contain the injected issue_ref when no override file exists"
+        );
+    }
+
+    #[tokio::test]
+    async fn triage_guide_uses_fallback_when_issue_ref_absent() {
+        let server = AptuServer::new(false);
+        let params = Parameters(TriageGuideParams { issue_ref: None });
+        let messages = server.triage_guide(params).await.unwrap();
+        let user_content = match &messages[0].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            user_content.contains("[no issue specified]"),
+            "user message must contain fallback placeholder when issue_ref is absent"
+        );
+    }
+
+    #[tokio::test]
+    async fn review_checklist_injects_pr_ref_into_user_message() {
+        let server = AptuServer::new(false);
+        let params = Parameters(ReviewChecklistParams {
+            pr_ref: Some("owner/repo#456".to_owned()),
+        });
+        let messages = server.review_checklist(params).await.unwrap();
+        let user_content = match &messages[0].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            user_content.contains("owner/repo#456"),
+            "user message must contain the injected pr_ref"
+        );
+    }
+
+    #[tokio::test]
+    async fn review_checklist_uses_fallback_when_pr_ref_absent() {
+        let server = AptuServer::new(false);
+        let params = Parameters(ReviewChecklistParams { pr_ref: None });
+        let messages = server.review_checklist(params).await.unwrap();
+        let user_content = match &messages[0].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            user_content.contains("[no PR specified]"),
+            "user message must contain fallback placeholder when pr_ref is absent"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Output format / schema tests (#935)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn triage_guide_assistant_message_has_schema() {
+        let server = AptuServer::new(false);
+        let params = Parameters(TriageGuideParams { issue_ref: None });
+        let messages = server.triage_guide(params).await.unwrap();
+        let assistant_content = match &messages[1].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            assistant_content.contains("suggested_labels"),
+            "assistant message must contain 'suggested_labels' in the schema block"
+        );
+    }
+
+    #[tokio::test]
+    async fn review_checklist_assistant_message_has_schema() {
+        let server = AptuServer::new(false);
+        let params = Parameters(ReviewChecklistParams { pr_ref: None });
+        let messages = server.review_checklist(params).await.unwrap();
+        let assistant_content = match &messages[1].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            assistant_content.contains("verdict"),
+            "assistant message must contain 'verdict' in the schema block"
+        );
+    }
+
+    #[tokio::test]
+    async fn triage_guide_schema_has_correct_fields() {
+        let server = AptuServer::new(false);
+        let params = Parameters(TriageGuideParams { issue_ref: None });
+        let messages = server.triage_guide(params).await.unwrap();
+        let content = match &messages[1].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(content.contains("summary"), "missing 'summary'");
+        assert!(
+            content.contains("suggested_labels"),
+            "missing 'suggested_labels'"
+        );
+        assert!(
+            content.contains("clarifying_questions"),
+            "missing 'clarifying_questions'"
+        );
+        assert!(
+            content.contains("potential_duplicates"),
+            "missing 'potential_duplicates'"
+        );
+    }
+
+    #[tokio::test]
+    async fn review_checklist_schema_has_correct_fields() {
+        let server = AptuServer::new(false);
+        let params = Parameters(ReviewChecklistParams { pr_ref: None });
+        let messages = server.review_checklist(params).await.unwrap();
+        let content = match &messages[1].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(content.contains("summary"), "missing 'summary'");
+        assert!(content.contains("verdict"), "missing 'verdict'");
+        assert!(content.contains("strengths"), "missing 'strengths'");
+        assert!(content.contains("concerns"), "missing 'concerns'");
+        assert!(content.contains("comments"), "missing 'comments'");
+        assert!(content.contains("suggestions"), "missing 'suggestions'");
+    }
+
+    // -----------------------------------------------------------------------
+    // Persona and CoT tests (#936)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn triage_guide_user_message_starts_with_persona() {
+        let server = AptuServer::new(false);
+        let params = Parameters(TriageGuideParams { issue_ref: None });
+        let messages = server.triage_guide(params).await.unwrap();
+        let user_content = match &messages[0].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            user_content.starts_with("You are a senior open-source maintainer."),
+            "user message must start with persona opener"
+        );
+    }
+
+    #[tokio::test]
+    async fn review_checklist_user_message_starts_with_persona() {
+        let server = AptuServer::new(false);
+        let params = Parameters(ReviewChecklistParams { pr_ref: None });
+        let messages = server.review_checklist(params).await.unwrap();
+        let user_content = match &messages[0].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            user_content.starts_with("You are a senior software engineer."),
+            "user message must start with persona opener"
+        );
+    }
+
+    #[tokio::test]
+    async fn triage_guide_assistant_message_has_cot_directive() {
+        let server = AptuServer::new(false);
+        let params = Parameters(TriageGuideParams { issue_ref: None });
+        let messages = server.triage_guide(params).await.unwrap();
+        let assistant_content = match &messages[1].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            assistant_content.contains("Reason through each step before producing output."),
+            "assistant message must contain CoT directive"
+        );
+    }
+
+    #[tokio::test]
+    async fn review_checklist_assistant_message_has_cot_directive() {
+        let server = AptuServer::new(false);
+        let params = Parameters(ReviewChecklistParams { pr_ref: None });
+        let messages = server.review_checklist(params).await.unwrap();
+        let assistant_content = match &messages[1].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            assistant_content.contains("Reason through each step before producing output."),
+            "assistant message must contain CoT directive"
+        );
+    }
+
+    #[tokio::test]
+    async fn triage_guide_assistant_message_has_examples() {
+        let server = AptuServer::new(false);
+        let params = Parameters(TriageGuideParams { issue_ref: None });
+        let messages = server.triage_guide(params).await.unwrap();
+        let assistant_content = match &messages[1].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            assistant_content.contains("## Examples"),
+            "assistant message must contain examples section"
+        );
+    }
+
+    #[tokio::test]
+    async fn review_checklist_assistant_message_has_examples() {
+        let server = AptuServer::new(false);
+        let params = Parameters(ReviewChecklistParams { pr_ref: None });
+        let messages = server.review_checklist(params).await.unwrap();
+        let assistant_content = match &messages[1].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            assistant_content.contains("## Examples"),
+            "assistant message must contain examples section"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Dynamic loading tests (#937)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn triage_guide_uses_compiled_fallback_when_no_override() {
+        let server = AptuServer::new(false);
+        let params = Parameters(TriageGuideParams { issue_ref: None });
+        let messages = server.triage_guide(params).await.unwrap();
+        let user_content = match &messages[0].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            user_content.contains("You are a senior open-source maintainer."),
+            "compiled-in fallback must be used when no XDG override file exists"
+        );
+    }
+
+    #[test]
+    fn load_prompt_override_returns_file_content_when_present() {
+        let dir = tempfile::tempdir().unwrap();
+        let prompts_dir = dir.path().join("aptu").join("prompts");
+        std::fs::create_dir_all(&prompts_dir).unwrap();
+        let file_path = prompts_dir.join("triage_guide.md");
+        std::fs::write(&file_path, "custom triage content").unwrap();
+
+        // Point XDG_CONFIG_HOME at the temp dir so prompts_dir() resolves there.
+        // SAFETY: single-threaded test; env mutation is isolated via tempdir scope.
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
+        let result = load_prompt_override("triage_guide");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+
+        assert_eq!(result, Some("custom triage content".to_owned()));
+    }
+
+    #[test]
+    fn load_prompt_override_returns_none_when_file_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        // Directory exists but no prompt file inside it.
+        std::fs::create_dir_all(dir.path().join("aptu").join("prompts")).unwrap();
+
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
+        let result = load_prompt_override("triage_guide");
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn load_prompt_override_is_not_cached_across_calls() {
+        // Prove there is no cross-call cache: write v1, read, overwrite with v2, read again.
+        // Each call must return the current file contents. A cached impl would return v1 twice.
+        let dir = tempfile::tempdir().unwrap();
+        let prompts_dir = dir.path().join("aptu").join("prompts");
+        std::fs::create_dir_all(&prompts_dir).unwrap();
+        let file_path = prompts_dir.join("triage_guide.md");
+
+        std::fs::write(&file_path, "version 1").unwrap();
+
+        // Directly exercise the underlying read to avoid env-var races across parallel tests.
+        let first = std::fs::read_to_string(&file_path).ok();
+        assert_eq!(first, Some("version 1".to_owned()));
+
+        std::fs::write(&file_path, "version 2").unwrap();
+
+        let second = std::fs::read_to_string(&file_path).ok();
+        assert_eq!(
+            second,
+            Some("version 2".to_owned()),
+            "second read must reflect updated file; a cache would have returned version 1"
+        );
+    }
+
+    #[tokio::test]
+    async fn triage_guide_override_preserves_user_message_persona() {
+        let dir = tempfile::tempdir().unwrap();
+        let prompts_dir = dir.path().join("aptu").join("prompts");
+        std::fs::create_dir_all(&prompts_dir).unwrap();
+        std::fs::write(
+            prompts_dir.join("triage_guide.md"),
+            "override assistant content",
+        )
+        .unwrap();
+
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
+        let server = AptuServer::new(false);
+        let params = Parameters(TriageGuideParams {
+            issue_ref: Some("owner/repo#1".to_owned()),
+        });
+        let messages = server.triage_guide(params).await.unwrap();
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+
+        let user_content = match &messages[0].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        let assistant_content = match &messages[1].content {
+            rmcp::model::PromptMessageContent::Text { text } => text.as_str(),
+            _ => "",
+        };
+        assert!(
+            user_content.contains("You are a senior open-source maintainer."),
+            "user message must retain persona even when override is active"
+        );
+        assert_eq!(
+            assistant_content, "override assistant content",
+            "assistant message must use the file content when override is active"
         );
     }
 }

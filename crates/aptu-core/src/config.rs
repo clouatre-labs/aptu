@@ -336,6 +336,18 @@ pub fn data_dir() -> PathBuf {
         .join("aptu")
 }
 
+/// Returns the Aptu prompts configuration directory.
+///
+/// Prompt override files are loaded from this directory at runtime.
+/// Place a `<name>.md` file here to override the compiled-in prompt.
+///
+/// Respects the `XDG_CONFIG_HOME` environment variable if set,
+/// otherwise defaults to `~/.config/aptu/prompts`.
+#[must_use]
+pub fn prompts_dir() -> PathBuf {
+    config_dir().join("prompts")
+}
+
 /// Returns the path to the configuration file.
 #[must_use]
 pub fn config_file_path() -> PathBuf {
