@@ -26,7 +26,7 @@ pub type Result<T> = std::result::Result<T, AptuError>;
 
 pub use config::{
     AiConfig, AppConfig, CacheConfig, GitHubConfig, TaskType, UiConfig, UserConfig, config_dir,
-    config_file_path, data_dir, load_config,
+    config_file_path, data_dir, load_config, prompts_dir,
 };
 
 // ============================================================================
