@@ -5,8 +5,19 @@
 extends:
   - '@commitlint/config-conventional'
 
-# Using config-conventional defaults:
+rules:
+  # config-conventional leaves these as warnings; promote to errors for parity with the local hook.
+  # subject-full-stop is already [2, never, '.'] in config-conventional -- no override needed.
+  body-leading-blank:
+    - 2
+    - always
+  footer-leading-blank:
+    - 2
+    - always
+
+# config-conventional defaults enforced at error level:
 # - header-max-length: 100
 # - body-max-line-length: 100
 # - footer-max-line-length: 100
+# - subject-full-stop: [2, never, '.']
 # - type-enum: [build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test]
