@@ -344,6 +344,9 @@ jobs:
     needs: create-release
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -354,22 +357,16 @@ jobs:
           toolchain: stable
 
       - name: Publish aptu-core
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: cargo publish -p aptu-core
 
       - name: Wait for index propagation
         run: sleep 30
 
       - name: Publish aptu-cli
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: cargo publish -p aptu-cli
 
       - name: Wait for index propagation
         run: sleep 30
 
       - name: Publish aptu-mcp
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: cargo publish -p aptu-mcp
