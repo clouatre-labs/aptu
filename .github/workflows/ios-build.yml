@@ -25,9 +25,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   build:
     runs-on: macos-15
+    permissions:
+      contents: read
+      actions: read
     
     steps:
       - name: Checkout code
