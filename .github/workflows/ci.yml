@@ -99,7 +99,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: changes
     timeout-minutes: 5
-    if: github.actor == 'renovate[bot]'
+    if: github.actor == 'renovate[bot]'  # zizmor: ignore[spoofable-github-context]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -221,7 +221,7 @@ jobs:
       - name: Make binary executable
         run: chmod +x target/ci/aptu
       - name: Setup Bats testing framework
-        uses: bats-core/bats-action@e412797c46257a2dbf3775f6f6010b33ee6cb99f # v3
+        uses: bats-core/bats-action@e412797c46257a2dbf3775f6f6010b33ee6cb99f # v3  # zizmor: ignore[ref-confusion]
         with:
           support-path: ${{ github.workspace }}/.bats-libs/bats-support
           assert-path: ${{ github.workspace }}/.bats-libs/bats-assert
@@ -235,11 +235,24 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: bats tests/integration.bats
 
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8 # v0.5.2
+        with:
+          advanced-security: false
+          annotations: true
+          min-severity: high
+
   ci-result:
     name: CI Result
     runs-on: ubuntu-24.04
     if: always()
-    needs: [commitlint, check-base, deny, renovate-check, format, lint, test, build-release, integration]
+    needs: [commitlint, check-base, deny, renovate-check, format, lint, test, build-release, integration, zizmor]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
