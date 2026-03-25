@@ -30,7 +30,7 @@ env:
 jobs:
   verify-tag-signature:
     name: Verify Tag Signature
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name != 'workflow_dispatch'
     steps:
       - name: Checkout repository
@@ -72,7 +72,7 @@ jobs:
     name: Create Release
     needs: [verify-tag-signature]
     if: always() && (needs.verify-tag-signature.result == 'success' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     outputs:
@@ -125,10 +125,10 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04
             cross: true
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04
             cross: true
           - target: aarch64-apple-darwin
             os: macos-latest
@@ -146,7 +146,7 @@ jobs:
     name: Update Homebrew Formula
     needs: build-and-attest
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout homebrew-tap repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -343,7 +343,7 @@ jobs:
     name: Publish to crates.io
     needs: create-release
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
