@@ -131,7 +131,7 @@ jobs:
             os: ubuntu-24.04
             cross: true
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-15
             cross: false
     uses: ./.github/workflows/build-and-attest.yml
     with:

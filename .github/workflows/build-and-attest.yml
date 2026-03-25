@@ -10,7 +10,7 @@ on:
       os:
         required: true
         type: string
-        description: Runner OS (e.g., ubuntu-24.04, macos-latest, windows-latest)
+        description: Runner OS (e.g., ubuntu-24.04, macos-15)
       cross:
         required: true
         type: boolean
