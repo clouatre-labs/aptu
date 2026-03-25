@@ -7,18 +7,18 @@
   "dependencyDashboard": false,
   "ignorePaths": ["fuzz/**"],
   "schedule": ["before 6am on monday"],
+  "timezone": "UTC",
   "packageRules": [
     {
       "groupName": "non-major",
       "matchUpdateTypes": ["patch", "minor", "digest", "pin", "lockFileMaintenance"],
-      "automerge": true,
-      "platformAutomerge": true
+      "automerge": true
     },
     {
       "groupName": "github-actions",
       "matchManagers": ["github-actions"],
-      "automerge": true,
-      "platformAutomerge": true
+      "matchUpdateTypes": ["patch", "minor", "digest", "pin", "lockFileMaintenance"],
+      "automerge": true
     }
   ]
 }
