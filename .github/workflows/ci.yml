@@ -99,7 +99,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: changes
     timeout-minutes: 5
-    if: github.actor == 'renovate[bot]'
+    if: github.actor == 'renovate[bot]'  # zizmor: ignore[spoofable-github-context]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -221,7 +221,7 @@ jobs:
       - name: Make binary executable
         run: chmod +x target/ci/aptu
       - name: Setup Bats testing framework
-        uses: bats-core/bats-action@e412797c46257a2dbf3775f6f6010b33ee6cb99f # v3
+        uses: bats-core/bats-action@e412797c46257a2dbf3775f6f6010b33ee6cb99f # v3  # zizmor: ignore[ref-confusion]
         with:
           support-path: ${{ github.workspace }}/.bats-libs/bats-support
           assert-path: ${{ github.workspace }}/.bats-libs/bats-assert
@@ -246,6 +246,7 @@ jobs:
         with:
           advanced-security: false
           annotations: true
+          min-severity: error
 
   ci-result:
     name: CI Result

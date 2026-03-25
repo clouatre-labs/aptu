@@ -101,7 +101,7 @@ runs:
         INPUT_DRY_RUN: ${{ inputs.dry-run }}
         INPUT_APPLY_LABELS: ${{ inputs.apply-labels }}
         INPUT_NO_COMMENT: ${{ inputs.no-comment }}
-      run: |
+      run: |  # zizmor: ignore[dangerous-write]
         # Set shared environment variables for subsequent steps
         # Values from inputs (originally secrets) are auto-masked by GitHub
         echo "GITHUB_TOKEN=$INPUT_GITHUB_TOKEN" >> "$GITHUB_ENV"
@@ -120,7 +120,7 @@ runs:
     - name: Download aptu binary
       if: steps.check-skip.outputs.skip != 'true'
       shell: bash
-      run: |
+      run: |  # zizmor: ignore[dangerous-write]
         set -e
         
         # Get latest v0.x.x release from GitHub API (authenticated to avoid rate limits)
