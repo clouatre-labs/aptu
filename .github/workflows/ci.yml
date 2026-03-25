@@ -147,9 +147,9 @@ jobs:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run Clippy lints
-        run: cargo clippy -- -D warnings -W clippy::cognitive_complexity
+        run: cargo clippy --profile ci -- -D warnings -W clippy::cognitive_complexity
       - name: Build examples
-        run: cargo build --examples -p aptu-core
+        run: cargo build --examples -p aptu-core --profile ci
 
   test:
     name: Test
@@ -170,7 +170,7 @@ jobs:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run tests
-        run: cargo test
+        run: cargo test --profile ci
 
   build-release:
     name: Build Release Binary
