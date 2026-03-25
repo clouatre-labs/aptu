@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   label:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pull-requests: write
       issues: write
