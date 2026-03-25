@@ -15,7 +15,6 @@ on:
       - '**.md'
       - 'docs/**'
       - 'LICENSES/**'
-  merge_group:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
