@@ -14,10 +14,11 @@ rules:
   footer-leading-blank:
     - 2
     - always
+  subject-case: [0] # not in the Conventional Commits spec; breaks all bots (dependabot, renovate, etc.)
+  body-max-line-length: [0] # cosmetic; dependabot bodies always exceed 100 chars
 
 # config-conventional defaults enforced at error level:
 # - header-max-length: 100
-# - body-max-line-length: 100
 # - footer-max-line-length: 100
 # - subject-full-stop: [2, never, '.']
 # - type-enum: [build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test]
