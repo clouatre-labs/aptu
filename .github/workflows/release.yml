@@ -359,17 +359,27 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Authenticate to crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1
+
       - name: Publish aptu-core
         run: cargo publish -p aptu-core
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Wait for index propagation
         run: sleep 30
 
       - name: Publish aptu-cli
         run: cargo publish -p aptu-cli
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Wait for index propagation
         run: sleep 30
 
       - name: Publish aptu-mcp
         run: cargo publish -p aptu-mcp
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
