@@ -136,7 +136,7 @@ pub struct HealthCheckResponse {
 
 /// Parameters for health check (empty for consistency).
 #[derive(Debug, Deserialize, JsonSchema)]
-#[schemars(description = "Check the health of credentials and configuration")]
+#[schemars(description = "Check the health of credentials and configuration", extend("properties" = {}))]
 pub struct HealthCheckParams {}
 
 // ---------------------------------------------------------------------------
