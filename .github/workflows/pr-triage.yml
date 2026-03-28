@@ -21,9 +21,9 @@ jobs:
 
       - name: Triage PR
         uses: ./
-        continue-on-error: true  # Non-blocking until fix released
+        continue-on-error: true  # Non-blocking - AI review is advisory
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-          provider: openrouter
-          model: mistralai/mistral-small-2603
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          provider: gemini
+          model: gemini-3.1-flash-lite-preview
