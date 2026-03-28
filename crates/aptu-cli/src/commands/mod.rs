@@ -683,7 +683,7 @@ async fn run_pr_command(
             dry_run,
             no_apply: _,
             no_comment: _,
-            force: _,
+            force,
         } => {
             let repo_context = repo
                 .as_deref()
@@ -728,7 +728,7 @@ async fn run_pr_command(
                             repo_context.as_deref(),
                             review_type,
                             dry_run,
-                            false,
+                            !ctx.is_interactive() || force,
                             &ctx,
                             &config,
                         )
