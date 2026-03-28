@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Hugues Clouatre
+# SPDX-License-Identifier: Apache-2.0
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/**'
+  schedule:
+    - cron: '0 3 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, rust]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24'
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # v3.35.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # v3.35.1
+        with:
+          category: /language:${{ matrix.language }}
