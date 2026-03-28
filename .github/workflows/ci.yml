@@ -30,6 +30,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       tests: ${{ steps.filter.outputs.tests }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -44,6 +45,8 @@ jobs:
               - 'Cargo.lock'
             tests:
               - 'tests/**'
+            workflows:
+              - '.github/workflows/**'
 
   commitlint:
     name: Lint Commits
@@ -189,14 +192,18 @@ jobs:
       - name: Run tests
         run: cargo test --profile ci
 
-  build-release:
-    name: Build Release Binary
+  integration:
+    name: Integration Tests
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    needs: changes
-    timeout-minutes: 10
-    if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
+    needs: [changes, test]
+    timeout-minutes: 20
+    if: |
+      (needs.changes.outputs.code == 'true' || needs.changes.outputs.tests == 'true') &&
+      !(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'skip-integration')) &&
+      (needs.test.result == 'success' || github.event_name != 'pull_request') &&
+      github.actor != 'renovate[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -209,38 +216,10 @@ jobs:
         with:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Build release binary
-        run: cargo build --profile ci
-      - name: Upload release binary
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
-        with:
-          name: aptu-binary
-          path: target/ci/aptu
-          retention-days: 1
-
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    needs: [changes, test, build-release]
-    timeout-minutes: 15
-    if: |
-      (needs.changes.outputs.code == 'true' || needs.changes.outputs.tests == 'true') &&
-      !(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'skip-integration')) &&
-      (needs.test.result == 'success' || github.event_name != 'pull_request') &&
-      (needs.build-release.result == 'success' || github.event_name != 'pull_request') &&
-      github.actor != 'renovate[bot]'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - name: Download release binary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: aptu-binary
-          path: target/ci
-      - name: Make binary executable
-        run: chmod +x target/ci/aptu
+      - name: Build CLI binary
+        run: |
+          cargo build --profile ci -p aptu-cli
+          chmod +x target/ci/aptu
       - name: Setup Bats testing framework
         uses: bats-core/bats-action@e412797c46257a2dbf3775f6f6010b33ee6cb99f # v3  # zizmor: ignore[impostor-commit]
         with:
@@ -259,6 +238,8 @@ jobs:
   zizmor:
     name: zizmor
     runs-on: ubuntu-24.04
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true' || github.event_name != 'pull_request'
     permissions:
       contents: read
     steps:
@@ -274,7 +255,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions: {}
     if: always()
-    needs: [commitlint, check-base, deny, renovate-check, format, lint, test, build-release, integration, zizmor]
+    needs: [commitlint, check-base, deny, renovate-check, format, lint, test, integration, zizmor]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
