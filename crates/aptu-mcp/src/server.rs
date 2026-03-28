@@ -843,7 +843,9 @@ impl ServerHandler for AptuServer {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unsafe_code)]
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn server_info_has_all_capabilities() {
@@ -1470,6 +1472,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[tokio::test]
+    #[serial]
     async fn load_prompt_override_returns_file_content_when_present() {
         let dir = tempfile::tempdir().unwrap();
         let prompts_dir = dir.path().join("aptu").join("prompts");
@@ -1487,6 +1490,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn load_prompt_override_returns_none_when_file_absent() {
         let dir = tempfile::tempdir().unwrap();
         // Directory exists but no prompt file inside it.
@@ -1525,6 +1529,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn triage_guide_override_preserves_user_message_persona() {
         let dir = tempfile::tempdir().unwrap();
         let prompts_dir = dir.path().join("aptu").join("prompts");

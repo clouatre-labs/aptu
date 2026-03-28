@@ -384,9 +384,12 @@ pub fn load_config() -> Result<AppConfig, AptuError> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unsafe_code)]
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_load_config_defaults() {
         // Without any config file or env vars, should return defaults.
         // Point XDG_CONFIG_HOME to a guaranteed-empty temp dir so the real
