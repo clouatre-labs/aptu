@@ -139,7 +139,7 @@ runs:
     - name: Cache aptu binary
       id: cache-aptu
       if: steps.check-skip.outputs.skip != 'true'
-      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
       with:
         path: ~/.local/bin/aptu
         key: aptu-${{ steps.resolve-version.outputs.version }}-${{ runner.os }}-${{ runner.arch }}
@@ -172,10 +172,10 @@ runs:
         sha256sum -c "${ARCHIVE%.tar.gz}.sha256"
         popd > /dev/null
 
-        tar -xzf "$TEMP_DIR/${ARCHIVE}" -C "$TEMP_DIR"
+        # Verify build provenance attestation (SLSA) against the tarball
+        gh attestation verify "$TEMP_DIR/${ARCHIVE}" -R clouatre-labs/aptu
 
-        # Verify build provenance attestation (SLSA)
-        gh attestation verify "$TEMP_DIR/aptu" -R clouatre-labs/aptu
+        tar -xzf "$TEMP_DIR/${ARCHIVE}" -C "$TEMP_DIR"
 
         mkdir -p "$HOME/.local/bin"
         install -m 0755 "$TEMP_DIR/aptu" "$HOME/.local/bin/aptu"
