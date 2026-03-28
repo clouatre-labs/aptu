@@ -10,7 +10,7 @@ use octocrab::Octocrab;
 use tracing::{debug, instrument};
 
 use super::{ReferenceKind, parse_github_reference};
-use crate::ai::types::{PrDetails, PrFile, ReviewEvent};
+use crate::ai::types::{PrDetails, PrFile, PrReviewComment, ReviewEvent};
 use crate::error::{AptuError, ResourceType};
 
 /// Parses a PR reference into (owner, repo, number).
@@ -124,6 +124,7 @@ pub async fn fetch_pr_details(
         body: pr.body.unwrap_or_default(),
         base_branch: pr.base.ref_field,
         head_branch: pr.head.ref_field,
+        head_sha: pr.head.sha,
         files: pr_files,
         url: pr.html_url.map_or_else(String::new, |u| u.to_string()),
         labels,
@@ -150,6 +151,8 @@ pub async fn fetch_pr_details(
 /// * `number` - PR number
 /// * `body` - Review comment text
 /// * `event` - Review event type (Comment, Approve, or `RequestChanges`)
+/// * `comments` - Inline review comments to attach; entries with `line = None` are silently skipped
+/// * `commit_id` - Head commit SHA to associate with the review; omitted from payload if empty
 ///
 /// # Returns
 ///
@@ -158,7 +161,8 @@ pub async fn fetch_pr_details(
 /// # Errors
 ///
 /// Returns an error if the API call fails, user lacks write access, or PR is not found.
-#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number, event = %event))]
+#[allow(clippy::too_many_arguments)]
+#[instrument(skip(client, comments), fields(owner = %owner, repo = %repo, number = number, event = %event))]
 pub async fn post_pr_review(
     client: &Octocrab,
     owner: &str,
@@ -166,15 +170,38 @@ pub async fn post_pr_review(
     number: u64,
     body: &str,
     event: ReviewEvent,
+    comments: &[PrReviewComment],
+    commit_id: &str,
 ) -> Result<u64> {
     debug!("Posting PR review");
 
     let route = format!("/repos/{owner}/{repo}/pulls/{number}/reviews");
 
-    let payload = serde_json::json!({
+    // Build inline comments array; skip entries without a line number.
+    let inline_comments: Vec<serde_json::Value> = comments
+        .iter()
+        .filter_map(|c| {
+            c.line.map(|line| {
+                serde_json::json!({
+                    "path": c.file,
+                    "line": line,
+                    "side": "RIGHT",
+                    "body": c.comment,
+                })
+            })
+        })
+        .collect();
+
+    let mut payload = serde_json::json!({
         "body": body,
         "event": event.to_string(),
+        "comments": inline_comments,
     });
+
+    // commit_id is optional; include only when non-empty.
+    if !commit_id.is_empty() {
+        payload["commit_id"] = serde_json::Value::String(commit_id.to_string());
+    }
 
     #[derive(serde::Deserialize)]
     struct ReviewResponse {
@@ -257,6 +284,94 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::types::CommentSeverity;
+
+    // ---------------------------------------------------------------------------
+    // post_pr_review payload construction
+    // ---------------------------------------------------------------------------
+
+    /// Helper: build the inline comments JSON array using the same logic as
+    /// `post_pr_review`, without making a live HTTP call.
+    fn build_inline_comments(comments: &[PrReviewComment]) -> Vec<serde_json::Value> {
+        comments
+            .iter()
+            .filter_map(|c| {
+                c.line.map(|line| {
+                    serde_json::json!({
+                        "path": c.file,
+                        "line": line,
+                        "side": "RIGHT",
+                        "body": c.comment,
+                    })
+                })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_post_pr_review_payload_with_comments() {
+        // Arrange
+        let comments = vec![PrReviewComment {
+            file: "src/main.rs".to_string(),
+            line: Some(42),
+            comment: "Consider using a match here.".to_string(),
+            severity: CommentSeverity::Suggestion,
+        }];
+
+        // Act
+        let inline = build_inline_comments(&comments);
+
+        // Assert
+        assert_eq!(inline.len(), 1);
+        assert_eq!(inline[0]["path"], "src/main.rs");
+        assert_eq!(inline[0]["line"], 42);
+        assert_eq!(inline[0]["side"], "RIGHT");
+        assert_eq!(inline[0]["body"], "Consider using a match here.");
+    }
+
+    #[test]
+    fn test_post_pr_review_skips_none_line_comments() {
+        // Arrange: one comment with a line, one without.
+        let comments = vec![
+            PrReviewComment {
+                file: "src/lib.rs".to_string(),
+                line: None,
+                comment: "General file comment.".to_string(),
+                severity: CommentSeverity::Info,
+            },
+            PrReviewComment {
+                file: "src/lib.rs".to_string(),
+                line: Some(10),
+                comment: "Inline comment.".to_string(),
+                severity: CommentSeverity::Warning,
+            },
+        ];
+
+        // Act
+        let inline = build_inline_comments(&comments);
+
+        // Assert: only the comment with a line is included.
+        assert_eq!(inline.len(), 1);
+        assert_eq!(inline[0]["line"], 10);
+    }
+
+    #[test]
+    fn test_post_pr_review_empty_comments() {
+        // Arrange
+        let comments: Vec<PrReviewComment> = vec![];
+
+        // Act
+        let inline = build_inline_comments(&comments);
+
+        // Assert: empty slice produces empty array, which serializes as [].
+        assert!(inline.is_empty());
+        let serialized = serde_json::to_string(&inline).unwrap();
+        assert_eq!(serialized, "[]");
+    }
+
+    // ---------------------------------------------------------------------------
+    // Existing tests
+    // ---------------------------------------------------------------------------
 
     // Smoke test to verify parse_pr_reference delegates correctly.
     // Comprehensive parsing tests are in github/mod.rs.

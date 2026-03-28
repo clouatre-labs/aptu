@@ -303,6 +303,9 @@ pub struct PrDetails {
     /// Labels applied to the PR.
     #[serde(default)]
     pub labels: Vec<String>,
+    /// Head commit SHA (used as `commit_id` when posting inline review comments).
+    #[serde(default)]
+    pub head_sha: String,
 }
 
 /// A file changed in a pull request.

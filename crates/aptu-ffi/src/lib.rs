@@ -204,6 +204,8 @@ pub fn post_pr_review(
             repo_context.as_deref(),
             &body,
             event,
+            &[],
+            "",
         )
         .await
         {

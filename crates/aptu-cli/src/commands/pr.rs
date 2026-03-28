@@ -112,10 +112,17 @@ pub async fn post(
             }
         }
 
-        // Post the review
-        let review_id =
-            aptu_core::post_pr_review(&provider, reference, repo_context, &review_body, event)
-                .await?;
+        // Post the review with inline comments and head SHA.
+        let review_id = aptu_core::post_pr_review(
+            &provider,
+            reference,
+            repo_context,
+            &review_body,
+            event,
+            &analyze_result.review.comments,
+            &analyze_result.pr_details.head_sha,
+        )
+        .await?;
 
         info!(review_id = review_id, "Review posted successfully");
         eprintln!("Review posted successfully (ID: {review_id})");
