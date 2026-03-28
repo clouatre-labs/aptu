@@ -843,6 +843,7 @@ impl ServerHandler for AptuServer {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unsafe_code)]
     use super::*;
 
     #[test]

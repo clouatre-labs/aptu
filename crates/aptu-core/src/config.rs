@@ -384,6 +384,7 @@ pub fn load_config() -> Result<AppConfig, AptuError> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unsafe_code)]
     use super::*;
 
     #[test]
