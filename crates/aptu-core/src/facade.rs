@@ -12,7 +12,9 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::ai::provider::MAX_LABELS;
 use crate::ai::registry::get_provider;
-use crate::ai::types::{CreateIssueResponse, PrDetails, ReviewEvent, TriageResponse};
+use crate::ai::types::{
+    CreateIssueResponse, PrDetails, PrReviewComment, ReviewEvent, TriageResponse,
+};
 use crate::ai::{AiClient, AiProvider, AiResponse, types::IssueDetails};
 use crate::auth::TokenProvider;
 use crate::cache::{FileCache, FileCacheImpl};
@@ -677,6 +679,8 @@ pub async fn analyze_pr(
 /// * `repo_context` - Optional repository context for bare numbers
 /// * `body` - Review comment text
 /// * `event` - Review event type (Comment, Approve, or `RequestChanges`)
+/// * `comments` - Inline review comments; entries with `line = None` are silently skipped
+/// * `commit_id` - Head commit SHA; omitted from the API payload when empty
 ///
 /// # Returns
 ///
@@ -689,13 +693,15 @@ pub async fn analyze_pr(
 /// - PR cannot be parsed or found
 /// - User lacks write access to the repository
 /// - API call fails
-#[instrument(skip(provider), fields(reference = %reference, event = %event))]
+#[instrument(skip(provider, comments), fields(reference = %reference, event = %event))]
 pub async fn post_pr_review(
     provider: &dyn TokenProvider,
     reference: &str,
     repo_context: Option<&str>,
     body: &str,
     event: ReviewEvent,
+    comments: &[PrReviewComment],
+    commit_id: &str,
 ) -> crate::Result<u64> {
     use crate::github::pulls::parse_pr_reference;
 
@@ -709,11 +715,13 @@ pub async fn post_pr_review(
     let client = create_client_from_provider(provider)?;
 
     // Post the review
-    gh_post_pr_review(&client, &owner, &repo, number, body, event)
-        .await
-        .map_err(|e| AptuError::GitHub {
-            message: e.to_string(),
-        })
+    gh_post_pr_review(
+        &client, &owner, &repo, number, body, event, comments, commit_id,
+    )
+    .await
+    .map_err(|e| AptuError::GitHub {
+        message: e.to_string(),
+    })
 }
 
 /// Auto-label a pull request based on conventional commit prefix and file paths.

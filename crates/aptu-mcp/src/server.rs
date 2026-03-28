@@ -356,9 +356,17 @@ impl AptuServer {
 
         let event = params.event.into();
 
-        aptu_core::facade::post_pr_review(&provider, &params.pr_ref, None, &review.summary, event)
-            .await
-            .map_err(|e| aptu_error_to_mcp(&e))?;
+        aptu_core::facade::post_pr_review(
+            &provider,
+            &params.pr_ref,
+            None,
+            &review.summary,
+            event,
+            &review.comments,
+            &pr.head_sha,
+        )
+        .await
+        .map_err(|e| aptu_error_to_mcp(&e))?;
 
         let structured = serde_json::json!({
             "status": "posted",
