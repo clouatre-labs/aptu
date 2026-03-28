@@ -180,6 +180,7 @@ pub async fn post_pr_review(
     // Build inline comments array; skip entries without a line number.
     let inline_comments: Vec<serde_json::Value> = comments
         .iter()
+        // Comments without a line number cannot be anchored to the diff; skip silently.
         .filter_map(|c| {
             c.line.map(|line| {
                 serde_json::json!({

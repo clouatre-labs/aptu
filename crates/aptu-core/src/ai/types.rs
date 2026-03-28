@@ -361,7 +361,8 @@ impl CommentSeverity {
 pub struct PrReviewComment {
     /// File path the comment applies to.
     pub file: String,
-    /// Line number in the diff (optional for general file comments).
+    /// File line number for the inline comment. `None` comments are excluded from the
+    /// GitHub Reviews API payload and omitted from the posted review.
     pub line: Option<u32>,
     /// The comment text.
     pub comment: String,
