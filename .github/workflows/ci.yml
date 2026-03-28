@@ -25,6 +25,8 @@ jobs:
   changes:
     name: Detect Changes
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
       tests: ${{ steps.filter.outputs.tests }}
@@ -46,6 +48,9 @@ jobs:
   commitlint:
     name: Lint Commits
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout repository
@@ -58,6 +63,8 @@ jobs:
   check-base:
     name: Check Branch Base
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     if: github.event_name == 'pull_request'
     timeout-minutes: 5
     steps:
@@ -81,6 +88,8 @@ jobs:
   deny:
     name: Audit Dependencies
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     needs: changes
     timeout-minutes: 10
     if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
@@ -97,6 +106,8 @@ jobs:
   renovate-check:
     name: Dependency Check (Renovate)
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     needs: changes
     timeout-minutes: 5
     if: github.actor == 'renovate[bot]'  # zizmor: ignore[bot-conditions]
@@ -113,6 +124,8 @@ jobs:
   format:
     name: Check Format
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     needs: changes
     timeout-minutes: 10
     if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
@@ -130,6 +143,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     needs: changes
     timeout-minutes: 10
     if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
@@ -154,6 +169,8 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     needs: changes
     timeout-minutes: 10
     if: (needs.changes.outputs.code == 'true' || needs.changes.outputs.tests == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
@@ -175,6 +192,8 @@ jobs:
   build-release:
     name: Build Release Binary
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     needs: changes
     timeout-minutes: 10
     if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
@@ -202,6 +221,8 @@ jobs:
   integration:
     name: Integration Tests
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     needs: [changes, test, build-release]
     timeout-minutes: 15
     if: |
@@ -251,6 +272,7 @@ jobs:
   ci-result:
     name: CI Result
     runs-on: ubuntu-24.04
+    permissions: {}
     if: always()
     needs: [commitlint, check-base, deny, renovate-check, format, lint, test, build-release, integration, zizmor]
     steps:

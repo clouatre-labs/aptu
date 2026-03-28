@@ -31,6 +31,8 @@ jobs:
   verify-tag-signature:
     name: Verify Tag Signature
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     if: github.event_name != 'workflow_dispatch'
     steps:
       - name: Checkout repository
@@ -148,6 +150,8 @@ jobs:
   update-homebrew:
     name: Update Homebrew Formula
     needs: build-and-attest
+    permissions:
+      contents: read
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     runs-on: ubuntu-24.04
     steps:
@@ -310,6 +314,8 @@ jobs:
   publish-snap:
     name: Publish to Snap Store (${{ matrix.arch }})
     needs: create-release
+    permissions:
+      contents: read
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     strategy:
       fail-fast: false
