@@ -250,12 +250,26 @@ jobs:
           annotations: true
           min-severity: high
 
+  gitleaks:
+    name: Scan for secrets
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
   ci-result:
     name: CI Result
     runs-on: ubuntu-24.04
     permissions: {}
     if: always()
-    needs: [commitlint, check-base, deny, renovate-check, format, lint, test, integration, zizmor]
+    needs: [commitlint, check-base, deny, renovate-check, format, lint, test, integration, zizmor, gitleaks]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
