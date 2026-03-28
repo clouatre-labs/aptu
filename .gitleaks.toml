@@ -1,0 +1,14 @@
+title = "aptu gitleaks config"
+version = "1"
+
+[[allowlists]]
+description = "Intentional hardcoded secrets in test fixtures"
+paths = [
+  '''tests/security_fixtures/vulnerable/'''
+]
+
+[[allowlists]]
+description = "GitHub token format validation tests"
+paths = [
+  '''crates/aptu-mcp/tests/health\.rs'''
+]
