@@ -140,6 +140,35 @@ pub fn render_triage_content(
         output.push('\n');
     }
 
+    // Complexity assessment (always show when present)
+    if let Some(c) = &triage.complexity {
+        use aptu_core::ai::types::ComplexityLevel;
+        let _ = writeln!(output, "{}", style("Complexity").cyan().bold());
+        let level_label = match c.level {
+            ComplexityLevel::Low => style("Low").green().bold(),
+            ComplexityLevel::Medium => style("Medium").yellow().bold(),
+            ComplexityLevel::High => style("High").red().bold(),
+        };
+        let loc_str = c
+            .estimated_loc
+            .map(|l| format!(" (~{l} LOC)"))
+            .unwrap_or_default();
+        let _ = writeln!(output, "  {level_label}{loc_str}");
+        if !c.affected_areas.is_empty() {
+            let _ = writeln!(output, "  {}", style("Affected areas:").dim());
+            for area in &c.affected_areas {
+                let _ = writeln!(output, "    - {area}");
+            }
+        }
+        if let Some(rec) = &c.recommendation
+            && !rec.is_empty()
+        {
+            let _ = writeln!(output, "  {}", style("Recommendation:").dim());
+            let _ = writeln!(output, "    {rec}");
+        }
+        output.push('\n');
+    }
+
     output
 }
 

@@ -162,6 +162,7 @@ impl From<FfiTriageResponse> for aptu_core::ai::types::TriageResponse {
             }),
             implementation_approach: ffi_triage.implementation_approach,
             suggested_milestone: ffi_triage.suggested_milestone,
+            complexity: None,
         }
     }
 }

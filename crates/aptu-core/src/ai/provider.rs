@@ -502,7 +502,7 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_system_prompt(custom_guidance: Option<&str>) -> String {
         let context = super::context::load_custom_guidance(custom_guidance);
-        let schema = "{\n  \"summary\": \"A 2-3 sentence summary of what the issue is about and its impact\",\n  \"suggested_labels\": [\"label1\", \"label2\"],\n  \"clarifying_questions\": [\"question1\", \"question2\"],\n  \"potential_duplicates\": [\"#123\", \"#456\"],\n  \"related_issues\": [\n    {\n      \"number\": 789,\n      \"title\": \"Related issue title\",\n      \"reason\": \"Brief explanation of why this is related\"\n    }\n  ],\n  \"status_note\": \"Optional note about issue status (e.g., claimed, in-progress)\",\n  \"contributor_guidance\": {\n    \"beginner_friendly\": true,\n    \"reasoning\": \"1-2 sentence explanation of beginner-friendliness assessment\"\n  },\n  \"implementation_approach\": \"Optional suggestions for implementation based on repository structure\",\n  \"suggested_milestone\": \"Optional milestone title for the issue\"\n}";
+        let schema = "{\n  \"summary\": \"A 2-3 sentence summary of what the issue is about and its impact\",\n  \"suggested_labels\": [\"label1\", \"label2\"],\n  \"clarifying_questions\": [\"question1\", \"question2\"],\n  \"potential_duplicates\": [\"#123\", \"#456\"],\n  \"related_issues\": [\n    {\n      \"number\": 789,\n      \"title\": \"Related issue title\",\n      \"reason\": \"Brief explanation of why this is related\"\n    }\n  ],\n  \"status_note\": \"Optional note about issue status (e.g., claimed, in-progress)\",\n  \"contributor_guidance\": {\n    \"beginner_friendly\": true,\n    \"reasoning\": \"1-2 sentence explanation of beginner-friendliness assessment\"\n  },\n  \"implementation_approach\": \"Optional suggestions for implementation based on repository structure\",\n  \"suggested_milestone\": \"Optional milestone title for the issue\",\n  \"complexity\": {\n    \"level\": \"low|medium|high\",\n    \"estimated_loc\": 150,\n    \"affected_areas\": [\"crates/aptu-core/src/ai/types.rs\"],\n    \"recommendation\": \"Optional decomposition recommendation for high-complexity issues\"\n  }\n}";
         let guidelines = "Reason through each step before producing output.\n\n\
 Guidelines:\n\
 - summary: Concise explanation of the problem/request and why it matters\n\
@@ -514,6 +514,7 @@ Guidelines:\n\
 - contributor_guidance: Assess whether the issue is suitable for beginners. Consider: scope (small, well-defined), file count (few files to modify), required knowledge (no deep expertise needed), clarity (clear problem statement). Set beginner_friendly to true if all factors are favorable. Provide 1-2 sentence reasoning explaining the assessment.\n\
 - implementation_approach: Based on the repository structure provided, suggest specific files or modules to modify. Reference the file paths from the repository structure. Be concrete and actionable. Leave as null or empty string if no specific guidance can be provided.\n\
 - suggested_milestone: If applicable, suggest a milestone title from the Available Milestones list. Only include if a milestone is clearly relevant to the issue. Leave as null or empty string if no milestone is appropriate.\n\
+- complexity: Always populate this field. Set `level` to low/medium/high based on estimated implementation scope: low = small, self-contained change (1-2 files, <100 LOC); medium = moderate change (3-5 files, 100-300 LOC); high = large change (5+ files, 300+ LOC or deep domain knowledge). Populate `affected_areas` with likely file paths from the repository structure. For high complexity, set `recommendation` to a concrete suggestion (e.g. 'Decompose into 3 sub-issues: CLI parsing, AI prompt update, GitHub API integration').\n\
 \n\
 Be helpful, concise, and actionable. Focus on what a maintainer needs to know.\n\
 \n\
@@ -535,7 +536,13 @@ Output:\n\
     \"reasoning\": \"Requires understanding of the theme system and CSS. Could span multiple files.\"\n\
   },\n\
   \"implementation_approach\": \"Extend the existing ThemeProvider with a dark variant and persist preference to localStorage.\",\n\
-  \"suggested_milestone\": \"v2.0\"\n\
+  \"suggested_milestone\": \"v2.0\",\n\
+  \"complexity\": {\n\
+    \"level\": \"medium\",\n\
+    \"estimated_loc\": 120,\n\
+    \"affected_areas\": [\"src/theme/ThemeProvider.tsx\", \"src/components/Settings.tsx\"],\n\
+    \"recommendation\": null\n\
+  }\n\
 }\n\
 ```\n\
 \n\
@@ -555,7 +562,13 @@ Output:\n\
     \"reasoning\": \"Issue is too vague to assess or action without clarification.\"\n\
   },\n\
   \"implementation_approach\": \"\",\n\
-  \"suggested_milestone\": null\n\
+  \"suggested_milestone\": null,\n\
+  \"complexity\": {\n\
+    \"level\": \"low\",\n\
+    \"estimated_loc\": null,\n\
+    \"affected_areas\": [],\n\
+    \"recommendation\": null\n\
+  }\n\
 }\n\
 ```";
         format!(

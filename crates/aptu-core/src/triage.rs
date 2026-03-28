@@ -93,6 +93,36 @@ fn render_list_section_markdown(
     output
 }
 
+/// Render the complexity section into markdown, if present.
+fn render_complexity_markdown(output: &mut String, triage: &TriageResponse) {
+    use crate::ai::types::ComplexityLevel;
+    let Some(c) = &triage.complexity else {
+        return;
+    };
+    output.push_str("### Complexity\n\n");
+    let level_str = match c.level {
+        ComplexityLevel::Low => "Low",
+        ComplexityLevel::Medium => "Medium",
+        ComplexityLevel::High => "High",
+    };
+    let loc_str = c
+        .estimated_loc
+        .map(|l| format!(" (~{l} LOC)"))
+        .unwrap_or_default();
+    let _ = writeln!(output, "**Level:** {level_str}{loc_str}");
+    if c.affected_areas.is_empty() {
+        output.push('\n');
+    } else {
+        let areas: Vec<String> = c.affected_areas.iter().map(|a| format!("`{a}`")).collect();
+        let _ = writeln!(output, "Affected: {}\n", areas.join(", "));
+    }
+    if let Some(rec) = &c.recommendation
+        && !rec.is_empty()
+    {
+        let _ = writeln!(output, "**Recommendation:** {rec}\n");
+    }
+}
+
 /// Renders triage response as markdown for posting to GitHub.
 ///
 /// Generates pure markdown without terminal colors. This is the core rendering
@@ -135,6 +165,18 @@ pub fn render_triage_markdown(triage: &TriageResponse) -> String {
         output.push_str(milestone);
         output.push_str("\n\n");
     }
+
+    // Suggested Milestone
+    if let Some(milestone) = &triage.suggested_milestone
+        && !milestone.is_empty()
+    {
+        output.push_str("### Suggested Milestone\n\n");
+        output.push_str(milestone);
+        output.push_str("\n\n");
+    }
+
+    // Complexity assessment
+    render_complexity_markdown(&mut output, triage);
 
     // Questions
     output.push_str(&render_list_section_markdown(
@@ -494,6 +536,7 @@ mod tests {
             suggested_milestone: None,
             status_note: None,
             contributor_guidance: None,
+            complexity: None,
         };
 
         let markdown = render_triage_markdown(&triage);
@@ -516,6 +559,7 @@ mod tests {
             suggested_milestone: None,
             status_note: None,
             contributor_guidance: None,
+            complexity: None,
         };
 
         let markdown = render_triage_markdown(&triage);
@@ -536,6 +580,7 @@ mod tests {
             suggested_milestone: None,
             status_note: None,
             contributor_guidance: None,
+            complexity: None,
         };
 
         let markdown = render_triage_markdown(&triage);
