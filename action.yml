@@ -117,27 +117,51 @@ runs:
         echo "APPLY_LABELS=$INPUT_APPLY_LABELS" >> "$GITHUB_ENV"
         echo "NO_COMMENT=$INPUT_NO_COMMENT" >> "$GITHUB_ENV"
 
-    - name: Download aptu binary
+    - name: Resolve aptu version
+      id: resolve-version
       if: steps.check-skip.outputs.skip != 'true'
       shell: bash
-      run: |  # zizmor: ignore[github-env]
-        set -euo pipefail
-
-        # Resolve latest v0.x.x release tag
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        echo "::group::Resolving latest aptu v0.x release"
         APTU_VERSION=$(gh api repos/clouatre-labs/aptu/releases \
           --jq '[.[] | select(.tag_name | startswith("v0."))] | first | .tag_name' \
           | sed 's/^v//')
         if [[ -z "$APTU_VERSION" ]]; then
-          echo "ERROR: could not resolve latest aptu v0.x release" >&2
+          echo "::error::Could not resolve latest aptu v0.x release"
           exit 1
         fi
-        echo "Latest aptu v0.x version: $APTU_VERSION"
+        echo "Resolved: $APTU_VERSION"
+        echo "version=$APTU_VERSION" >> "$GITHUB_OUTPUT"
+        echo "::endgroup::"
+
+    - name: Cache aptu binary
+      id: cache-aptu
+      if: steps.check-skip.outputs.skip != 'true'
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+      with:
+        path: ~/.local/bin/aptu
+        key: aptu-${{ steps.resolve-version.outputs.version }}-${{ runner.os }}-${{ runner.arch }}
+        restore-keys: |
+          aptu-${{ steps.resolve-version.outputs.version }}-${{ runner.os }}-
+
+    - name: Install aptu binary
+      id: install-aptu
+      if: steps.check-skip.outputs.skip != 'true' && steps.cache-aptu.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        APTU_VERSION="${{ steps.resolve-version.outputs.version }}"
+        echo "::group::Installing aptu v$APTU_VERSION"
 
         ARCHIVE="aptu-cli-${APTU_VERSION}-x86_64-unknown-linux-musl.tar.gz"
         TEMP_DIR=$(mktemp -d)
         trap 'rm -rf "$TEMP_DIR"' EXIT
 
-        # Download archive + checksum via gh (authenticated, avoids rate limits)
+        # Download archive + checksum (authenticated, avoids rate limits)
         gh release download "v${APTU_VERSION}" -R clouatre-labs/aptu \
           --pattern "${ARCHIVE}" \
           --pattern "${ARCHIVE%.tar.gz}.sha256" \
@@ -150,13 +174,21 @@ runs:
 
         tar -xzf "$TEMP_DIR/${ARCHIVE}" -C "$TEMP_DIR"
 
-        # Install binary
-        chmod +x "$TEMP_DIR/aptu"
-        mkdir -p "$HOME/.local/bin"
-        mv "$TEMP_DIR/aptu" "$HOME/.local/bin/aptu"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        # Verify build provenance attestation (SLSA)
+        gh attestation verify "$TEMP_DIR/aptu" -R clouatre-labs/aptu
 
-        echo "aptu v$APTU_VERSION installed and verified successfully"
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$TEMP_DIR/aptu" "$HOME/.local/bin/aptu"
+
+        echo "aptu v$APTU_VERSION installed and verified"
+        echo "::endgroup::"
+
+    - name: Setup PATH
+      if: steps.check-skip.outputs.skip != 'true'
+      id: setup-path
+      shell: bash
+      run: |  # zizmor: ignore[github-env]
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
     - name: Run aptu issue triage
       if: github.event_name == 'issues' && steps.check-skip.outputs.skip != 'true'
