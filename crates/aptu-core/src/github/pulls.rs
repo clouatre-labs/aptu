@@ -186,6 +186,9 @@ pub async fn post_pr_review(
                 serde_json::json!({
                     "path": c.file,
                     "line": line,
+                    // RIGHT = new version of the file (added/changed lines).
+                    // Use line (file line number) rather than the deprecated
+                    // position (diff hunk offset) so no hunk parsing is needed.
                     "side": "RIGHT",
                     "body": c.comment,
                 })
