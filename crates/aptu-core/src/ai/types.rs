@@ -115,6 +115,34 @@ pub struct RelatedIssue {
     pub reason: String,
 }
 
+/// Complexity level of an issue.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ComplexityLevel {
+    /// Low complexity: well-scoped, few files, minimal expertise required.
+    Low,
+    /// Medium complexity: moderate scope, multiple files or subsystems.
+    Medium,
+    /// High complexity: large scope, many files, or deep domain knowledge required.
+    High,
+}
+
+/// Automatic complexity assessment produced for every triage.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct ComplexityAssessment {
+    /// Overall complexity level: low, medium, or high.
+    pub level: ComplexityLevel,
+    /// Rough estimate of lines of code that would need to change.
+    #[serde(default)]
+    pub estimated_loc: Option<u32>,
+    /// Source files or subsystems likely affected.
+    #[serde(default)]
+    pub affected_areas: Vec<String>,
+    /// Human-readable recommendation, e.g. "Decompose into 3 sub-issues".
+    #[serde(default)]
+    pub recommendation: Option<String>,
+}
+
 /// Structured triage response from AI.
 ///
 /// This is the expected JSON structure in the AI's response content.
@@ -165,6 +193,9 @@ pub struct TriageResponse {
     /// Suggested milestone for the issue.
     #[serde(default)]
     pub suggested_milestone: Option<String>,
+    /// Automatic complexity assessment.
+    #[serde(default)]
+    pub complexity: Option<ComplexityAssessment>,
 }
 
 /// Context about a related issue from repository search.
@@ -458,4 +489,24 @@ pub struct ReleaseNotesResponse {
     pub maintenance: Vec<String>,
     /// Contributor list.
     pub contributors: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_complexity_assessment_deserialize() {
+        let json = r#"{"level":"high","estimated_loc":450,"affected_areas":["crates/aptu-cli/src/cli.rs"],"recommendation":"Decompose into sub-issues"}"#;
+        let ca: ComplexityAssessment = serde_json::from_str(json).unwrap();
+        assert!(matches!(ca.level, ComplexityLevel::High));
+        assert_eq!(ca.estimated_loc, Some(450));
+    }
+
+    #[test]
+    fn test_triage_response_missing_complexity() {
+        let json = r#"{"summary":"Test","suggested_labels":[],"clarifying_questions":[],"potential_duplicates":[],"related_issues":[]}"#;
+        let tr: TriageResponse = serde_json::from_str(json).unwrap();
+        assert!(tr.complexity.is_none());
+    }
 }
