@@ -2,7 +2,7 @@ name: Triage Pull Requests
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize]
   workflow_dispatch: # Manual trigger for testing
 
 permissions: {}
@@ -23,4 +23,6 @@ jobs:
         continue-on-error: true  # Non-blocking until fix released
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          provider: openrouter
+          model: mistralai/mistral-small-2603
