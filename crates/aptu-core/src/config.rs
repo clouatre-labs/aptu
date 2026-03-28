@@ -372,6 +372,7 @@ pub fn load_config() -> Result<AppConfig, AptuError> {
         // Override with environment variables
         .add_source(
             Environment::with_prefix("APTU")
+                .prefix_separator("_")
                 .separator("__")
                 .try_parsing(true),
         )
@@ -860,5 +861,28 @@ model = "gemini-3.1-flash-lite-preview"
         // Test that AiConfig::default() has fallback: None
         let ai_config = AiConfig::default();
         assert!(ai_config.fallback.is_none());
+    }
+
+    #[test]
+    #[serial]
+    fn test_load_config_env_var_override() {
+        // Test that APTU_AI__MODEL and APTU_AI__PROVIDER env vars override defaults.
+        let tmp_dir = std::env::temp_dir().join("aptu_test_env_override");
+        std::fs::create_dir_all(&tmp_dir).expect("create tmp dir");
+        // SAFETY: single-threaded test process; no concurrent env reads.
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", &tmp_dir);
+            std::env::set_var("APTU_AI__MODEL", "test-model-override");
+            std::env::set_var("APTU_AI__PROVIDER", "openrouter");
+        }
+        let config = load_config().expect("should load with env overrides");
+        unsafe {
+            std::env::remove_var("XDG_CONFIG_HOME");
+            std::env::remove_var("APTU_AI__MODEL");
+            std::env::remove_var("APTU_AI__PROVIDER");
+        }
+
+        assert_eq!(config.ai.model, "test-model-override");
+        assert_eq!(config.ai.provider, "openrouter");
     }
 }
