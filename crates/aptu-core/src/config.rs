@@ -176,7 +176,7 @@ impl Default for AiConfig {
     fn default() -> Self {
         Self {
             provider: "openrouter".to_string(),
-            model: "mistral/mistral-small-2603".to_string(),
+            model: "mistralai/mistral-small-2603".to_string(),
             timeout_seconds: 30,
             allow_paid_models: true,
             max_tokens: 4096,
@@ -403,7 +403,7 @@ mod tests {
         }
 
         assert_eq!(config.ai.provider, "openrouter");
-        assert_eq!(config.ai.model, "mistral/mistral-small-2603");
+        assert_eq!(config.ai.model, "mistralai/mistral-small-2603");
         assert_eq!(config.ai.timeout_seconds, 30);
         assert_eq!(config.ai.max_tokens, 4096);
         assert_eq!(config.ai.allow_paid_models, true);
@@ -586,20 +586,20 @@ model = "gemini-3.1-flash-lite-preview"
         // Test that resolve_for_task returns correct defaults (all tasks use openrouter)
         let ai_config = AiConfig::default();
 
-        // All tasks use global defaults (openrouter/mistral/mistral-small-2603)
+        // All tasks use global defaults (openrouter/mistralai/mistral-small-2603)
         let (provider, model) = ai_config.resolve_for_task(TaskType::Triage);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "mistral/mistral-small-2603");
+        assert_eq!(model, "mistralai/mistral-small-2603");
         assert_eq!(ai_config.allow_paid_models, true);
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Review);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "mistral/mistral-small-2603");
+        assert_eq!(model, "mistralai/mistral-small-2603");
         assert_eq!(ai_config.allow_paid_models, true);
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "mistral/mistral-small-2603");
+        assert_eq!(model, "mistralai/mistral-small-2603");
         assert_eq!(ai_config.allow_paid_models, true);
     }
 
