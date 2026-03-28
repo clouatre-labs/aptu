@@ -66,6 +66,7 @@ jobs:
       
       - name: Download XcodeGen 2.44.1
         if: steps.cache-xcodegen.outputs.cache-hit != 'true'
+        # zizmor: ignore[unpinned-uses] -- XcodeGen 2.44.1 does not publish a checksum file; pinned by version in cache key and download URL
         run: curl -L -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip && unzip -o /tmp/xcodegen.zip -d /tmp && sudo mv /tmp/xcodegen/bin/xcodegen /usr/local/bin/xcodegen && sudo chmod +x /usr/local/bin/xcodegen
       
       - name: Verify XcodeGen installation
@@ -80,6 +81,7 @@ jobs:
       
       - name: Install uniffi-bindgen
         if: steps.cache-uniffi.outputs.cache-hit != 'true'
+        # zizmor: ignore[unpinned-uses] -- uniffi-bindgen is installed from a git tag; no crates.io release ships the CLI binary independently
         run: |
           cargo install --git https://github.com/mozilla/uniffi-rs --tag v0.30.0 --bin uniffi-bindgen --features cli uniffi
       
