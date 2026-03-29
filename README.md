@@ -107,6 +107,26 @@ See [docs/MCP_SERVER.md](docs/mcp.md) for client configuration and Docker deploy
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for AI provider setup.
 
+## Popular Models by Use Case
+
+Examples using `aptu models list`. Model availability depends on your configured providers.
+
+**Fast / low-latency** (good for high-volume triage):
+- `gemini-2.0-flash` (Gemini) - fast, large context, free tier available
+- `llama-3.3-70b-versatile` (Groq) - fast inference, generous free limits
+- `llama3.1-8b` (Cerebras) - ultra-fast, small model
+
+**Quality / reasoning** (good for complex PR review):
+- `gemini-2.5-pro` (Gemini) - strong reasoning, 1M context window
+- `mistralai/mistral-small-2503` (OpenRouter) - aptu default for PR review
+- `gpt-4o-mini` (OpenRouter) - cost-effective quality
+
+**Free / no cost** (good for experiments):
+- `gemini-2.0-flash` (Gemini) - free tier with daily quota
+- `llama-3.3-70b-versatile` (Groq) - free tier
+
+Browse and filter: `aptu models list --provider gemini --sort context`
+
 ## Security
 
 - **SLSA Level 3** - Provenance attestations for all releases

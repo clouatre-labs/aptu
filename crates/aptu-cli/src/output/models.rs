@@ -4,9 +4,54 @@ use console::style;
 use std::io::{self, Write};
 
 use crate::cli::OutputContext;
-use crate::commands::models::{ModelsResult, ModelsResultMulti};
+use crate::commands::models::{ModelsResult, ModelsResultMulti, SerializableModelInfo};
 
 use super::Renderable;
+
+/// Compute the display width for the id column based on the longest id in the list.
+fn id_col_width(models: &[SerializableModelInfo]) -> usize {
+    models
+        .iter()
+        .map(|m| m.id.len())
+        .max()
+        .unwrap_or(20)
+        .max(20)
+}
+
+/// Write a single model row to the writer.
+fn write_model_row(
+    w: &mut dyn Write,
+    index: usize,
+    model: &SerializableModelInfo,
+    id_width: usize,
+) -> io::Result<()> {
+    let num = format!("{:>3}.", index + 1);
+    let id = format!("{:<width$}", model.id, width = id_width);
+    let name = model
+        .name
+        .as_deref()
+        .map_or_else(|| "N/A".to_string(), |n| format!("{n:<20}"));
+
+    let free_str = match model.is_free {
+        Some(true) => style("free").green().to_string(),
+        Some(false) => style("paid").red().to_string(),
+        None => style("unknown").dim().to_string(),
+    };
+
+    let context_str = model
+        .context_window
+        .map_or_else(|| "N/A".to_string(), |cw| format!("{cw} tokens"));
+
+    writeln!(
+        w,
+        "  {} {} {} {} {}",
+        style(num).dim(),
+        style(id).cyan(),
+        style(name).yellow(),
+        free_str,
+        style(context_str).dim()
+    )
+}
 
 impl Renderable for ModelsResult {
     fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
@@ -21,33 +66,9 @@ impl Renderable for ModelsResult {
         if self.models.is_empty() {
             writeln!(w, "  {}", style("No models found").dim())?;
         } else {
+            let id_width = id_col_width(&self.models);
             for (i, model) in self.models.iter().enumerate() {
-                let num = format!("{:>3}.", i + 1);
-                let id = format!("{:<30}", model.id);
-                let name = model
-                    .name
-                    .as_deref()
-                    .map_or_else(|| "N/A".to_string(), |n| format!("{n:<20}"));
-
-                let free_str = match model.is_free {
-                    Some(true) => style("free").green().to_string(),
-                    Some(false) => style("paid").red().to_string(),
-                    None => style("unknown").dim().to_string(),
-                };
-
-                let context_str = model
-                    .context_window
-                    .map_or_else(|| "N/A".to_string(), |cw| format!("{cw} tokens"));
-
-                writeln!(
-                    w,
-                    "  {} {} {} {} {}",
-                    style(num).dim(),
-                    style(id).cyan(),
-                    style(name).yellow(),
-                    free_str,
-                    style(context_str).dim()
-                )?;
+                write_model_row(w, i, model, id_width)?;
             }
         }
 
@@ -103,33 +124,9 @@ impl Renderable for ModelsResultMulti {
                 if result.models.is_empty() {
                     writeln!(w, "  {}", style("No models found").dim())?;
                 } else {
+                    let id_width = id_col_width(&result.models);
                     for (i, model) in result.models.iter().enumerate() {
-                        let num = format!("{:>3}.", i + 1);
-                        let id = format!("{:<30}", model.id);
-                        let name = model
-                            .name
-                            .as_deref()
-                            .map_or_else(|| "N/A".to_string(), |n| format!("{n:<20}"));
-
-                        let free_str = match model.is_free {
-                            Some(true) => style("free").green().to_string(),
-                            Some(false) => style("paid").red().to_string(),
-                            None => style("unknown").dim().to_string(),
-                        };
-
-                        let context_str = model
-                            .context_window
-                            .map_or_else(|| "N/A".to_string(), |cw| format!("{cw} tokens"));
-
-                        writeln!(
-                            w,
-                            "  {} {} {} {} {}",
-                            style(num).dim(),
-                            style(id).cyan(),
-                            style(name).yellow(),
-                            free_str,
-                            style(context_str).dim()
-                        )?;
+                        write_model_row(w, i, model, id_width)?;
                     }
                 }
                 writeln!(w)?;

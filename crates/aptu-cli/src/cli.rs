@@ -512,5 +512,8 @@ pub enum ModelsCommand {
         /// Filter models by minimum context window size (in tokens)
         #[arg(long)]
         min_context: Option<u32>,
+        /// Filter models by name or id (case-insensitive substring match)
+        #[arg(long)]
+        filter: Option<String>,
     },
 }

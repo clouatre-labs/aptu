@@ -31,22 +31,6 @@ use thiserror::Error;
 use crate::auth::TokenProvider;
 use crate::cache::FileCache;
 
-/// Metadata for a single AI model.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ModelInfo {
-    /// Human-readable model name for UI display
-    pub display_name: &'static str,
-
-    /// Provider-specific model identifier used in API requests
-    pub identifier: &'static str,
-
-    /// Whether this model is free to use
-    pub is_free: bool,
-
-    /// Maximum context window size in tokens
-    pub context_window: u32,
-}
-
 /// Configuration for an AI provider.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProviderConfig {
@@ -196,6 +180,8 @@ pub struct CachedModel {
     pub is_free: Option<bool>,
     /// Maximum context window size in tokens.
     pub context_window: Option<u32>,
+    /// Provider name this model belongs to.
+    pub provider: String,
 }
 
 /// Trait for runtime model validation and listing.
@@ -248,7 +234,7 @@ impl CachedModelRegistry<'_> {
     }
 
     /// Parse `OpenRouter` API response into models.
-    fn parse_openrouter_models(data: &serde_json::Value) -> Vec<CachedModel> {
+    fn parse_openrouter_models(data: &serde_json::Value, provider: &str) -> Vec<CachedModel> {
         data.get("data")
             .and_then(|d| d.as_array())
             .map(|arr| {
@@ -266,6 +252,7 @@ impl CachedModelRegistry<'_> {
                                 .get("context_length")
                                 .and_then(serde_json::Value::as_u64)
                                 .and_then(|c| u32::try_from(c).ok()),
+                            provider: provider.to_string(),
                         })
                     })
                     .collect()
@@ -274,7 +261,7 @@ impl CachedModelRegistry<'_> {
     }
 
     /// Parse Gemini API response into models.
-    fn parse_gemini_models(data: &serde_json::Value) -> Vec<CachedModel> {
+    fn parse_gemini_models(data: &serde_json::Value, provider: &str) -> Vec<CachedModel> {
         data.get("models")
             .and_then(|d| d.as_array())
             .map(|arr| {
@@ -291,6 +278,7 @@ impl CachedModelRegistry<'_> {
                                 .get("inputTokenLimit")
                                 .and_then(serde_json::Value::as_u64)
                                 .and_then(|c| u32::try_from(c).ok()),
+                            provider: provider.to_string(),
                         })
                     })
                     .collect()
@@ -299,7 +287,7 @@ impl CachedModelRegistry<'_> {
     }
 
     /// Parse generic OpenAI-compatible API response into models.
-    fn parse_generic_models(data: &serde_json::Value) -> Vec<CachedModel> {
+    fn parse_generic_models(data: &serde_json::Value, provider: &str) -> Vec<CachedModel> {
         data.get("data")
             .and_then(|d| d.as_array())
             .map(|arr| {
@@ -310,6 +298,7 @@ impl CachedModelRegistry<'_> {
                             name: None,
                             is_free: None,
                             context_window: None,
+                            provider: provider.to_string(),
                         })
                     })
                     .collect()
@@ -364,9 +353,9 @@ impl CachedModelRegistry<'_> {
 
         // Parse based on provider API format
         let models = match provider {
-            "openrouter" => Self::parse_openrouter_models(&data),
-            "gemini" => Self::parse_gemini_models(&data),
-            "groq" | "cerebras" | "zenmux" | "zai" => Self::parse_generic_models(&data),
+            "openrouter" => Self::parse_openrouter_models(&data, provider),
+            "gemini" => Self::parse_gemini_models(&data, provider),
+            "groq" | "cerebras" | "zenmux" | "zai" => Self::parse_generic_models(&data, provider),
             _ => vec![],
         };
 
