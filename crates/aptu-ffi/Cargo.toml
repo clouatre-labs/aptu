@@ -2,10 +2,11 @@
 name = "aptu-ffi"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-
+description = "Swift/Kotlin FFI bindings for aptu-core via UniFFI"
 [dependencies]
 aptu-core = { path = "../aptu-core" }
 uniffi = { workspace = true }
@@ -16,7 +17,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 secrecy = { workspace = true }
-lazy_static = "1.4"
 
 [build-dependencies]
 uniffi = { version = "0.31", features = ["build"] }

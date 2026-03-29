@@ -45,7 +45,6 @@ pub struct IssueNode {
     /// Issue labels.
     pub labels: Labels,
     /// Issue URL (used by triage command).
-    #[allow(dead_code)]
     pub url: String,
 }
 

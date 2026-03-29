@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "crates/aptu-ffi", "crates/aptu-mcp"]
+members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
@@ -11,6 +11,14 @@ license = "Apache-2.0"
 repository = "https://github.com/clouatre-labs/aptu"
 
 [workspace.dependencies]
+# Workspace-wide dependencies
+toml = "0.8"
+fastrand = "2"
+percent-encoding = "2"
+axum = "0.8"
+tower = "0.5"
+serial_test = "3.4.0"
+tempfile = "3.27.0"
 # Core
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }

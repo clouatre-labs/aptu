@@ -232,7 +232,6 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
         let analyze_result = triage::AnalyzeResult {
             issue_details: issue_details.clone(),
             triage: ai_response.triage.clone(),
-            ai_stats: ai_response.stats.clone(),
         };
         let url = triage::post(&analyze_result).await?;
         if let Some(s) = spinner {
@@ -353,7 +352,6 @@ async fn review_single_pr(
     let analyze_result = pr::AnalyzeResult {
         pr_details: pr_details.clone(),
         review: review.clone(),
-        ai_stats: ai_stats.clone(),
     };
 
     // Handle posting if review type specified

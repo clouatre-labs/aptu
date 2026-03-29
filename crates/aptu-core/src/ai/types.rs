@@ -256,7 +256,6 @@ pub struct IssueDetails {
     #[builder(default)]
     pub comments: Vec<IssueComment>,
     /// Issue URL.
-    #[allow(dead_code)] // Used for future features (history tracking)
     pub url: String,
     /// Related issues from repository search (for AI context).
     #[serde(default)]

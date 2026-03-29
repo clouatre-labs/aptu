@@ -17,7 +17,7 @@ path = "src/main.rs"
 [dependencies]
 aptu-core = { path = "../aptu-core", version = "0.2" }
 anyhow = { workspace = true }
-axum = "0.8"
+axum = { workspace = true }
 clap = { workspace = true }
 rmcp = { workspace = true, features = ["server", "transport-io", "transport-streamable-http-server"] }
 schemars = { workspace = true }
@@ -25,7 +25,7 @@ secrecy = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-tower = "0.5"
+tower = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
@@ -33,8 +33,8 @@ tracing-subscriber = { workspace = true }
 workspace = true
 
 [dev-dependencies]
-serial_test = "3.4.0"
-tempfile = "=3.27.0"
+serial_test = { workspace = true }
+tempfile = { workspace = true }
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{version}/aptu-mcp-{version}-{target}.tar.gz"

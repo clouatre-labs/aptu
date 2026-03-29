@@ -64,7 +64,7 @@ pub use ai::types::CreditsStatus;
 // History Tracking
 // ============================================================================
 
-pub use history::{Contribution, ContributionStatus, HistoryData};
+pub use history::{AiStats, Contribution, ContributionStatus, HistoryData};
 
 // ============================================================================
 // Repository Discovery

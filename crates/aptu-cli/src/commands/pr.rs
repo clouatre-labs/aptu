@@ -10,8 +10,7 @@
 use anyhow::Result;
 use aptu_core::ai::types::PrReviewComment;
 use aptu_core::{
-    PrDetails, PrReviewResponse, history::AiStats, render_pr_review_comment_body,
-    render_pr_review_markdown,
+    PrDetails, PrReviewResponse, render_pr_review_comment_body, render_pr_review_markdown,
 };
 use tracing::{debug, info, instrument};
 
@@ -24,9 +23,6 @@ pub struct AnalyzeResult {
     pub pr_details: PrDetails,
     /// AI review analysis.
     pub review: PrReviewResponse,
-    /// AI usage statistics.
-    #[allow(dead_code)]
-    pub ai_stats: AiStats,
 }
 
 /// Fetch a pull request from GitHub.

@@ -14,7 +14,8 @@ aptu/
 │   ├── github/       # GitHub API integration (Octocrab wrapper)
 │   ├── repos/        # Repository discovery and management
 │   └── ...           # Config, cache, history, triage logic
-└── aptu-ffi          # Swift FFI bindings (Phase 2+)
+├── aptu-ffi          # Swift/Kotlin FFI bindings via UniFFI
+└── aptu-mcp          # MCP server for AI-powered triage and review
 ```
 
 ## Data Flow
