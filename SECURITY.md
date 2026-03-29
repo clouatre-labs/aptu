@@ -6,6 +6,15 @@ Please report issues privately via GitHub's private vulnerability reporting feat
 
 Do not open public issues for sensitive matters.
 
+### Response SLA
+
+| Severity | Triage | Acknowledge | Fix Target | Disclosure |
+|----------|--------|-------------|------------|------------|
+| Critical | 24h    | 24h         | 14 days    | 90 days after fix |
+| High     | 24h    | 48h         | 14 days    | 90 days after fix |
+| Medium   | 48h    | 72h         | 30 days    | 90 days after fix |
+| Low      | 72h    | 7 days      | 90 days    | Coordinated       |
+
 ## Credential Storage
 
 Aptu stores tokens in your system keychain (macOS Keychain, Linux Secret Service, Windows Credential Manager). Tokens are never stored in plaintext.
@@ -56,3 +65,7 @@ cosign verify-blob --bundle aptu-<target>.tar.gz.bundle --certificate-identity-r
 ```
 
 This provides cryptographic proof that artifacts were built by the official CI/CD pipeline without requiring key management.
+
+### Reporter Credit
+
+Security reporters are acknowledged by their chosen name or pseudonym in the release notes for the version that includes the fix. If a CVE is assigned, reporters are credited in the GitHub Security Advisory by name or pseudonym as they prefer. Reporters who wish to remain anonymous are always respected. We may also list acknowledged reporters in a HALL_OF_FAME file or dedicated release notes section for significant findings.
