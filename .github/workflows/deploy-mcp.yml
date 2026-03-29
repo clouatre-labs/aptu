@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Deploy MCP Server
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: deploy-mcp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy aptu-mcp to Fly.io
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    environment: fly-production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@de6d3cb385db954d04942d536214580bd2b19d79 # master
+        with:
+          version: 0.4.27
+
+      - name: Deploy to Fly.io
+        # FLY_API_TOKEN is a scoped deploy token (aptu-mcp app only, 1-year expiry).
+        # Fly.io does not support OIDC federation; rotate annually via:
+        #   fly tokens create deploy -x 8760h --app aptu-mcp
+        # then update the FLY_API_TOKEN secret in GitHub > Settings > Environments > fly-production.
+        run: fly deploy --config crates/aptu-mcp/fly.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
