@@ -32,7 +32,9 @@ Add to `~/.config/Claude/claude_desktop_config.json` (macOS/Linux) or `%APPDATA%
 }
 ```
 
-## Hosted Instance
+## Remote (HTTP)
+
+### Hosted Instance
 
 A public read-only instance runs at:
 
@@ -40,10 +42,17 @@ A public read-only instance runs at:
 https://aptu-mcp.fly.dev/mcp
 ```
 
-Configure your MCP client to connect directly:
+Configure your MCP client:
 
-### goose
+**goose** (`~/.config/goose/config.yaml`):
+```yaml
+extensions:
+  aptu:
+    type: streamable_http
+    url: https://aptu-mcp.fly.dev/mcp
+```
 
+**Claude Desktop** (`claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
@@ -54,27 +63,30 @@ Configure your MCP client to connect directly:
 }
 ```
 
-### Claude Desktop
+**Security note:** The hosted instance holds no credentials. Tool calls that require GitHub or AI keys (`triage_issue`, `review_pr`, etc.) must be made from a client that supplies its own `GITHUB_TOKEN` and AI API key via environment variables. Bearer token authentication is tracked in #1013.
 
-```json
-{
-  "mcpServers": {
-    "aptu": {
-      "url": "https://aptu-mcp.fly.dev/mcp"
-    }
-  }
-}
-```
-
-**Note:** The hosted instance holds no secrets. Tool calls that require GitHub or AI credentials (`triage_issue`, `review_pr`, etc.) must be made from a client that supplies its own `GITHUB_TOKEN` and AI API key via environment variables. The server returns a credential error if they are absent. Bearer token authentication is tracked in #1013.
-
-## Remote (HTTP) -- Self-hosted
+### Self-hosted
 
 ```bash
 aptu-mcp --transport http --host 0.0.0.0 --port 8080
 ```
 
-Connect your MCP client to `https://your-host.example.com/mcp`.
+### Deploy to Fly.io
+
+Tag releases redeploy automatically via the `Deploy MCP Server` GitHub Actions workflow. For manual deploys, run from the repo root:
+
+```bash
+fly deploy --config crates/aptu-mcp/fly.toml
+```
+
+The app runs with `--read-only` (enforced via `[processes]` in `fly.toml`). No secrets are stored on the server.
+
+**One-time setup** (repo maintainer, already done):
+```bash
+fly apps create aptu-mcp
+fly tokens create deploy -x 999999h --app aptu-mcp
+# Store output as FLY_API_TOKEN in GitHub → Settings → Environments → fly-production
+```
 
 ## Docker
 
@@ -87,15 +99,6 @@ docker run -p 8080:8080 \
 ```
 
 Works with any container platform (Cloud Run, Fly.io, Railway, Render, self-hosted).
-
-## Fly.io Deploy
-
-```bash
-# From repo root
-fly deploy --config crates/aptu-mcp/fly.toml
-```
-
-The app runs with `--read-only` (enforced via `[processes]` in `fly.toml`). No secrets are stored on the server; credentials are supplied per-call by MCP clients.
 
 ## Options
 
