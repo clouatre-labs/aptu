@@ -444,10 +444,7 @@ mod tests {
         assert_eq!(inline[0]["path"], "src/main.rs");
         assert_eq!(inline[0]["line"], 42);
         assert_eq!(inline[0]["side"], "RIGHT");
-        assert_eq!(
-            inline[0]["body"],
-            "> [!TIP]\n> Consider using a match here."
-        );
+        assert_eq!(inline[0]["body"], "Consider using a match here.");
     }
 
     #[test]

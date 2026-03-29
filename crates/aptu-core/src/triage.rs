@@ -5,9 +5,7 @@
 //! This module provides utilities to check whether an issue has already been triaged,
 //! either through labels or Aptu-generated comments.
 
-use crate::ai::types::{
-    CommentSeverity, IssueDetails, PrReviewComment, PrReviewResponse, TriageResponse,
-};
+use crate::ai::types::{IssueDetails, PrReviewComment, PrReviewResponse, TriageResponse};
 use crate::utils::is_priority_label;
 use std::fmt::Write;
 use tracing::debug;
@@ -377,19 +375,13 @@ pub fn check_already_triaged(issue: &IssueDetails) -> TriageStatus {
     )
 }
 
-/// Formats an inline PR review comment body with a GitHub admonition severity badge.
+/// Formats an inline PR review comment body.
 ///
 /// When the comment includes `suggested_code`, appends a GitHub suggestion block
 /// that renders as a one-click "Apply suggestion" button in the PR diff view.
 #[must_use]
 pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
-    let badge = match comment.severity {
-        CommentSeverity::Issue => "> [!CAUTION]\n> ",
-        CommentSeverity::Warning => "> [!WARNING]\n> ",
-        CommentSeverity::Suggestion => "> [!TIP]\n> ",
-        CommentSeverity::Info => "> [!NOTE]\n> ",
-    };
-    let mut body = format!("{}{}", badge, comment.comment);
+    let mut body = comment.comment.clone();
     if let Some(code) = &comment.suggested_code
         && !code.is_empty()
     {
@@ -437,7 +429,7 @@ pub fn render_pr_review_markdown(review: &PrReviewResponse, files_count: usize) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::types::IssueComment;
+    use crate::ai::types::{CommentSeverity, IssueComment};
 
     fn create_test_issue(labels: Vec<String>, comments: Vec<IssueComment>) -> IssueDetails {
         IssueDetails::builder()
@@ -710,7 +702,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_pr_review_comment_body_severity_badges() {
+    fn test_render_pr_review_comment_body_plain_text() {
         let base = PrReviewComment {
             file: "f.rs".to_string(),
             line: Some(1),
@@ -718,23 +710,29 @@ mod tests {
             severity: CommentSeverity::Issue,
             suggested_code: None,
         };
-        assert!(render_pr_review_comment_body(&base).contains("[!CAUTION]"));
-        assert!(render_pr_review_comment_body(&base).contains("test msg"));
+        // No admonition badges -- plain prose only
+        let body = render_pr_review_comment_body(&base);
+        assert!(!body.contains("[!CAUTION]"));
+        assert!(!body.contains("[!WARNING]"));
+        assert!(!body.contains("[!TIP]"));
+        assert!(!body.contains("[!NOTE]"));
+        assert!(body.contains("test msg"));
+        // Severity variants all produce plain text
         let w = PrReviewComment {
             severity: CommentSeverity::Warning,
             ..base.clone()
         };
-        assert!(render_pr_review_comment_body(&w).contains("[!WARNING]"));
+        assert!(!render_pr_review_comment_body(&w).contains("[!"));
         let s = PrReviewComment {
             severity: CommentSeverity::Suggestion,
             ..base.clone()
         };
-        assert!(render_pr_review_comment_body(&s).contains("[!TIP]"));
+        assert!(!render_pr_review_comment_body(&s).contains("[!"));
         let i = PrReviewComment {
             severity: CommentSeverity::Info,
             ..base.clone()
         };
-        assert!(render_pr_review_comment_body(&i).contains("[!NOTE]"));
+        assert!(!render_pr_review_comment_body(&i).contains("[!"));
     }
 
     #[test]
@@ -767,7 +765,7 @@ mod tests {
             suggested_code: Some("    let x = foo()?;\n".to_string()),
         };
         let body = render_pr_review_comment_body(&comment);
-        assert!(body.contains("[!WARNING]"));
+        assert!(!body.contains("[!"));
         assert!(body.contains("Use ? instead of unwrap."));
         assert!(body.contains("```suggestion"));
         assert!(body.contains("let x = foo()?;"));
@@ -783,7 +781,7 @@ mod tests {
             suggested_code: None,
         };
         let body = render_pr_review_comment_body(&comment);
-        assert!(body.contains("[!NOTE]"));
+        assert!(!body.contains("[!"));
         assert!(!body.contains("```suggestion"));
     }
 }
