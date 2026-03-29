@@ -182,6 +182,10 @@ pub enum Capability {
 }
 
 /// Raw pricing information for a model (cost per token in USD).
+///
+/// `f64` is used here because these values are display-only (never used for
+/// arithmetic or financial calculations). Precision matches what the API
+/// returns in its JSON responses.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PricingInfo {
     /// Cost per prompt token in USD. None if unavailable.

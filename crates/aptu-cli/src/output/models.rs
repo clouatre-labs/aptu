@@ -29,6 +29,9 @@ fn name_col_width(models: &[SerializableModelInfo]) -> usize {
 }
 
 /// Returns true when every model has no pricing information (all `is_free` are `None`).
+///
+/// Called once per render pass (not in a tight loop), so a single linear scan
+/// over the model list is acceptable.
 fn all_unknown(models: &[SerializableModelInfo]) -> bool {
     models.iter().all(|m| m.is_free.is_none())
 }
