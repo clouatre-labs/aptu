@@ -35,7 +35,7 @@ The command should complete successfully and return structured output.
 
 - Aptu version: `aptu --version`
 - OS: macOS / Linux / Windows (specify version)
-- AI provider and model: e.g., OpenRouter / mistralai/devstral-2512:free
+- AI provider and model: e.g., OpenRouter / mistralai/mistral-small-2603
 - Rust version (if building from source): `rustc --version`
 
 ## Logs / Error Output

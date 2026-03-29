@@ -19,18 +19,18 @@ Configure different AI models for different operations (triage, review, create) 
 ```toml
 [ai]
 provider = "openrouter"
-model = "mistralai/devstral-2512:free"  # default model for all tasks
+model = "mistralai/mistral-small-2603"  # default model for all tasks
 
 # Override models for specific tasks
 [ai.tasks.triage]
-model = "mistralai/devstral-2512:free"  # fast and cheap for triage
+model = "mistralai/mistral-small-2603"  # fast and cheap for triage
 
 [ai.tasks.review]
 provider = "openrouter"
 model = "anthropic/claude-haiku-4.5"  # balanced for review
 
 [ai.tasks.create]
-model = "anthropic/claude-sonnet-4.5"  # more capable for code creation
+model = "anthropic/claude-sonnet-4.6"  # more capable for code creation
 ```
 
 All task-specific overrides are optional. If not specified, the default `provider` and `model` are used.
@@ -96,7 +96,7 @@ When the primary provider fails with a non-retryable error (after retry exhausti
 Override the configured provider and model with global flags:
 
 ```bash
-aptu --provider openrouter --model mistralai/devstral-2512:free issue triage owner/repo#123
+aptu --provider openrouter --model mistralai/mistral-small-2603 issue triage owner/repo#123
 ```
 
 Flags can be used independently (`--model` alone uses configured provider). CLI flags take precedence over config file.
@@ -164,7 +164,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```toml
    [ai]
    provider = "openrouter"
-   model = "mistralai/devstral-2512:free"
+   model = "mistralai/mistral-small-2603"
    ```
 
 **Free Models:** Look for models with `:free` suffix on OpenRouter

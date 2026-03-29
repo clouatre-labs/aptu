@@ -35,7 +35,7 @@ pub struct ChatMessage {
 /// Request body for `OpenRouter` chat completions API.
 #[derive(Debug, Serialize)]
 pub struct ChatCompletionRequest {
-    /// Model identifier (e.g., "mistralai/devstral-2512:free").
+    /// Model identifier (e.g., "mistralai/mistral-small-2603").
     pub model: String,
     /// List of messages in the conversation.
     pub messages: Vec<ChatMessage>,
