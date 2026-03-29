@@ -18,14 +18,20 @@ fn id_col_width(models: &[SerializableModelInfo]) -> usize {
         .max(20)
 }
 
+/// Maximum display width for the name column to keep the table legible on narrow terminals.
+const NAME_COL_MAX: usize = 40;
+
 /// Compute the display width for the name column based on the longest name in the list.
+///
+/// Capped at [`NAME_COL_MAX`] so that an unusually long model name does not push
+/// the context and pricing columns off-screen on smaller terminal windows.
 fn name_col_width(models: &[SerializableModelInfo]) -> usize {
     models
         .iter()
         .map(|m| m.name.as_deref().unwrap_or("").len())
         .max()
         .unwrap_or(0)
-        .max(4) // minimum "Name" header width
+        .clamp(4, NAME_COL_MAX)
 }
 
 /// Returns true when every model has no pricing information (all `is_free` are `None`).
