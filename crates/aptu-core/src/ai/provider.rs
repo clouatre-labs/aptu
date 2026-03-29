@@ -857,14 +857,14 @@ Output:\n\
             "You are a senior software engineer. Your mission is to produce structured, actionable review feedback on a pull request.\n\n\
 {context}\n\n\
 Your response MUST be valid JSON with this exact schema:\n\
-{{\n  \"summary\": \"A 2-3 sentence summary of what the PR does and its impact\",\n  \"verdict\": \"approve|request_changes|comment\",\n  \"strengths\": [\"strength1\", \"strength2\"],\n  \"concerns\": [\"concern1\", \"concern2\"],\n  \"comments\": [\n    {{\n      \"file\": \"path/to/file.rs\",\n      \"line\": 42,\n      \"comment\": \"Specific feedback about this line\",\n      \"severity\": \"info|suggestion|warning|issue\"\n    }}\n  ],\n  \"suggestions\": [\"suggestion1\", \"suggestion2\"],\n  \"disclaimer\": null\n}}\n\n\
+{{\n  \"summary\": \"A 2-3 sentence summary of what the PR does and its impact\",\n  \"verdict\": \"approve|request_changes|comment\",\n  \"strengths\": [\"strength1\", \"strength2\"],\n  \"concerns\": [\"concern1\", \"concern2\"],\n  \"comments\": [\n    {{\n      \"file\": \"path/to/file.rs\",\n      \"line\": 42,\n      \"comment\": \"Specific feedback about this line\",\n      \"severity\": \"info|suggestion|warning|issue\",\n      \"suggested_code\": null\n    }}\n  ],\n  \"suggestions\": [\"suggestion1\", \"suggestion2\"],\n  \"disclaimer\": null\n}}\n\n\
 Reason through each step before producing output.\n\n\
 Guidelines:\n\
 - summary: Concise explanation of the changes and their purpose\n\
 - verdict: Use \"approve\" for good PRs, \"request_changes\" for blocking issues, \"comment\" for feedback without blocking\n\
 - strengths: What the PR does well (good patterns, clear code, etc.)\n\
 - concerns: Potential issues or risks (bugs, performance, security, maintainability)\n\
-- comments: Specific line-level feedback. Use severity:\n  - \"info\": Informational, no action needed\n  - \"suggestion\": Optional improvement\n  - \"warning\": Should consider changing\n  - \"issue\": Should be fixed before merge\n\
+- comments: Specific line-level feedback. Use severity:\n  - \"info\": Informational, no action needed\n  - \"suggestion\": Optional improvement\n  - \"warning\": Should consider changing\n  - \"issue\": Should be fixed before merge\n  - \"suggested_code\": Optional. Provide replacement lines for a one-click GitHub suggestion block when you have a small, safe, directly applicable fix (1-10 lines). Omit diff markers (+/-). Leave null for refactors, multi-file changes, or uncertain fixes.\n\
 - suggestions: General improvements that are not blocking\n\
 - disclaimer: Optional field. If the PR involves platform versions (iOS, Android, Node, Rust, Python, Java, etc.), include a disclaimer explaining that platform version validation may be inaccurate due to knowledge cutoffs. Otherwise, set to null.\n\n\
 IMPORTANT - Platform Version Exclusions:\n\
@@ -887,7 +887,7 @@ Output:\n\
 Input: PR adds a file parser that uses unwrap().\n\
 Output:\n\
 ```json\n\
-{{\n  \"summary\": \"Adds a CSV parser but uses unwrap() on file reads.\",\n  \"verdict\": \"request_changes\",\n  \"strengths\": [\"Covers the happy path\"],\n  \"concerns\": [\"unwrap() on file open will panic on missing files\"],\n  \"comments\": [{{\"file\": \"src/parser.rs\", \"line\": 42, \"severity\": \"high\", \"comment\": \"Replace unwrap() with proper error propagation using ?\"}}],\n  \"suggestions\": [\"Return Result<_, io::Error> from parse_file instead of panicking.\"],\n  \"disclaimer\": null\n}}\n\
+{{\n  \"summary\": \"Adds a CSV parser but uses unwrap() on file reads.\",\n  \"verdict\": \"request_changes\",\n  \"strengths\": [\"Covers the happy path\"],\n  \"concerns\": [\"unwrap() on file open will panic on missing files\"],\n  \"comments\": [{{\"file\": \"src/parser.rs\", \"line\": 42, \"severity\": \"high\", \"comment\": \"Replace unwrap() with proper error propagation using ?\", \"suggested_code\": \"        let file = File::open(path)?;\\n\"}}],\n  \"suggestions\": [\"Return Result<_, io::Error> from parse_file instead of panicking.\"],\n  \"disclaimer\": null\n}}\n\
 ```"
         )
     }

@@ -12,6 +12,7 @@ use tracing::{debug, instrument};
 use super::{ReferenceKind, parse_github_reference};
 use crate::ai::types::{PrDetails, PrFile, PrReviewComment, ReviewEvent};
 use crate::error::{AptuError, ResourceType};
+use crate::triage::render_pr_review_comment_body;
 
 /// Result from creating a pull request.
 #[derive(Debug, serde::Serialize)]
@@ -213,7 +214,7 @@ pub async fn post_pr_review(
                     // Use line (file line number) rather than the deprecated
                     // position (diff hunk offset) so no hunk parsing is needed.
                     "side": "RIGHT",
-                    "body": c.comment,
+                    "body": render_pr_review_comment_body(c),
                 })
             })
         })
@@ -417,7 +418,7 @@ mod tests {
                         "path": c.file,
                         "line": line,
                         "side": "RIGHT",
-                        "body": c.comment,
+                        "body": render_pr_review_comment_body(c),
                     })
                 })
             })
@@ -432,6 +433,7 @@ mod tests {
             line: Some(42),
             comment: "Consider using a match here.".to_string(),
             severity: CommentSeverity::Suggestion,
+            suggested_code: None,
         }];
 
         // Act
@@ -454,12 +456,14 @@ mod tests {
                 line: None,
                 comment: "General file comment.".to_string(),
                 severity: CommentSeverity::Info,
+                suggested_code: None,
             },
             PrReviewComment {
                 file: "src/lib.rs".to_string(),
                 line: Some(10),
                 comment: "Inline comment.".to_string(),
                 severity: CommentSeverity::Warning,
+                suggested_code: None,
             },
         ];
 

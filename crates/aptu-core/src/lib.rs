@@ -78,7 +78,8 @@ pub use repos::{CuratedRepo, RepoFilter};
 // ============================================================================
 
 pub use triage::{
-    APTU_SIGNATURE, TriageStatus, check_already_triaged, render_release_notes_markdown,
+    APTU_SIGNATURE, TriageStatus, check_already_triaged, render_pr_review_comment_body,
+    render_pr_review_markdown, render_release_notes_markdown, render_triage_markdown,
 };
 
 // ============================================================================

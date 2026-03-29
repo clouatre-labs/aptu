@@ -5,7 +5,7 @@
 //! This module provides utilities to check whether an issue has already been triaged,
 //! either through labels or Aptu-generated comments.
 
-use crate::ai::types::{IssueDetails, TriageResponse};
+use crate::ai::types::{IssueDetails, PrReviewComment, PrReviewResponse, TriageResponse};
 use crate::utils::is_priority_label;
 use std::fmt::Write;
 use tracing::debug;
@@ -375,10 +375,61 @@ pub fn check_already_triaged(issue: &IssueDetails) -> TriageStatus {
     )
 }
 
+/// Formats an inline PR review comment body.
+///
+/// When the comment includes `suggested_code`, appends a GitHub suggestion block
+/// that renders as a one-click "Apply suggestion" button in the PR diff view.
+#[must_use]
+pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
+    let mut body = comment.comment.clone();
+    if let Some(code) = &comment.suggested_code
+        && !code.is_empty()
+    {
+        body.push_str("\n\n```suggestion\n");
+        body.push_str(code);
+        body.push_str("\n```");
+    }
+    body
+}
+
+/// Renders a concise PR review body for posting to GitHub.
+///
+/// Produces a short verdict + summary line, optionally followed by notable-change
+/// bullets when the PR touches more than five files. All inline detail lives in the
+/// anchored review comments; the body stays intentionally brief.
+///
+/// An `<!-- APTU_REVIEW -->` HTML comment is embedded so duplicate reviews can be
+/// detected programmatically.
+#[must_use]
+pub fn render_pr_review_markdown(review: &PrReviewResponse, files_count: usize) -> String {
+    let verdict_badge = match review.verdict.as_str() {
+        "approve" => "✅ Approve",
+        "request_changes" | "request-changes" => "❌ Request Changes",
+        _ => "💬 Comment",
+    };
+
+    let mut body = format!(
+        "<!-- APTU_REVIEW -->\n## Aptu Review\n\n**{}** — {}\n",
+        verdict_badge, review.summary
+    );
+
+    // Notable changes bullets: only for larger PRs to give reviewers orientation.
+    if files_count > 5 && !review.concerns.is_empty() {
+        body.push('\n');
+        for c in &review.concerns {
+            let _ = writeln!(body, "- {c}");
+        }
+    }
+
+    body.push_str("\n---\n\n<sub>Posted by [aptu](https://github.com/clouatre-labs/aptu)</sub>\n");
+
+    body
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::types::IssueComment;
+    use crate::ai::types::{CommentSeverity, IssueComment};
 
     fn create_test_issue(labels: Vec<String>, comments: Vec<IssueComment>) -> IssueDetails {
         IssueDetails::builder()
@@ -588,5 +639,149 @@ mod tests {
         assert!(markdown.contains("Line 1"));
         assert!(markdown.contains("Line 2"));
         assert!(markdown.contains("Line 3"));
+    }
+
+    fn make_pr_review() -> PrReviewResponse {
+        PrReviewResponse {
+            summary: "Good PR overall.".to_string(),
+            verdict: "approve".to_string(),
+            strengths: vec!["Clean code".to_string(), "Good tests".to_string()],
+            concerns: vec!["Missing docs".to_string()],
+            comments: vec![PrReviewComment {
+                file: "src/lib.rs".to_string(),
+                line: Some(42),
+                comment: "Consider using a match here.".to_string(),
+                severity: CommentSeverity::Suggestion,
+                suggested_code: None,
+            }],
+            suggestions: vec!["Add a CHANGELOG entry.".to_string()],
+            disclaimer: Some("AI-generated review.".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_render_pr_review_markdown_basic() {
+        let review = make_pr_review();
+        let body = render_pr_review_markdown(&review, 0);
+        assert!(body.contains("<!-- APTU_REVIEW -->"));
+        assert!(body.contains("✅ Approve"));
+        assert!(body.contains("Good PR overall."));
+        assert!(body.contains("aptu"));
+    }
+
+    #[test]
+    fn test_render_pr_review_markdown_empty_arrays() {
+        let review = PrReviewResponse {
+            summary: "LGTM".to_string(),
+            verdict: "approve".to_string(),
+            strengths: vec![],
+            concerns: vec![],
+            comments: vec![],
+            suggestions: vec![],
+            disclaimer: None,
+        };
+        let body = render_pr_review_markdown(&review, 3);
+        assert!(body.contains("<!-- APTU_REVIEW -->"));
+        assert!(!body.contains("### Strengths"));
+        assert!(!body.contains("### Concerns"));
+        assert!(!body.contains("### Inline Comments"));
+        assert!(!body.contains("### Suggestions"));
+    }
+
+    #[test]
+    fn test_render_pr_review_markdown_verdict_badges() {
+        let mut r = make_pr_review();
+        r.verdict = "approve".to_string();
+        assert!(render_pr_review_markdown(&r, 0).contains("✅ Approve"));
+        r.verdict = "request_changes".to_string();
+        assert!(render_pr_review_markdown(&r, 0).contains("❌ Request Changes"));
+        r.verdict = "request-changes".to_string();
+        assert!(render_pr_review_markdown(&r, 0).contains("❌ Request Changes"));
+        r.verdict = "comment".to_string();
+        assert!(render_pr_review_markdown(&r, 0).contains("💬 Comment"));
+    }
+
+    #[test]
+    fn test_render_pr_review_comment_body_plain_text() {
+        let base = PrReviewComment {
+            file: "f.rs".to_string(),
+            line: Some(1),
+            comment: "test msg".to_string(),
+            severity: CommentSeverity::Issue,
+            suggested_code: None,
+        };
+        // No admonition badges -- plain prose only
+        let body = render_pr_review_comment_body(&base);
+        assert!(!body.contains("[!CAUTION]"));
+        assert!(!body.contains("[!WARNING]"));
+        assert!(!body.contains("[!TIP]"));
+        assert!(!body.contains("[!NOTE]"));
+        assert!(body.contains("test msg"));
+        // Severity variants all produce plain text
+        let w = PrReviewComment {
+            severity: CommentSeverity::Warning,
+            ..base.clone()
+        };
+        assert!(!render_pr_review_comment_body(&w).contains("[!"));
+        let s = PrReviewComment {
+            severity: CommentSeverity::Suggestion,
+            ..base.clone()
+        };
+        assert!(!render_pr_review_comment_body(&s).contains("[!"));
+        let i = PrReviewComment {
+            severity: CommentSeverity::Info,
+            ..base.clone()
+        };
+        assert!(!render_pr_review_comment_body(&i).contains("[!"));
+    }
+
+    #[test]
+    fn test_render_pr_review_markdown_notable_changes_shown() {
+        let mut review = make_pr_review();
+        review.concerns = vec![
+            "Removes CodeQL without replacement".to_string(),
+            "cargo-nextest not pinned".to_string(),
+        ];
+        let body = render_pr_review_markdown(&review, 6);
+        assert!(body.contains("- Removes CodeQL without replacement"));
+        assert!(body.contains("- cargo-nextest not pinned"));
+    }
+
+    #[test]
+    fn test_render_pr_review_markdown_notable_changes_hidden() {
+        let mut review = make_pr_review();
+        review.concerns = vec!["Some concern".to_string()];
+        let body = render_pr_review_markdown(&review, 3);
+        assert!(!body.contains("- Some concern"));
+    }
+
+    #[test]
+    fn test_render_pr_review_comment_body_with_suggestion() {
+        let comment = PrReviewComment {
+            file: "src/main.rs".to_string(),
+            line: Some(10),
+            comment: "Use ? instead of unwrap.".to_string(),
+            severity: CommentSeverity::Warning,
+            suggested_code: Some("    let x = foo()?;\n".to_string()),
+        };
+        let body = render_pr_review_comment_body(&comment);
+        assert!(!body.contains("[!"));
+        assert!(body.contains("Use ? instead of unwrap."));
+        assert!(body.contains("```suggestion"));
+        assert!(body.contains("let x = foo()?;"));
+    }
+
+    #[test]
+    fn test_render_pr_review_comment_body_without_suggestion() {
+        let comment = PrReviewComment {
+            file: "src/main.rs".to_string(),
+            line: Some(10),
+            comment: "Consider refactoring this module.".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        };
+        let body = render_pr_review_comment_body(&comment);
+        assert!(!body.contains("[!"));
+        assert!(!body.contains("```suggestion"));
     }
 }
