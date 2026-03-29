@@ -27,3 +27,4 @@ jobs:
           gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
           provider: gemini
           model: gemini-3.1-flash-lite-preview
+          skip-labeled: 'false'
