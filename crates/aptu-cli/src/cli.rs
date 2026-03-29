@@ -470,6 +470,7 @@ pub enum PrCommand {
 #[derive(Debug, Subcommand)]
 pub enum AgentCommand {
     /// Run the full issue-to-PR orchestration workflow
+    #[command(hide = true)]
     Run {
         /// Issue reference (e.g., org/repo#123)
         issue_ref: String,

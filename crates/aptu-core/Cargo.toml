@@ -2,6 +2,7 @@
 name = "aptu-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Core library for Aptu - OSS issue triage with AI assistance"
 authors.workspace = true
 license.workspace = true
@@ -20,7 +21,7 @@ sha2 = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
-toml = "1.0"
+toml = { workspace = true }
 
 # HTTP/API
 reqwest = { workspace = true }
@@ -51,18 +52,18 @@ async-trait = { workspace = true }
 bon = { workspace = true }
 
 # Random number generation
-fastrand = "2"
+fastrand = { workspace = true }
 
 # Regex for git URL parsing
 regex = "1"
 
 # URL encoding for tag names with special characters
-percent-encoding = "2"
+percent-encoding = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
-serial_test = "3.4.0"
-tempfile = "=3.27.0"
+serial_test = { workspace = true }
+tempfile = { workspace = true }
 
 [[bench]]
 name = "security_scan"

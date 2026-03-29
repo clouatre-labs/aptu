@@ -8,7 +8,7 @@
 
 use anyhow::Result;
 use aptu_core::ai::AiResponse;
-use aptu_core::{IssueDetails, TriageResponse, history::AiStats};
+use aptu_core::{IssueDetails, TriageResponse};
 use tracing::{debug, info, instrument};
 
 use crate::provider::CliTokenProvider;
@@ -19,9 +19,6 @@ pub struct AnalyzeResult {
     pub issue_details: IssueDetails,
     /// AI triage analysis.
     pub triage: TriageResponse,
-    /// AI usage statistics.
-    #[allow(dead_code)] // Used for future features (history tracking)
-    pub ai_stats: AiStats,
 }
 
 /// Fetch an issue from GitHub.

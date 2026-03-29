@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Error types for the Aptu CLI.
+//! Error types for the aptu-core library.
 //!
 //! Uses `thiserror` for deriving `std::error::Error` implementations.
 //! Application code should use `anyhow::Result` for top-level error handling.

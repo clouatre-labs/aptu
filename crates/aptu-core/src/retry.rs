@@ -43,7 +43,7 @@ pub fn is_retryable_http(status: u16) -> bool {
 ///
 /// `true` if the error is transient and should be retried
 #[must_use]
-pub fn is_retryable_octocrab(e: &octocrab::Error) -> bool {
+pub(crate) fn is_retryable_octocrab(e: &octocrab::Error) -> bool {
     match e {
         octocrab::Error::GitHub { source, .. } => {
             // Check if the GitHub error has a retryable status code

@@ -11,11 +11,10 @@ use crate::types::{
     FfiApplyResult, FfiCuratedRepo, FfiDiscoveredRepo, FfiIssueNode, FfiLabelPrResult,
     FfiReleaseNotesResponse, FfiTokenStatus, FfiTriageResponse,
 };
-use tokio::runtime::Runtime;
 
-lazy_static::lazy_static! {
-    static ref RUNTIME: Runtime = Runtime::new().expect("Failed to create Tokio runtime");
-}
+static RUNTIME: std::sync::LazyLock<tokio::runtime::Runtime> = std::sync::LazyLock::new(|| {
+    tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime")
+});
 
 #[uniffi::export]
 pub fn list_curated_repos() -> Result<Vec<FfiCuratedRepo>, AptuFfiError> {
