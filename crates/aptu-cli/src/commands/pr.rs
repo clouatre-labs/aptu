@@ -131,6 +131,73 @@ pub async fn post(
     Ok(())
 }
 
+/// Create a pull request on GitHub.
+///
+/// Resolves the head branch from git if not provided, resolves repo from context,
+/// and calls the core facade to create the PR.
+///
+/// # Arguments
+///
+/// * `repo` - Optional repository override (owner/repo)
+/// * `inferred_repo` - Repository inferred from git remote
+/// * `default_repo` - Default repository from config
+/// * `title` - PR title
+/// * `body` - Optional PR body
+/// * `branch` - Optional head branch (defaults to current git branch)
+/// * `base` - Base branch to merge into
+#[instrument(skip_all)]
+pub async fn run_pr_create(
+    repo: Option<String>,
+    inferred_repo: Option<String>,
+    default_repo: Option<String>,
+    title: String,
+    body: Option<String>,
+    branch: Option<String>,
+    base: String,
+) -> anyhow::Result<aptu_core::PrCreateResult> {
+    use aptu_core::github::parse_owner_repo;
+
+    // Resolve repo
+    let resolved_repo = repo
+        .as_deref()
+        .or(inferred_repo.as_deref())
+        .or(default_repo.as_deref())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No repository specified. Use --repo or run inside a git repo with a GitHub remote."
+            )
+        })?;
+    let (owner, repo_name) = parse_owner_repo(resolved_repo)?;
+
+    // Resolve head branch
+    let head = if let Some(b) = branch {
+        b
+    } else {
+        let output = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .output()
+            .map_err(|e| anyhow::anyhow!("Failed to run git: {e}"))?;
+        if !output.status.success() {
+            anyhow::bail!("Failed to determine current git branch. Use --branch to specify.");
+        }
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    };
+
+    let provider = CliTokenProvider;
+
+    aptu_core::create_pr(
+        &provider,
+        &owner,
+        &repo_name,
+        &title,
+        &base,
+        &head,
+        body.as_deref(),
+    )
+    .await
+    .map_err(Into::into)
+}
+
 /// Auto-label a pull request based on conventional commit prefix and file paths.
 ///
 /// Fetches PR details, extracts labels from title and changed files,
