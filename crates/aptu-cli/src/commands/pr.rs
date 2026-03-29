@@ -8,7 +8,7 @@
 //! before AI spinner).
 
 use anyhow::Result;
-use aptu_core::{PrDetails, PrReviewResponse, history::AiStats};
+use aptu_core::{PrDetails, PrReviewResponse, history::AiStats, render_pr_review_markdown};
 use tracing::{debug, info, instrument};
 
 use super::types::PrLabelResult;
@@ -84,10 +84,7 @@ pub async fn post(
     // Create CLI token provider
     let provider = CliTokenProvider;
 
-    let review_body = format!(
-        "## Aptu Review\n\n{}\n\n**Verdict:** {}\n\n",
-        analyze_result.review.summary, analyze_result.review.verdict
-    );
+    let review_body = render_pr_review_markdown(&analyze_result.review, None);
 
     if dry_run {
         debug!("Dry-run mode: skipping post");

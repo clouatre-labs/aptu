@@ -12,6 +12,7 @@ use tracing::{debug, instrument};
 use super::{ReferenceKind, parse_github_reference};
 use crate::ai::types::{PrDetails, PrFile, PrReviewComment, ReviewEvent};
 use crate::error::{AptuError, ResourceType};
+use crate::triage::render_pr_review_comment_body;
 
 /// Result from creating a pull request.
 #[derive(Debug, serde::Serialize)]
@@ -213,7 +214,7 @@ pub async fn post_pr_review(
                     // Use line (file line number) rather than the deprecated
                     // position (diff hunk offset) so no hunk parsing is needed.
                     "side": "RIGHT",
-                    "body": c.comment,
+                    "body": render_pr_review_comment_body(c),
                 })
             })
         })
@@ -417,7 +418,7 @@ mod tests {
                         "path": c.file,
                         "line": line,
                         "side": "RIGHT",
-                        "body": c.comment,
+                        "body": render_pr_review_comment_body(c),
                     })
                 })
             })
@@ -442,7 +443,10 @@ mod tests {
         assert_eq!(inline[0]["path"], "src/main.rs");
         assert_eq!(inline[0]["line"], 42);
         assert_eq!(inline[0]["side"], "RIGHT");
-        assert_eq!(inline[0]["body"], "Consider using a match here.");
+        assert_eq!(
+            inline[0]["body"],
+            "> [!TIP]\n> Consider using a match here."
+        );
     }
 
     #[test]

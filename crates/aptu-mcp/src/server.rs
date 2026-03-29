@@ -360,7 +360,7 @@ impl AptuServer {
             &provider,
             &params.pr_ref,
             None,
-            &review.summary,
+            &aptu_core::render_pr_review_markdown(&review, None),
             event,
             &review.comments,
             &pr.head_sha,
