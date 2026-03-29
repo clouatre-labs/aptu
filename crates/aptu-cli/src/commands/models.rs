@@ -34,6 +34,8 @@ pub struct SerializableModelInfo {
     pub is_free: Option<bool>,
     /// Maximum context window size in tokens
     pub context_window: Option<u32>,
+    /// Provider name this model belongs to
+    pub provider: String,
 }
 
 /// Filter models by minimum context window size.
@@ -56,6 +58,37 @@ fn filter_by_min_context(
             .into_iter()
             .filter(|m| m.context_window.is_some_and(|ctx| ctx >= min))
             .collect(),
+    }
+}
+
+/// Filter models by name substring (case-insensitive).
+///
+/// # Arguments
+///
+/// * `models` - Vector of models to filter
+/// * `filter` - Case-insensitive substring to match against id and name (optional)
+///
+/// # Returns
+///
+/// Filtered vector of models
+fn filter_by_name(
+    models: Vec<SerializableModelInfo>,
+    filter: Option<&str>,
+) -> Vec<SerializableModelInfo> {
+    match filter {
+        None => models,
+        Some(pat) => {
+            let pat_lower = pat.to_lowercase();
+            models
+                .into_iter()
+                .filter(|m| {
+                    m.id.to_lowercase().contains(&pat_lower)
+                        || m.name
+                            .as_deref()
+                            .is_some_and(|n| n.to_lowercase().contains(&pat_lower))
+                })
+                .collect()
+        }
     }
 }
 
@@ -102,6 +135,7 @@ fn sort_models(
 /// * `provider` - Provider name (e.g., "openrouter", "openai")
 /// * `sort_by` - Field to sort by (Name or Context)
 /// * `min_context` - Minimum context window size in tokens (optional)
+/// * `filter` - Case-insensitive substring filter on id or name (optional)
 ///
 /// # Returns
 ///
@@ -110,6 +144,7 @@ pub async fn run_list(
     provider: &str,
     sort_by: SortBy,
     min_context: Option<u32>,
+    filter: Option<&str>,
 ) -> anyhow::Result<ModelsResult> {
     let token_provider = CliTokenProvider;
     let models = aptu_core::list_models(&token_provider, provider).await?;
@@ -121,11 +156,13 @@ pub async fn run_list(
             name: m.name,
             is_free: m.is_free,
             context_window: m.context_window,
+            provider: m.provider,
         })
         .collect();
 
     // Apply filtering first, then sorting
     serializable_models = filter_by_min_context(serializable_models, min_context);
+    serializable_models = filter_by_name(serializable_models, filter);
     serializable_models = sort_models(serializable_models, sort_by);
 
     Ok(ModelsResult {
@@ -136,10 +173,14 @@ pub async fn run_list(
 
 /// List available AI models from all available providers.
 ///
+/// # Arguments
+///
+/// * `filter` - Case-insensitive substring filter on id or name (optional)
+///
 /// # Returns
 ///
 /// A `ModelsResultMulti` containing results from all providers
-pub async fn run_list_all() -> anyhow::Result<ModelsResultMulti> {
+pub async fn run_list_all(filter: Option<&str>) -> anyhow::Result<ModelsResultMulti> {
     let token_provider = CliTokenProvider;
     let providers = aptu_core::ai::registry::all_providers();
 
@@ -155,8 +196,11 @@ pub async fn run_list_all() -> anyhow::Result<ModelsResultMulti> {
                         name: m.name,
                         is_free: m.is_free,
                         context_window: m.context_window,
+                        provider: m.provider,
                     })
                     .collect();
+
+                let serializable_models = filter_by_name(serializable_models, filter);
 
                 results.push(ModelsResult {
                     provider: provider_config.name.to_string(),
@@ -180,28 +224,33 @@ pub async fn run_list_all() -> anyhow::Result<ModelsResultMulti> {
 mod tests {
     use super::*;
 
+    fn make_model(
+        id: &str,
+        name: Option<&str>,
+        context_window: Option<u32>,
+    ) -> SerializableModelInfo {
+        SerializableModelInfo {
+            id: id.to_string(),
+            name: name.map(String::from),
+            is_free: None,
+            context_window,
+            provider: "test".to_string(),
+        }
+    }
+
+    // --- filter_by_min_context ---
+
     #[test]
     fn test_filter_by_min_context_empty_list() {
-        let models = vec![];
-        let result = filter_by_min_context(models, Some(8000));
+        let result = filter_by_min_context(vec![], Some(8000));
         assert_eq!(result.len(), 0);
     }
 
     #[test]
     fn test_filter_by_min_context_none_filter() {
         let models = vec![
-            SerializableModelInfo {
-                id: "model1".to_string(),
-                name: Some("Model 1".to_string()),
-                is_free: Some(true),
-                context_window: Some(4000),
-            },
-            SerializableModelInfo {
-                id: "model2".to_string(),
-                name: Some("Model 2".to_string()),
-                is_free: Some(false),
-                context_window: Some(8000),
-            },
+            make_model("model1", Some("Model 1"), Some(4000)),
+            make_model("model2", Some("Model 2"), Some(8000)),
         ];
         let result = filter_by_min_context(models, None);
         assert_eq!(result.len(), 2);
@@ -210,24 +259,9 @@ mod tests {
     #[test]
     fn test_filter_by_min_context_with_threshold() {
         let models = vec![
-            SerializableModelInfo {
-                id: "model1".to_string(),
-                name: Some("Model 1".to_string()),
-                is_free: Some(true),
-                context_window: Some(4000),
-            },
-            SerializableModelInfo {
-                id: "model2".to_string(),
-                name: Some("Model 2".to_string()),
-                is_free: Some(false),
-                context_window: Some(8000),
-            },
-            SerializableModelInfo {
-                id: "model3".to_string(),
-                name: Some("Model 3".to_string()),
-                is_free: Some(true),
-                context_window: Some(16000),
-            },
+            make_model("model1", Some("Model 1"), Some(4000)),
+            make_model("model2", Some("Model 2"), Some(8000)),
+            make_model("model3", Some("Model 3"), Some(16000)),
         ];
         let result = filter_by_min_context(models, Some(8000));
         assert_eq!(result.len(), 2);
@@ -238,45 +272,65 @@ mod tests {
     #[test]
     fn test_filter_by_min_context_excludes_none_values() {
         let models = vec![
-            SerializableModelInfo {
-                id: "model1".to_string(),
-                name: Some("Model 1".to_string()),
-                is_free: Some(true),
-                context_window: None,
-            },
-            SerializableModelInfo {
-                id: "model2".to_string(),
-                name: Some("Model 2".to_string()),
-                is_free: Some(false),
-                context_window: Some(8000),
-            },
+            make_model("model1", Some("Model 1"), None),
+            make_model("model2", Some("Model 2"), Some(8000)),
         ];
         let result = filter_by_min_context(models, Some(4000));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, "model2");
     }
 
+    // --- filter_by_name ---
+
+    #[test]
+    fn test_filter_by_name_match() {
+        // Arrange
+        let models = vec![
+            make_model("gemini-pro", Some("Gemini Pro"), Some(128000)),
+            make_model("gpt-4o", Some("GPT-4o"), Some(128000)),
+        ];
+        // Act
+        let result = filter_by_name(models, Some("gemini"));
+        // Assert
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "gemini-pro");
+    }
+
+    #[test]
+    fn test_filter_by_name_none_returns_all() {
+        // Arrange
+        let models = vec![
+            make_model("gemini-pro", Some("Gemini Pro"), None),
+            make_model("gpt-4o", Some("GPT-4o"), None),
+        ];
+        // Act
+        let result = filter_by_name(models, None);
+        // Assert
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_by_name_case_insensitive() {
+        // Arrange
+        let models = vec![
+            make_model("gemini-pro", Some("Gemini Pro"), None),
+            make_model("gpt-4o", Some("GPT-4o"), None),
+        ];
+        // Act
+        let result = filter_by_name(models, Some("GEMINI"));
+        // Assert
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "gemini-pro");
+    }
+
+    // --- sort_models ---
+
     #[test]
     fn test_sort_models_by_name() {
         let models = vec![
-            SerializableModelInfo {
-                id: "model_c".to_string(),
-                name: Some("Zebra Model".to_string()),
-                is_free: Some(true),
-                context_window: Some(4000),
-            },
-            SerializableModelInfo {
-                id: "model_a".to_string(),
-                name: Some("Alpha Model".to_string()),
-                is_free: Some(false),
-                context_window: Some(8000),
-            },
-            SerializableModelInfo {
-                id: "model_b".to_string(),
-                name: Some("Beta Model".to_string()),
-                is_free: Some(true),
-                context_window: Some(16000),
-            },
+            make_model("model_c", Some("Zebra Model"), Some(4000)),
+            make_model("model_a", Some("Alpha Model"), Some(8000)),
+            make_model("model_b", Some("Beta Model"), Some(16000)),
         ];
         let result = sort_models(models, SortBy::Name);
         assert_eq!(result[0].id, "model_a");
@@ -287,18 +341,8 @@ mod tests {
     #[test]
     fn test_sort_models_by_name_case_insensitive() {
         let models = vec![
-            SerializableModelInfo {
-                id: "model1".to_string(),
-                name: Some("zebra".to_string()),
-                is_free: Some(true),
-                context_window: Some(4000),
-            },
-            SerializableModelInfo {
-                id: "model2".to_string(),
-                name: Some("ALPHA".to_string()),
-                is_free: Some(false),
-                context_window: Some(8000),
-            },
+            make_model("model1", Some("zebra"), Some(4000)),
+            make_model("model2", Some("ALPHA"), Some(8000)),
         ];
         let result = sort_models(models, SortBy::Name);
         assert_eq!(result[0].id, "model2");
@@ -308,67 +352,30 @@ mod tests {
     #[test]
     fn test_sort_models_by_context_descending() {
         let models = vec![
-            SerializableModelInfo {
-                id: "model1".to_string(),
-                name: Some("Model 1".to_string()),
-                is_free: Some(true),
-                context_window: Some(4000),
-            },
-            SerializableModelInfo {
-                id: "model2".to_string(),
-                name: Some("Model 2".to_string()),
-                is_free: Some(false),
-                context_window: Some(8000),
-            },
-            SerializableModelInfo {
-                id: "model3".to_string(),
-                name: Some("Model 3".to_string()),
-                is_free: Some(true),
-                context_window: Some(16000),
-            },
+            make_model("model1", Some("Model 1"), Some(4000)),
+            make_model("model2", Some("Model 2"), Some(8000)),
+            make_model("model3", Some("Model 3"), Some(16000)),
         ];
         let result = sort_models(models, SortBy::Context);
-        assert_eq!(result[0].id, "model3"); // 16000
-        assert_eq!(result[1].id, "model2"); // 8000
-        assert_eq!(result[2].id, "model1"); // 4000
+        assert_eq!(result[0].id, "model3");
+        assert_eq!(result[1].id, "model2");
+        assert_eq!(result[2].id, "model1");
     }
 
     #[test]
     fn test_sort_models_by_context_none_values_last() {
         let models = vec![
-            SerializableModelInfo {
-                id: "model1".to_string(),
-                name: Some("Model 1".to_string()),
-                is_free: Some(true),
-                context_window: None,
-            },
-            SerializableModelInfo {
-                id: "model2".to_string(),
-                name: Some("Model 2".to_string()),
-                is_free: Some(false),
-                context_window: Some(8000),
-            },
-            SerializableModelInfo {
-                id: "model3".to_string(),
-                name: Some("Model 3".to_string()),
-                is_free: Some(true),
-                context_window: None,
-            },
+            make_model("model1", Some("Model 1"), None),
+            make_model("model2", Some("Model 2"), Some(8000)),
+            make_model("model3", Some("Model 3"), None),
         ];
         let result = sort_models(models, SortBy::Context);
-        assert_eq!(result[0].id, "model2"); // Has context window
-        assert_eq!(result[1].id, "model1"); // None
-        assert_eq!(result[2].id, "model3"); // None
+        assert_eq!(result[0].id, "model2");
     }
 
     #[test]
     fn test_sort_models_single_item() {
-        let models = vec![SerializableModelInfo {
-            id: "model1".to_string(),
-            name: Some("Model 1".to_string()),
-            is_free: Some(true),
-            context_window: Some(4000),
-        }];
+        let models = vec![make_model("model1", Some("Model 1"), Some(4000))];
         let result = sort_models(models, SortBy::Name);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id, "model1");
@@ -377,30 +384,14 @@ mod tests {
     #[test]
     fn test_filter_and_sort_combined() {
         let models = vec![
-            SerializableModelInfo {
-                id: "model1".to_string(),
-                name: Some("Zebra".to_string()),
-                is_free: Some(true),
-                context_window: Some(4000),
-            },
-            SerializableModelInfo {
-                id: "model2".to_string(),
-                name: Some("Alpha".to_string()),
-                is_free: Some(false),
-                context_window: Some(8000),
-            },
-            SerializableModelInfo {
-                id: "model3".to_string(),
-                name: Some("Beta".to_string()),
-                is_free: Some(true),
-                context_window: Some(16000),
-            },
+            make_model("model1", Some("Zebra"), Some(4000)),
+            make_model("model2", Some("Alpha"), Some(8000)),
+            make_model("model3", Some("Beta"), Some(16000)),
         ];
-        // Filter for min_context >= 8000, then sort by name
         let filtered = filter_by_min_context(models, Some(8000));
         let result = sort_models(filtered, SortBy::Name);
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0].id, "model2"); // Alpha
-        assert_eq!(result[1].id, "model3"); // Beta
+        assert_eq!(result[0].id, "model2");
+        assert_eq!(result[1].id, "model3");
     }
 }

@@ -828,18 +828,20 @@ async fn run_models_command(
             provider,
             sort,
             min_context,
+            filter,
         } => {
             let spinner = maybe_spinner(&ctx, "Fetching models...");
             if let Some(provider_name) = provider {
                 // Single provider
-                let result = models::run_list(&provider_name, sort, min_context).await?;
+                let result =
+                    models::run_list(&provider_name, sort, min_context, filter.as_deref()).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }
                 output::render(&result, &ctx)?;
             } else {
                 // All providers
-                let result = models::run_list_all().await?;
+                let result = models::run_list_all(filter.as_deref()).await?;
                 if let Some(s) = spinner {
                     s.finish_and_clear();
                 }

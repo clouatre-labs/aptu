@@ -833,17 +833,16 @@ pub fn list_models(provider_name: String) -> Result<Vec<crate::types::FfiAiModel
 
         match aptu_core::list_models(&provider, &provider_name).await {
             Ok(models) => {
-                // Determine the ModelProvider enum variant from the string name
-                let model_provider = match provider_name.to_lowercase().as_str() {
-                    "openrouter" => aptu_core::ai::models::ModelProvider::OpenRouter,
-                    "ollama" => aptu_core::ai::models::ModelProvider::Ollama,
-                    "mlx" => aptu_core::ai::models::ModelProvider::Mlx,
-                    _ => aptu_core::ai::models::ModelProvider::OpenRouter, // Default fallback
-                };
-
                 let ffi_models = models
                     .into_iter()
                     .map(|cached_model| {
+                        // Derive provider enum from the model's own provider field
+                        let model_provider = match cached_model.provider.to_lowercase().as_str() {
+                            "openrouter" => aptu_core::ai::models::ModelProvider::OpenRouter,
+                            "ollama" => aptu_core::ai::models::ModelProvider::Ollama,
+                            "mlx" => aptu_core::ai::models::ModelProvider::Mlx,
+                            _ => aptu_core::ai::models::ModelProvider::OpenRouter,
+                        };
                         // Convert CachedModel to FfiAiModel
                         crate::types::FfiAiModel {
                             display_name: cached_model

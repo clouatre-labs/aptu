@@ -37,9 +37,9 @@ inputs:
     required: false
     default: ''
   skip-labeled:
-    description: Skip triage if issue already has both type and priority labels
+    description: Skip triage if issue already has at least one label starting with "type:" and at least one label matching "p0"-"p3"
     required: false
-    default: 'false'
+    default: 'true'
   dry-run:
     description: Run without making changes
     required: false
@@ -76,10 +76,11 @@ runs:
         ISSUE_LABELS: ${{ toJson(github.event.issue.labels) }}
       run: |
         if [[ "$SKIP_LABELED" == "true" ]]; then
-          LABEL_COUNT=$(echo "$ISSUE_LABELS" | jq 'length')
-          if [[ $LABEL_COUNT -gt 0 ]]; then
+          HAS_TYPE=$(echo "$ISSUE_LABELS" | jq '[.[].name | select(startswith("type:"))] | length > 0')
+          HAS_PRIORITY=$(echo "$ISSUE_LABELS" | jq '[.[].name | select(test("^p[0-9]$"))] | length > 0')
+          if [[ "$HAS_TYPE" == "true" && "$HAS_PRIORITY" == "true" ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Issue already has labels, skipping triage"
+            echo "Issue already has type and priority labels, skipping triage"
             exit 0
           fi
         fi
