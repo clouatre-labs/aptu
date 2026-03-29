@@ -84,7 +84,10 @@ pub async fn post(
     // Create CLI token provider
     let provider = CliTokenProvider;
 
-    let review_body = render_pr_review_markdown(&analyze_result.review, None);
+    let review_body = render_pr_review_markdown(
+        &analyze_result.review,
+        analyze_result.pr_details.files.len(),
+    );
 
     if dry_run {
         debug!("Dry-run mode: skipping post");

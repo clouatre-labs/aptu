@@ -433,6 +433,7 @@ mod tests {
             line: Some(42),
             comment: "Consider using a match here.".to_string(),
             severity: CommentSeverity::Suggestion,
+            suggested_code: None,
         }];
 
         // Act
@@ -458,12 +459,14 @@ mod tests {
                 line: None,
                 comment: "General file comment.".to_string(),
                 severity: CommentSeverity::Info,
+                suggested_code: None,
             },
             PrReviewComment {
                 file: "src/lib.rs".to_string(),
                 line: Some(10),
                 comment: "Inline comment.".to_string(),
                 severity: CommentSeverity::Warning,
+                suggested_code: None,
             },
         ];
 

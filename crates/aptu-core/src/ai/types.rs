@@ -399,6 +399,11 @@ pub struct PrReviewComment {
     pub comment: String,
     /// Severity level for the comment.
     pub severity: CommentSeverity,
+    /// Optional corrected code for a GitHub suggestion block.
+    /// When present, the reviewer can apply the fix with one click.
+    /// Provide only the replacement lines (no diff markers).
+    #[serde(default)]
+    pub suggested_code: Option<String>,
 }
 
 /// Structured PR review response from AI.
