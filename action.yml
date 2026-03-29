@@ -137,10 +137,9 @@ runs:
         # idempotent on re-runs; no pre-existing config.toml is expected in CI.
         if [[ -n "$INPUT_FALLBACK_PROVIDER" && -n "$INPUT_FALLBACK_MODEL" ]]; then
           mkdir -p "$HOME/.config/aptu"
-          cat > "$HOME/.config/aptu/config.toml" << TOML
-[ai.fallback]
-chain = [{ provider = "${INPUT_FALLBACK_PROVIDER}", model = "${INPUT_FALLBACK_MODEL}" }]
-TOML
+          printf '[ai.fallback]\nchain = [{ provider = "%s", model = "%s" }]\n' \
+            "$INPUT_FALLBACK_PROVIDER" "$INPUT_FALLBACK_MODEL" \
+            > "$HOME/.config/aptu/config.toml"
         fi
 
     - name: Resolve aptu version
