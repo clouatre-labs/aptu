@@ -131,12 +131,13 @@ runs:
         echo "APPLY_LABELS=$INPUT_APPLY_LABELS" >> "$GITHUB_ENV"
         echo "NO_COMMENT=$INPUT_NO_COMMENT" >> "$GITHUB_ENV"
 
-        # Write fallback chain config so openrouter is tried when primary fails.
+        # Write fallback chain config when a fallback provider is configured.
         # Array values are not reliably settable via APTU_AI__* env vars, so we
-        # write a minimal config.toml instead.
-        if [[ -n "$INPUT_OPENROUTER_API_KEY" && -n "$INPUT_FALLBACK_PROVIDER" && -n "$INPUT_FALLBACK_MODEL" ]]; then
+        # write a minimal config.toml instead. Use > (overwrite) to stay
+        # idempotent on re-runs; no pre-existing config.toml is expected in CI.
+        if [[ -n "$INPUT_FALLBACK_PROVIDER" && -n "$INPUT_FALLBACK_MODEL" ]]; then
           mkdir -p "$HOME/.config/aptu"
-          cat >> "$HOME/.config/aptu/config.toml" << TOML
+          cat > "$HOME/.config/aptu/config.toml" << TOML
 [ai.fallback]
 chain = [{ provider = "${INPUT_FALLBACK_PROVIDER}", model = "${INPUT_FALLBACK_MODEL}" }]
 TOML
