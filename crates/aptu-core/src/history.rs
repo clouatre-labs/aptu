@@ -271,7 +271,7 @@ mod tests {
     fn test_ai_stats_serialization_roundtrip() {
         let stats = AiStats {
             provider: "openrouter".to_string(),
-            model: "google/gemini-2.0-flash-exp:free".to_string(),
+            model: "mistralai/mistral-small-2603".to_string(),
             input_tokens: 1000,
             output_tokens: 500,
             duration_ms: 1500,
@@ -290,7 +290,7 @@ mod tests {
         let mut contribution = test_contribution();
         contribution.ai_stats = Some(AiStats {
             provider: "openrouter".to_string(),
-            model: "google/gemini-2.0-flash-exp:free".to_string(),
+            model: "mistralai/mistral-small-2603".to_string(),
             input_tokens: 1000,
             output_tokens: 500,
             duration_ms: 1500,
@@ -304,7 +304,7 @@ mod tests {
         assert!(parsed.ai_stats.is_some());
         assert_eq!(
             parsed.ai_stats.unwrap().model,
-            "google/gemini-2.0-flash-exp:free"
+            "mistralai/mistral-small-2603"
         );
     }
 

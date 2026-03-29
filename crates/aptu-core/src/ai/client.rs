@@ -30,7 +30,7 @@ pub struct AiClient {
     http: Client,
     /// API key for provider authentication.
     api_key: SecretString,
-    /// Model name (e.g., "mistralai/devstral-2512:free").
+    /// Model name (e.g., "mistralai/mistral-small-2603").
     model: String,
     /// Maximum tokens for API responses.
     max_tokens: u32,
@@ -74,7 +74,7 @@ impl AiClient {
                 "Model '{}' is not in the free tier.\n\
                  To use paid models, set `allow_paid_models = true` in your config file:\n\
                  {}\n\n\
-                 Or use a free model like: mistralai/devstral-2512:free",
+                 Or use a free model like: google/gemma-3-12b-it:free",
                 config.model,
                 crate::config::config_file_path().display()
             );
@@ -148,7 +148,7 @@ impl AiClient {
                 "Model '{}' is not in the free tier.\n\
                  To use paid models, set `allow_paid_models = true` in your config file:\n\
                  {}\n\n\
-                 Or use a free model like: mistralai/devstral-2512:free",
+                 Or use a free model like: google/gemma-3-12b-it:free",
                 model_name,
                 crate::config::config_file_path().display()
             );

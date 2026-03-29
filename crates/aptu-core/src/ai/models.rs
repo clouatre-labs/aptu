@@ -49,7 +49,7 @@ pub struct AiModel {
     /// Provider-specific model identifier
     /// Used in API requests to specify which model to use.
     /// Examples:
-    /// - `OpenRouter`: "mistralai/devstral-2512:free"
+    /// - `OpenRouter`: "mistralai/mistral-small-2603"
     /// - `Ollama`: "mistral:7b"
     pub identifier: String,
 

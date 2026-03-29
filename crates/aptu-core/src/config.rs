@@ -25,6 +25,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AptuError;
 
+/// Default `OpenRouter` model identifier.
+pub const DEFAULT_OPENROUTER_MODEL: &str = "mistralai/mistral-small-2603";
+/// Default `Gemini` model identifier.
+pub const DEFAULT_GEMINI_MODEL: &str = "gemini-3.1-flash-lite-preview";
+
 /// Task type for model selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskType {
@@ -176,7 +181,7 @@ impl Default for AiConfig {
     fn default() -> Self {
         Self {
             provider: "openrouter".to_string(),
-            model: "mistralai/mistral-small-2603".to_string(),
+            model: DEFAULT_OPENROUTER_MODEL.to_string(),
             timeout_seconds: 30,
             allow_paid_models: true,
             max_tokens: 4096,
@@ -407,7 +412,7 @@ mod tests {
         }
 
         assert_eq!(config.ai.provider, "openrouter");
-        assert_eq!(config.ai.model, "mistralai/mistral-small-2603");
+        assert_eq!(config.ai.model, DEFAULT_OPENROUTER_MODEL);
         assert_eq!(config.ai.timeout_seconds, 30);
         assert_eq!(config.ai.max_tokens, 4096);
         assert_eq!(config.ai.allow_paid_models, true);
@@ -448,7 +453,7 @@ provider = "gemini"
 model = "gemini-3.1-flash-lite-preview"
 
 [ai.tasks.triage]
-model = "gemini-2.5-flash-lite-preview-09-2025"
+model = "gemini-3.1-flash-lite-preview"
 "#;
 
         let config = Config::builder()
@@ -459,7 +464,7 @@ model = "gemini-2.5-flash-lite-preview-09-2025"
         let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
 
         assert_eq!(app_config.ai.provider, "gemini");
-        assert_eq!(app_config.ai.model, "gemini-3.1-flash-lite-preview");
+        assert_eq!(app_config.ai.model, DEFAULT_GEMINI_MODEL);
         assert!(app_config.ai.tasks.is_some());
 
         let tasks = app_config.ai.tasks.unwrap();
@@ -469,10 +474,7 @@ model = "gemini-2.5-flash-lite-preview-09-2025"
 
         let triage = tasks.triage.unwrap();
         assert_eq!(triage.provider, None);
-        assert_eq!(
-            triage.model,
-            Some("gemini-2.5-flash-lite-preview-09-2025".to_string())
-        );
+        assert_eq!(triage.model, Some(DEFAULT_GEMINI_MODEL.to_string()));
     }
 
     #[test]
@@ -481,17 +483,17 @@ model = "gemini-2.5-flash-lite-preview-09-2025"
         let config_str = r#"
 [ai]
 provider = "openrouter"
-model = "mistralai/devstral-2512:free"
+model = "mistralai/mistral-small-2603"
 
 [ai.tasks.triage]
-model = "mistralai/devstral-2512:free"
+model = "mistralai/mistral-small-2603"
 
 [ai.tasks.review]
 provider = "openrouter"
 model = "anthropic/claude-haiku-4.5"
 
 [ai.tasks.create]
-model = "anthropic/claude-sonnet-4.5"
+model = "anthropic/claude-sonnet-4.6"
 "#;
 
         let config = Config::builder()
@@ -506,10 +508,7 @@ model = "anthropic/claude-sonnet-4.5"
         // Triage: only model override
         let triage = tasks.triage.expect("triage should exist");
         assert_eq!(triage.provider, None);
-        assert_eq!(
-            triage.model,
-            Some("mistralai/devstral-2512:free".to_string())
-        );
+        assert_eq!(triage.model, Some(DEFAULT_OPENROUTER_MODEL.to_string()));
 
         // Review: both provider and model override
         let review = tasks.review.expect("review should exist");
@@ -521,7 +520,7 @@ model = "anthropic/claude-sonnet-4.5"
         assert_eq!(create.provider, None);
         assert_eq!(
             create.model,
-            Some("anthropic/claude-sonnet-4.5".to_string())
+            Some("anthropic/claude-sonnet-4.6".to_string())
         );
     }
 
@@ -557,10 +556,7 @@ model = "gemini-3.1-flash-lite-preview"
         // Review: only model
         let review = tasks.review.expect("review should exist");
         assert_eq!(review.provider, None);
-        assert_eq!(
-            review.model,
-            Some("gemini-3.1-flash-lite-preview".to_string())
-        );
+        assert_eq!(review.model, Some(DEFAULT_GEMINI_MODEL.to_string()));
     }
 
     #[test]
@@ -580,7 +576,7 @@ model = "gemini-3.1-flash-lite-preview"
         let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
 
         assert_eq!(app_config.ai.provider, "gemini");
-        assert_eq!(app_config.ai.model, "gemini-3.1-flash-lite-preview");
+        assert_eq!(app_config.ai.model, DEFAULT_GEMINI_MODEL);
         // When no tasks section is provided, defaults are used (tasks: None)
         assert!(app_config.ai.tasks.is_none());
     }
@@ -593,12 +589,12 @@ model = "gemini-3.1-flash-lite-preview"
         // All tasks use global defaults (openrouter/mistralai/mistral-small-2603)
         let (provider, model) = ai_config.resolve_for_task(TaskType::Triage);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "mistralai/mistral-small-2603");
+        assert_eq!(model, DEFAULT_OPENROUTER_MODEL);
         assert_eq!(ai_config.allow_paid_models, true);
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Review);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "mistralai/mistral-small-2603");
+        assert_eq!(model, DEFAULT_OPENROUTER_MODEL);
         assert_eq!(ai_config.allow_paid_models, true);
 
         let (provider, model) = ai_config.resolve_for_task(TaskType::Create);
@@ -616,7 +612,7 @@ provider = "gemini"
 model = "gemini-3.1-flash-lite-preview"
 
 [ai.tasks.triage]
-model = "gemini-2.5-flash-lite-preview-09-2025"
+model = "gemini-3.1-flash-lite-preview"
 "#;
 
         let config = Config::builder()
@@ -629,16 +625,16 @@ model = "gemini-2.5-flash-lite-preview-09-2025"
         // Triage should use override
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Triage);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-2.5-flash-lite-preview-09-2025");
+        assert_eq!(model, DEFAULT_GEMINI_MODEL);
 
         // Review and Create should use defaults
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3.1-flash-lite-preview");
+        assert_eq!(model, DEFAULT_GEMINI_MODEL);
 
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3.1-flash-lite-preview");
+        assert_eq!(model, DEFAULT_GEMINI_MODEL);
     }
 
     #[test]
@@ -663,16 +659,16 @@ provider = "openrouter"
         // Review should use provider override but default model
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "gemini-3.1-flash-lite-preview");
+        assert_eq!(model, DEFAULT_GEMINI_MODEL);
 
         // Triage and Create should use defaults
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Triage);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3.1-flash-lite-preview");
+        assert_eq!(model, DEFAULT_GEMINI_MODEL);
 
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3.1-flash-lite-preview");
+        assert_eq!(model, DEFAULT_GEMINI_MODEL);
     }
 
     #[test]
@@ -685,7 +681,7 @@ model = "gemini-3.1-flash-lite-preview"
 
 [ai.tasks.triage]
 provider = "openrouter"
-model = "mistralai/devstral-2512:free"
+model = "mistralai/mistral-small-2603"
 
 [ai.tasks.review]
 provider = "openrouter"
@@ -706,7 +702,7 @@ model = "gemini-3.1-flash-lite-preview"
         // Triage
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Triage);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "mistralai/devstral-2512:free");
+        assert_eq!(model, DEFAULT_OPENROUTER_MODEL);
 
         // Review
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
@@ -716,7 +712,7 @@ model = "gemini-3.1-flash-lite-preview"
         // Create
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "gemini");
-        assert_eq!(model, "gemini-3.1-flash-lite-preview");
+        assert_eq!(model, DEFAULT_GEMINI_MODEL);
     }
 
     #[test]
@@ -725,10 +721,10 @@ model = "gemini-3.1-flash-lite-preview"
         let config_str = r#"
 [ai]
 provider = "openrouter"
-model = "mistralai/devstral-2512:free"
+model = "mistralai/mistral-small-2603"
 
 [ai.tasks.triage]
-model = "mistralai/devstral-2512:free"
+model = "mistralai/mistral-small-2603"
 
 [ai.tasks.review]
 provider = "openrouter"
@@ -746,17 +742,17 @@ provider = "openrouter"
         // Triage: model override, provider from default
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Triage);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "mistralai/devstral-2512:free");
+        assert_eq!(model, DEFAULT_OPENROUTER_MODEL);
 
         // Review: provider override, model from default
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Review);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "mistralai/devstral-2512:free");
+        assert_eq!(model, DEFAULT_OPENROUTER_MODEL);
 
         // Create: empty override, both from default
         let (provider, model) = app_config.ai.resolve_for_task(TaskType::Create);
         assert_eq!(provider, "openrouter");
-        assert_eq!(model, "mistralai/devstral-2512:free");
+        assert_eq!(model, DEFAULT_OPENROUTER_MODEL);
     }
 
     #[test]
