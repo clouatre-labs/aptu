@@ -18,39 +18,66 @@ fn id_col_width(models: &[SerializableModelInfo]) -> usize {
         .max(20)
 }
 
+/// Compute the display width for the name column based on the longest name in the list.
+fn name_col_width(models: &[SerializableModelInfo]) -> usize {
+    models
+        .iter()
+        .map(|m| m.name.as_deref().unwrap_or("").len())
+        .max()
+        .unwrap_or(0)
+        .max(4) // minimum "Name" header width
+}
+
+/// Returns true when every model has no pricing information (all `is_free` are `None`).
+fn all_unknown(models: &[SerializableModelInfo]) -> bool {
+    models.iter().all(|m| m.is_free.is_none())
+}
+
 /// Write a single model row to the writer.
 fn write_model_row(
     w: &mut dyn Write,
     index: usize,
     model: &SerializableModelInfo,
     id_width: usize,
+    name_width: usize,
+    show_pricing: bool,
 ) -> io::Result<()> {
     let num = format!("{:>3}.", index + 1);
     let id = format!("{:<width$}", model.id, width = id_width);
     let name = model
         .name
         .as_deref()
-        .map_or_else(|| "N/A".to_string(), |n| format!("{n:<20}"));
-
-    let free_str = match model.is_free {
-        Some(true) => style("free").green().to_string(),
-        Some(false) => style("paid").red().to_string(),
-        None => style("unknown").dim().to_string(),
-    };
+        .map_or_else(|| "N/A".to_string(), |n| format!("{n:<name_width$}"));
 
     let context_str = model
         .context_window
         .map_or_else(|| "N/A".to_string(), |cw| format!("{cw} tokens"));
 
-    writeln!(
-        w,
-        "  {} {} {} {} {}",
-        style(num).dim(),
-        style(id).cyan(),
-        style(name).yellow(),
-        free_str,
-        style(context_str).dim()
-    )
+    if show_pricing {
+        let free_str = match model.is_free {
+            Some(true) => style("free").green().to_string(),
+            Some(false) => style("paid").red().to_string(),
+            None => style("unknown").dim().to_string(),
+        };
+        writeln!(
+            w,
+            "  {} {} {} {} {}",
+            style(num).dim(),
+            style(id).cyan(),
+            style(name).yellow(),
+            free_str,
+            style(context_str).dim()
+        )
+    } else {
+        writeln!(
+            w,
+            "  {} {} {} {}",
+            style(num).dim(),
+            style(id).cyan(),
+            style(name).yellow(),
+            style(context_str).dim()
+        )
+    }
 }
 
 impl Renderable for ModelsResult {
@@ -67,9 +94,22 @@ impl Renderable for ModelsResult {
             writeln!(w, "  {}", style("No models found").dim())?;
         } else {
             let id_width = id_col_width(&self.models);
+            let name_w = name_col_width(&self.models);
+            let show_pricing = !all_unknown(&self.models);
             for (i, model) in self.models.iter().enumerate() {
-                write_model_row(w, i, model, id_width)?;
+                write_model_row(w, i, model, id_width, name_w, show_pricing)?;
             }
+            let count = self.models.len();
+            writeln!(
+                w,
+                "  {}",
+                style(format!(
+                    "{} model{}",
+                    count,
+                    if count == 1 { "" } else { "s" }
+                ))
+                .dim()
+            )?;
         }
 
         writeln!(w)?;
@@ -125,9 +165,22 @@ impl Renderable for ModelsResultMulti {
                     writeln!(w, "  {}", style("No models found").dim())?;
                 } else {
                     let id_width = id_col_width(&result.models);
+                    let name_w = name_col_width(&result.models);
+                    let show_pricing = !all_unknown(&result.models);
                     for (i, model) in result.models.iter().enumerate() {
-                        write_model_row(w, i, model, id_width)?;
+                        write_model_row(w, i, model, id_width, name_w, show_pricing)?;
                     }
+                    let count = result.models.len();
+                    writeln!(
+                        w,
+                        "  {}",
+                        style(format!(
+                            "{} model{}",
+                            count,
+                            if count == 1 { "" } else { "s" }
+                        ))
+                        .dim()
+                    )?;
                 }
                 writeln!(w)?;
             }
@@ -170,5 +223,34 @@ impl Renderable for ModelsResultMulti {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_model(id: &str, is_free: Option<bool>) -> SerializableModelInfo {
+        SerializableModelInfo {
+            id: id.to_string(),
+            name: None,
+            is_free,
+            context_window: None,
+            provider: "test".to_string(),
+            capabilities: vec![],
+            pricing: None,
+        }
+    }
+
+    #[test]
+    fn test_all_unknown_all_none() {
+        let models = vec![make_model("a", None), make_model("b", None)];
+        assert!(all_unknown(&models));
+    }
+
+    #[test]
+    fn test_all_unknown_mixed() {
+        let models = vec![make_model("a", None), make_model("b", Some(true))];
+        assert!(!all_unknown(&models));
     }
 }

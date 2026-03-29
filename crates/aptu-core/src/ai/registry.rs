@@ -169,6 +169,27 @@ pub enum RegistryError {
     },
 }
 
+/// Model capability indicators.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Capability {
+    /// Model supports image/vision inputs.
+    Vision,
+    /// Model supports function/tool calling.
+    FunctionCalling,
+    /// Model has extended reasoning capabilities.
+    Reasoning,
+}
+
+/// Raw pricing information for a model (cost per token in USD).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PricingInfo {
+    /// Cost per prompt token in USD. None if unavailable.
+    pub prompt_per_token: Option<f64>,
+    /// Cost per completion token in USD. None if unavailable.
+    pub completion_per_token: Option<f64>,
+}
+
 /// Cached model information from API responses.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CachedModel {
@@ -182,6 +203,12 @@ pub struct CachedModel {
     pub context_window: Option<u32>,
     /// Provider name this model belongs to.
     pub provider: String,
+    /// Model capabilities (e.g., `Vision`, `FunctionCalling`).
+    #[serde(default)]
+    pub capabilities: Vec<Capability>,
+    /// Pricing information for this model.
+    #[serde(default)]
+    pub pricing: Option<PricingInfo>,
 }
 
 /// Trait for runtime model validation and listing.
@@ -240,19 +267,75 @@ impl CachedModelRegistry<'_> {
             .map(|arr| {
                 arr.iter()
                     .filter_map(|m| {
-                        Some(CachedModel {
-                            id: m.get("id")?.as_str()?.to_string(),
-                            name: m.get("name").and_then(|n| n.as_str()).map(String::from),
-                            is_free: m
-                                .get("pricing")
+                        let pricing_obj = m.get("pricing");
+                        let prompt_per_token = pricing_obj
+                            .and_then(|p| p.get("prompt"))
+                            .and_then(|p| p.as_str())
+                            .and_then(|s| s.parse::<f64>().ok());
+                        let completion_per_token = pricing_obj
+                            .and_then(|p| p.get("completion"))
+                            .and_then(|p| p.as_str())
+                            .and_then(|s| s.parse::<f64>().ok());
+
+                        let is_free = match (prompt_per_token, completion_per_token) {
+                            (Some(prompt), Some(completion)) => {
+                                Some(prompt == 0.0 && completion == 0.0)
+                            }
+                            (Some(prompt), None) => Some(prompt == 0.0),
+                            _ => pricing_obj
                                 .and_then(|p| p.get("prompt"))
                                 .and_then(|p| p.as_str())
                                 .map(|p| p == "0"),
+                        };
+
+                        let pricing =
+                            if prompt_per_token.is_some() || completion_per_token.is_some() {
+                                Some(PricingInfo {
+                                    prompt_per_token,
+                                    completion_per_token,
+                                })
+                            } else {
+                                None
+                            };
+
+                        // Derive capabilities from architecture field defensively
+                        let arch = m.get("architecture");
+                        let capabilities = {
+                            // Check input_modalities array first
+                            let from_input_modalities = arch
+                                .and_then(|a| a.get("input_modalities"))
+                                .and_then(|im| im.as_array())
+                                .map(|arr| {
+                                    arr.iter().filter_map(|v| v.as_str()).any(|s| s == "image")
+                                });
+                            // Fall back to modalities string
+                            let from_modalities_str = arch
+                                .and_then(|a| a.get("modalities"))
+                                .and_then(|m| m.as_str())
+                                .map(|s| s.contains("image"));
+
+                            let has_vision = from_input_modalities
+                                .or(from_modalities_str)
+                                .unwrap_or(false);
+
+                            if has_vision {
+                                vec![Capability::Vision]
+                            } else {
+                                vec![]
+                            }
+                        };
+
+                        Some(CachedModel {
+                            id: m.get("id")?.as_str()?.to_string(),
+                            name: m.get("name").and_then(|n| n.as_str()).map(String::from),
+                            is_free,
                             context_window: m
                                 .get("context_length")
                                 .and_then(serde_json::Value::as_u64)
                                 .and_then(|c| u32::try_from(c).ok()),
                             provider: provider.to_string(),
+                            capabilities,
+                            pricing,
                         })
                     })
                     .collect()
@@ -279,6 +362,8 @@ impl CachedModelRegistry<'_> {
                                 .and_then(serde_json::Value::as_u64)
                                 .and_then(|c| u32::try_from(c).ok()),
                             provider: provider.to_string(),
+                            capabilities: vec![],
+                            pricing: None,
                         })
                     })
                     .collect()
@@ -299,6 +384,8 @@ impl CachedModelRegistry<'_> {
                             is_free: None,
                             context_window: None,
                             provider: provider.to_string(),
+                            capabilities: vec![],
+                            pricing: None,
                         })
                     })
                     .collect()
@@ -529,5 +616,62 @@ mod tests {
                 provider.name
             );
         }
+    }
+
+    #[test]
+    fn test_parse_openrouter_models_with_pricing() {
+        let data = serde_json::json!({
+            "data": [
+                {
+                    "id": "openai/gpt-4o",
+                    "name": "GPT-4o",
+                    "context_length": 128000,
+                    "pricing": {
+                        "prompt": "0.000005",
+                        "completion": "0.000015"
+                    },
+                    "architecture": {
+                        "input_modalities": ["text", "image"],
+                        "output_modalities": ["text"]
+                    }
+                }
+            ]
+        });
+
+        let models = CachedModelRegistry::parse_openrouter_models(&data, "openrouter");
+        assert_eq!(models.len(), 1);
+        let m = &models[0];
+        assert_eq!(m.id, "openai/gpt-4o");
+        assert_eq!(m.is_free, Some(false));
+        let pricing = m.pricing.as_ref().expect("pricing should be present");
+        assert_eq!(pricing.prompt_per_token, Some(0.000_005));
+        assert_eq!(pricing.completion_per_token, Some(0.000_015));
+        assert!(m.capabilities.contains(&Capability::Vision));
+    }
+
+    #[test]
+    fn test_parse_openrouter_models_missing_capabilities() {
+        let data = serde_json::json!({
+            "data": [
+                {
+                    "id": "some/text-only-model",
+                    "name": "Text Only",
+                    "context_length": 32000,
+                    "pricing": {
+                        "prompt": "0",
+                        "completion": "0"
+                    }
+                }
+            ]
+        });
+
+        let models = CachedModelRegistry::parse_openrouter_models(&data, "openrouter");
+        assert_eq!(models.len(), 1);
+        let m = &models[0];
+        assert!(
+            m.capabilities.is_empty(),
+            "no vision if architecture missing"
+        );
+        assert_eq!(m.is_free, Some(true));
     }
 }

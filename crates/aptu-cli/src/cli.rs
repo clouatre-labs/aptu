@@ -35,6 +35,21 @@ const COMPLETION_GENERATE_HELP: &str = r#"EXAMPLES
       aptu completion generate powershell | Out-String | Invoke-Expression
 "#;
 
+/// Extended help text for the models list subcommand with usage examples.
+const MODELS_LIST_HELP: &str = "EXAMPLES
+
+  List models from all providers:
+    aptu models list
+
+  List models from a specific provider:
+    aptu models list --provider openrouter
+
+  Sort by context window size:
+    aptu models list --provider gemini --sort context
+
+  Filter to models with at least 100k context:
+    aptu models list --provider groq --min-context 100000";
+
 /// Output format for CLI results.
 #[derive(Clone, Copy, Default, ValueEnum)]
 pub enum OutputFormat {
@@ -500,6 +515,7 @@ pub enum SortBy {
 #[derive(Subcommand)]
 pub enum ModelsCommand {
     /// List available AI models from a provider (or all providers if not specified)
+    #[command(after_long_help = MODELS_LIST_HELP)]
     List {
         /// AI provider name (e.g., "openrouter", "openai"). If not specified, shows all providers.
         #[arg(long)]
