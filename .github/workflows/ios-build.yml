@@ -40,9 +40,9 @@ jobs:
         with:
           fetch-depth: 0
       
-      - name: Select Xcode 26.1
+      - name: Select Xcode 26.3
         run: |
-          sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
           xcodebuild -version
       
       - name: Setup Rust
@@ -52,7 +52,7 @@ jobs:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim
       
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: |
             .

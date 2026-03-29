@@ -4,17 +4,19 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    paths:
+      - '**/*.rs'
+      - '**/*.toml'
+      - 'Cargo.lock'
       - 'LICENSES/**'
+      - '.reuse/**'
+      - '.github/workflows/reuse.yml'
   pull_request:
     branches:
       - main
     paths-ignore:
       - '**.md'
       - 'docs/**'
-      - 'LICENSES/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

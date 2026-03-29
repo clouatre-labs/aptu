@@ -10,9 +10,16 @@ on:
       - '.github/workflows/**'
       - 'tests/**'
   pull_request:
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/**'
+      - 'tests/**'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # PRs: cancel stale runs on force-push; push to main: each run gets a unique ID
+  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
   cancel-in-progress: true
 
 permissions: {}
@@ -95,7 +102,7 @@ jobs:
       contents: read
     needs: changes
     timeout-minutes: 10
-    if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
+    if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request')
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -106,23 +113,6 @@ jobs:
       - name: Run cargo-deny
         run: cargo deny check
 
-  renovate-check:
-    name: Dependency Check (Renovate)
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    needs: changes
-    timeout-minutes: 5
-    if: github.actor == 'renovate[bot]'  # zizmor: ignore[bot-conditions]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - name: Install cargo-deny
-        uses: taiki-e/install-action@328a871ad8f62ecac78390391f463ccabc974b72 # v2
-        with:
-          tool: cargo-deny
-      - name: Check dependencies
-        run: cargo deny check
 
   format:
     name: Check Format
@@ -189,8 +179,13 @@ jobs:
         with:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@328a871ad8f62ecac78390391f463ccabc974b72 # v2
+        with:
+          tool: cargo-nextest
       - name: Run tests
-        run: cargo test --profile ci
+        # --no-fail-fast: run all tests and report all failures at once
+        run: cargo nextest run --workspace --locked --no-fail-fast
 
   integration:
     name: Integration Tests
@@ -269,7 +264,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions: {}
     if: always()
-    needs: [commitlint, check-base, deny, renovate-check, format, lint, test, integration, zizmor, gitleaks]
+    needs: [commitlint, check-base, deny, format, lint, test, integration, zizmor, gitleaks]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
