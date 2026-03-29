@@ -118,7 +118,7 @@ See [SECURITY.md](SECURITY.md) for reporting and verification.
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines. See [docs/repo-standards.md](docs/repo-standards.md) for a full artifact map and rationale covering CI workflows, tooling, and security controls.
+We welcome contributions! See [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines. See [docs/REPO-STANDARDS.md](docs/REPO-STANDARDS.md) for a full artifact map and rationale covering CI workflows, tooling, and security controls.
 
 ## License
 
