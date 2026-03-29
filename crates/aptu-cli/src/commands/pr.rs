@@ -8,7 +8,11 @@
 //! before AI spinner).
 
 use anyhow::Result;
-use aptu_core::{PrDetails, PrReviewResponse, history::AiStats, render_pr_review_markdown};
+use aptu_core::ai::types::PrReviewComment;
+use aptu_core::{
+    PrDetails, PrReviewResponse, history::AiStats, render_pr_review_comment_body,
+    render_pr_review_markdown,
+};
 use tracing::{debug, info, instrument};
 
 use super::types::PrLabelResult;
@@ -71,6 +75,15 @@ pub async fn analyze(
     Ok((review, ai_stats))
 }
 
+/// Format the header line for a single inline review comment.
+///
+/// Returns `"<file>[:<line>]  [<SEVERITY>]"`.
+pub(crate) fn format_comment_header(comment: &PrReviewComment) -> String {
+    let line_part = comment.line.map_or_else(String::new, |l| format!(":{l}"));
+    let severity = comment.severity.as_str().to_uppercase();
+    format!("{}{}  [{}]", comment.file, line_part, severity)
+}
+
 /// Post a PR review to GitHub.
 #[instrument(skip_all, fields(pr_number = analyze_result.pr_details.number))]
 pub async fn post(
@@ -80,6 +93,7 @@ pub async fn post(
     event: aptu_core::ReviewEvent,
     dry_run: bool,
     skip_confirm: bool,
+    verbose: bool,
 ) -> Result<()> {
     // Create CLI token provider
     let provider = CliTokenProvider;
@@ -96,6 +110,22 @@ pub async fn post(
             event, analyze_result.pr_details.number
         );
         eprintln!("Review body:\n{review_body}");
+        if verbose && !analyze_result.review.comments.is_empty() {
+            eprintln!(
+                "\nInline comments ({}):",
+                analyze_result.review.comments.len()
+            );
+            for (i, comment) in analyze_result.review.comments.iter().enumerate() {
+                eprintln!("  [{}] {}", i + 1, format_comment_header(comment));
+                let body = render_pr_review_comment_body(comment);
+                let indented = body
+                    .lines()
+                    .map(|l| format!("      {l}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                eprintln!("{indented}\n");
+            }
+        }
     } else {
         // Confirm before posting unless --yes flag is set
         if !skip_confirm {
@@ -230,4 +260,36 @@ pub async fn run_label(
         labels,
         dry_run,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aptu_core::ai::types::{CommentSeverity, PrReviewComment};
+
+    #[test]
+    fn test_format_comment_header_with_line() {
+        let comment = PrReviewComment {
+            file: "src/main.rs".to_string(),
+            line: Some(42),
+            comment: "Test comment".to_string(),
+            severity: CommentSeverity::Warning,
+            suggested_code: None,
+        };
+        let header = format_comment_header(&comment);
+        assert_eq!(header, "src/main.rs:42  [WARNING]");
+    }
+
+    #[test]
+    fn test_format_comment_header_no_line() {
+        let comment = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: None,
+            comment: "Test comment".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        };
+        let header = format_comment_header(&comment);
+        assert_eq!(header, "src/lib.rs  [INFO]");
+    }
 }

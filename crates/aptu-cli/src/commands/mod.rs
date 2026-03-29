@@ -365,6 +365,7 @@ async fn review_single_pr(
             event,
             dry_run,
             yes,
+            ctx.is_verbose(),
         )
         .await?;
     }
