@@ -107,25 +107,29 @@ See [docs/MCP_SERVER.md](docs/mcp.md) for client configuration and Docker deploy
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for AI provider setup.
 
-## Popular Models by Use Case
+## Models
 
-Examples using `aptu models list`. Model availability depends on your configured providers.
+Use `aptu models list` to discover available models from all configured providers.
 
-**Fast / low-latency** (good for high-volume triage):
-- `gemini-2.0-flash` (Gemini) - fast, large context, free tier available
-- `llama-3.3-70b-versatile` (Groq) - fast inference, generous free limits
-- `llama3.1-8b` (Cerebras) - ultra-fast, small model
+### Discovering models
 
-**Quality / reasoning** (good for complex PR review):
-- `gemini-2.5-pro` (Gemini) - strong reasoning, 1M context window
-- `mistralai/mistral-small-2503` (OpenRouter) - aptu default for PR review
-- `gpt-4o-mini` (OpenRouter) - cost-effective quality
+```
+aptu models list                                # all providers
+aptu models list --provider openrouter          # OpenRouter only
+```
 
-**Free / no cost** (good for experiments):
-- `gemini-2.0-flash` (Gemini) - free tier with daily quota
-- `llama-3.3-70b-versatile` (Groq) - free tier
+### Filtering and sorting
 
-Browse and filter: `aptu models list --provider gemini --sort context`
+| Flag | Description |
+|------|-------------|
+| `--provider` | Filter to a specific provider |
+| `--sort name\|context` | Sort by name or context window size |
+| `--min-context N` | Show only models with at least N tokens of context |
+| `--filter TEXT` | Filter by name or ID (case-insensitive substring match) |
+
+### Free-tier models
+
+OpenRouter exposes pricing data for each model. Models with zero prompt and completion cost are labeled **free** in the output. Use `--provider openrouter` to browse free models.
 
 ## Security
 

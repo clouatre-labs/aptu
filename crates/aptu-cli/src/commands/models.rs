@@ -36,6 +36,10 @@ pub struct SerializableModelInfo {
     pub context_window: Option<u32>,
     /// Provider name this model belongs to
     pub provider: String,
+    /// Model capabilities (e.g., `Vision`, `FunctionCalling`)
+    pub capabilities: Vec<aptu_core::ai::registry::Capability>,
+    /// Pricing information for this model
+    pub pricing: Option<aptu_core::ai::registry::PricingInfo>,
 }
 
 /// Filter models by minimum context window size.
@@ -157,6 +161,8 @@ pub async fn run_list(
             is_free: m.is_free,
             context_window: m.context_window,
             provider: m.provider,
+            capabilities: m.capabilities,
+            pricing: m.pricing,
         })
         .collect();
 
@@ -197,6 +203,8 @@ pub async fn run_list_all(filter: Option<&str>) -> anyhow::Result<ModelsResultMu
                         is_free: m.is_free,
                         context_window: m.context_window,
                         provider: m.provider,
+                        capabilities: m.capabilities,
+                        pricing: m.pricing,
                     })
                     .collect();
 
@@ -235,6 +243,8 @@ mod tests {
             is_free: None,
             context_window,
             provider: "test".to_string(),
+            capabilities: vec![],
+            pricing: None,
         }
     }
 
