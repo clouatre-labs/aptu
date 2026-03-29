@@ -18,6 +18,7 @@ on:
       - 'tests/**'
 
 concurrency:
+  # PRs: cancel stale runs on force-push; push to main: each run gets a unique ID
   group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
   cancel-in-progress: true
 
@@ -183,6 +184,7 @@ jobs:
         with:
           tool: cargo-nextest
       - name: Run tests
+        # --no-fail-fast: run all tests and report all failures at once
         run: cargo nextest run --workspace --locked --no-fail-fast
 
   integration:
