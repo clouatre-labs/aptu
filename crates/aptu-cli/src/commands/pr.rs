@@ -118,10 +118,12 @@ pub async fn post(
             for (i, comment) in analyze_result.review.comments.iter().enumerate() {
                 eprintln!("  [{}] {}", i + 1, format_comment_header(comment));
                 let body = render_pr_review_comment_body(comment);
-                for line in body.lines() {
-                    eprintln!("      {line}");
-                }
-                eprintln!();
+                let indented = body
+                    .lines()
+                    .map(|l| format!("      {l}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                eprintln!("{indented}\n");
             }
         }
     } else {
