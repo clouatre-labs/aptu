@@ -68,6 +68,23 @@ cargo clippy     # Lint
 cargo build      # Build binary
 ```
 
+### Good First Issues
+
+New contributors are encouraged to start with issues labelled
+[`good-first-issue`](https://github.com/clouatre-labs/aptu/issues?q=is%3Aopen+label%3Agood-first-issue)
+or
+[`help-wanted`](https://github.com/clouatre-labs/aptu/issues?q=is%3Aopen+label%3Ahelp-wanted).
+
+Typical tasks in these categories include:
+
+- Improving documentation or fixing typos in existing docs
+- Applying fixes for clippy suggestions flagged in CI
+- Adding or improving `--help` text for CLI flags and subcommands
+- Writing tests for code paths that lack coverage
+- Updating dependency version constraints to resolve Renovate/Dependabot alerts
+
+If you are unsure where to start, leave a comment on the issue and the maintainer will help scope it.
+
 ## Before Submitting
 
 ```bash
@@ -159,6 +176,10 @@ This adds `Signed-off-by: Your Name <email>` to your commit, certifying you agre
 - [ ] Code formatted (`cargo fmt`)
 - [ ] Commits signed off (`git commit -s`)
 - [ ] Clear PR description
+
+### Regression Test Policy
+
+Bug fixes must include a regression test that reproduces the reported behavior before the fix. This is a project standard for all fixes going forward. A focused test (even a single assertion) that fails on the unfixed code is sufficient.
 
 ## Code Style
 
