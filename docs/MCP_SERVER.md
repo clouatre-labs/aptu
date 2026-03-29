@@ -32,7 +32,43 @@ Add to `~/.config/Claude/claude_desktop_config.json` (macOS/Linux) or `%APPDATA%
 }
 ```
 
-## Remote (HTTP)
+## Hosted Instance
+
+A public read-only instance runs at:
+
+```
+https://aptu-mcp.fly.dev/mcp
+```
+
+Configure your MCP client to connect directly:
+
+### goose
+
+```json
+{
+  "mcpServers": {
+    "aptu": {
+      "url": "https://aptu-mcp.fly.dev/mcp"
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "aptu": {
+      "url": "https://aptu-mcp.fly.dev/mcp"
+    }
+  }
+}
+```
+
+**Note:** The hosted instance holds no secrets. Tool calls that require GitHub or AI credentials (`triage_issue`, `review_pr`, etc.) must be made from a client that supplies its own `GITHUB_TOKEN` and AI API key via environment variables. The server returns a credential error if they are absent. Bearer token authentication is tracked in #1013.
+
+## Remote (HTTP) -- Self-hosted
 
 ```bash
 aptu-mcp --transport http --host 0.0.0.0 --port 8080
@@ -51,6 +87,15 @@ docker run -p 8080:8080 \
 ```
 
 Works with any container platform (Cloud Run, Fly.io, Railway, Render, self-hosted).
+
+## Fly.io Deploy
+
+```bash
+# From repo root
+fly deploy --config crates/aptu-mcp/fly.toml
+```
+
+The app runs with `--read-only` (enforced via `[processes]` in `fly.toml`). No secrets are stored on the server; credentials are supplied per-call by MCP clients.
 
 ## Options
 
