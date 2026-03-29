@@ -11,6 +11,7 @@ use crate::commands::types::{
     BulkPrReviewResult, PrLabelResult, PrReviewResult, SinglePrReviewOutcome,
 };
 use crate::output::Renderable;
+use aptu_core::PrCreateResult;
 
 fn render_security_findings_text(
     w: &mut dyn Write,
@@ -435,6 +436,30 @@ impl Renderable for PrLabelResult {
         }
         writeln!(w)?;
 
+        Ok(())
+    }
+}
+
+impl Renderable for PrCreateResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(
+            w,
+            "PR #{} created: {}",
+            self.pr_number,
+            style(&self.url).cyan().underlined()
+        )?;
+        writeln!(
+            w,
+            "  {} -> {}",
+            style(&self.branch).green(),
+            style(&self.base).cyan()
+        )?;
+        Ok(())
+    }
+
+    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w, "PR #{} created: {}", self.pr_number, self.url)?;
+        writeln!(w, "  {} -> {}", self.branch, self.base)?;
         Ok(())
     }
 }

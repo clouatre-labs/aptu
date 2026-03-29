@@ -229,6 +229,12 @@ pub enum Commands {
     /// Generate or install shell completion scripts
     #[command(subcommand)]
     Completion(CompletionCommand),
+
+    /// Agent orchestration
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
 }
 
 /// Authentication subcommands
@@ -432,6 +438,48 @@ pub enum PrCommand {
         repo: Option<String>,
 
         /// Preview labels without applying
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Create a pull request
+    Create {
+        /// Repository in owner/repo format (inferred from git if not provided)
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// PR title
+        #[arg(long)]
+        title: String,
+
+        /// PR body
+        #[arg(long)]
+        body: Option<String>,
+
+        /// Head branch. Defaults to current git branch.
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Base branch. Defaults to main.
+        #[arg(long, default_value = "main")]
+        base: String,
+    },
+}
+
+/// Agent orchestration subcommands
+#[derive(Debug, Subcommand)]
+pub enum AgentCommand {
+    /// Run the full issue-to-PR orchestration workflow
+    Run {
+        /// Issue reference (e.g., org/repo#123)
+        issue_ref: String,
+        /// Run only a specific phase (plan, build, check, pr)
+        #[arg(long)]
+        phase: Option<String>,
+        /// Directory for handoff JSON files
+        #[arg(long, default_value = ".aptu/handoff")]
+        handoff_dir: String,
+        /// Dry run -- skip PR creation
         #[arg(long)]
         dry_run: bool,
     },
