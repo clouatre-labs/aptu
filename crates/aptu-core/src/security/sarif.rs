@@ -5,6 +5,7 @@
 //! Converts security findings to SARIF 2.1.0 format for integration with
 //! GitHub Code Scanning and other security tools.
 
+use hex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -154,8 +155,7 @@ impl From<Finding> for SarifResult {
         );
         let mut hasher = Sha256::new();
         hasher.update(fingerprint_input.as_bytes());
-        let hash = hasher.finalize();
-        let fingerprint = format!("{hash:x}");
+        let fingerprint = hex::encode(hasher.finalize());
 
         SarifResult {
             rule_id: finding.pattern_id,

@@ -7,6 +7,7 @@
 
 use anyhow::Result;
 use chrono::Duration;
+use hex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::instrument;
@@ -70,7 +71,7 @@ pub fn cache_key(
     hasher.update(pattern_id.as_bytes());
     hasher.update(b":");
     hasher.update(matched_text.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 /// Cache for security finding validation results.
