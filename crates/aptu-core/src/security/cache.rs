@@ -7,9 +7,9 @@
 
 use anyhow::Result;
 use chrono::Duration;
+use hex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use hex;
 use tracing::instrument;
 
 use crate::cache::{FileCache, FileCacheImpl};

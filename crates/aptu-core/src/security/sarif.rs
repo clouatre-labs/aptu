@@ -5,8 +5,8 @@
 //! Converts security findings to SARIF 2.1.0 format for integration with
 //! GitHub Code Scanning and other security tools.
 
-use serde::{Deserialize, Serialize};
 use hex;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::types::Finding;
