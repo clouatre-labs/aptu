@@ -17,6 +17,44 @@ The aptu MCP server supports stdio (local) and HTTP (remote) transports.
 }
 ```
 
+### Claude Code
+
+Add to `.mcp.json` in your project root, or to `~/.claude.json` for global access:
+
+```json
+{
+  "mcpServers": {
+    "aptu": {
+      "type": "stdio",
+      "command": "aptu-mcp",
+      "args": ["--read-only"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
+        "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+### Kiro
+
+```json
+{
+  "mcpServers": {
+    "aptu": {
+      "type": "stdio",
+      "command": "aptu-mcp",
+      "args": ["--read-only"],
+      "env": {
+        "GITHUB_TOKEN": "${env:GITHUB_TOKEN}",
+        "OPENROUTER_API_KEY": "${env:OPENROUTER_API_KEY}"
+      }
+    }
+  }
+}
+```
+
 ### Claude Desktop
 
 Add to `~/.config/Claude/claude_desktop_config.json` (macOS/Linux) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
@@ -42,47 +80,80 @@ A public read-only instance runs at:
 https://aptu-mcp.fly.dev/mcp
 ```
 
-Configure your MCP client:
+The hosted instance holds no credentials and requires no authentication token. Tool calls
+that require GitHub or AI keys (`triage_issue`, `review_pr`, etc.) must supply credentials
+via per-request HTTP headers (see below).
+
+### Per-request credential forwarding
+
+Header names map from provider environment variable names: `GEMINI_API_KEY` →
+`X-Gemini-Api-Key`. Supply only the headers your workflow needs.
 
 **goose** (`~/.config/goose/config.yaml`):
-```yaml
-extensions:
-  aptu:
-    type: streamable_http
-    url: https://aptu-mcp.fly.dev/mcp
-```
-
-**Per-request credential forwarding** (recommended for hosted instance):
-
-The hosted instance supports per-request credential forwarding via HTTP headers. This allows you to use your own GitHub and AI provider credentials without storing them on the server. Header names follow the pattern `X-<Provider>-Api-Key`:
 
 ```yaml
 extensions:
   aptu:
     type: streamable_http
     uri: https://aptu-mcp.fly.dev/mcp
+    env_keys:
+      - GITHUB_TOKEN
+      - GEMINI_API_KEY
+      - OPENROUTER_API_KEY
     headers:
-      X-Github-Token: "your-github-token"
-      X-Gemini-Api-Key: "your-gemini-api-key"
-      X-Openrouter-Api-Key: "your-openrouter-api-key"
-      X-Groq-Api-Key: "your-groq-api-key"
-      X-Cerebras-Api-Key: "your-cerebras-api-key"
-      X-Zenmux-Api-Key: "your-zenmux-api-key"
-      X-Zai-Api-Key: "your-zai-api-key"
+      X-Github-Token: "$GITHUB_TOKEN"
+      X-Gemini-Api-Key: "$GEMINI_API_KEY"
+      X-Openrouter-Api-Key: "$OPENROUTER_API_KEY"
+      X-Groq-Api-Key: "$GROQ_API_KEY"
+      X-Cerebras-Api-Key: "$CEREBRAS_API_KEY"
+      X-Zenmux-Api-Key: "$ZENMUX_API_KEY"
+      X-Zai-Api-Key: "$ZAI_API_KEY"
 ```
 
-**Claude Desktop** (`claude_desktop_config.json`):
+`env_keys` loads secrets from the goose keyring into the env map used for `$VAR`
+substitution in header values. Variables already present in the shell environment are
+substituted without declaring them in `env_keys`.
+
+**Claude Code** (`.mcp.json` or `~/.claude.json`):
+
 ```json
 {
   "mcpServers": {
     "aptu": {
-      "url": "https://aptu-mcp.fly.dev/mcp"
+      "type": "http",
+      "url": "https://aptu-mcp.fly.dev/mcp",
+      "headers": {
+        "X-Github-Token": "${GITHUB_TOKEN}",
+        "X-Gemini-Api-Key": "${GEMINI_API_KEY}",
+        "X-Openrouter-Api-Key": "${OPENROUTER_API_KEY}"
+      }
     }
   }
 }
 ```
 
-**Security note:** The hosted instance holds no credentials. Tool calls that require GitHub or AI keys (`triage_issue`, `review_pr`, etc.) must be made from a client that supplies its own `GITHUB_TOKEN` and AI API key via environment variables (stdio) or per-request headers (HTTP). Bearer token authentication is tracked in #1013.
+Claude Code expands `${VAR}` in header values from the shell environment. No `env` block
+is needed for HTTP connections.
+
+**Kiro**:
+
+```json
+{
+  "mcpServers": {
+    "aptu": {
+      "type": "http",
+      "url": "https://aptu-mcp.fly.dev/mcp",
+      "headers": {
+        "X-Github-Token": "${env:GITHUB_TOKEN}",
+        "X-Gemini-Api-Key": "${env:GEMINI_API_KEY}",
+        "X-Openrouter-Api-Key": "${env:OPENROUTER_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Kiro uses `${env:VAR}` syntax for environment variable substitution in headers.
 
 ### Self-hosted
 
@@ -122,3 +193,51 @@ Works with any container platform (Cloud Run, Fly.io, Railway, Render, self-host
 ## Options
 
 Remove `--read-only` to enable write tools (`post_triage`, `post_review`). See [CONFIGURATION.md](CONFIGURATION.md) for environment variables and AI provider setup.
+
+## Authentication (operator)
+
+The HTTP server supports optional bearer token authentication. By default it is
+**disabled** -- the hosted instance at `aptu-mcp.fly.dev` accepts connections without any
+token.
+
+To enable it, set `MCP_BEARER_TOKEN` on the server before or after deploying. Every
+incoming HTTP request must then present a matching `Authorization: Bearer <token>` header;
+requests with a missing or wrong token receive a 401 response.
+
+### Fly.io
+
+```sh
+fly secrets set MCP_BEARER_TOKEN=$(openssl rand -hex 32) --app aptu-mcp
+```
+
+### Self-hosted (Docker / other)
+
+Pass the variable at startup:
+
+```sh
+docker run -p 8080:8080 -e MCP_BEARER_TOKEN=<token> aptu-mcp
+```
+
+### Client configuration (when bearer auth is enabled)
+
+Once enabled, clients must include an `Authorization` header. Each client uses its own
+substitution syntax; the token must be present in the shell environment (or the goose
+keyring, if declared under `env_keys`).
+
+**goose:**
+```yaml
+headers:
+  Authorization: "Bearer $MCP_BEARER_TOKEN"
+```
+
+**Claude Code:**
+```json
+"Authorization": "Bearer ${MCP_BEARER_TOKEN}"
+```
+
+**Kiro:**
+```json
+"Authorization": "Bearer ${env:MCP_BEARER_TOKEN}"
+```
+
+Add the appropriate line to the `headers` block in your existing client configuration.
