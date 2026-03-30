@@ -88,12 +88,45 @@ async fn bearer_auth(expected: Arc<str>, req: Request, next: Next) -> Response {
         .to_string();
         let mut response = Response::new(body.into());
         *response.status_mut() = StatusCode::UNAUTHORIZED;
-        response
-            .headers_mut()
-            .insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static("application/json"),
+        );
         return response;
     }
     next.run(req).await
+}
+
+/// Apply bearer token middleware to `router` if `MCP_BEARER_TOKEN` is set and non-empty.
+///
+/// Logs a warning when the env var is absent or empty so operators notice an unprotected endpoint.
+fn apply_bearer_middleware(router: axum::Router) -> axum::Router {
+    match std::env::var("MCP_BEARER_TOKEN") {
+        Ok(token) if !token.is_empty() => {
+            let token = Arc::from(token.as_str());
+            router.layer(middleware::from_fn(move |req, next| {
+                bearer_auth(Arc::clone(&token), req, next)
+            }))
+        }
+        Ok(_) => {
+            tracing::warn!("MCP_BEARER_TOKEN is empty; HTTP endpoint is unauthenticated");
+            router
+        }
+        Err(_) => {
+            tracing::warn!("MCP_BEARER_TOKEN is not set; HTTP endpoint is unauthenticated");
+            router
+        }
+    }
+}
+
+/// Parse `host:port` into a [`SocketAddr`], bracketing IPv6 addresses.
+fn parse_socket_addr(host: &str, port: u16) -> anyhow::Result<std::net::SocketAddr> {
+    let addr_str = if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    };
+    addr_str.parse().map_err(Into::into)
 }
 
 pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<()> {
@@ -102,7 +135,6 @@ pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<
     use rmcp::transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     };
-    use std::net::SocketAddr;
     use std::sync::Arc;
     use tokio::net::TcpListener;
 
@@ -124,31 +156,10 @@ pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<
         config,
     );
 
-    let mut router = Router::new().nest_service("/mcp", service);
+    let router = Router::new().nest_service("/mcp", service);
+    let router = apply_bearer_middleware(router);
 
-    // Wire bearer token authentication middleware if MCP_BEARER_TOKEN is set
-    if let Ok(token) = std::env::var("MCP_BEARER_TOKEN") {
-        if token.is_empty() {
-            tracing::warn!("MCP_BEARER_TOKEN is empty; HTTP endpoint is unauthenticated");
-        } else {
-            let token = Arc::from(token.as_str());
-            router = router.layer(middleware::from_fn(move |req, next| {
-                bearer_auth(Arc::clone(&token), req, next)
-            }));
-        }
-    } else {
-        tracing::warn!("MCP_BEARER_TOKEN is not set; HTTP endpoint is unauthenticated");
-    }
-
-    // Handle both IPv4 and IPv6 addresses
-    let addr: SocketAddr = if host.contains(':') {
-        // IPv6 address - needs brackets
-        format!("[{host}]:{port}")
-    } else {
-        // IPv4 address or hostname
-        format!("{host}:{port}")
-    }
-    .parse()?;
+    let addr = parse_socket_addr(host, port)?;
     let listener = TcpListener::bind(addr).await?;
 
     tracing::info!("HTTP server listening on {}", addr);
