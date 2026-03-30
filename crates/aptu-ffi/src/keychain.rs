@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2025 Block, Inc.
+// Copyright 2026 Block, Inc.
 
 use crate::error::AptuFfiError;
 use std::sync::Arc;

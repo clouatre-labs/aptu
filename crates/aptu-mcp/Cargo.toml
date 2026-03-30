@@ -46,7 +46,7 @@ pkg-url = "{ repo }/releases/download/v{version}/aptu-mcp-{version}-x86_64-unkno
 
 [package.metadata.deb]
 maintainer = "Hugues Clouâtre <hugues@linux.com>"
-copyright = "2025 Hugues Clouâtre <hugues@linux.com>"
+copyright = "2026 Hugues Clouâtre <hugues@linux.com>"
 license-file = ["../../LICENSE", "4"]
 extended-description = """\
 Aptu MCP server exposing aptu-core functionality \

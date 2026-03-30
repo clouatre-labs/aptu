@@ -70,7 +70,7 @@ pub fn cache_key(
     hasher.update(pattern_id.as_bytes());
     hasher.update(b":");
     hasher.update(matched_text.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hasher.finalize().iter().fold(String::new(), |mut acc, b| { use std::fmt::Write; let _ = write!(acc, "{b:02x}"); acc })
 }
 
 /// Cache for security finding validation results.

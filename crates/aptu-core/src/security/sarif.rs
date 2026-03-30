@@ -155,7 +155,7 @@ impl From<Finding> for SarifResult {
         let mut hasher = Sha256::new();
         hasher.update(fingerprint_input.as_bytes());
         let hash = hasher.finalize();
-        let fingerprint = format!("{hash:x}");
+        let fingerprint: String = hash.iter().fold(String::new(), |mut acc, b| { use std::fmt::Write; let _ = write!(acc, "{b:02x}"); acc });
 
         SarifResult {
             rule_id: finding.pattern_id,
