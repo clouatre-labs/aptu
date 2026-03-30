@@ -115,7 +115,7 @@ SPDX-FileCopyrightText = "2025 Aptu Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = ["Dockerfile*"]
+path = ["Dockerfile*", "crates/**/Dockerfile*"]
 precedence = "override"
 SPDX-FileCopyrightText = "2025 Aptu Contributors"
 SPDX-License-Identifier = "Apache-2.0"
