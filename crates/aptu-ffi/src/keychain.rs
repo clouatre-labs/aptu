@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Copyright 2025 Block, Inc.
+// SPDX-FileCopyrightText: 2026 Aptu Contributors
 
 use crate::error::AptuFfiError;
 use std::sync::Arc;
