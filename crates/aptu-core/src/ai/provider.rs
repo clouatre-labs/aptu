@@ -1483,6 +1483,7 @@ mod tests {
     #[test]
     fn test_parse_ai_json_with_truncated_json() {
         #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
         struct TestResponse {
             message: String,
         }
@@ -1500,6 +1501,7 @@ mod tests {
     #[test]
     fn test_parse_ai_json_with_malformed_json() {
         #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
         struct TestResponse {
             message: String,
         }
