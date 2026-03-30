@@ -18,7 +18,7 @@ const ANSWERS: Answer[] = [
     id: "description_good",
     status: "Met",
     justification:
-      "README opens with "Aptu AI-powered CLI for issue triage and PR review with gamification." The GitHub repository description matches. URL: https://github.com/clouatre-labs/aptu#readme",
+      "README opens with 'Aptu AI-powered CLI for issue triage and PR review with gamification.' The GitHub repository description matches. URL: https://github.com/clouatre-labs/aptu#readme",
   },
   {
     id: "interact",
