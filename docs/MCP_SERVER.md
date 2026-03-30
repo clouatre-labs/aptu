@@ -80,10 +80,9 @@ A public read-only instance runs at:
 https://aptu-mcp.fly.dev/mcp
 ```
 
-The hosted instance holds no credentials. Tool calls that require GitHub or AI keys
-(`triage_issue`, `review_pr`, etc.) must supply credentials via per-request HTTP headers
-(see below). The endpoint requires a bearer token when `MCP_BEARER_TOKEN` is set on the
-server (see [Authentication](#authentication)).
+The hosted instance holds no credentials and requires no authentication token. Tool calls
+that require GitHub or AI keys (`triage_issue`, `review_pr`, etc.) must supply credentials
+via per-request HTTP headers (see below).
 
 ### Per-request credential forwarding
 
@@ -102,7 +101,6 @@ extensions:
       - GEMINI_API_KEY
       - OPENROUTER_API_KEY
     headers:
-      Authorization: "Bearer $MCP_BEARER_TOKEN"
       X-Github-Token: "$GITHUB_TOKEN"
       X-Gemini-Api-Key: "$GEMINI_API_KEY"
       X-Openrouter-Api-Key: "$OPENROUTER_API_KEY"
@@ -125,7 +123,6 @@ substituted without declaring them in `env_keys`.
       "type": "http",
       "url": "https://aptu-mcp.fly.dev/mcp",
       "headers": {
-        "Authorization": "Bearer ${MCP_BEARER_TOKEN}",
         "X-Github-Token": "${GITHUB_TOKEN}",
         "X-Gemini-Api-Key": "${GEMINI_API_KEY}",
         "X-Openrouter-Api-Key": "${OPENROUTER_API_KEY}"
@@ -147,7 +144,6 @@ is needed for HTTP connections.
       "type": "http",
       "url": "https://aptu-mcp.fly.dev/mcp",
       "headers": {
-        "Authorization": "Bearer ${env:MCP_BEARER_TOKEN}",
         "X-Github-Token": "${env:GITHUB_TOKEN}",
         "X-Gemini-Api-Key": "${env:GEMINI_API_KEY}",
         "X-Openrouter-Api-Key": "${env:OPENROUTER_API_KEY}"
@@ -198,24 +194,50 @@ Works with any container platform (Cloud Run, Fly.io, Railway, Render, self-host
 
 Remove `--read-only` to enable write tools (`post_triage`, `post_review`). See [CONFIGURATION.md](CONFIGURATION.md) for environment variables and AI provider setup.
 
-## Authentication
+## Authentication (operator)
 
-The hosted endpoint supports optional bearer token authentication. When `MCP_BEARER_TOKEN`
-is set on the server, every HTTP request must include a matching
-`Authorization: Bearer <token>` header. When the variable is absent, the server starts
-unauthenticated.
+The HTTP server supports optional bearer token authentication. By default it is
+**disabled** -- the hosted instance at `aptu-mcp.fly.dev` accepts connections without any
+token.
 
-### Fly.io deployment
+To enable it, set `MCP_BEARER_TOKEN` on the server before or after deploying. Every
+incoming HTTP request must then present a matching `Authorization: Bearer <token>` header;
+requests with a missing or wrong token receive a 401 response.
 
-Set the secret before or after deploying:
+### Fly.io
 
 ```sh
 fly secrets set MCP_BEARER_TOKEN=$(openssl rand -hex 32) --app aptu-mcp
 ```
 
-### Client configuration
+### Self-hosted (Docker / other)
 
-Each client uses its own variable substitution syntax in the `Authorization` header. See
-the [Per-request credential forwarding](#per-request-credential-forwarding) section above
-for complete examples per client. The `MCP_BEARER_TOKEN` variable must be present in the
-shell environment (or the goose keyring, if declared under `env_keys`).
+Pass the variable at startup:
+
+```sh
+docker run -p 8080:8080 -e MCP_BEARER_TOKEN=<token> aptu-mcp
+```
+
+### Client configuration (when bearer auth is enabled)
+
+Once enabled, clients must include an `Authorization` header. Each client uses its own
+substitution syntax; the token must be present in the shell environment (or the goose
+keyring, if declared under `env_keys`).
+
+**goose:**
+```yaml
+headers:
+  Authorization: "Bearer $MCP_BEARER_TOKEN"
+```
+
+**Claude Code:**
+```json
+"Authorization": "Bearer ${MCP_BEARER_TOKEN}"
+```
+
+**Kiro:**
+```json
+"Authorization": "Bearer ${env:MCP_BEARER_TOKEN}"
+```
+
+Add the appropriate line to the `headers` block in your existing client configuration.
