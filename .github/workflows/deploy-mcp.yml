@@ -29,6 +29,6 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2 # master
 
       - name: Deploy to Fly.io
-        run: fly deploy --config crates/aptu-mcp/fly.toml --remote-only
+        run: flyctl deploy --config crates/aptu-mcp/fly.toml --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
