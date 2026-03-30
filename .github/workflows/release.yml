@@ -147,6 +147,39 @@ jobs:
       dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
     secrets: inherit
 
+  update-marketplace-tag:
+    name: Update Marketplace Floating Tag
+    needs: create-release
+    if: >-
+      github.event_name != 'workflow_dispatch' &&
+      startsWith(github.ref, 'refs/tags/v0.2.')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Move v0.2 floating tag to current release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          COMMIT_SHA="${GITHUB_SHA}"
+          echo "Moving floating tag v0.2 to $COMMIT_SHA (released as $TAG)"
+
+          # Delete the existing floating tag via API (force-move via REST)
+          gh api \
+            --method DELETE \
+            "repos/${{ github.repository }}/git/refs/tags/v0.2" \
+            || echo "v0.2 tag did not exist yet, creating fresh"
+
+          # Create it pointing at the new commit
+          gh api \
+            --method POST \
+            "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/tags/v0.2" \
+            -f sha="$COMMIT_SHA"
+
+          echo "v0.2 now points to $COMMIT_SHA ($TAG)"
+
   update-homebrew:
     name: Update Homebrew Formula
     needs: build-and-attest
