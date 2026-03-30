@@ -142,6 +142,14 @@ OpenRouter exposes pricing data for each model. Models with zero prompt and comp
 
 See [SECURITY.md](https://github.com/clouatre-labs/aptu/blob/main/SECURITY.md) for reporting and verification.
 
+## Architecture
+
+Aptu is a multi-crate Rust workspace. See [docs/ARCHITECTURE.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ARCHITECTURE.md) for the full crate structure, data flow, and key dependencies.
+
+## Roadmap
+
+See [docs/ROADMAP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ROADMAP.md) for the project direction across near-term, medium-term, and long-term horizons.
+
 ## Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines. See [docs/REPO-STANDARDS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/REPO-STANDARDS.md) for a full artifact map and rationale covering CI workflows, tooling, and security controls.
