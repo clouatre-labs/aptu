@@ -202,6 +202,7 @@ dependencies = [
  "aptu-core",
  "axum",
  "clap",
+ "http",
  "rmcp",
  "schemars",
  "secrecy",
