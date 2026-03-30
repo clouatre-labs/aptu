@@ -52,6 +52,25 @@ extensions:
     url: https://aptu-mcp.fly.dev/mcp
 ```
 
+**Per-request credential forwarding** (recommended for hosted instance):
+
+The hosted instance supports per-request credential forwarding via HTTP headers. This allows you to use your own GitHub and AI provider credentials without storing them on the server. Header names follow the pattern `X-<Provider>-Api-Key`:
+
+```yaml
+extensions:
+  aptu:
+    type: streamable_http
+    uri: https://aptu-mcp.fly.dev/mcp
+    headers:
+      X-Github-Token: "your-github-token"
+      X-Gemini-Api-Key: "your-gemini-api-key"
+      X-Openrouter-Api-Key: "your-openrouter-api-key"
+      X-Groq-Api-Key: "your-groq-api-key"
+      X-Cerebras-Api-Key: "your-cerebras-api-key"
+      X-Zenmux-Api-Key: "your-zenmux-api-key"
+      X-Zai-Api-Key: "your-zai-api-key"
+```
+
 **Claude Desktop** (`claude_desktop_config.json`):
 ```json
 {
@@ -63,7 +82,7 @@ extensions:
 }
 ```
 
-**Security note:** The hosted instance holds no credentials. Tool calls that require GitHub or AI keys (`triage_issue`, `review_pr`, etc.) must be made from a client that supplies its own `GITHUB_TOKEN` and AI API key via environment variables. Bearer token authentication is tracked in #1013.
+**Security note:** The hosted instance holds no credentials. Tool calls that require GitHub or AI keys (`triage_issue`, `review_pr`, etc.) must be made from a client that supplies its own `GITHUB_TOKEN` and AI API key via environment variables (stdio) or per-request headers (HTTP). Bearer token authentication is tracked in #1013.
 
 ### Self-hosted
 

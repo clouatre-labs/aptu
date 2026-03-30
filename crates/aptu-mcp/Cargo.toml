@@ -19,6 +19,7 @@ aptu-core = { path = "../aptu-core", version = "0.2" }
 anyhow = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true }
+http = "1"
 rmcp = { workspace = true, features = ["server", "transport-io", "transport-streamable-http-server"] }
 schemars = { workspace = true }
 secrecy = { workspace = true }
