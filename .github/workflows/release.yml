@@ -161,22 +161,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
           COMMIT_SHA="${GITHUB_SHA}"
           echo "Moving floating tag v0.2 to $COMMIT_SHA (released as $TAG)"
 
-          # Delete the existing floating tag via API (force-move via REST)
+          # PATCH with force:true is atomic: creates or updates in one call.
+          # This is the canonical approach per GitHub Actions release management docs.
           gh api \
-            --method DELETE \
+            --method PATCH \
             "repos/${{ github.repository }}/git/refs/tags/v0.2" \
-            || echo "v0.2 tag did not exist yet, creating fresh"
-
-          # Create it pointing at the new commit
-          gh api \
-            --method POST \
-            "repos/${{ github.repository }}/git/refs" \
-            -f ref="refs/tags/v0.2" \
-            -f sha="$COMMIT_SHA"
+            -f sha="$COMMIT_SHA" \
+            -F force=true || {
+              # Tag does not exist yet -- create it
+              gh api \
+                --method POST \
+                "repos/${{ github.repository }}/git/refs" \
+                -f ref="refs/tags/v0.2" \
+                -f sha="$COMMIT_SHA"
+            }
 
           echo "v0.2 now points to $COMMIT_SHA ($TAG)"
 
