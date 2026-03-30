@@ -1166,6 +1166,13 @@ Your response MUST be valid JSON with this exact schema:
 mod tests {
     use super::*;
 
+    /// Shared struct for parse_ai_json error-path tests.
+    /// The field is only used via serde deserialization; `_message` silences dead_code.
+    #[derive(Debug, serde::Deserialize)]
+    struct ErrorTestResponse {
+        _message: String,
+    }
+
     struct TestProvider;
 
     impl AiProvider for TestProvider {
@@ -1482,14 +1489,8 @@ mod tests {
 
     #[test]
     fn test_parse_ai_json_with_truncated_json() {
-        #[derive(Debug, serde::Deserialize)]
-        #[allow(dead_code)]
-        struct TestResponse {
-            message: String,
-        }
-
         let json = r#"{"message": "hello"#;
-        let result: Result<TestResponse> = parse_ai_json(json, "test-provider");
+        let result: Result<ErrorTestResponse> = parse_ai_json(json, "test-provider");
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(
@@ -1500,14 +1501,8 @@ mod tests {
 
     #[test]
     fn test_parse_ai_json_with_malformed_json() {
-        #[derive(Debug, serde::Deserialize)]
-        #[allow(dead_code)]
-        struct TestResponse {
-            message: String,
-        }
-
         let json = r#"{"message": invalid}"#;
-        let result: Result<TestResponse> = parse_ai_json(json, "test-provider");
+        let result: Result<ErrorTestResponse> = parse_ai_json(json, "test-provider");
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Invalid JSON response from AI"));
