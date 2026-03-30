@@ -117,7 +117,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "aptu-cli"
-version = "0.2.20"
+version = "0.2.21"
 dependencies = [
  "anyhow",
  "aptu-core",
@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "aptu-core"
-version = "0.2.20"
+version = "0.2.21"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -181,7 +181,7 @@ dependencies = [
 
 [[package]]
 name = "aptu-ffi"
-version = "0.2.20"
+version = "0.2.21"
 dependencies = [
  "anyhow",
  "aptu-core",
@@ -196,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "aptu-mcp"
-version = "0.2.20"
+version = "0.2.21"
 dependencies = [
  "anyhow",
  "aptu-core",
