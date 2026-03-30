@@ -6,6 +6,12 @@
 //! facade functions as MCP tools, resources, and prompts. It uses the RMCP Rust SDK
 //! with stdio transport for integration with MCP-compatible clients.
 
+use axum::extract::Request;
+use axum::http::{StatusCode, header};
+use axum::middleware::{self, Next};
+use axum::response::Response;
+use std::sync::Arc;
+
 mod auth;
 mod error;
 mod server;
@@ -46,6 +52,50 @@ pub async fn run_stdio(read_only: bool) -> anyhow::Result<()> {
 /// * `host` - Host to bind to
 /// * `port` - Port to bind to
 /// * `read_only` - If true, disables write tools (`post_triage`, `post_review`)
+// Validate bearer token using constant-time comparison
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut acc: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        acc |= x ^ y;
+    }
+    acc == 0
+}
+
+fn validate_bearer(expected: &str, auth_header: Option<&str>) -> bool {
+    match auth_header {
+        Some(val) if val.starts_with("Bearer ") => {
+            let token = &val[7..];
+            constant_time_eq(token.as_bytes(), expected.as_bytes())
+        }
+        _ => false,
+    }
+}
+
+async fn bearer_auth(expected: Arc<str>, req: Request, next: Next) -> Response {
+    let auth_header = req
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok());
+    if !validate_bearer(&expected, auth_header) {
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": {"code": -32001, "message": "Unauthorized"},
+            "id": null
+        })
+        .to_string();
+        let mut response = Response::new(body.into());
+        *response.status_mut() = StatusCode::UNAUTHORIZED;
+        response
+            .headers_mut()
+            .insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        return response;
+    }
+    next.run(req).await
+}
+
 pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<()> {
     use anyhow::Context;
     use axum::Router;
@@ -74,7 +124,21 @@ pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<
         config,
     );
 
-    let router = Router::new().nest_service("/mcp", service);
+    let mut router = Router::new().nest_service("/mcp", service);
+
+    // Wire bearer token authentication middleware if MCP_BEARER_TOKEN is set
+    if let Ok(token) = std::env::var("MCP_BEARER_TOKEN") {
+        if token.is_empty() {
+            tracing::warn!("MCP_BEARER_TOKEN is empty; HTTP endpoint is unauthenticated");
+        } else {
+            let token = Arc::from(token.as_str());
+            router = router.layer(middleware::from_fn(move |req, next| {
+                bearer_auth(Arc::clone(&token), req, next)
+            }));
+        }
+    } else {
+        tracing::warn!("MCP_BEARER_TOKEN is not set; HTTP endpoint is unauthenticated");
+    }
 
     // Handle both IPv4 and IPv6 addresses
     let addr: SocketAddr = if host.contains(':') {
@@ -99,4 +163,44 @@ pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<
         .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_bearer_valid() {
+        assert!(validate_bearer("secret123", Some("Bearer secret123")));
+    }
+
+    #[test]
+    fn test_validate_bearer_missing_header() {
+        assert!(!validate_bearer("secret123", None));
+    }
+
+    #[test]
+    fn test_validate_bearer_wrong_token() {
+        assert!(!validate_bearer("secret123", Some("Bearer wrongtoken")));
+    }
+
+    #[test]
+    fn test_validate_bearer_wrong_scheme() {
+        assert!(!validate_bearer("secret123", Some("Basic dXNlcjpwYXNz")));
+    }
+
+    #[test]
+    fn test_constant_time_eq_equal() {
+        assert!(constant_time_eq(b"abc", b"abc"));
+    }
+
+    #[test]
+    fn test_constant_time_eq_different_length() {
+        assert!(!constant_time_eq(b"abc", b"abcd"));
+    }
+
+    #[test]
+    fn test_constant_time_eq_different_content() {
+        assert!(!constant_time_eq(b"abc", b"abd"));
+    }
 }

@@ -122,3 +122,33 @@ Works with any container platform (Cloud Run, Fly.io, Railway, Render, self-host
 ## Options
 
 Remove `--read-only` to enable write tools (`post_triage`, `post_review`). See [CONFIGURATION.md](CONFIGURATION.md) for environment variables and AI provider setup.
+
+## Authentication
+
+The hosted endpoint supports optional bearer token authentication. When `MCP_BEARER_TOKEN`
+is set, every HTTP request must include a matching `Authorization: Bearer <token>` header.
+When the variable is absent, the server starts unauthenticated.
+
+### Fly.io deployment
+
+Set the secret before or after deploying:
+
+```sh
+fly secrets set MCP_BEARER_TOKEN=$(openssl rand -hex 32) --app aptu-mcp
+```
+
+### Client configuration (goose)
+
+Add the `Authorization` header alongside your credential headers:
+
+```yaml
+extensions:
+  - type: streamable_http
+    id: aptu
+    name: aptu
+    uri: https://aptu-mcp.fly.dev/mcp
+    headers:
+      Authorization: "Bearer <your-mcp-bearer-token>"
+      X-Github-Token: "<your-github-token>"
+      X-Gemini-Api-Key: "<your-gemini-key>"
+```
