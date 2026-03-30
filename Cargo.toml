@@ -12,7 +12,7 @@ repository = "https://github.com/clouatre-labs/aptu"
 
 [workspace.dependencies]
 # Workspace-wide dependencies
-toml = "0.9"
+toml = "1.0"
 fastrand = "2"
 percent-encoding = "2"
 axum = "0.8"
