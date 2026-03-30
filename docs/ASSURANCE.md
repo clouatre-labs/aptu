@@ -93,3 +93,12 @@ The following risks are acknowledged and accepted for the current project maturi
 - [SECURITY.md](../SECURITY.md) - Vulnerability disclosure process and response SLAs
 - [GOVERNANCE.md](../GOVERNANCE.md) - Maintainer roles and succession plan
 - [docs/ARCHITECTURE.md](ARCHITECTURE.md) - System architecture and data flow
+
+## Security Review
+
+- **Review date:** 2026-03-30
+- **Scope:** Full codebase, CI/CD pipeline, trust boundaries, attack surface, and security controls as documented in this file
+- **Methodology:** Manual review by the project maintainer covering: credential storage paths, TLS configuration, input validation entry points, dependency audit (cargo deny), supply chain controls (SLSA Level 3, cosign, SHA-pinned actions), and CI security scanning (gitleaks, zizmor)
+- **Conclusion:** No exploitable vulnerabilities identified in the current release. Residual risks are documented in the Residual Risks section above and are accepted for the current project maturity.
+- **Reviewer:** Project maintainer (self-review; acceptable for solo projects under OpenSSF Best Practices silver criteria)
+- **Next review:** Triggered by any major dependency upgrade, architectural change, or security disclosure; otherwise annually
