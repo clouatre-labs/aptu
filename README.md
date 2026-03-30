@@ -60,6 +60,8 @@ cargo binstall aptu-cli
 cargo install aptu-cli
 ```
 
+**MCP Server (hosted, read-only):** `https://aptu-mcp.fly.dev/mcp` - no install required for AI assistant integrations.
+
 ## Quick Start
 
 ```bash
@@ -80,7 +82,7 @@ aptu pr review owner/repo#123                       # Review with security scann
 aptu pr review owner/repo#123 --output sarif        # SARIF for GitHub Code Scanning
 ```
 
-See [docs/SECURITY_SCANNING.md](docs/SECURITY_SCANNING.md) for SARIF upload and GitHub integration.
+See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md) for SARIF upload and GitHub integration.
 
 ## GitHub Action
 
@@ -95,17 +97,17 @@ Auto-triage new issues with AI using any supported provider.
 
 Options: `apply-labels`, `no-comment`, `skip-labeled`, `dry-run`, `model`, `provider`.
 
-See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for setup and examples.
+See [docs/GITHUB_ACTION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_ACTION.md) for setup and examples.
 
 ## MCP Server
 
 Integrate aptu with AI tools via the Model Context Protocol (MCP). Supports stdio (goose, Claude Desktop) and HTTP (remote/containerized).
 
-See [docs/MCP_SERVER.md](docs/mcp.md) for client configuration and Docker deployment.
+See [docs/MCP_SERVER.md](https://github.com/clouatre-labs/aptu/blob/main/docs/MCP_SERVER.md) for client configuration and Docker deployment.
 
 ## Configuration
 
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for AI provider setup.
+See [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/CONFIGURATION.md) for AI provider setup.
 
 ## Models
 
@@ -138,11 +140,11 @@ OpenRouter exposes pricing data for each model. Models with zero prompt and comp
 - **Signed Commits** - GPG-signed commits required
 - **Dependency Scanning** - Automated updates via Renovate
 
-See [SECURITY.md](SECURITY.md) for reporting and verification.
+See [SECURITY.md](https://github.com/clouatre-labs/aptu/blob/main/SECURITY.md) for reporting and verification.
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines. See [docs/REPO-STANDARDS.md](docs/REPO-STANDARDS.md) for a full artifact map and rationale covering CI workflows, tooling, and security controls.
+We welcome contributions! See [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines. See [docs/REPO-STANDARDS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/REPO-STANDARDS.md) for a full artifact map and rationale covering CI workflows, tooling, and security controls.
 
 ## License
 
