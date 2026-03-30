@@ -137,6 +137,7 @@ impl HeaderTokenProvider {
     /// Transformation: `GEMINI_API_KEY` -> `x-gemini-api-key`.
     /// Returns `None` if the provider is unknown (no `api_key_env` defined).
     fn derive_header_name(provider: &str) -> Option<String> {
+        // e.g. GEMINI_API_KEY -> x-gemini-api-key (lowercase, underscores to hyphens, x- prefix)
         get_provider(provider)
             .map(|p| format!("x-{}", p.api_key_env.to_lowercase().replace('_', "-")))
     }

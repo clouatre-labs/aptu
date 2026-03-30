@@ -170,6 +170,11 @@ fn no_cache_meta() -> Meta {
     Meta(m)
 }
 
+/// Extract HTTP request parts from the MCP request context.
+fn get_request_parts(ctx: &RequestContext<RoleServer>) -> Option<&Parts> {
+    ctx.extensions.get::<Parts>()
+}
+
 // ---------------------------------------------------------------------------
 // Tools (generates Self::tool_router())
 // ---------------------------------------------------------------------------
@@ -223,7 +228,7 @@ impl AptuServer {
         ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<TriageIssueParams>,
     ) -> Result<CallToolResult, McpError> {
-        let parts_opt = ctx.extensions.get::<Parts>();
+        let parts_opt = get_request_parts(&ctx);
         let provider = make_provider(parts_opt);
         let ai_config = self.ai_config.clone();
 
@@ -255,7 +260,7 @@ impl AptuServer {
         ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<ReviewPrParams>,
     ) -> Result<CallToolResult, McpError> {
-        let parts_opt = ctx.extensions.get::<Parts>();
+        let parts_opt = get_request_parts(&ctx);
         let provider = make_provider(parts_opt);
         let ai_config = self.ai_config.clone();
 
@@ -285,7 +290,7 @@ impl AptuServer {
         ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<ScanSecurityParams>,
     ) -> Result<CallToolResult, McpError> {
-        let _parts_opt = ctx.extensions.get::<Parts>();
+        let _parts_opt = get_request_parts(&ctx);
         let scanner = aptu_core::security::SecurityScanner::new();
         let findings = scanner.scan_diff(&params.diff);
 
@@ -310,7 +315,7 @@ impl AptuServer {
         ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<PostTriageParams>,
     ) -> Result<CallToolResult, McpError> {
-        let parts_opt = ctx.extensions.get::<Parts>();
+        let parts_opt = get_request_parts(&ctx);
         let provider = make_provider(parts_opt);
         let ai_config = self.ai_config.clone();
 
@@ -354,7 +359,7 @@ impl AptuServer {
         ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<PostReviewParams>,
     ) -> Result<CallToolResult, McpError> {
-        let parts_opt = ctx.extensions.get::<Parts>();
+        let parts_opt = get_request_parts(&ctx);
         let provider = make_provider(parts_opt);
         let ai_config = self.ai_config.clone();
 
@@ -405,7 +410,7 @@ impl AptuServer {
         ctx: RequestContext<RoleServer>,
         Parameters(_params): Parameters<HealthCheckParams>,
     ) -> Result<CallToolResult, McpError> {
-        let parts_opt = ctx.extensions.get::<Parts>();
+        let parts_opt = get_request_parts(&ctx);
         let provider = make_provider(parts_opt);
 
         // Check GitHub token presence and format
