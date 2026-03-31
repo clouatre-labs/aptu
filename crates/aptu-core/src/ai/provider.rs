@@ -931,7 +931,8 @@ pub trait AiProvider: Send + Sync {
         {
             override_prompt
         } else {
-            build_release_notes_system_prompt()
+            let context = super::context::load_custom_guidance(self.custom_guidance());
+            build_release_notes_system_prompt(&context)
         };
         let prompt = Self::build_release_notes_prompt(&prs, version);
         let request = ChatCompletionRequest {

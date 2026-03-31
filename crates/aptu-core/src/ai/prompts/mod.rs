@@ -93,10 +93,11 @@ pub fn build_pr_label_system_prompt(context: &str) -> String {
 
 /// Builds the system prompt for release notes generation.
 #[must_use]
-pub fn build_release_notes_system_prompt() -> String {
+pub fn build_release_notes_system_prompt(context: &str) -> String {
     format!(
         "You are a senior release manager. Your mission is to produce clear, structured release \
          notes.\n\n\
+         {context}\n\n\
          Your response MUST be valid JSON with this exact schema:\n{RELEASE_NOTES_SCHEMA}\n\n\
          {RELEASE_NOTES_GUIDELINES}"
     )

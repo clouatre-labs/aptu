@@ -24,7 +24,10 @@ fn all_system_prompts() -> Vec<(&'static str, String)> {
         ("create", build_create_system_prompt(TOOLING_CONTEXT)),
         ("pr_review", build_pr_review_system_prompt(TOOLING_CONTEXT)),
         ("pr_label", build_pr_label_system_prompt(TOOLING_CONTEXT)),
-        ("release_notes", build_release_notes_system_prompt()),
+        (
+            "release_notes",
+            build_release_notes_system_prompt(TOOLING_CONTEXT),
+        ),
     ]
 }
 
