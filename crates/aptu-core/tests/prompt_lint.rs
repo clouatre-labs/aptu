@@ -18,84 +18,87 @@ const RELEASE_NOTES_GUIDELINES: &str =
     include_str!("../src/ai/prompts/release_notes_guidelines.md");
 const TOOLING_CONTEXT: &str = include_str!("../src/ai/prompts/tooling_context.md");
 
-/// Reconstructs a system prompt in the same way provider.rs does, for size testing.
-fn triage_system_prompt() -> String {
-    format!(
-        "You are a senior OSS maintainer. Your mission is to produce structured triage output that helps maintainers prioritize and route incoming issues.\n\n{TOOLING_CONTEXT}\n\nYour response MUST be valid JSON with this exact schema:\n{TRIAGE_SCHEMA}\n\n{TRIAGE_GUIDELINES}"
-    )
-}
-
-fn create_system_prompt() -> String {
-    format!(
-        "You are a senior developer advocate. Your mission is to produce a well-structured, professional GitHub issue from raw user input.\n\n{TOOLING_CONTEXT}\n\nYour response MUST be valid JSON with this exact schema:\n{CREATE_SCHEMA}\n\n{CREATE_GUIDELINES}"
-    )
-}
-
-fn pr_review_system_prompt() -> String {
-    format!(
-        "You are a senior software engineer. Your mission is to produce structured, actionable review feedback on a pull request.\n\n{TOOLING_CONTEXT}\n\nYour response MUST be valid JSON with this exact schema:\n{PR_REVIEW_SCHEMA}\n\n{PR_REVIEW_GUIDELINES}"
-    )
-}
-
-fn pr_label_system_prompt() -> String {
-    format!(
-        "You are a senior open-source maintainer. Your mission is to suggest the most relevant labels for a pull request based on its content.\n\n{TOOLING_CONTEXT}\n\nYour response MUST be valid JSON with this exact schema:\n{PR_LABEL_SCHEMA}\n\n{PR_LABEL_GUIDELINES}"
-    )
-}
-
-fn release_notes_system_prompt() -> String {
-    format!(
-        "You are a senior release manager. Your mission is to produce clear, structured release notes.\n\nYour response MUST be valid JSON with this exact schema:\n{RELEASE_NOTES_SCHEMA}\n\n{RELEASE_NOTES_GUIDELINES}"
-    )
+/// Returns all system prompts as `(name, content)` pairs, reconstructed the same
+/// way `provider.rs` does at runtime. Tests iterate this list rather than repeating
+/// the same assertion for each prompt individually.
+fn all_system_prompts() -> Vec<(&'static str, String)> {
+    vec![
+        (
+            "triage",
+            format!(
+                "You are a senior OSS maintainer. Your mission is to produce structured triage \
+                 output that helps maintainers prioritize and route incoming issues.\n\n\
+                 {TOOLING_CONTEXT}\n\n\
+                 Your response MUST be valid JSON with this exact schema:\n{TRIAGE_SCHEMA}\n\n\
+                 {TRIAGE_GUIDELINES}"
+            ),
+        ),
+        (
+            "create",
+            format!(
+                "You are a senior developer advocate. Your mission is to produce a well-structured, \
+                 professional GitHub issue from raw user input.\n\n\
+                 {TOOLING_CONTEXT}\n\n\
+                 Your response MUST be valid JSON with this exact schema:\n{CREATE_SCHEMA}\n\n\
+                 {CREATE_GUIDELINES}"
+            ),
+        ),
+        (
+            "pr_review",
+            format!(
+                "You are a senior software engineer. Your mission is to produce structured, \
+                 actionable review feedback on a pull request.\n\n\
+                 {TOOLING_CONTEXT}\n\n\
+                 Your response MUST be valid JSON with this exact schema:\n{PR_REVIEW_SCHEMA}\n\n\
+                 {PR_REVIEW_GUIDELINES}"
+            ),
+        ),
+        (
+            "pr_label",
+            format!(
+                "You are a senior open-source maintainer. Your mission is to suggest the most \
+                 relevant labels for a pull request based on its content.\n\n\
+                 {TOOLING_CONTEXT}\n\n\
+                 Your response MUST be valid JSON with this exact schema:\n{PR_LABEL_SCHEMA}\n\n\
+                 {PR_LABEL_GUIDELINES}"
+            ),
+        ),
+        (
+            "release_notes",
+            format!(
+                "You are a senior release manager. Your mission is to produce clear, structured \
+                 release notes.\n\n\
+                 Your response MUST be valid JSON with this exact schema:\n{RELEASE_NOTES_SCHEMA}\n\n\
+                 {RELEASE_NOTES_GUIDELINES}"
+            ),
+        ),
+    ]
 }
 
 #[test]
 fn all_embedded_prompts_non_empty() {
-    assert!(!TRIAGE_SCHEMA.is_empty(), "triage_schema.json is empty");
-    assert!(
-        !TRIAGE_GUIDELINES.is_empty(),
-        "triage_guidelines.md is empty"
-    );
-    assert!(!CREATE_SCHEMA.is_empty(), "create_schema.json is empty");
-    assert!(
-        !CREATE_GUIDELINES.is_empty(),
-        "create_guidelines.md is empty"
-    );
-    assert!(
-        !PR_REVIEW_SCHEMA.is_empty(),
-        "pr_review_schema.json is empty"
-    );
-    assert!(
-        !PR_REVIEW_GUIDELINES.is_empty(),
-        "pr_review_guidelines.md is empty"
-    );
-    assert!(!PR_LABEL_SCHEMA.is_empty(), "pr_label_schema.json is empty");
-    assert!(
-        !PR_LABEL_GUIDELINES.is_empty(),
-        "pr_label_guidelines.md is empty"
-    );
-    assert!(
-        !RELEASE_NOTES_SCHEMA.is_empty(),
-        "release_notes_schema.json is empty"
-    );
-    assert!(
-        !RELEASE_NOTES_GUIDELINES.is_empty(),
-        "release_notes_guidelines.md is empty"
-    );
-    assert!(!TOOLING_CONTEXT.is_empty(), "tooling_context.md is empty");
+    let fragments: &[(&str, &str)] = &[
+        ("triage_schema.json", TRIAGE_SCHEMA),
+        ("triage_guidelines.md", TRIAGE_GUIDELINES),
+        ("create_schema.json", CREATE_SCHEMA),
+        ("create_guidelines.md", CREATE_GUIDELINES),
+        ("pr_review_schema.json", PR_REVIEW_SCHEMA),
+        ("pr_review_guidelines.md", PR_REVIEW_GUIDELINES),
+        ("pr_label_schema.json", PR_LABEL_SCHEMA),
+        ("pr_label_guidelines.md", PR_LABEL_GUIDELINES),
+        ("release_notes_schema.json", RELEASE_NOTES_SCHEMA),
+        ("release_notes_guidelines.md", RELEASE_NOTES_GUIDELINES),
+        ("tooling_context.md", TOOLING_CONTEXT),
+    ];
+    for (name, content) in fragments {
+        assert!(!content.is_empty(), "{name} is empty");
+    }
 }
 
 #[test]
 fn all_embedded_prompts_within_max_size() {
     const MAX: usize = 6000;
-    let prompts = [
-        ("triage", triage_system_prompt()),
-        ("create", create_system_prompt()),
-        ("pr_review", pr_review_system_prompt()),
-        ("pr_label", pr_label_system_prompt()),
-        ("release_notes", release_notes_system_prompt()),
-    ];
-    for (name, prompt) in &prompts {
+    for (name, prompt) in all_system_prompts() {
         assert!(
             prompt.len() <= MAX,
             "prompt '{name}' exceeds {MAX} chars: {} chars",
@@ -106,16 +109,9 @@ fn all_embedded_prompts_within_max_size() {
 
 #[test]
 fn system_prompts_have_persona_directive() {
-    let prompts = [
-        ("triage", triage_system_prompt()),
-        ("create", create_system_prompt()),
-        ("pr_review", pr_review_system_prompt()),
-        ("pr_label", pr_label_system_prompt()),
-        ("release_notes", release_notes_system_prompt()),
-    ];
-    for (name, prompt) in &prompts {
+    for (name, prompt) in all_system_prompts() {
         assert!(
-            prompt.contains("You are a senior") || prompt.contains("You are a"),
+            prompt.contains("You are a"),
             "prompt '{name}' missing persona directive"
         );
     }
@@ -123,14 +119,7 @@ fn system_prompts_have_persona_directive() {
 
 #[test]
 fn system_prompts_have_cot_directive() {
-    let prompts = [
-        ("triage", triage_system_prompt()),
-        ("create", create_system_prompt()),
-        ("pr_review", pr_review_system_prompt()),
-        ("pr_label", pr_label_system_prompt()),
-        ("release_notes", release_notes_system_prompt()),
-    ];
-    for (name, prompt) in &prompts {
+    for (name, prompt) in all_system_prompts() {
         assert!(
             prompt.contains("Reason through each step"),
             "prompt '{name}' missing CoT directive"
@@ -140,14 +129,7 @@ fn system_prompts_have_cot_directive() {
 
 #[test]
 fn system_prompts_have_examples_section() {
-    let prompts = [
-        ("triage", triage_system_prompt()),
-        ("create", create_system_prompt()),
-        ("pr_review", pr_review_system_prompt()),
-        ("pr_label", pr_label_system_prompt()),
-        ("release_notes", release_notes_system_prompt()),
-    ];
-    for (name, prompt) in &prompts {
+    for (name, prompt) in all_system_prompts() {
         assert!(
             prompt.contains("## Examples"),
             "prompt '{name}' missing ## Examples section"
@@ -157,14 +139,7 @@ fn system_prompts_have_examples_section() {
 
 #[test]
 fn system_prompts_have_json_reminder_bookend() {
-    let prompts = [
-        ("triage", triage_system_prompt()),
-        ("create", create_system_prompt()),
-        ("pr_review", pr_review_system_prompt()),
-        ("pr_label", pr_label_system_prompt()),
-        ("release_notes", release_notes_system_prompt()),
-    ];
-    for (name, prompt) in &prompts {
+    for (name, prompt) in all_system_prompts() {
         let tail = &prompt[prompt.len().saturating_sub(300)..];
         assert!(
             tail.contains("valid JSON") || tail.contains("schema"),
@@ -176,14 +151,7 @@ fn system_prompts_have_json_reminder_bookend() {
 #[test]
 fn system_prompts_meet_minimum_size() {
     const MIN: usize = 200;
-    let prompts = [
-        ("triage", triage_system_prompt()),
-        ("create", create_system_prompt()),
-        ("pr_review", pr_review_system_prompt()),
-        ("pr_label", pr_label_system_prompt()),
-        ("release_notes", release_notes_system_prompt()),
-    ];
-    for (name, prompt) in &prompts {
+    for (name, prompt) in all_system_prompts() {
         assert!(
             prompt.len() >= MIN,
             "prompt '{name}' is too short: {} chars (min {MIN})",
@@ -202,5 +170,4 @@ fn tooling_context_contains_required_tools() {
         TOOLING_CONTEXT.contains("biome"),
         "tooling_context missing 'biome'"
     );
-    assert!(!TOOLING_CONTEXT.is_empty(), "tooling_context is empty");
 }
