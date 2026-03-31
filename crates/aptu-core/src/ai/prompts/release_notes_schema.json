@@ -1,0 +1,11 @@
+{
+  "theme": "Release theme title",
+  "narrative": "1-2 sentence summary",
+  "highlights": ["highlight1", "highlight2"],
+  "features": ["feature1", "feature2"],
+  "fixes": ["fix1", "fix2"],
+  "improvements": ["improvement1"],
+  "documentation": ["doc change1"],
+  "maintenance": ["maintenance1"],
+  "contributors": ["@author1", "@author2"]
+}

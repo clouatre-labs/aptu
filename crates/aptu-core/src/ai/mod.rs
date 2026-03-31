@@ -8,6 +8,7 @@ pub mod circuit_breaker;
 pub mod client;
 pub mod context;
 pub mod models;
+pub mod prompts;
 pub mod provider;
 pub mod registry;
 pub mod types;

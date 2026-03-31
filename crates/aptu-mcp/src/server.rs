@@ -27,6 +27,9 @@ use serde_json::Value;
 use crate::auth::{EnvTokenProvider, make_provider};
 use crate::error::{aptu_error_to_mcp, generic_to_mcp_error};
 
+const TRIAGE_GUIDE_CONTENT: &str = include_str!("prompts/triage_guide.md");
+const REVIEW_CHECKLIST_CONTENT: &str = include_str!("prompts/review_checklist.md");
+
 // ---------------------------------------------------------------------------
 // Tool parameter structs
 // ---------------------------------------------------------------------------
@@ -491,14 +494,6 @@ struct ReviewChecklistParams {
     pr_ref: Option<String>,
 }
 
-/// Attempt to load a prompt override from `~/.config/aptu/prompts/<name>.md`.
-/// Returns `None` if the file does not exist or cannot be read.
-async fn load_prompt_override(name: &str) -> Option<String> {
-    use aptu_core::config::prompts_dir;
-    let path = prompts_dir().join(format!("{name}.md"));
-    tokio::fs::read_to_string(&path).await.ok()
-}
-
 #[prompt_router]
 impl AptuServer {
     #[prompt(
@@ -520,77 +515,13 @@ impl AptuServer {
              I need to triage a GitHub issue. Walk me through the process."
         );
 
-        if let Some(content) = load_prompt_override("triage_guide").await {
-            return Ok(vec![
-                PromptMessage::new_text(PromptMessageRole::User, user_msg),
-                PromptMessage::new_text(PromptMessageRole::Assistant, content),
-            ]);
-        }
-
-        let assistant_msg = "Reason through each step before producing output.\n\n\
-             Here is a step-by-step triage workflow:\n\n\
-             1. Read the issue title, body, and any linked references\n\
-             2. Check for reproducibility information and environment details\n\
-             3. Assess severity: critical (data loss, security), high (broken feature), \
-                medium (degraded experience), low (cosmetic, minor)\n\
-             4. Identify the affected component or module\n\
-             5. Check for duplicates using search\n\
-             6. Apply appropriate labels (bug, enhancement, documentation, etc.)\n\
-             7. Estimate complexity: simple (< 1 day), medium (1-3 days), complex (> 3 days)\n\
-             8. Add to the relevant milestone if applicable\n\
-             9. Write a triage summary comment with your assessment\n\n\
-             Three-step workflow for AI-assisted triage:\n\n\
-             Step 1: Call `triage_issue` with the issue reference to fetch and analyze the \
-             issue. This is read-only; nothing is posted to GitHub.\n\n\
-             Step 2: Review the analysis returned by `triage_issue`.\n\n\
-             Step 3: If satisfied, call `post_triage` with the same issue reference to \
-             publish the triage comment. This is destructive and cannot be undone. \
-             Calling `post_triage` twice on the same issue posts duplicate comments.\n\n\
-             ## Examples\n\n\
-             Happy path - well-described bug report:\n\
-             ```json\n\
-             {\n\
-               \"summary\": \"User reports that the `aptu issue list` command panics when the \
-             GitHub token is expired. Reproducible on macOS 14 with aptu 0.9.0.\",\n\
-               \"suggested_labels\": [\"bug\", \"auth\"],\n\
-               \"clarifying_questions\": [],\n\
-               \"potential_duplicates\": [],\n\
-               \"related_issues\": [{\"number\": 42, \"title\": \"Token refresh loop\", \
-             \"reason\": \"Same auth code path\"}],\n\
-               \"contributor_guidance\": {\"beginner_friendly\": false, \
-             \"reasoning\": \"Requires understanding of the OAuth refresh flow.\"}\n\
-             }\n\
-             ```\n\n\
-             Edge case - vague feature request with no reproduction:\n\
-             ```json\n\
-             {\n\
-               \"summary\": \"User requests a dark mode for the CLI output. No technical \
-             details provided.\",\n\
-               \"suggested_labels\": [\"enhancement\", \"needs-info\"],\n\
-               \"clarifying_questions\": [\"Which terminal emulator are you using?\", \
-             \"Do you mean ANSI color scheme changes?\"],\n\
-               \"potential_duplicates\": [\"#88\"],\n\
-               \"related_issues\": [],\n\
-               \"contributor_guidance\": {\"beginner_friendly\": true, \
-             \"reasoning\": \"Purely cosmetic change; no core logic involved.\"}\n\
-             }\n\
-             ```\n\n\
-             ## Output Format\n\n\
-             Respond with a JSON object matching this schema:\n\
-             ```json\n\
-             {\n\
-               \"summary\": \"string\",\n\
-               \"suggested_labels\": [\"string\"],\n\
-               \"clarifying_questions\": [\"string\"],\n\
-               \"potential_duplicates\": [\"string\"],\n\
-               \"related_issues\": [{\"number\": 0, \"title\": \"string\", \"reason\": \"string\"}],\n\
-               \"contributor_guidance\": {\"beginner_friendly\": true, \"reasoning\": \"string\"}\n\
-             }\n\
-             ```";
+        let assistant_content = aptu_core::ai::context::load_system_prompt_override("triage_guide")
+            .await
+            .unwrap_or_else(|| TRIAGE_GUIDE_CONTENT.to_owned());
 
         Ok(vec![
             PromptMessage::new_text(PromptMessageRole::User, user_msg),
-            PromptMessage::new_text(PromptMessageRole::Assistant, assistant_msg),
+            PromptMessage::new_text(PromptMessageRole::Assistant, assistant_content),
         ])
     }
 
@@ -613,82 +544,14 @@ impl AptuServer {
              I need to review a pull request. Give me a checklist."
         );
 
-        if let Some(content) = load_prompt_override("review_checklist").await {
-            return Ok(vec![
-                PromptMessage::new_text(PromptMessageRole::User, user_msg),
-                PromptMessage::new_text(PromptMessageRole::Assistant, content),
-            ]);
-        }
-
-        let assistant_msg = "Reason through each step before producing output.\n\n\
-             PR Review Checklist:\n\n\
-             Code Quality:\n\
-             - [ ] Code follows project style and conventions\n\
-             - [ ] No unnecessary complexity (KISS/YAGNI)\n\
-             - [ ] No code duplication (DRY)\n\
-             - [ ] Error handling is appropriate\n\
-             - [ ] No hardcoded values that should be configurable\n\n\
-             Testing:\n\
-             - [ ] Tests cover the changes adequately\n\
-             - [ ] Edge cases are handled\n\
-             - [ ] Tests pass locally\n\n\
-             Security:\n\
-             - [ ] No secrets or credentials in code\n\
-             - [ ] Input validation is present\n\
-             - [ ] No SQL injection or XSS vulnerabilities\n\n\
-             Documentation:\n\
-             - [ ] Public APIs are documented\n\
-             - [ ] Breaking changes are noted\n\
-             - [ ] CHANGELOG updated if needed\n\n\
-             To use `scan_security`, first obtain a unified diff: run \
-             `git diff <base-branch>` or `git diff --staged` locally and pass \
-             the output as the `diff` parameter.\n\n\
-             Use the `review_pr` tool for AI analysis, `scan_security` to check \
-             for vulnerabilities, then `post_review` to submit your review.\n\n\
-             ## Examples\n\n\
-             Happy path - clean, well-tested PR:\n\
-             ```json\n\
-             {\n\
-               \"summary\": \"This PR adds retry logic to the OAuth token refresh flow. \
-             The change is well-scoped and includes unit tests for the backoff behaviour.\",\n\
-               \"verdict\": \"approve\",\n\
-               \"strengths\": [\"Good test coverage\", \"Follows existing error handling patterns\"],\n\
-               \"concerns\": [],\n\
-               \"comments\": [],\n\
-               \"suggestions\": [\"Consider adding a metric for retry count.\"]\n\
-             }\n\
-             ```\n\n\
-             Edge case - PR with a security concern:\n\
-             ```json\n\
-             {\n\
-               \"summary\": \"This PR exposes a new REST endpoint without input validation. \
-             The happy path works but the endpoint is vulnerable to injection.\",\n\
-               \"verdict\": \"request-changes\",\n\
-               \"strengths\": [\"Clean code structure\"],\n\
-               \"concerns\": [\"Missing input validation on the new endpoint\"],\n\
-               \"comments\": [{\"file\": \"src/api/handler.rs\", \"line\": 42, \
-             \"severity\": \"issue\", \
-             \"comment\": \"User-supplied input passed directly to SQL query without sanitization.\"}],\n\
-               \"suggestions\": [\"Use parameterised queries throughout.\"]\n\
-             }\n\
-             ```\n\n\
-             ## Output Format\n\n\
-             Respond with a JSON object matching this schema:\n\
-             ```json\n\
-             {\n\
-               \"summary\": \"string\",\n\
-               \"verdict\": \"approve | request-changes | comment\",\n\
-               \"strengths\": [\"string\"],\n\
-               \"concerns\": [\"string\"],\n\
-               \"comments\": [{\"file\": \"string\", \"line\": 0, \"severity\": \"info|suggestion|warning|issue\", \
-             \"comment\": \"string\"}],\n\
-               \"suggestions\": [\"string\"]\n\
-             }\n\
-             ```";
+        let assistant_content =
+            aptu_core::ai::context::load_system_prompt_override("review_checklist")
+                .await
+                .unwrap_or_else(|| REVIEW_CHECKLIST_CONTENT.to_owned());
 
         Ok(vec![
             PromptMessage::new_text(PromptMessageRole::User, user_msg),
-            PromptMessage::new_text(PromptMessageRole::Assistant, assistant_msg),
+            PromptMessage::new_text(PromptMessageRole::Assistant, assistant_content),
         ])
     }
 }
@@ -1475,7 +1338,7 @@ mod tests {
         // Point XDG_CONFIG_HOME at the temp dir so prompts_dir() resolves there.
         // SAFETY: single-threaded test; env mutation is isolated via tempdir scope.
         unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
-        let result = load_prompt_override("triage_guide").await;
+        let result = aptu_core::ai::context::load_system_prompt_override("triage_guide").await;
         unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
 
         assert_eq!(result, Some("custom triage content".to_owned()));
@@ -1489,7 +1352,7 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("aptu").join("prompts")).unwrap();
 
         unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
-        let result = load_prompt_override("triage_guide").await;
+        let result = aptu_core::ai::context::load_system_prompt_override("triage_guide").await;
         unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
 
         assert!(result.is_none());

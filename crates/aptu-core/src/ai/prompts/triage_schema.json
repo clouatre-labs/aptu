@@ -1,0 +1,26 @@
+{
+  "summary": "A 2-3 sentence summary of what the issue is about and its impact",
+  "suggested_labels": ["label1", "label2"],
+  "clarifying_questions": ["question1", "question2"],
+  "potential_duplicates": ["#123", "#456"],
+  "related_issues": [
+    {
+      "number": 789,
+      "title": "Related issue title",
+      "reason": "Brief explanation of why this is related"
+    }
+  ],
+  "status_note": "Optional note about issue status (e.g., claimed, in-progress)",
+  "contributor_guidance": {
+    "beginner_friendly": true,
+    "reasoning": "1-2 sentence explanation of beginner-friendliness assessment"
+  },
+  "implementation_approach": "Optional suggestions for implementation based on repository structure",
+  "suggested_milestone": "Optional milestone title for the issue",
+  "complexity": {
+    "level": "low|medium|high",
+    "estimated_loc": 150,
+    "affected_areas": ["crates/aptu-core/src/ai/types.rs"],
+    "recommendation": "Optional decomposition recommendation for high-complexity issues"
+  }
+}
