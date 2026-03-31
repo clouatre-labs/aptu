@@ -59,6 +59,22 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Gro
 
 Each function accepts a `&dyn TokenProvider` for credential resolution.
 
+### Prompt System
+
+System prompts are built from two layers embedded at compile time via `include_str!` in `crates/aptu-core/src/ai/prompts/`:
+
+- **Schema files** (`.json`) - JSON schema that constrains AI response structure
+- **Guideline files** (`.md`) - Instructions and examples for each operation
+
+Builder functions (`build_triage_system_prompt`, `build_review_system_prompt`, etc.) in `prompts/mod.rs` are shared between `provider.rs` (runtime) and `tests/prompt_lint.rs` to guarantee tests exercise the same construction logic.
+
+At runtime, two override mechanisms are applied in order:
+
+1. **File override** - If `~/.config/aptu/prompts/<operation>.md` exists, it fully replaces the compiled-in guideline for that operation
+2. **Custom guidance** - `AiConfig.custom_guidance` (from `config.toml`) is appended to every system prompt after the tooling context
+
+This means users can tune AI behavior without recompiling, and developers can audit the exact prompts from source.
+
 ## Security Boundaries
 
 1. **Token Storage**: Credentials stored in system keychain, never in plaintext config

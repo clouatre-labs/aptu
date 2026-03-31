@@ -37,6 +37,7 @@ The small specialized model is not smarter, just less distracted. In real-world 
 - **AI Triage** - Summaries, suggested labels, clarifying questions, and contributor guidance
 - **Issue Discovery** - Find good-first-issues from curated repositories
 - **PR Analysis** - AI-powered pull request review and feedback
+- **Prompt Customization** - Override built-in system prompts per operation or append custom guidance via config
 - **Release Notes** - AI-curated changelogs from merged PRs
 - **GitHub Action** - Auto-triage incoming issues with labels and comments
 - **MCP Server** - Model Context Protocol integration for AI assistants
@@ -83,6 +84,12 @@ aptu pr review owner/repo#123 --output sarif        # SARIF for GitHub Code Scan
 ```
 
 See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md) for SARIF upload and GitHub integration.
+
+## Prompt Customization
+
+Aptu's built-in system prompts are compiled into the binary as defaults. You can override them per operation at runtime or append project-specific guidance globally.
+
+See [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/CONFIGURATION.md#prompt-customization) for file paths, operation names, and examples.
 
 ## GitHub Action
 
@@ -135,6 +142,7 @@ OpenRouter exposes pricing data for each model. Models with zero prompt and comp
 
 ## Security
 
+- **OpenSSF Best Practices Silver** - Fewer than 1% of open source projects reach this level
 - **SLSA Level 3** - Provenance attestations for all releases
 - **REUSE/SPDX** - License compliance for all files
 - **Signed Commits** - GPG-signed commits required

@@ -29,7 +29,7 @@ Aptu stores tokens in your system keychain (macOS Keychain, Linux Secret Service
 
 ### OpenSSF Best Practices
 
-100% [passing criteria](https://www.bestpractices.dev/projects/11662).
+**OpenSSF Best Practices Silver certified.** Fewer than 1% of open source projects reach this level. See [passing criteria](https://www.bestpractices.dev/projects/11662).
 
 ### SLSA Level 3
 

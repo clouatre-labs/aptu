@@ -200,3 +200,47 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```
 
 **Free Tier:** x-ai/grok-code-fast-1 with 256K context window
+
+## Prompt Customization
+
+Aptu ships with built-in system prompts compiled into the binary. You can override them at runtime without rebuilding.
+
+### Append custom guidance (all operations)
+
+Add a `custom_guidance` field to `~/.config/aptu/config.toml`. The text is appended to every system prompt, after the built-in tooling context:
+
+```toml
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"
+custom_guidance = "Always respond in French. Prefer concise labels."
+```
+
+Use this for project-wide conventions you want the AI to follow consistently across triage, review, and create operations.
+
+### Replace a system prompt for a specific operation
+
+Drop a Markdown file at `~/.config/aptu/prompts/<operation>.md`. If the file exists and is readable, it fully replaces the built-in system prompt for that operation. The `custom_guidance` field is still appended on top.
+
+Supported operation names:
+
+| File | Replaces |
+|------|----------|
+| `~/.config/aptu/prompts/triage.md` | Issue triage system prompt |
+| `~/.config/aptu/prompts/review.md` | PR review system prompt |
+| `~/.config/aptu/prompts/pr_label.md` | PR label suggestion system prompt |
+| `~/.config/aptu/prompts/create.md` | Issue creation system prompt |
+| `~/.config/aptu/prompts/release_notes.md` | Release notes system prompt |
+
+**Example:** customize the triage prompt for a monorepo:
+
+```bash
+mkdir -p ~/.config/aptu/prompts
+cp $(cargo locate-project --workspace --message-format plain | xargs dirname)/crates/aptu-core/src/ai/prompts/triage_guidelines.md \
+   ~/.config/aptu/prompts/triage.md
+# Now edit ~/.config/aptu/prompts/triage.md with your changes
+```
+
+### Developer note
+
+Built-in prompt fragments live in `crates/aptu-core/src/ai/prompts/` (guidelines as `.md`, response schemas as `.json`) and are embedded at compile time via `include_str!`. The builder functions (`build_triage_system_prompt`, etc.) in `prompts/mod.rs` are shared between production code and `tests/prompt_lint.rs` to guarantee tests exercise real construction logic.
