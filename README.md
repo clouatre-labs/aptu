@@ -7,9 +7,9 @@
 <p align="center">
   <a href="https://crates.io/crates/aptu-cli"><img alt="crates.io" src="https://img.shields.io/crates/v/aptu-cli.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20"></a>
   <a href="https://docs.rs/aptu-core"><img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-aptu--core-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20"></a>
-  <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img alt="REUSE" src="https://api.reuse.software/badge/github.com/clouatre-labs/aptu" height="20"></a>
-  <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://slsa.dev/images/gh-badge-level3.svg" height="20"></a>
-  <a href="https://www.bestpractices.dev/projects/11662"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/11662/badge" height="20"></a>
+  <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img alt="REUSE" src="https://img.shields.io/reuse/compliance/github.com/clouatre-labs/aptu?style=for-the-badge" height="20"></a>
+  <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://img.shields.io/badge/SLSA-Level%203-green?style=for-the-badge" height="20"></a>
+  <a href="https://www.bestpractices.dev/projects/11662"><img alt="OpenSSF Best Practices" src="https://img.shields.io/cii/level/11662?style=for-the-badge" height="20"></a>
 </p>
 
 <p align="center"><strong>AI-Powered Triage Utility</strong> - A CLI for OSS issue triage with AI assistance.</p>
