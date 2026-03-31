@@ -19,17 +19,10 @@ use super::types::{
 };
 use crate::history::AiStats;
 
-// Static prompt file constants embedded at compile time.
-const TRIAGE_SCHEMA: &str = include_str!("prompts/triage_schema.json");
-const TRIAGE_GUIDELINES: &str = include_str!("prompts/triage_guidelines.md");
-const CREATE_SCHEMA: &str = include_str!("prompts/create_schema.json");
-const CREATE_GUIDELINES: &str = include_str!("prompts/create_guidelines.md");
-const PR_REVIEW_SCHEMA: &str = include_str!("prompts/pr_review_schema.json");
-const PR_REVIEW_GUIDELINES: &str = include_str!("prompts/pr_review_guidelines.md");
-const PR_LABEL_SCHEMA: &str = include_str!("prompts/pr_label_schema.json");
-const PR_LABEL_GUIDELINES: &str = include_str!("prompts/pr_label_guidelines.md");
-const RELEASE_NOTES_SCHEMA: &str = include_str!("prompts/release_notes_schema.json");
-const RELEASE_NOTES_GUIDELINES: &str = include_str!("prompts/release_notes_guidelines.md");
+use super::prompts::{
+    build_create_system_prompt, build_pr_label_system_prompt, build_pr_review_system_prompt,
+    build_release_notes_system_prompt, build_triage_system_prompt,
+};
 
 /// Parses JSON response from AI provider, detecting truncated responses.
 ///
@@ -522,9 +515,7 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_system_prompt(custom_guidance: Option<&str>) -> String {
         let context = super::context::load_custom_guidance(custom_guidance);
-        format!(
-            "You are a senior OSS maintainer. Your mission is to produce structured triage output that helps maintainers prioritize and route incoming issues.\n\n{context}\n\nYour response MUST be valid JSON with this exact schema:\n{TRIAGE_SCHEMA}\n\n{TRIAGE_GUIDELINES}"
-        )
+        build_triage_system_prompt(&context)
     }
 
     /// Builds the user prompt containing the issue details.
@@ -633,9 +624,7 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_create_system_prompt(custom_guidance: Option<&str>) -> String {
         let context = super::context::load_custom_guidance(custom_guidance);
-        format!(
-            "You are a senior developer advocate. Your mission is to produce a well-structured, professional GitHub issue from raw user input.\n\n{context}\n\nYour response MUST be valid JSON with this exact schema:\n{CREATE_SCHEMA}\n\n{CREATE_GUIDELINES}"
-        )
+        build_create_system_prompt(&context)
     }
 
     /// Builds the user prompt for issue creation/formatting.
@@ -782,9 +771,7 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_pr_review_system_prompt(custom_guidance: Option<&str>) -> String {
         let context = super::context::load_custom_guidance(custom_guidance);
-        format!(
-            "You are a senior software engineer. Your mission is to produce structured, actionable review feedback on a pull request.\n\n{context}\n\nYour response MUST be valid JSON with this exact schema:\n{PR_REVIEW_SCHEMA}\n\n{PR_REVIEW_GUIDELINES}"
-        )
+        build_pr_review_system_prompt(&context)
     }
 
     /// Builds the user prompt for PR review.
@@ -879,9 +866,7 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_pr_label_system_prompt(custom_guidance: Option<&str>) -> String {
         let context = super::context::load_custom_guidance(custom_guidance);
-        format!(
-            "You are a senior open-source maintainer. Your mission is to suggest the most relevant labels for a pull request based on its content.\n\n{context}\n\nYour response MUST be valid JSON with this exact schema:\n{PR_LABEL_SCHEMA}\n\n{PR_LABEL_GUIDELINES}"
-        )
+        build_pr_label_system_prompt(&context)
     }
 
     /// Builds the user prompt for PR label suggestion.
@@ -946,9 +931,7 @@ pub trait AiProvider: Send + Sync {
         {
             override_prompt
         } else {
-            format!(
-                "You are a senior release manager. Your mission is to produce clear, structured release notes.\n\nYour response MUST be valid JSON with this exact schema:\n{RELEASE_NOTES_SCHEMA}\n\n{RELEASE_NOTES_GUIDELINES}"
-            )
+            build_release_notes_system_prompt()
         };
         let prompt = Self::build_release_notes_prompt(&prs, version);
         let request = ChatCompletionRequest {
