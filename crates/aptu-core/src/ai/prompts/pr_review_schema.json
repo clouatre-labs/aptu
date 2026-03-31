@@ -1,0 +1,17 @@
+{
+  "summary": "A 2-3 sentence summary of what the PR does and its impact",
+  "verdict": "approve|request_changes|comment",
+  "strengths": ["strength1", "strength2"],
+  "concerns": ["concern1", "concern2"],
+  "comments": [
+    {
+      "file": "path/to/file.rs",
+      "line": 42,
+      "comment": "Specific feedback about this line",
+      "severity": "info|suggestion|warning|issue",
+      "suggested_code": null
+    }
+  ],
+  "suggestions": ["suggestion1", "suggestion2"],
+  "disclaimer": null
+}

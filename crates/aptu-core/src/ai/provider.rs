@@ -19,6 +19,18 @@ use super::types::{
 };
 use crate::history::AiStats;
 
+// Static prompt file constants embedded at compile time.
+const TRIAGE_SCHEMA: &str = include_str!("prompts/triage_schema.json");
+const TRIAGE_GUIDELINES: &str = include_str!("prompts/triage_guidelines.md");
+const CREATE_SCHEMA: &str = include_str!("prompts/create_schema.json");
+const CREATE_GUIDELINES: &str = include_str!("prompts/create_guidelines.md");
+const PR_REVIEW_SCHEMA: &str = include_str!("prompts/pr_review_schema.json");
+const PR_REVIEW_GUIDELINES: &str = include_str!("prompts/pr_review_guidelines.md");
+const PR_LABEL_SCHEMA: &str = include_str!("prompts/pr_label_schema.json");
+const PR_LABEL_GUIDELINES: &str = include_str!("prompts/pr_label_guidelines.md");
+const RELEASE_NOTES_SCHEMA: &str = include_str!("prompts/release_notes_schema.json");
+const RELEASE_NOTES_GUIDELINES: &str = include_str!("prompts/release_notes_guidelines.md");
+
 /// Parses JSON response from AI provider, detecting truncated responses.
 ///
 /// If the JSON parsing fails with an EOF error (indicating the response was cut off),
@@ -135,6 +147,14 @@ pub trait AiProvider: Send + Sync {
     /// to enforce constraints (e.g., free tier validation).
     fn validate_model(&self) -> Result<()> {
         Ok(())
+    }
+
+    /// Returns the custom guidance string for system prompt injection, if set.
+    ///
+    /// Default implementation returns `None`. Providers that store custom guidance
+    /// (e.g., from `AiConfig`) override this to supply it.
+    fn custom_guidance(&self) -> Option<&str> {
+        None
     }
 
     /// Sends a chat completion request to the provider's API (HTTP-only, no retry).
@@ -386,7 +406,7 @@ pub trait AiProvider: Send + Sync {
         {
             override_prompt
         } else {
-            Self::build_system_prompt(None)
+            Self::build_system_prompt(self.custom_guidance())
         };
 
         let request = ChatCompletionRequest {
@@ -457,7 +477,7 @@ pub trait AiProvider: Send + Sync {
         {
             override_prompt
         } else {
-            Self::build_create_system_prompt(None)
+            Self::build_create_system_prompt(self.custom_guidance())
         };
 
         let request = ChatCompletionRequest {
@@ -502,77 +522,8 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_system_prompt(custom_guidance: Option<&str>) -> String {
         let context = super::context::load_custom_guidance(custom_guidance);
-        let schema = "{\n  \"summary\": \"A 2-3 sentence summary of what the issue is about and its impact\",\n  \"suggested_labels\": [\"label1\", \"label2\"],\n  \"clarifying_questions\": [\"question1\", \"question2\"],\n  \"potential_duplicates\": [\"#123\", \"#456\"],\n  \"related_issues\": [\n    {\n      \"number\": 789,\n      \"title\": \"Related issue title\",\n      \"reason\": \"Brief explanation of why this is related\"\n    }\n  ],\n  \"status_note\": \"Optional note about issue status (e.g., claimed, in-progress)\",\n  \"contributor_guidance\": {\n    \"beginner_friendly\": true,\n    \"reasoning\": \"1-2 sentence explanation of beginner-friendliness assessment\"\n  },\n  \"implementation_approach\": \"Optional suggestions for implementation based on repository structure\",\n  \"suggested_milestone\": \"Optional milestone title for the issue\",\n  \"complexity\": {\n    \"level\": \"low|medium|high\",\n    \"estimated_loc\": 150,\n    \"affected_areas\": [\"crates/aptu-core/src/ai/types.rs\"],\n    \"recommendation\": \"Optional decomposition recommendation for high-complexity issues\"\n  }\n}";
-        let guidelines = "Reason through each step before producing output.\n\n\
-Guidelines:\n\
-- summary: Concise explanation of the problem/request and why it matters\n\
-- suggested_labels: Prefer labels from the Available Labels list provided. Choose from: bug, enhancement, documentation, question, duplicate, invalid, wontfix. If a more specific label exists in the repository, use it instead of generic ones.\n\
-- clarifying_questions: Only include if the issue lacks critical information. Leave empty array if issue is clear. Skip questions already answered in comments.\n\
-- potential_duplicates: Only include if you detect likely duplicates from the context. Leave empty array if none. A duplicate is an issue that describes the exact same problem.\n\
-- related_issues: Include issues from the search results that are contextually related but NOT duplicates. Provide brief reasoning for each. Leave empty array if none are relevant.\n\
-- status_note: Detect if someone has claimed the issue or is working on it. Look for patterns like \"I'd like to work on this\", \"I'll submit a PR\", \"working on this\", or \"@user I've assigned you\". If claimed, set status_note to a brief description (e.g., \"Issue claimed by @username\"). If not claimed, leave as null or empty string.\n\
-- contributor_guidance: Assess whether the issue is suitable for beginners. Consider: scope (small, well-defined), file count (few files to modify), required knowledge (no deep expertise needed), clarity (clear problem statement). Set beginner_friendly to true if all factors are favorable. Provide 1-2 sentence reasoning explaining the assessment.\n\
-- implementation_approach: Based on the repository structure provided, suggest specific files or modules to modify. Reference the file paths from the repository structure. Be concrete and actionable. Leave as null or empty string if no specific guidance can be provided.\n\
-- suggested_milestone: If applicable, suggest a milestone title from the Available Milestones list. Only include if a milestone is clearly relevant to the issue. Leave as null or empty string if no milestone is appropriate.\n\
-- complexity: Always populate this field. Set `level` to low/medium/high based on estimated implementation scope: low = small, self-contained change (1-2 files, <100 LOC); medium = moderate change (3-5 files, 100-300 LOC); high = large change (5+ files, 300+ LOC or deep domain knowledge). Populate `affected_areas` with likely file paths from the repository structure. For high complexity, set `recommendation` to a concrete suggestion (e.g. 'Decompose into 3 sub-issues: CLI parsing, AI prompt update, GitHub API integration').\n\
-\n\
-Be helpful, concise, and actionable. Focus on what a maintainer needs to know.\n\
-\n\
-## Examples\n\
-\n\
-### Example 1 (happy path)\n\
-Input: Issue titled \"Add dark mode support\" with body describing a UI theme toggle request.\n\
-Output:\n\
-```json\n\
-{\n\
-  \"summary\": \"User requests dark mode support with a toggle in settings.\",\n\
-  \"suggested_labels\": [\"enhancement\", \"ui\"],\n\
-  \"clarifying_questions\": [\"Which components should be themed first?\"],\n\
-  \"potential_duplicates\": [],\n\
-  \"related_issues\": [],\n\
-  \"status_note\": \"Ready for design discussion\",\n\
-  \"contributor_guidance\": {\n\
-    \"beginner_friendly\": false,\n\
-    \"reasoning\": \"Requires understanding of the theme system and CSS. Could span multiple files.\"\n\
-  },\n\
-  \"implementation_approach\": \"Extend the existing ThemeProvider with a dark variant and persist preference to localStorage.\",\n\
-  \"suggested_milestone\": \"v2.0\",\n\
-  \"complexity\": {\n\
-    \"level\": \"medium\",\n\
-    \"estimated_loc\": 120,\n\
-    \"affected_areas\": [\"src/theme/ThemeProvider.tsx\", \"src/components/Settings.tsx\"],\n\
-    \"recommendation\": null\n\
-  }\n\
-}\n\
-```\n\
-\n\
-### Example 2 (edge case - vague report)\n\
-Input: Issue titled \"it broken\" with empty body.\n\
-Output:\n\
-```json\n\
-{\n\
-  \"summary\": \"Vague report with no reproduction steps or context.\",\n\
-  \"suggested_labels\": [\"needs-info\"],\n\
-  \"clarifying_questions\": [\"What is broken?\", \"Steps to reproduce?\", \"Expected vs actual behavior?\"],\n\
-  \"potential_duplicates\": [],\n\
-  \"related_issues\": [],\n\
-  \"status_note\": \"Blocked on clarification\",\n\
-  \"contributor_guidance\": {\n\
-    \"beginner_friendly\": false,\n\
-    \"reasoning\": \"Issue is too vague to assess or action without clarification.\"\n\
-  },\n\
-  \"implementation_approach\": \"\",\n\
-  \"suggested_milestone\": null,\n\
-  \"complexity\": {\n\
-    \"level\": \"low\",\n\
-    \"estimated_loc\": null,\n\
-    \"affected_areas\": [],\n\
-    \"recommendation\": null\n\
-  }\n\
-}\n\
-```";
         format!(
-            "You are a senior OSS maintainer. Your mission is to produce structured triage output that helps maintainers prioritize and route incoming issues.\n\n{context}\n\nYour response MUST be valid JSON with this exact schema:\n{schema}\n\n{guidelines}"
+            "You are a senior OSS maintainer. Your mission is to produce structured triage output that helps maintainers prioritize and route incoming issues.\n\n{context}\n\nYour response MUST be valid JSON with this exact schema:\n{TRIAGE_SCHEMA}\n\n{TRIAGE_GUIDELINES}"
         )
     }
 
@@ -683,29 +634,7 @@ Output:\n\
     fn build_create_system_prompt(custom_guidance: Option<&str>) -> String {
         let context = super::context::load_custom_guidance(custom_guidance);
         format!(
-            "You are a senior developer advocate. Your mission is to produce a well-structured, professional GitHub issue from raw user input.\n\n\
-{context}\n\n\
-Your response MUST be valid JSON with this exact schema:\n\
-{{\n  \"formatted_title\": \"Well-formatted issue title following conventional commit style\",\n  \"formatted_body\": \"Professionally formatted issue body with clear sections\",\n  \"suggested_labels\": [\"label1\", \"label2\"]\n}}\n\n\
-Reason through each step before producing output.\n\n\
-Guidelines:\n\
-- formatted_title: Use conventional commit style (e.g., \"feat: add search functionality\", \"fix: resolve memory leak in parser\"). Keep it concise (under 72 characters). No period at the end.\n\
-- formatted_body: Structure the body with clear sections:\n  * Start with a brief 1-2 sentence summary if not already present\n  * Use markdown formatting with headers (## Summary, ## Details, ## Steps to Reproduce, ## Expected Behavior, ## Actual Behavior, ## Context, etc.)\n  * Keep sentences clear and concise\n  * Use bullet points for lists\n  * Improve grammar and clarity\n  * Add relevant context if missing\n\
-- suggested_labels: Suggest up to 3 relevant GitHub labels. Common ones: bug, enhancement, documentation, question, duplicate, invalid, wontfix. Choose based on the issue content.\n\n\
-Be professional but friendly. Maintain the user's intent while improving clarity and structure.\n\n\
-## Examples\n\n\
-### Example 1 (happy path)\n\
-Input: Title \"app crashes\", Body \"when i click login it crashes on android\"\n\
-Output:\n\
-```json\n\
-{{\n  \"formatted_title\": \"fix(auth): app crashes on login on Android\",\n  \"formatted_body\": \"## Description\\nThe app crashes when tapping the login button on Android.\\n\\n## Steps to Reproduce\\n1. Open the app on Android\\n2. Tap the login button\\n\\n## Expected Behavior\\nUser is authenticated and redirected to the home screen.\\n\\n## Actual Behavior\\nApp crashes immediately.\",\n  \"suggested_labels\": [\"bug\", \"android\", \"auth\"]\n}}\n\
-```\n\n\
-### Example 2 (edge case - already well-formatted)\n\
-Input: Title \"feat(api): add pagination to /users endpoint\", Body already has sections.\n\
-Output:\n\
-```json\n\
-{{\n  \"formatted_title\": \"feat(api): add pagination to /users endpoint\",\n  \"formatted_body\": \"## Description\\nAdd cursor-based pagination to the /users endpoint to support large datasets.\\n\\n## Motivation\\nThe endpoint currently returns all users at once, causing timeouts for large datasets.\",\n  \"suggested_labels\": [\"enhancement\", \"api\"]\n}}\n\
-```"
+            "You are a senior developer advocate. Your mission is to produce a well-structured, professional GitHub issue from raw user input.\n\n{context}\n\nYour response MUST be valid JSON with this exact schema:\n{CREATE_SCHEMA}\n\n{CREATE_GUIDELINES}"
         )
     }
 
@@ -741,7 +670,7 @@ Output:\n\
         {
             override_prompt
         } else {
-            Self::build_pr_review_system_prompt(None)
+            Self::build_pr_review_system_prompt(self.custom_guidance())
         };
 
         let request = ChatCompletionRequest {
@@ -810,7 +739,7 @@ Output:\n\
         {
             override_prompt
         } else {
-            Self::build_pr_label_system_prompt(None)
+            Self::build_pr_label_system_prompt(self.custom_guidance())
         };
 
         let request = ChatCompletionRequest {
@@ -854,41 +783,7 @@ Output:\n\
     fn build_pr_review_system_prompt(custom_guidance: Option<&str>) -> String {
         let context = super::context::load_custom_guidance(custom_guidance);
         format!(
-            "You are a senior software engineer. Your mission is to produce structured, actionable review feedback on a pull request.\n\n\
-{context}\n\n\
-Your response MUST be valid JSON with this exact schema:\n\
-{{\n  \"summary\": \"A 2-3 sentence summary of what the PR does and its impact\",\n  \"verdict\": \"approve|request_changes|comment\",\n  \"strengths\": [\"strength1\", \"strength2\"],\n  \"concerns\": [\"concern1\", \"concern2\"],\n  \"comments\": [\n    {{\n      \"file\": \"path/to/file.rs\",\n      \"line\": 42,\n      \"comment\": \"Specific feedback about this line\",\n      \"severity\": \"info|suggestion|warning|issue\",\n      \"suggested_code\": null\n    }}\n  ],\n  \"suggestions\": [\"suggestion1\", \"suggestion2\"],\n  \"disclaimer\": null\n}}\n\n\
-Reason through each step before producing output.\n\n\
-Guidelines:\n\
-- summary: Concise explanation of the changes and their purpose\n\
-- verdict: Use \"approve\" for good PRs, \"request_changes\" for blocking issues, \"comment\" for feedback without blocking\n\
-- strengths: What the PR does well (good patterns, clear code, etc.)\n\
-- concerns: Potential issues or risks (bugs, performance, security, maintainability)\n\
-- comments: Specific line-level feedback. Use severity:\n  - \"info\": Informational, no action needed\n  - \"suggestion\": Optional improvement\n  - \"warning\": Should consider changing\n  - \"issue\": Should be fixed before merge\n  - \"suggested_code\": Optional. Provide replacement lines for a one-click GitHub suggestion block when you have a small, safe, directly applicable fix (1-10 lines). Omit diff markers (+/-). Leave null for refactors, multi-file changes, or uncertain fixes.\n\
-- suggestions: General improvements that are not blocking\n\
-- disclaimer: Optional field. If the PR involves platform versions (iOS, Android, Node, Rust, Python, Java, etc.), include a disclaimer explaining that platform version validation may be inaccurate due to knowledge cutoffs. Otherwise, set to null.\n\n\
-IMPORTANT - Platform Version Exclusions:\n\
-DO NOT validate or flag platform versions (iOS, Android, Node, Rust, Python, Java, simulator availability, package versions, framework versions) as concerns or issues. These may be newer than your knowledge cutoff and flagging them creates false positives. If the PR involves platform versions, include a disclaimer field explaining that platform version validation was skipped due to knowledge cutoff limitations. Focus your review on code logic, patterns, and structure instead.\n\n\
-Focus on:\n\
-1. Correctness: Does the code do what it claims?\n\
-2. Security: Any potential vulnerabilities?\n\
-3. Performance: Any obvious inefficiencies?\n\
-4. Maintainability: Is the code clear and well-structured?\n\
-5. Testing: Are changes adequately tested?\n\n\
-Be constructive and specific. Explain why something is an issue and how to fix it.\n\n\
-## Examples\n\n\
-### Example 1 (happy path)\n\
-Input: PR adds a retry helper with tests.\n\
-Output:\n\
-```json\n\
-{{\n  \"summary\": \"Adds an exponential-backoff retry helper with unit tests.\",\n  \"verdict\": \"approve\",\n  \"strengths\": [\"Well-tested with happy and error paths\", \"Follows existing error handling patterns\"],\n  \"concerns\": [],\n  \"comments\": [],\n  \"suggestions\": [\"Consider adding a jitter parameter to reduce thundering-herd effects.\"],\n  \"disclaimer\": null\n}}\n\
-```\n\n\
-### Example 2 (edge case - missing error handling)\n\
-Input: PR adds a file parser that uses unwrap().\n\
-Output:\n\
-```json\n\
-{{\n  \"summary\": \"Adds a CSV parser but uses unwrap() on file reads.\",\n  \"verdict\": \"request_changes\",\n  \"strengths\": [\"Covers the happy path\"],\n  \"concerns\": [\"unwrap() on file open will panic on missing files\"],\n  \"comments\": [{{\"file\": \"src/parser.rs\", \"line\": 42, \"severity\": \"high\", \"comment\": \"Replace unwrap() with proper error propagation using ?\", \"suggested_code\": \"        let file = File::open(path)?;\\n\"}}],\n  \"suggestions\": [\"Return Result<_, io::Error> from parse_file instead of panicking.\"],\n  \"disclaimer\": null\n}}\n\
-```"
+            "You are a senior software engineer. Your mission is to produce structured, actionable review feedback on a pull request.\n\n{context}\n\nYour response MUST be valid JSON with this exact schema:\n{PR_REVIEW_SCHEMA}\n\n{PR_REVIEW_GUIDELINES}"
         )
     }
 
@@ -985,42 +880,7 @@ Output:\n\
     fn build_pr_label_system_prompt(custom_guidance: Option<&str>) -> String {
         let context = super::context::load_custom_guidance(custom_guidance);
         format!(
-            r#"You are a senior open-source maintainer. Your mission is to suggest the most relevant labels for a pull request based on its content.
-
-{context}
-
-Your response MUST be valid JSON with this exact schema:
-{{
-  "suggested_labels": ["label1", "label2", "label3"]
-}}
-
-Response format: json_object
-
-Reason through each step before producing output.
-
-Guidelines:
-- suggested_labels: Suggest 1-3 relevant GitHub labels based on the PR content. Common labels include: bug, enhancement, documentation, feature, refactor, performance, security, testing, ci, dependencies. Choose labels that best describe the type of change.
-- Focus on the PR title, description, and file paths to determine appropriate labels.
-- Prefer specific labels over generic ones when possible.
-- Only suggest labels that are commonly used in GitHub repositories.
-
-Be concise and practical.
-
-## Examples
-
-### Example 1 (happy path)
-Input: PR adds OAuth2 login flow with tests.
-Output:
-```json
-{{"suggested_labels": ["feature", "auth", "security"]}}
-```
-
-### Example 2 (edge case - documentation only PR)
-Input: PR fixes typos in README.
-Output:
-```json
-{{"suggested_labels": ["documentation"]}}
-```"#
+            "You are a senior open-source maintainer. Your mission is to suggest the most relevant labels for a pull request based on its content.\n\n{context}\n\nYour response MUST be valid JSON with this exact schema:\n{PR_LABEL_SCHEMA}\n\n{PR_LABEL_GUIDELINES}"
         )
     }
 
@@ -1081,13 +941,28 @@ Output:
         prs: Vec<super::types::PrSummary>,
         version: &str,
     ) -> Result<(super::types::ReleaseNotesResponse, AiStats)> {
+        let system_content = if let Some(override_prompt) =
+            super::context::load_system_prompt_override("release_notes_system").await
+        {
+            override_prompt
+        } else {
+            format!(
+                "You are a senior release manager. Your mission is to produce clear, structured release notes.\n\nYour response MUST be valid JSON with this exact schema:\n{RELEASE_NOTES_SCHEMA}\n\n{RELEASE_NOTES_GUIDELINES}"
+            )
+        };
         let prompt = Self::build_release_notes_prompt(&prs, version);
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
-            messages: vec![ChatMessage {
-                role: "user".to_string(),
-                content: prompt,
-            }],
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: system_content,
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: prompt,
+                },
+            ],
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
                 json_schema: None,
@@ -1128,36 +1003,7 @@ Output:
             .join("\n");
 
         format!(
-            r#"Generate release notes for version {version} based on these merged PRs:
-
-{pr_list}
-
-Create a curated release notes document with:
-1. A theme/title that captures the essence of this release
-2. A 1-2 sentence narrative about the release
-3. 3-5 highlighted features
-4. Categorized changes: Features, Fixes, Improvements, Documentation, Maintenance
-5. List of contributors
-
-Follow these conventions:
-- No emojis
-- Bold feature names with dash separator
-- Include PR numbers in parentheses
-- Group by user impact, not just commit type
-- Filter CI/deps under Maintenance
-
-Your response MUST be valid JSON with this exact schema:
-{{
-  "theme": "Release theme title",
-  "narrative": "1-2 sentence summary",
-  "highlights": ["highlight1", "highlight2"],
-  "features": ["feature1", "feature2"],
-  "fixes": ["fix1", "fix2"],
-  "improvements": ["improvement1"],
-  "documentation": ["doc change1"],
-  "maintenance": ["maintenance1"],
-  "contributors": ["@author1", "@author2"]
-}}"#
+            "Generate release notes for version {version} based on these merged PRs:\n\n{pr_list}"
         )
     }
 }

@@ -40,6 +40,8 @@ pub struct AiClient {
     max_attempts: u32,
     /// Circuit breaker for resilience.
     circuit_breaker: CircuitBreaker,
+    /// Optional custom guidance from config to inject into system prompts.
+    custom_guidance: Option<String>,
 }
 
 impl AiClient {
@@ -107,6 +109,7 @@ impl AiClient {
                 config.circuit_breaker_threshold,
                 config.circuit_breaker_reset_seconds,
             ),
+            custom_guidance: config.custom_guidance.clone(),
         })
     }
 
@@ -172,6 +175,7 @@ impl AiClient {
                 config.circuit_breaker_threshold,
                 config.circuit_breaker_reset_seconds,
             ),
+            custom_guidance: config.custom_guidance.clone(),
         })
     }
 
@@ -222,6 +226,10 @@ impl AiProvider for AiClient {
 
     fn circuit_breaker(&self) -> Option<&super::CircuitBreaker> {
         Some(&self.circuit_breaker)
+    }
+
+    fn custom_guidance(&self) -> Option<&str> {
+        self.custom_guidance.as_deref()
     }
 
     fn build_headers(&self) -> reqwest::header::HeaderMap {
