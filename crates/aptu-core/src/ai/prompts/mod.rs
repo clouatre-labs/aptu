@@ -50,7 +50,6 @@ pub fn build_triage_system_prompt(context: &str) -> String {
         "You are a senior OSS maintainer. Your mission is to produce structured triage output \
          that helps maintainers prioritize and route incoming issues.\n\n\
          {context}\n\n\
-         Your response MUST be valid JSON with this exact schema:\n{TRIAGE_SCHEMA}\n\n\
          {TRIAGE_GUIDELINES}"
     )
 }
@@ -62,7 +61,6 @@ pub fn build_create_system_prompt(context: &str) -> String {
         "You are a senior developer advocate. Your mission is to produce a well-structured, \
          professional GitHub issue from raw user input.\n\n\
          {context}\n\n\
-         Your response MUST be valid JSON with this exact schema:\n{CREATE_SCHEMA}\n\n\
          {CREATE_GUIDELINES}"
     )
 }
@@ -74,7 +72,6 @@ pub fn build_pr_review_system_prompt(context: &str) -> String {
         "You are a senior software engineer. Your mission is to produce structured, actionable \
          review feedback on a pull request.\n\n\
          {context}\n\n\
-         Your response MUST be valid JSON with this exact schema:\n{PR_REVIEW_SCHEMA}\n\n\
          {PR_REVIEW_GUIDELINES}"
     )
 }
@@ -86,7 +83,6 @@ pub fn build_pr_label_system_prompt(context: &str) -> String {
         "You are a senior open-source maintainer. Your mission is to suggest the most relevant \
          labels for a pull request based on its content.\n\n\
          {context}\n\n\
-         Your response MUST be valid JSON with this exact schema:\n{PR_LABEL_SCHEMA}\n\n\
          {PR_LABEL_GUIDELINES}"
     )
 }
@@ -98,7 +94,6 @@ pub fn build_release_notes_system_prompt(context: &str) -> String {
         "You are a senior release manager. Your mission is to produce clear, structured release \
          notes.\n\n\
          {context}\n\n\
-         Your response MUST be valid JSON with this exact schema:\n{RELEASE_NOTES_SCHEMA}\n\n\
          {RELEASE_NOTES_GUIDELINES}"
     )
 }

@@ -10,6 +10,41 @@ use aptu_core::ai::prompts::{
     TOOLING_CONTEXT, build_create_system_prompt, build_pr_label_system_prompt,
     build_pr_review_system_prompt, build_release_notes_system_prompt, build_triage_system_prompt,
 };
+use aptu_core::ai::provider::AiProvider;
+use aptu_core::ai::types::{IssueDetails, PrDetails, PrFile, PrSummary};
+
+// ---------------------------------------------------------------------------
+// Minimal provider stub for user-prompt builder access
+// ---------------------------------------------------------------------------
+
+struct StubProvider;
+
+impl AiProvider for StubProvider {
+    fn name(&self) -> &str {
+        "stub"
+    }
+    fn api_url(&self) -> &str {
+        "https://stub.example.com"
+    }
+    fn api_key_env(&self) -> &str {
+        "STUB_API_KEY"
+    }
+    fn http_client(&self) -> &reqwest::Client {
+        unimplemented!()
+    }
+    fn api_key(&self) -> &secrecy::SecretString {
+        unimplemented!()
+    }
+    fn model(&self) -> &str {
+        "stub-model"
+    }
+    fn max_tokens(&self) -> u32 {
+        2048
+    }
+    fn temperature(&self) -> f32 {
+        0.3
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -117,5 +152,83 @@ fn tooling_context_contains_required_tools() {
     assert!(
         TOOLING_CONTEXT.contains("biome"),
         "tooling_context missing 'biome'"
+    );
+}
+
+#[test]
+fn all_user_prompts_contain_schema() {
+    // triage user prompt
+    let issue = IssueDetails::builder()
+        .owner("test".to_string())
+        .repo("repo".to_string())
+        .number(1)
+        .title("Test issue".to_string())
+        .body("Issue body".to_string())
+        .labels(vec![])
+        .comments(vec![])
+        .url("https://github.com/test/repo/issues/1".to_string())
+        .build();
+    let triage_user = StubProvider::build_user_prompt(&issue);
+    assert!(
+        triage_user.contains("summary") && triage_user.contains("suggested_labels"),
+        "triage user prompt missing schema fields"
+    );
+
+    // create user prompt
+    let create_user = StubProvider::build_create_user_prompt("My title", "My body", "test/repo");
+    assert!(
+        create_user.contains("formatted_title") && create_user.contains("formatted_body"),
+        "create user prompt missing schema fields"
+    );
+
+    // pr_review user prompt
+    let pr = PrDetails {
+        owner: "test".to_string(),
+        repo: "repo".to_string(),
+        number: 1,
+        title: "Test PR".to_string(),
+        body: "PR body".to_string(),
+        head_branch: "feat".to_string(),
+        base_branch: "main".to_string(),
+        url: "https://github.com/test/repo/pull/1".to_string(),
+        files: vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 5,
+            deletions: 2,
+            patch: None,
+        }],
+        labels: vec![],
+        head_sha: String::new(),
+    };
+    let pr_review_user = StubProvider::build_pr_review_user_prompt(&pr);
+    assert!(
+        pr_review_user.contains("verdict") && pr_review_user.contains("summary"),
+        "pr_review user prompt missing schema fields"
+    );
+
+    // pr_label user prompt
+    let pr_label_user = StubProvider::build_pr_label_user_prompt(
+        "feat: add thing",
+        "body",
+        &["src/lib.rs".to_string()],
+    );
+    assert!(
+        pr_label_user.contains("suggested_labels"),
+        "pr_label user prompt missing schema fields"
+    );
+
+    // release_notes user prompt
+    let prs = vec![PrSummary {
+        number: 1,
+        title: "feat: add thing".to_string(),
+        author: "alice".to_string(),
+        body: "First line of PR body".to_string(),
+        merged_at: None,
+    }];
+    let release_user = StubProvider::build_release_notes_prompt(&prs, "v1.0.0");
+    assert!(
+        release_user.contains("theme") && release_user.contains("highlights"),
+        "release_notes user prompt missing schema fields"
     );
 }
