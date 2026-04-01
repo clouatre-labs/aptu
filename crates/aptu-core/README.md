@@ -7,8 +7,8 @@ Core library for Aptu - AI-Powered Triage Utility.
 
 [![docs.rs](https://img.shields.io/badge/docs.rs-aptu--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs)](https://docs.rs/aptu-core)
 [![CLI crate](https://img.shields.io/badge/CLI-aptu--cli-fc8d62?style=flat-square&labelColor=555555&logo=rust)](https://crates.io/crates/aptu-cli)
-[![REUSE](https://api.reuse.software/badge/github.com/clouatre-labs/aptu)](https://api.reuse.software/info/github.com/clouatre-labs/aptu)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11662/badge)](https://www.bestpractices.dev/projects/11662)
+<a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img alt="REUSE" src="https://img.shields.io/reuse/compliance/github.com/clouatre-labs/aptu?style=for-the-badge" height="20"></a>
+<a href="https://www.bestpractices.dev/projects/11662"><img alt="OpenSSF Best Practices" src="https://img.shields.io/cii/level/11662?style=for-the-badge" height="20"></a>
 
 ## Features
 
@@ -16,7 +16,7 @@ Core library for Aptu - AI-Powered Triage Utility.
 - **PR Review** - AI-powered pull request analysis and feedback
 - **Release Notes** - AI-generated release notes from PRs between tags
 - **Security Scanning** - Built-in security pattern detection with SARIF output
-- **Multiple Providers** - Gemini (default), Cerebras, Groq, `OpenRouter`, `Z.AI`, and `ZenMux`
+- **Multiple Providers** - `OpenRouter` (default), Cerebras, Groq, Gemini, `Z.AI`, and `ZenMux`
 - **GitHub Integration** - Auth, issues, PRs, and GraphQL queries
 - **Resilient** - Exponential backoff, circuit breaker, rate limit handling
 

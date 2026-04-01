@@ -7,8 +7,8 @@ MCP server for Aptu - AI-Powered Triage Utility.
 
 [![docs.rs](https://img.shields.io/badge/docs.rs-aptu--mcp-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs)](https://docs.rs/aptu-mcp)
 [![Core crate](https://img.shields.io/badge/Core-aptu--core-fc8d62?style=flat-square&labelColor=555555&logo=rust)](https://crates.io/crates/aptu-core)
-[![REUSE](https://api.reuse.software/badge/github.com/clouatre-labs/aptu)](https://api.reuse.software/info/github.com/clouatre-labs/aptu)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11662/badge)](https://www.bestpractices.dev/projects/11662)
+<a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img alt="REUSE" src="https://img.shields.io/reuse/compliance/github.com/clouatre-labs/aptu?style=for-the-badge" height="20"></a>
+<a href="https://www.bestpractices.dev/projects/11662"><img alt="OpenSSF Best Practices" src="https://img.shields.io/cii/level/11662?style=for-the-badge" height="20"></a>
 
 ## Features
 
@@ -16,7 +16,7 @@ MCP server for Aptu - AI-Powered Triage Utility.
 - **2 Prompts** - triage_guide and review_checklist for guided workflows
 - **4 Resources** - curated repos, good first issues, config, and repo detail template
 - **Dual Transport** - stdio for local editors, HTTP for remote deployments
-- **Multiple Providers** - Groq (default), Cerebras, Gemini, `OpenRouter`, `Z.AI`, and `ZenMux`
+- **Multiple Providers** - `OpenRouter` (default), Cerebras, Groq, Gemini, `Z.AI`, and `ZenMux`
 - **Read-Only Mode** - Use --read-only flag to disable write operations (post_triage, post_review)
 
 ## Installation
