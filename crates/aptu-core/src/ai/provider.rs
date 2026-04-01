@@ -76,6 +76,9 @@ pub const MAX_LABELS: usize = 30;
 /// Maximum number of milestones to include in the prompt.
 pub const MAX_MILESTONES: usize = 10;
 
+/// Preamble appended to every user-turn prompt to request a JSON response matching the schema.
+const SCHEMA_PREAMBLE: &str = "\n\nRespond with valid JSON matching this schema:\n";
+
 /// AI provider trait for issue triage and creation.
 ///
 /// Defines the interface that all AI providers must implement.
@@ -616,7 +619,7 @@ pub trait AiProvider: Send + Sync {
         }
 
         prompt.push_str("</issue_content>");
-        prompt.push_str("\n\nRespond with valid JSON matching this schema:\n");
+        prompt.push_str(SCHEMA_PREAMBLE);
         prompt.push_str(crate::ai::prompts::TRIAGE_SCHEMA);
 
         prompt
@@ -633,7 +636,8 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_create_user_prompt(title: &str, body: &str, _repo: &str) -> String {
         format!(
-            "Please format this GitHub issue:\n\nTitle: {title}\n\nBody:\n{body}\n\nRespond with valid JSON matching this schema:\n{}",
+            "Please format this GitHub issue:\n\nTitle: {title}\n\nBody:\n{body}{}{}",
+            SCHEMA_PREAMBLE,
             crate::ai::prompts::CREATE_SCHEMA
         )
     }
@@ -863,7 +867,7 @@ pub trait AiProvider: Send + Sync {
         }
 
         prompt.push_str("</pull_request>");
-        prompt.push_str("\n\nRespond with valid JSON matching this schema:\n");
+        prompt.push_str(SCHEMA_PREAMBLE);
         prompt.push_str(crate::ai::prompts::PR_REVIEW_SCHEMA);
 
         prompt
@@ -913,7 +917,7 @@ pub trait AiProvider: Send + Sync {
         }
 
         prompt.push_str("</pull_request>");
-        prompt.push_str("\n\nRespond with valid JSON matching this schema:\n");
+        prompt.push_str(SCHEMA_PREAMBLE);
         prompt.push_str(crate::ai::prompts::PR_LABEL_SCHEMA);
 
         prompt
@@ -996,7 +1000,8 @@ pub trait AiProvider: Send + Sync {
             .join("\n");
 
         format!(
-            "Generate release notes for version {version} based on these merged PRs:\n\n{pr_list}\n\nRespond with valid JSON matching this schema:\n{}",
+            "Generate release notes for version {version} based on these merged PRs:\n\n{pr_list}{}{}",
+            SCHEMA_PREAMBLE,
             crate::ai::prompts::RELEASE_NOTES_SCHEMA
         )
     }
