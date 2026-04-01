@@ -98,7 +98,7 @@ The `aptu-mcp` binary ships with a `--read-only` flag. When enabled:
 - Write tools (`post_triage`, `post_review`) are disabled and return an error.
 - All read tools (`triage_issue`, `review_pr`, `scan_security`, `health`) remain available.
 
-This is the default posture in third-party integrations (e.g., Goose MCP extension) to prevent unintended writes. Explicit opt-in (`--no-read-only`) is required to enable write operations.
+The server defaults to write-enabled. Pass `--read-only` to restrict it to read-only mode, disabling write operations in third-party integrations (e.g., Goose MCP extension) where unintended writes are a concern.
 
 ---
 

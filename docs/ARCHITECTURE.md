@@ -96,20 +96,23 @@ This means users can tune AI behavior without recompiling, and developers can au
 
 ```
 ~/.config/aptu/config.toml
-├── [auth]
-│   └── github_token (via keychain, not file)
+├── [user]
+│   └── default_repo = "owner/repo"
 ├── [ai]
-│   ├── provider = "gemini"
-│   └── model = "gemini-3.1-flash-lite-preview"
-└── [repos]
-    └── curated = ["block/goose", ...]
+│   ├── provider = "openrouter"
+│   └── model = "mistralai/mistral-small-2603"
+├── [ui]
+│   └── no_color = false
+└── [cache]
+    └── ttl_seconds = 300
 ```
 
 ## Testing Strategy
 
-- **Unit tests**: Domain logic in `aptu-core` with mocked providers
-- **Integration tests**: CLI commands with wiremock HTTP mocking
-- **E2E tests**: Against staging GitHub API (CI only)
+- **Unit tests**: Standard `#[cfg(test)]` modules in each crate
+- **CLI integration tests**: `crates/aptu-cli/tests/cli.rs` using `assert_cmd` (binary invocation, no HTTP mocking)
+- **Core integration tests**: `crates/aptu-core/tests/prompt_lint.rs` and `crates/aptu-core/tests/security_integration.rs`
+- **Shell integration tests**: `tests/integration.bats` using the bats framework
 
 ## Rust Edition & Tooling
 
