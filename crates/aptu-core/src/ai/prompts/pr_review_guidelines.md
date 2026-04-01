@@ -43,19 +43,4 @@ Output:
 }
 ```
 
-### Example 2 (edge case - missing error handling)
-Input: PR adds a file parser that uses unwrap().
-Output:
-```json
-{
-  "summary": "Adds a CSV parser but uses unwrap() on file reads.",
-  "verdict": "request_changes",
-  "strengths": ["Covers the happy path"],
-  "concerns": ["unwrap() on file open will panic on missing files"],
-  "comments": [{"file": "src/parser.rs", "line": 42, "severity": "high", "comment": "Replace unwrap() with proper error propagation using ?", "suggested_code": "        let file = File::open(path)?;\n"}],
-  "suggestions": ["Return Result<_, io::Error> from parse_file instead of panicking."],
-  "disclaimer": null
-}
-```
-
 Remember: respond ONLY with valid JSON matching the schema above.

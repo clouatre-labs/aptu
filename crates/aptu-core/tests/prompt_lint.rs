@@ -45,7 +45,7 @@ fn all_embedded_prompts_non_empty() {
 
 #[test]
 fn all_embedded_prompts_within_max_size() {
-    const MAX: usize = 6000;
+    const MAX: usize = 4000;
     for (name, prompt) in all_system_prompts() {
         assert!(
             prompt.len() <= MAX,
