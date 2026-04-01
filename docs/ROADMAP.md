@@ -6,12 +6,8 @@ This document describes the project direction across three time horizons. Items 
 
 These items address known gaps and complete features already partially implemented.
 
-- **Agent mode** (`aptu agent run`): interactive session that combines triage, review, and release notes generation in a single workflow loop
 - **Bulk triage improvements**: better progress reporting, per-repo rate limit awareness, and configurable concurrency
-- **`issue create` subcommand**: AI-assisted issue drafting from a description or commit range
-- **`pr create` subcommand**: draft PR description from a git diff
 - **SARIF v2.2 full compliance**: complete SARIF export for security scan results, including rule metadata and suppression entries
-- **Completion improvements**: `completion generate` and `completion install` for fish and PowerShell in addition to bash and zsh
 - **MCP resource paging**: `aptu://issues` resource returns paginated results for large repositories
 - **Config validation**: `aptu config validate` reports missing keys and unknown fields on startup
 

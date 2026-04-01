@@ -41,7 +41,7 @@ The small specialized model is not smarter, just less distracted. In real-world 
 - **Release Notes** - AI-curated changelogs from merged PRs
 - **GitHub Action** - Auto-triage incoming issues with labels and comments
 - **MCP Server** - Model Context Protocol integration for AI assistants
-- **Multiple Providers** - Groq (default), Cerebras, Gemini, OpenRouter, Z.AI, and ZenMux
+- **Multiple Providers** - OpenRouter (default), Gemini, Groq, Cerebras, Z.AI, and ZenMux
 - **Local History** - Track your contributions offline
 - **Multiple Outputs** - Text, JSON, YAML, Markdown, and SARIF
 

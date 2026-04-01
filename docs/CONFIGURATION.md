@@ -105,7 +105,7 @@ Flags can be used independently (`--model` alone uses configured provider). CLI 
 
 Aptu supports multiple AI providers. Choose the one that works best for you:
 
-### Google AI Studio (Gemini) - Default
+### Google AI Studio (Gemini)
 
 1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
 2. Set the environment variable:

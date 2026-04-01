@@ -84,7 +84,7 @@ Provide **one** API key. The action auto-detects the provider:
 
 | Provider | Input | Default Model |
 |----------|-------|---------------|
-| OpenRouter | `openrouter-api-key` | `mistral/mistral-small-2603` |
+| OpenRouter | `openrouter-api-key` | `mistralai/mistral-small-2603` |
 | Google Gemini | `gemini-api-key` | `gemini-3.1-flash-lite-preview` |
 | Groq | `groq-api-key` | `llama-3.3-70b-versatile` |
 | Cerebras | `cerebras-api-key` | `qwen-3-32b` |
@@ -100,6 +100,8 @@ Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.m
 | `github-token` | Yes | - | GitHub token for API access |
 | `gemini-api-key` | No | - | Google Gemini API key |
 | `openrouter-api-key` | No | - | OpenRouter API key |
+| `fallback-provider` | No | `openrouter` | AI provider for the fallback chain (used when primary provider fails) |
+| `fallback-model` | No | `inception/mercury-2` | Model for the fallback provider (e.g. inception/mercury-2) |
 | `groq-api-key` | No | - | Groq API key |
 | `cerebras-api-key` | No | - | Cerebras API key |
 | `zai-api-key` | No | - | Z.AI API key |
