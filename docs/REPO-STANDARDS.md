@@ -11,7 +11,7 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 | `.github/workflows/ci.yml` | push/PR (src, tests, workflows) | Build, test, lint, security scan | Fast feedback on every change; path filters skip docs-only pushes |
 | `.github/workflows/release.yml` | push `v*.*.*` tag, workflow_dispatch | Build release binaries, attest provenance, publish to GitHub Releases, Homebrew, Snap | Single pipeline owns the full release lifecycle |
 | `.github/workflows/ios-build.yml` | push/PR (AptuApp, Cargo.toml, src) | Build and test iOS Swift app and Rust FFI bindings | Catches UniFFI binding regressions before merge |
-| `.github/workflows/build-and-attest.yml` | push/PR | Build release binaries and attest provenance | SLSA Level 2 provenance attestation for every build |
+| `.github/workflows/build-and-attest.yml` | push/PR | Build release binaries and attest provenance | SLSA Level 3 provenance attestation for every build |
 | `.github/workflows/reuse.yml` | push/PR | REUSE SPDX compliance check | Apache-2.0 license attribution is machine-verifiable |
 | `.github/workflows/scorecard.yml` | schedule weekly, push main | OpenSSF Scorecard security posture analysis | Tracks supply-chain security best practices over time |
 | `.github/workflows/codeql.yml` | push/PR, schedule | CodeQL static analysis for security vulnerabilities | Automated SAST; catches common vulnerability patterns |
@@ -55,7 +55,7 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 
 | Control | Implementation | Rationale |
 |---------|---------------|-----------|
-| SLSA Level 2 provenance | `attest-build-provenance` + cosign in `build-and-attest.yml` | Verifiable artifact origin; mitigates supply-chain substitution |
+| SLSA Level 3 provenance | `attest-build-provenance` + cosign in reusable `build-and-attest.yml` (`workflow_call`) | Verifiable artifact origin; reusable workflow isolation satisfies SLSA v1.0 Build Level 3; mitigates supply-chain substitution |
 | OIDC keyless signing | `id-token: write` per-job in `release.yml` | No long-lived credentials; tokens scoped to the run |
 | GPG tag signing | `git tag -s`; verified by `git verify-tag` with imported public key in `release.yml` | Guards against tag tampering before any build or publish runs |
 | SHA-pinned Actions | All `uses:` lines pinned to commit SHA | Prevents tag mutation attacks (e.g., `actions/checkout@v4` is mutable) |

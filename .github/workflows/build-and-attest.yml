@@ -1,3 +1,7 @@
+# SLSA v1.0 Build Level 3: this workflow is a reusable workflow (workflow_call).
+# The reusable workflow boundary isolates the build and attestation steps from the
+# caller, satisfying the Level 3 isolation requirement per GitHub's documentation:
+# https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-and-reusable-workflows-to-achieve-slsa-v1-build-level-3
 name: Build and Attest
 
 on:
