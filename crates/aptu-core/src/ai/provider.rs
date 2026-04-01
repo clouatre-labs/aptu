@@ -76,6 +76,9 @@ pub const MAX_LABELS: usize = 30;
 /// Maximum number of milestones to include in the prompt.
 pub const MAX_MILESTONES: usize = 10;
 
+/// Preamble appended to every user-turn prompt to request a JSON response matching the schema.
+const SCHEMA_PREAMBLE: &str = "\n\nRespond with valid JSON matching this schema:\n";
+
 /// AI provider trait for issue triage and creation.
 ///
 /// Defines the interface that all AI providers must implement.
@@ -616,6 +619,8 @@ pub trait AiProvider: Send + Sync {
         }
 
         prompt.push_str("</issue_content>");
+        prompt.push_str(SCHEMA_PREAMBLE);
+        prompt.push_str(crate::ai::prompts::TRIAGE_SCHEMA);
 
         prompt
     }
@@ -630,7 +635,11 @@ pub trait AiProvider: Send + Sync {
     /// Builds the user prompt for issue creation/formatting.
     #[must_use]
     fn build_create_user_prompt(title: &str, body: &str, _repo: &str) -> String {
-        format!("Please format this GitHub issue:\n\nTitle: {title}\n\nBody:\n{body}")
+        format!(
+            "Please format this GitHub issue:\n\nTitle: {title}\n\nBody:\n{body}{}{}",
+            SCHEMA_PREAMBLE,
+            crate::ai::prompts::CREATE_SCHEMA
+        )
     }
 
     /// Reviews a pull request using the provider's API.
@@ -858,6 +867,8 @@ pub trait AiProvider: Send + Sync {
         }
 
         prompt.push_str("</pull_request>");
+        prompt.push_str(SCHEMA_PREAMBLE);
+        prompt.push_str(crate::ai::prompts::PR_REVIEW_SCHEMA);
 
         prompt
     }
@@ -906,6 +917,8 @@ pub trait AiProvider: Send + Sync {
         }
 
         prompt.push_str("</pull_request>");
+        prompt.push_str(SCHEMA_PREAMBLE);
+        prompt.push_str(crate::ai::prompts::PR_LABEL_SCHEMA);
 
         prompt
     }
@@ -987,7 +1000,9 @@ pub trait AiProvider: Send + Sync {
             .join("\n");
 
         format!(
-            "Generate release notes for version {version} based on these merged PRs:\n\n{pr_list}"
+            "Generate release notes for version {version} based on these merged PRs:\n\n{pr_list}{}{}",
+            SCHEMA_PREAMBLE,
+            crate::ai::prompts::RELEASE_NOTES_SCHEMA
         )
     }
 }
@@ -1041,12 +1056,31 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_contains_json_schema() {
-        let prompt = TestProvider::build_system_prompt(None);
-        assert!(prompt.contains("summary"));
-        assert!(prompt.contains("suggested_labels"));
-        assert!(prompt.contains("clarifying_questions"));
-        assert!(prompt.contains("potential_duplicates"));
-        assert!(prompt.contains("status_note"));
+        let system_prompt = TestProvider::build_system_prompt(None);
+        // Schema description strings are unique to the schema file and must NOT appear in the
+        // system prompt after moving schema injection to the user turn.
+        assert!(
+            !system_prompt
+                .contains("A 2-3 sentence summary of what the issue is about and its impact")
+        );
+
+        // Schema MUST appear in the user prompt
+        let issue = IssueDetails::builder()
+            .owner("test".to_string())
+            .repo("repo".to_string())
+            .number(1)
+            .title("Test".to_string())
+            .body("Body".to_string())
+            .labels(vec![])
+            .comments(vec![])
+            .url("https://github.com/test/repo/issues/1".to_string())
+            .build();
+        let user_prompt = TestProvider::build_user_prompt(&issue);
+        assert!(
+            user_prompt
+                .contains("A 2-3 sentence summary of what the issue is about and its impact")
+        );
+        assert!(user_prompt.contains("suggested_labels"));
     }
 
     #[test]
@@ -1064,7 +1098,8 @@ mod tests {
 
         let prompt = TestProvider::build_user_prompt(&issue);
         assert!(prompt.starts_with("<issue_content>"));
-        assert!(prompt.ends_with("</issue_content>"));
+        assert!(prompt.contains("</issue_content>"));
+        assert!(prompt.contains("Respond with valid JSON matching this schema"));
         assert!(prompt.contains("Title: Test issue"));
         assert!(prompt.contains("This is the body"));
         assert!(prompt.contains("Existing Labels: bug"));
@@ -1108,10 +1143,20 @@ mod tests {
 
     #[test]
     fn test_build_create_system_prompt_contains_json_schema() {
-        let prompt = TestProvider::build_create_system_prompt(None);
-        assert!(prompt.contains("formatted_title"));
-        assert!(prompt.contains("formatted_body"));
-        assert!(prompt.contains("suggested_labels"));
+        let system_prompt = TestProvider::build_create_system_prompt(None);
+        // Schema description strings are unique to the schema file and must NOT appear in system prompt.
+        assert!(
+            !system_prompt
+                .contains("Well-formatted issue title following conventional commit style")
+        );
+
+        // Schema MUST appear in the user prompt
+        let user_prompt =
+            TestProvider::build_create_user_prompt("My title", "My body", "test/repo");
+        assert!(
+            user_prompt.contains("Well-formatted issue title following conventional commit style")
+        );
+        assert!(user_prompt.contains("formatted_body"));
     }
 
     #[test]
@@ -1231,11 +1276,18 @@ mod tests {
 
     #[test]
     fn test_build_pr_label_system_prompt_contains_json_schema() {
-        let prompt = TestProvider::build_pr_label_system_prompt(None);
-        assert!(prompt.contains("suggested_labels"));
-        assert!(prompt.contains("json_object"));
-        assert!(prompt.contains("bug"));
-        assert!(prompt.contains("enhancement"));
+        let system_prompt = TestProvider::build_pr_label_system_prompt(None);
+        // "label1" is unique to the schema example values and must NOT appear in system prompt.
+        assert!(!system_prompt.contains("label1"));
+
+        // Schema MUST appear in the user prompt
+        let user_prompt = TestProvider::build_pr_label_user_prompt(
+            "feat: add thing",
+            "body",
+            &["src/lib.rs".to_string()],
+        );
+        assert!(user_prompt.contains("label1"));
+        assert!(user_prompt.contains("suggested_labels"));
     }
 
     #[test]
@@ -1246,7 +1298,8 @@ mod tests {
 
         let prompt = TestProvider::build_pr_label_user_prompt(title, body, &files);
         assert!(prompt.starts_with("<pull_request>"));
-        assert!(prompt.ends_with("</pull_request>"));
+        assert!(prompt.contains("</pull_request>"));
+        assert!(prompt.contains("Respond with valid JSON matching this schema"));
         assert!(prompt.contains("feat: add new feature"));
         assert!(prompt.contains("This PR adds a new feature"));
         assert!(prompt.contains("src/main.rs"));
