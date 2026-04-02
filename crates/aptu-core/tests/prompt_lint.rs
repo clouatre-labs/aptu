@@ -80,7 +80,11 @@ fn all_embedded_prompts_non_empty() {
 
 #[test]
 fn all_embedded_prompts_within_max_size() {
-    const MAX: usize = 6000;
+    // Ceiling empirically grounded: Goldberg et al. (arXiv:2402.14848) show reasoning
+    // degradation around 3,000 tokens; 5,000 chars (~1,250 tokens at ~4 chars/token)
+    // provides headroom below that threshold while accommodating all current guidelines
+    // without content removal. Triage is the largest prompt at ~4,759 chars.
+    const MAX: usize = 5000;
     for (name, prompt) in all_system_prompts() {
         assert!(
             prompt.len() <= MAX,
