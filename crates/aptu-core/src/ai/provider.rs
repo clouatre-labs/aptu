@@ -284,7 +284,12 @@ pub trait AiProvider: Send + Sync {
             let content = completion
                 .choices
                 .first()
-                .map(|c| c.message.content.clone())
+                .and_then(|c| {
+                    c.message
+                        .content
+                        .clone()
+                        .or_else(|| c.message.reasoning.clone())
+                })
                 .context("No response from AI model")?;
 
             debug!(response_length = content.len(), "Received AI response");
@@ -410,11 +415,13 @@ pub trait AiProvider: Send + Sync {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: system_content,
+                    content: Some(system_content),
+                    reasoning: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: Self::build_user_prompt(issue),
+                    content: Some(Self::build_user_prompt(issue)),
+                    reasoning: None,
                 },
             ],
             response_format: Some(ResponseFormat {
@@ -481,11 +488,13 @@ pub trait AiProvider: Send + Sync {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: system_content,
+                    content: Some(system_content),
+                    reasoning: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: Self::build_create_user_prompt(title, body, repo),
+                    content: Some(Self::build_create_user_prompt(title, body, repo)),
+                    reasoning: None,
                 },
             ],
             response_format: Some(ResponseFormat {
@@ -676,11 +685,13 @@ pub trait AiProvider: Send + Sync {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: system_content,
+                    content: Some(system_content),
+                    reasoning: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: Self::build_pr_review_user_prompt(pr),
+                    content: Some(Self::build_pr_review_user_prompt(pr)),
+                    reasoning: None,
                 },
             ],
             response_format: Some(ResponseFormat {
@@ -745,11 +756,13 @@ pub trait AiProvider: Send + Sync {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: system_content,
+                    content: Some(system_content),
+                    reasoning: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: Self::build_pr_label_user_prompt(title, body, file_paths),
+                    content: Some(Self::build_pr_label_user_prompt(title, body, file_paths)),
+                    reasoning: None,
                 },
             ],
             response_format: Some(ResponseFormat {
@@ -953,11 +966,13 @@ pub trait AiProvider: Send + Sync {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: system_content,
+                    content: Some(system_content),
+                    reasoning: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: prompt,
+                    content: Some(prompt),
+                    reasoning: None,
                 },
             ],
             response_format: Some(ResponseFormat {
