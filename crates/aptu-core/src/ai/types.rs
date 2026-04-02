@@ -28,8 +28,13 @@ impl CreditsStatus {
 pub struct ChatMessage {
     /// Role: "system", "user", or "assistant".
     pub role: String,
-    /// Message content.
-    pub content: String,
+    /// Message content. May be `null` for reasoning models (e.g. `minimax/minimax-m2.7`)
+    /// that place output in `reasoning` instead of `content`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    /// Reasoning output from reasoning models. Present when `content` is `null`.
+    #[serde(default)]
+    pub reasoning: Option<String>,
 }
 
 /// Request body for `OpenRouter` chat completions API.

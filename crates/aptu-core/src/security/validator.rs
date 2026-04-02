@@ -75,11 +75,13 @@ impl SecurityValidator {
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: Self::build_system_prompt(),
+                    content: Some(Self::build_system_prompt()),
+                    reasoning: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: prompt,
+                    content: Some(prompt),
+                    reasoning: None,
                 },
             ],
             response_format: Some(ResponseFormat {
@@ -199,7 +201,12 @@ Be conservative: when in doubt, mark as valid to avoid missing real issues."#
         let content = completion
             .choices
             .first()
-            .map(|c| c.message.content.clone())
+            .and_then(|c| {
+                c.message
+                    .content
+                    .clone()
+                    .or_else(|| c.message.reasoning.clone())
+            })
             .context("No response from AI model")?;
 
         // Parse JSON response
