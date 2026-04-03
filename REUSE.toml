@@ -131,3 +131,9 @@ path = ["Justfile"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Aptu Contributors"
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["AI_POLICY.md"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
