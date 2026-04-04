@@ -30,9 +30,13 @@ pub async fn build_ast_context(repo_path: &str, files: &[PrFile]) -> String {
     let repo_path = repo_path.to_string();
     let files: Vec<PrFile> = files.to_vec();
 
-    tokio::task::spawn_blocking(move || build_ast_context_sync(&repo_path, &files))
-        .await
-        .unwrap_or_default()
+    match tokio::task::spawn_blocking(move || build_ast_context_sync(&repo_path, &files)).await {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::warn!("build_ast_context: blocking task panicked: {e}");
+            String::new()
+        }
+    }
 }
 
 #[cfg(not(feature = "ast-context"))]
@@ -99,9 +103,15 @@ pub async fn build_call_graph_context(repo_path: &str, files: &[PrFile]) -> Stri
     let repo_path = repo_path.to_string();
     let files: Vec<PrFile> = files.to_vec();
 
-    tokio::task::spawn_blocking(move || build_call_graph_context_sync(&repo_path, &files))
+    match tokio::task::spawn_blocking(move || build_call_graph_context_sync(&repo_path, &files))
         .await
-        .unwrap_or_default()
+    {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::warn!("build_call_graph_context: blocking task panicked: {e}");
+            String::new()
+        }
+    }
 }
 
 #[cfg(not(feature = "ast-context"))]
