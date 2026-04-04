@@ -668,6 +668,16 @@ async fn run_issue_command(
     }
 }
 
+/// Validate arguments for the `pr review` subcommand.
+///
+/// Returns an error if a flag combination is invalid (e.g. `--deep` without `--repo-path`).
+fn validate_pr_review_args(deep: bool, repo_path: Option<&std::path::PathBuf>) -> Result<()> {
+    if deep && repo_path.is_none() {
+        anyhow::bail!("--deep requires --repo-path");
+    }
+    Ok(())
+}
+
 /// Run the PR command.
 #[allow(clippy::too_many_lines)]
 async fn run_pr_command(
@@ -690,9 +700,7 @@ async fn run_pr_command(
             repo_path,
             deep,
         } => {
-            if deep && repo_path.is_none() {
-                anyhow::bail!("--deep requires --repo-path");
-            }
+            validate_pr_review_args(deep, repo_path.as_ref())?;
             let repo_path_str = repo_path.map(|p| p.to_string_lossy().to_string());
             let repo_context = repo
                 .as_deref()
