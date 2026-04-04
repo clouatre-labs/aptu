@@ -150,7 +150,7 @@ jobs:
   update-marketplace-tag:
     name: Update Marketplace Floating Tag
     needs: create-release
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -163,7 +163,7 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           COMMIT_SHA="${GITHUB_SHA}"
           # Derive floating minor tag: v0.3.1 -> v0.3, v1.0.0 -> v1.0
-          MINOR_TAG=$(echo "$TAG" | sed 's/\.[^.]*$//')
+          MINOR_TAG="${TAG%.*}"
           echo "Moving floating tag $MINOR_TAG to $COMMIT_SHA (released as $TAG)"
 
           # PATCH with force:true is atomic: creates or updates in one call.
