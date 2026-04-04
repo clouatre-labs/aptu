@@ -150,38 +150,38 @@ jobs:
   update-marketplace-tag:
     name: Update Marketplace Floating Tag
     needs: create-release
-    if: >-
-      github.event_name != 'workflow_dispatch' &&
-      startsWith(github.ref, 'refs/tags/v0.2.')
+    if: github.event_name != 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - name: Move v0.2 floating tag to current release
+      - name: Move floating minor tag to current release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
           COMMIT_SHA="${GITHUB_SHA}"
-          echo "Moving floating tag v0.2 to $COMMIT_SHA (released as $TAG)"
+          # Derive floating minor tag: v0.3.1 -> v0.3, v1.0.0 -> v1.0
+          MINOR_TAG="${TAG%.*}"
+          echo "Moving floating tag $MINOR_TAG to $COMMIT_SHA (released as $TAG)"
 
           # PATCH with force:true is atomic: creates or updates in one call.
           # This is the canonical approach per GitHub Actions release management docs.
           gh api \
             --method PATCH \
-            "repos/${{ github.repository }}/git/refs/tags/v0.2" \
+            "repos/${{ github.repository }}/git/refs/tags/$MINOR_TAG" \
             -f sha="$COMMIT_SHA" \
             -F force=true || {
               # Tag does not exist yet -- create it
               gh api \
                 --method POST \
                 "repos/${{ github.repository }}/git/refs" \
-                -f ref="refs/tags/v0.2" \
+                -f ref="refs/tags/$MINOR_TAG" \
                 -f sha="$COMMIT_SHA"
             }
 
-          echo "v0.2 now points to $COMMIT_SHA ($TAG)"
+          echo "$MINOR_TAG now points to $COMMIT_SHA ($TAG)"
 
   update-homebrew:
     name: Update Homebrew Formula
