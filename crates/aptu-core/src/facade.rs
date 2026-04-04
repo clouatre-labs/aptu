@@ -632,6 +632,12 @@ pub async fn fetch_pr_for_review(
 }
 
 /// Reconstructs a unified diff string from PR file patches for security scanning.
+///
+/// Files with `patch: None` (e.g. binary files or files with no changes) are silently
+/// skipped. Patch content is used as-is from the GitHub API response; it is already in
+/// unified diff hunk format (`+`/`-`/context lines). Malformed or unexpected patch content
+/// degrades gracefully: `scan_diff` only inspects `+`-prefixed lines and ignores anything
+/// else, so corrupt hunks are skipped rather than causing errors.
 fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
     let mut diff = String::new();
     for file in files {

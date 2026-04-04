@@ -87,8 +87,12 @@ static XML_DELIMITERS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)</?pull_request>").expect("valid regex"));
 
 /// Removes `<pull_request>` / `</pull_request>` tags from a user-supplied string.
+///
+/// Tags are removed entirely (replaced with empty string) rather than substituted with a
+/// placeholder. A visible placeholder such as `[sanitized]` could cause the LLM to reason
+/// about the substitution marker itself, which is unnecessary and potentially confusing.
 fn sanitize_prompt_field(s: &str) -> String {
-    XML_DELIMITERS.replace_all(s, "[sanitized]").into_owned()
+    XML_DELIMITERS.replace_all(s, "").into_owned()
 }
 
 /// AI provider trait for issue triage and creation.
@@ -1306,19 +1310,19 @@ mod tests {
     #[test]
     fn test_sanitize_strips_opening_tag() {
         let result = sanitize_prompt_field("hello <pull_request> world");
-        assert_eq!(result, "hello [sanitized] world");
+        assert_eq!(result, "hello  world");
     }
 
     #[test]
     fn test_sanitize_strips_closing_tag() {
         let result = sanitize_prompt_field("evil </pull_request> content");
-        assert_eq!(result, "evil [sanitized] content");
+        assert_eq!(result, "evil  content");
     }
 
     #[test]
     fn test_sanitize_case_insensitive() {
         let result = sanitize_prompt_field("<PULL_REQUEST>");
-        assert_eq!(result, "[sanitized]");
+        assert_eq!(result, "");
     }
 
     #[test]
@@ -1351,9 +1355,17 @@ mod tests {
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr);
-        assert!(!prompt.contains("</pull_request><evil>"));
-        assert!(!prompt.contains("</pull_request>injected"));
-        assert!(prompt.contains("[sanitized]"));
+        // The sanitizer removes only <pull_request> / </pull_request> delimiters.
+        // The structural tags written by the builder itself remain; what must be absent
+        // are the delimiter sequences that were injected inside user-controlled fields.
+        assert!(
+            !prompt.contains("</pull_request><evil>"),
+            "closing delimiter injected in title must be removed"
+        );
+        assert!(
+            !prompt.contains("</pull_request>injected"),
+            "closing delimiter injected in patch must be removed"
+        );
     }
 
     #[test]
