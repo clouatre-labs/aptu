@@ -261,9 +261,11 @@ Configure a GPG key for signing commits and tags:
 2. Commit: `git commit -S -s -m "chore: bump version to X.Y.Z"`
 3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 4. Push: `git push origin main --tags`
+   - For `v0.2.x` releases, the workflow automatically moves the `v0.2` floating tag
+     used by the GitHub Action (`clouatre-labs/aptu@v0.2`) to the new commit.
 5. Edit the release to add highlights (see below)
 
-The workflow builds binaries (macOS ARM64, Linux ARM64/x86_64), signs artifacts with cosign, generates SLSA attestations, creates a GitHub release with auto-generated notes, publishes to crates.io, and updates the Homebrew formula.
+The workflow builds binaries (macOS ARM64, Linux ARM64/x86_64), signs artifacts with cosign, generates SLSA attestations, creates a GitHub release with auto-generated notes, publishes to crates.io, updates the Homebrew formula, and moves the `v0.2` floating tag to the new commit (for any `v0.2.x` release).
 
 ### Release Notes
 
