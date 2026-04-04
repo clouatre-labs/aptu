@@ -646,6 +646,9 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
     let mut diff = String::new();
     for file in files {
         if let Some(patch) = &file.patch {
+            // Cap check is intentionally pre-append (soft lower bound, not hard upper bound):
+            // it avoids splitting a file header from its patch, which would produce a
+            // malformed diff that confuses the scanner's file-path tracking.
             if diff.len() >= MAX_TOTAL_DIFF_SIZE {
                 break;
             }
@@ -732,8 +735,10 @@ pub async fn analyze_pr(
     deep: bool,
 ) -> crate::Result<(crate::ai::types::PrReviewResponse, crate::history::AiStats)> {
     let repo_path_ref = repo_path.as_deref();
-    let ast_ctx = build_ctx_ast(repo_path_ref, &pr_details.files).await;
-    let call_graph_ctx = build_ctx_call_graph(repo_path_ref, &pr_details.files, deep).await;
+    let (ast_ctx, call_graph_ctx) = tokio::join!(
+        build_ctx_ast(repo_path_ref, &pr_details.files),
+        build_ctx_call_graph(repo_path_ref, &pr_details.files, deep)
+    );
 
     // Resolve task-specific provider and model
     let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Review);

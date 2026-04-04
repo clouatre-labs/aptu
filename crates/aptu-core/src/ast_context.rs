@@ -3,7 +3,24 @@
 //! AST context injection for PR reviews.
 //!
 //! Extracts function signatures and cross-file call graph information from
-//! changed files and appends them to the AI review prompt.
+//! changed `.rs` files and appends structured context to the AI review prompt.
+//!
+//! # Feature Flag
+//!
+//! Most functionality is gated behind the `ast-context` Cargo feature, which
+//! enables the optional `code-analyze-core` dependency. When the feature is
+//! disabled, [`build_ast_context`] and [`build_call_graph_context`] return
+//! empty strings immediately without performing any I/O.
+//!
+//! # Output Format
+//!
+//! Context is emitted as XML-tagged blocks appended after `</pull_request>`:
+//! - `<ast_context>`: function signatures and imports per changed file
+//! - `<call_graph_context>`: cross-file call chains for changed functions
+//!
+//! Each block is capped at approximately 2000 characters (soft ceiling; the
+//! actual maximum is slightly higher due to the closing XML tag appended
+//! after truncation).
 
 use crate::ai::types::PrFile;
 use std::path::Path;
@@ -14,6 +31,10 @@ use std::fmt::Write as _;
 
 #[cfg(feature = "ast-context")]
 use code_analyze_core::{analyze_file, analyze_focused};
+
+// `str::floor_char_boundary` is available in std but remains behind the
+// `str_internals` nightly feature gate on stable Rust. This local
+// implementation provides the equivalent behavior on stable.
 
 /// Return the largest byte index `<= max` that falls on a UTF-8 character boundary.
 ///
@@ -62,6 +83,8 @@ fn build_ast_context_sync(_repo_path: &str, _files: &[PrFile]) -> String {
 
 #[cfg(feature = "ast-context")]
 fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
+    // CAP is a soft ceiling: the closing XML tag is appended after truncation,
+    // so actual maximum output length is CAP + len(closing_tag).
     const CAP: usize = 2000;
     let mut output = String::from("\n<ast_context>\n");
 
@@ -156,8 +179,9 @@ fn build_call_graph_context_sync(repo_path: &str, files: &[PrFile]) -> String {
                 .functions
                 .iter()
                 .map(|f| {
-                    // compact_signature() returns "name(args) :line-line"
-                    // Extract just the function name (before the '(')
+                    // Extract function name from the compact signature format produced by
+                    // code-analyze-core ("name(params) -> return_type"). The crate version
+                    // is pinned in Cargo.toml; a format change would require updating this.
                     f.compact_signature()
                         .split('(')
                         .next()
