@@ -15,6 +15,22 @@ use std::fmt::Write as _;
 #[cfg(feature = "ast-context")]
 use code_analyze_core::{analyze_file, analyze_focused};
 
+/// Return the largest byte index `<= max` that falls on a UTF-8 character boundary.
+///
+/// `String::truncate` panics when the index splits a multi-byte codepoint;
+/// this function prevents that by scanning backwards to the nearest boundary.
+#[cfg(feature = "ast-context")]
+fn floor_char_boundary(s: &str, max: usize) -> usize {
+    if max >= s.len() {
+        return s.len();
+    }
+    let mut idx = max;
+    while idx > 0 && !s.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
+}
+
 #[cfg(feature = "ast-context")]
 fn is_rust_file(filename: &str) -> bool {
     Path::new(filename)
@@ -88,7 +104,8 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
 
     // Enforce cap on the full output
     if output.len() > CAP {
-        output.truncate(CAP);
+        let boundary = floor_char_boundary(&output, CAP);
+        output.truncate(boundary);
         output.push_str("\n</ast_context>\n");
     }
 
@@ -193,7 +210,8 @@ fn build_call_graph_context_sync(repo_path: &str, files: &[PrFile]) -> String {
     }
 
     if output.len() > CAP {
-        output.truncate(CAP);
+        let boundary = floor_char_boundary(&output, CAP);
+        output.truncate(boundary);
         output.push_str("\n</call_graph>\n");
     }
 
