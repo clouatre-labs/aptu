@@ -75,6 +75,13 @@ inputs:
     description: Model for the fallback provider (e.g. inception/mercury-2)
     required: false
     default: 'inception/mercury-2'
+  repo-path:
+    description: >
+      Path to the local repository root for AST context injection into PR review prompts.
+      When set, `aptu pr review` will analyse changed Rust files and append function
+      signatures and call-graph context to the prompt. Leave empty to skip AST context.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -268,6 +275,7 @@ runs:
       env:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO: ${{ github.repository }}
+        REPO_PATH: ${{ inputs.repo-path }}
       run: |
         set -e
         
@@ -286,8 +294,12 @@ runs:
           ARGS="$ARGS --no-comment"
         fi
         
+        if [[ -n "$REPO_PATH" ]]; then
+          ARGS="$ARGS --repo-path $REPO_PATH"
+        fi
+        
         echo "Running: aptu pr review $ARGS $PR_REF"
-        aptu pr review $ARGS --repo-path "$GITHUB_WORKSPACE" "$PR_REF"
+        aptu pr review $ARGS "$PR_REF"
 
     - name: Run aptu release
       if: github.event_name == 'release'
