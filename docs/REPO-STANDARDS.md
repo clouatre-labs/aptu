@@ -57,7 +57,7 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 #[allow(clippy::cognitive_complexity, reason = "<why this function cannot be meaningfully split>")]
 ```
 
-Do not raise the global threshold to accommodate a single outlier. The `reason` field is required: it documents intent for reviewers and makes the suppression searchable. Macro-expanded code (`tracing::instrument`, `select!`, derive macros) can inflate scores artificially; this is a known upstream limitation (rust-lang/rust-clippy#14417).
+Do not raise the global threshold to accommodate a single outlier. The `reason` field is required: it documents intent for reviewers and makes the suppression searchable. Macro-expanded code can inflate scores artificially; this is a known upstream limitation (rust-lang/rust-clippy#14417).
 
 ---
 
