@@ -688,10 +688,12 @@ pub trait AiProvider: Send + Sync {
     /// Returns an error if:
     /// - API request fails (network, timeout, rate limit)
     /// - Response cannot be parsed as valid JSON
-    #[instrument(skip(self, pr), fields(pr_number = pr.number, repo = %format!("{}/{}", pr.owner, pr.repo)))]
+    #[instrument(skip(self, pr, ast_context, call_graph), fields(pr_number = pr.number, repo = %format!("{}/{}", pr.owner, pr.repo)))]
     async fn review_pr(
         &self,
         pr: &super::types::PrDetails,
+        ast_context: &str,
+        call_graph: &str,
     ) -> Result<(super::types::PrReviewResponse, AiStats)> {
         debug!(model = %self.model(), "Calling {} API for PR review", self.name());
 
@@ -714,7 +716,11 @@ pub trait AiProvider: Send + Sync {
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: Some(Self::build_pr_review_user_prompt(pr)),
+                    content: Some(Self::build_pr_review_user_prompt(
+                        pr,
+                        ast_context,
+                        call_graph,
+                    )),
                     reasoning: None,
                 },
             ],
@@ -822,7 +828,11 @@ pub trait AiProvider: Send + Sync {
 
     /// Builds the user prompt for PR review.
     #[must_use]
-    fn build_pr_review_user_prompt(pr: &super::types::PrDetails) -> String {
+    fn build_pr_review_user_prompt(
+        pr: &super::types::PrDetails,
+        ast_context: &str,
+        call_graph: &str,
+    ) -> String {
         use std::fmt::Write;
 
         let mut prompt = String::new();
@@ -906,6 +916,12 @@ pub trait AiProvider: Send + Sync {
         }
 
         prompt.push_str("</pull_request>");
+        if !ast_context.is_empty() {
+            prompt.push_str(ast_context);
+        }
+        if !call_graph.is_empty() {
+            prompt.push_str(call_graph);
+        }
         prompt.push_str(SCHEMA_PREAMBLE);
         prompt.push_str(crate::ai::prompts::PR_REVIEW_SCHEMA);
 
@@ -1229,7 +1245,7 @@ mod tests {
             head_sha: String::new(),
         };
 
-        let prompt = TestProvider::build_pr_review_user_prompt(&pr);
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
         assert!(prompt.contains("files omitted due to size limits"));
         assert!(prompt.contains("MAX_FILES=20"));
     }
@@ -1274,7 +1290,7 @@ mod tests {
             head_sha: String::new(),
         };
 
-        let prompt = TestProvider::build_pr_review_user_prompt(&pr);
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
         // Both files should be listed
         assert!(prompt.contains("file1.rs"));
         assert!(prompt.contains("file2.rs"));
@@ -1309,7 +1325,7 @@ mod tests {
             head_sha: String::new(),
         };
 
-        let prompt = TestProvider::build_pr_review_user_prompt(&pr);
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
         assert!(prompt.contains("file1.rs"));
         assert!(prompt.contains("added"));
         assert!(!prompt.contains("files omitted"));

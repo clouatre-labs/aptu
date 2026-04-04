@@ -287,7 +287,7 @@ runs:
         fi
         
         echo "Running: aptu pr review $ARGS $PR_REF"
-        aptu pr review $ARGS "$PR_REF"
+        aptu pr review $ARGS --repo-path "$GITHUB_WORKSPACE" "$PR_REF"
 
     - name: Run aptu release
       if: github.event_name == 'release'

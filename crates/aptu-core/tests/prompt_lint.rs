@@ -205,7 +205,7 @@ fn all_user_prompts_contain_schema() {
         labels: vec![],
         head_sha: String::new(),
     };
-    let pr_review_user = StubProvider::build_pr_review_user_prompt(&pr);
+    let pr_review_user = StubProvider::build_pr_review_user_prompt(&pr, "", "");
     assert!(
         pr_review_user.contains("verdict") && pr_review_user.contains("summary"),
         "pr_review user prompt missing schema fields"

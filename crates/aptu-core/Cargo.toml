@@ -35,6 +35,9 @@ config = { workspace = true }
 dirs = { workspace = true }
 keyring = { workspace = true, optional = true }
 
+# Optional: AST analysis for context injection
+code-analyze-core = { version = "0.2.6", optional = true, default-features = false, features = ["lang-rust"] }
+
 # History
 chrono = { workspace = true }
 uuid = { workspace = true }
@@ -74,6 +77,8 @@ harness = false
 default = []
 # Enable system keyring for secure token storage
 keyring = ["dep:keyring"]
+# Enable AST context injection for PR reviews
+ast-context = ["dep:code-analyze-core"]
 
 [lints]
 workspace = true

@@ -271,9 +271,10 @@ impl AptuServer {
             .await
             .map_err(|e| aptu_error_to_mcp(&e))?;
 
-        let (review, _stats) = aptu_core::facade::analyze_pr(provider.as_ref(), &pr, &ai_config)
-            .await
-            .map_err(|e| aptu_error_to_mcp(&e))?;
+        let (review, _stats) =
+            aptu_core::facade::analyze_pr(provider.as_ref(), &pr, &ai_config, None, false)
+                .await
+                .map_err(|e| aptu_error_to_mcp(&e))?;
 
         let json = serde_json::to_string_pretty(&review).map_err(generic_to_mcp_error)?;
         let mut result =
@@ -370,9 +371,10 @@ impl AptuServer {
             .await
             .map_err(|e| aptu_error_to_mcp(&e))?;
 
-        let (review, _stats) = aptu_core::facade::analyze_pr(provider.as_ref(), &pr, &ai_config)
-            .await
-            .map_err(|e| aptu_error_to_mcp(&e))?;
+        let (review, _stats) =
+            aptu_core::facade::analyze_pr(provider.as_ref(), &pr, &ai_config, None, false)
+                .await
+                .map_err(|e| aptu_error_to_mcp(&e))?;
 
         let event = params.event.into();
 

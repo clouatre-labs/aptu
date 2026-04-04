@@ -299,6 +299,8 @@ async fn review_single_pr(
     yes: bool,
     ctx: &OutputContext,
     config: &AppConfig,
+    repo_path: Option<String>,
+    deep: bool,
 ) -> Result<Option<PrReviewResult>> {
     // Fetch PR details
     let pr_details = pr::fetch(reference, repo_context).await?;
@@ -308,7 +310,7 @@ async fn review_single_pr(
 
     // Analyze with AI
     let spinner = maybe_spinner(ctx, "Analyzing with AI...");
-    let (review, ai_stats) = pr::analyze(&pr_details, &config.ai).await?;
+    let (review, ai_stats) = pr::analyze(&pr_details, &config.ai, repo_path, deep).await?;
     if let Some(s) = spinner {
         s.finish_and_clear();
     }
@@ -685,7 +687,13 @@ async fn run_pr_command(
             no_apply: _,
             no_comment: _,
             force,
+            repo_path,
+            deep,
         } => {
+            if deep && repo_path.is_none() {
+                anyhow::bail!("--deep requires --repo-path");
+            }
+            let repo_path_str = repo_path.map(|p| p.to_string_lossy().to_string());
             let repo_context = repo
                 .as_deref()
                 .or(inferred_repo.as_deref())
@@ -716,6 +724,7 @@ async fn run_pr_command(
             let ctx_for_progress = ctx.clone();
             let repo_context_owned = repo_context.map(std::string::ToString::to_string);
             let config_clone = config.clone();
+            let repo_path_str_owned = repo_path_str.clone();
 
             let core_result = aptu_core::process_bulk(
                 items,
@@ -723,6 +732,7 @@ async fn run_pr_command(
                     let ctx = ctx_for_processor.clone();
                     let repo_context = repo_context_owned.clone();
                     let config = config_clone.clone();
+                    let repo_path_for_review = repo_path_str_owned.clone();
                     async move {
                         review_single_pr(
                             &pr_ref,
@@ -732,6 +742,8 @@ async fn run_pr_command(
                             !ctx.is_interactive() || force,
                             &ctx,
                             &config,
+                            repo_path_for_review,
+                            deep,
                         )
                         .await
                     }

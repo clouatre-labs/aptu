@@ -684,7 +684,42 @@ pub async fn analyze_pr(
     provider: &dyn TokenProvider,
     pr_details: &PrDetails,
     ai_config: &AiConfig,
+    repo_path: Option<String>,
+    deep: bool,
 ) -> crate::Result<(crate::ai::types::PrReviewResponse, crate::history::AiStats)> {
+    // Build AST context if repo_path is provided
+    let ast_ctx = if let Some(ref path) = repo_path {
+        #[cfg(feature = "ast-context")]
+        {
+            crate::ast_context::build_ast_context(path, &pr_details.files).await
+        }
+        #[cfg(not(feature = "ast-context"))]
+        {
+            let _ = path;
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
+    let call_graph_ctx = if deep {
+        if let Some(ref path) = repo_path {
+            #[cfg(feature = "ast-context")]
+            {
+                crate::ast_context::build_call_graph_context(path, &pr_details.files).await
+            }
+            #[cfg(not(feature = "ast-context"))]
+            {
+                let _ = path;
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     // Resolve task-specific provider and model
     let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Review);
 
@@ -710,7 +745,9 @@ pub async fn analyze_pr(
     // Use fallback chain if configured
     try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
         let pr = pr_details.clone();
-        async move { client.review_pr(&pr).await }
+        let ast = ast_ctx.clone();
+        let call_graph = call_graph_ctx.clone();
+        async move { client.review_pr(&pr, &ast, &call_graph).await }
     })
     .await
 }
