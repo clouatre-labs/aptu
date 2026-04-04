@@ -28,6 +28,7 @@ use crate::github::issues::{create_issue as gh_create_issue, filter_labels_by_re
 use crate::github::pulls::{fetch_pr_details, post_pr_review as gh_post_pr_review};
 use crate::repos::{self, CuratedRepo};
 use crate::retry::is_retryable_anyhow;
+use crate::security::SecurityScanner;
 use secrecy::SecretString;
 
 /// Fetches "good first issue" issues from curated repositories.
@@ -630,6 +631,21 @@ pub async fn fetch_pr_for_review(
         })
 }
 
+/// Reconstructs a unified diff string from PR file patches for security scanning.
+fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
+    let mut diff = String::new();
+    for file in files {
+        if let Some(patch) = &file.patch {
+            diff.push_str("+++ b/");
+            diff.push_str(&file.filename);
+            diff.push('\n');
+            diff.push_str(patch);
+            diff.push('\n');
+        }
+    }
+    diff
+}
+
 /// Analyzes PR details with AI to generate a review.
 ///
 /// This function takes pre-fetched PR details and performs AI analysis.
@@ -658,6 +674,25 @@ pub async fn analyze_pr(
 ) -> crate::Result<(crate::ai::types::PrReviewResponse, crate::history::AiStats)> {
     // Resolve task-specific provider and model
     let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Review);
+
+    // Pre-AI prompt injection scan (advisory gate)
+    let diff = reconstruct_diff_from_pr(&pr_details.files);
+    let injection_findings: Vec<_> = SecurityScanner::new()
+        .scan_diff(&diff)
+        .into_iter()
+        .filter(|f| f.pattern_id.starts_with("prompt-injection"))
+        .collect();
+    if !injection_findings.is_empty() {
+        let pattern_ids: Vec<&str> = injection_findings
+            .iter()
+            .map(|f| f.pattern_id.as_str())
+            .collect();
+        warn!(
+            injection_count = injection_findings.len(),
+            ?pattern_ids,
+            "Prompt injection patterns detected in PR diff; proceeding with AI review"
+        );
+    }
 
     // Use fallback chain if configured
     try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {

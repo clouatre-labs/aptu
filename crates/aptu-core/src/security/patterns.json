@@ -124,5 +124,50 @@
     "confidence": "low",
     "cwe": "CWE-489",
     "file_extensions": []
+  },
+  {
+    "id": "prompt-injection-ignore-instructions",
+    "description": "Detects attempts to override AI instructions via ignore directives",
+    "pattern": "(?i)ignore (all |previous |above )*(instructions|rules|guidelines)",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": []
+  },
+  {
+    "id": "prompt-injection-system-marker",
+    "description": "Detects SYSTEM: role marker injection attempts",
+    "pattern": "(?i)\\bSYSTEM\\b\\s*:",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": []
+  },
+  {
+    "id": "prompt-injection-newline-system",
+    "description": "Detects newline-based SYSTEM role injection",
+    "pattern": "\\\\n\\s*(?i)system\\s*:",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": []
+  },
+  {
+    "id": "prompt-injection-closing-tag",
+    "description": "Detects XML closing tag injection to escape pull_request context",
+    "pattern": "(?i)</pull_request>",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": []
+  },
+  {
+    "id": "prompt-injection-jailbreak-preamble",
+    "description": "Detects jailbreak preamble patterns that attempt to redefine AI persona",
+    "pattern": "(?i)you are now (a |an )?(malicious|evil|unrestricted|unfiltered|jailbroken|hacker|attacker)",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": []
   }
 ]
