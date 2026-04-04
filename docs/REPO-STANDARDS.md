@@ -49,6 +49,16 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 | `gitleaks` | `gitleaks detect` | Secret detection in source history |
 | `reuse` | `reuse lint` | SPDX header compliance |
 
+### Lint suppressions
+
+**Cognitive complexity threshold.** `clippy::cognitive_complexity` is enforced at a threshold of 30 (set in `clippy.toml`); `-D warnings` promotes violations to hard errors in CI. When a function legitimately exceeds the threshold and splitting it would reduce clarity rather than improve it, suppress with an attribute and a mandatory `reason` field:
+
+```rust
+#[allow(clippy::cognitive_complexity, reason = "<why this function cannot be meaningfully split>")]
+```
+
+Do not raise the global threshold to accommodate a single outlier. The `reason` field is required: it documents intent for reviewers and makes the suppression searchable. Macro-expanded code (`tracing::instrument`, `select!`, derive macros) can inflate scores artificially; this is a known upstream limitation (rust-lang/rust-clippy#14417).
+
 ---
 
 ## Security Controls
