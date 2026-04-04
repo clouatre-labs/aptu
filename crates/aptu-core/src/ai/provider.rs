@@ -1378,7 +1378,7 @@ mod tests {
             head_sha: String::new(),
         };
 
-        let prompt = TestProvider::build_pr_review_user_prompt(&pr);
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
         // The sanitizer removes only <pull_request> / </pull_request> delimiters.
         // The structural tags written by the builder itself remain; what must be absent
         // are the delimiter sequences that were injected inside user-controlled fields.
