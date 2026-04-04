@@ -130,6 +130,8 @@ pub use security::{
 // ============================================================================
 
 pub mod ai;
+#[cfg(feature = "ast-context")]
+pub mod ast_context;
 pub mod auth;
 pub mod bulk;
 pub mod cache;

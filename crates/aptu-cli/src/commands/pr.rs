@@ -60,12 +60,15 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<PrDeta
 pub async fn analyze(
     pr_details: &PrDetails,
     ai_config: &aptu_core::AiConfig,
+    repo_path: Option<String>,
+    deep: bool,
 ) -> Result<(PrReviewResponse, aptu_core::history::AiStats)> {
     // Create CLI token provider
     let provider = CliTokenProvider;
 
     // Call facade for analysis
-    let (review, ai_stats) = aptu_core::analyze_pr(&provider, pr_details, ai_config).await?;
+    let (review, ai_stats) =
+        aptu_core::analyze_pr(&provider, pr_details, ai_config, repo_path, deep).await?;
 
     debug!("PR analyzed successfully");
     Ok((review, ai_stats))

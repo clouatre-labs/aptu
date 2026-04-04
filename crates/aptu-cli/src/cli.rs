@@ -441,6 +441,14 @@ pub enum PrCommand {
         /// Bypass confirmation prompts
         #[arg(short, long)]
         force: bool,
+
+        /// Path to the local repository root for AST context injection.
+        #[arg(long, value_name = "PATH")]
+        repo_path: Option<std::path::PathBuf>,
+
+        /// Enable cross-file call graph context (requires --repo-path).
+        #[arg(long, default_value_t = false)]
+        deep: bool,
     },
     /// Auto-label a pull request based on conventional commit prefix and file paths
     Label {

@@ -659,6 +659,50 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
     diff
 }
 
+/// Builds AST context for changed files when the `ast-context` feature is enabled
+/// and a `repo_path` is provided. Returns an empty string otherwise.
+#[allow(clippy::unused_async)] // async required for the ast-context feature path
+async fn build_ctx_ast(repo_path: Option<&str>, files: &[crate::ai::types::PrFile]) -> String {
+    let Some(path) = repo_path else {
+        return String::new();
+    };
+    #[cfg(feature = "ast-context")]
+    {
+        return crate::ast_context::build_ast_context(path, files).await;
+    }
+    #[cfg(not(feature = "ast-context"))]
+    {
+        let _ = (path, files);
+        String::new()
+    }
+}
+
+/// Builds call-graph context for changed files when the `ast-context` feature is enabled,
+/// a `repo_path` is provided, and `deep` analysis is requested. Returns an empty string
+/// otherwise.
+#[allow(clippy::unused_async)] // async required for the ast-context feature path
+async fn build_ctx_call_graph(
+    repo_path: Option<&str>,
+    files: &[crate::ai::types::PrFile],
+    deep: bool,
+) -> String {
+    if !deep {
+        return String::new();
+    }
+    let Some(path) = repo_path else {
+        return String::new();
+    };
+    #[cfg(feature = "ast-context")]
+    {
+        return crate::ast_context::build_call_graph_context(path, files).await;
+    }
+    #[cfg(not(feature = "ast-context"))]
+    {
+        let _ = (path, files);
+        String::new()
+    }
+}
+
 /// Analyzes PR details with AI to generate a review.
 ///
 /// This function takes pre-fetched PR details and performs AI analysis.
@@ -684,7 +728,13 @@ pub async fn analyze_pr(
     provider: &dyn TokenProvider,
     pr_details: &PrDetails,
     ai_config: &AiConfig,
+    repo_path: Option<String>,
+    deep: bool,
 ) -> crate::Result<(crate::ai::types::PrReviewResponse, crate::history::AiStats)> {
+    let repo_path_ref = repo_path.as_deref();
+    let ast_ctx = build_ctx_ast(repo_path_ref, &pr_details.files).await;
+    let call_graph_ctx = build_ctx_call_graph(repo_path_ref, &pr_details.files, deep).await;
+
     // Resolve task-specific provider and model
     let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Review);
 
@@ -710,7 +760,9 @@ pub async fn analyze_pr(
     // Use fallback chain if configured
     try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
         let pr = pr_details.clone();
-        async move { client.review_pr(&pr).await }
+        let ast = ast_ctx.clone();
+        let call_graph = call_graph_ctx.clone();
+        async move { client.review_pr(&pr, &ast, &call_graph).await }
     })
     .await
 }
