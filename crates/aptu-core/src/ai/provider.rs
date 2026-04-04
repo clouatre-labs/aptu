@@ -89,7 +89,8 @@ const SCHEMA_PREAMBLE: &str = "\n\nRespond with valid JSON matching this schema:
 static XML_DELIMITERS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)</?pull_request>").expect("valid regex"));
 
-/// Removes `<pull_request>` / `</pull_request>` tags from a user-supplied string.
+/// Removes `<pull_request>` / `</pull_request>` XML delimiter tags from a user-supplied
+/// string, preventing prompt injection via XML tag smuggling.
 ///
 /// Tags are removed entirely (replaced with empty string) rather than substituted with a
 /// placeholder. A visible placeholder such as `[sanitized]` could cause the LLM to reason
@@ -99,6 +100,9 @@ static XML_DELIMITERS: LazyLock<Regex> =
 /// prompt is the exact string `<pull_request>` / `</pull_request>` (no attributes, no
 /// nesting). Stripping those two fixed forms is sufficient to prevent a user-supplied value
 /// from breaking out of the delimiter boundary.
+///
+/// Applied to all user-controlled fields that appear inside the `<pull_request>` block:
+/// `pr.title`, `pr.body`, `file.filename`, `file.status`, and each file's patch content.
 fn sanitize_prompt_field(s: &str) -> String {
     XML_DELIMITERS.replace_all(s, "").into_owned()
 }
@@ -827,6 +831,10 @@ pub trait AiProvider: Send + Sync {
     }
 
     /// Builds the user prompt for PR review.
+    ///
+    /// All user-controlled fields (title, body, filename, status, patch) are sanitized via
+    /// [`sanitize_prompt_field`] before being written into the prompt to prevent prompt
+    /// injection via XML tag smuggling.
     #[must_use]
     fn build_pr_review_user_prompt(
         pr: &super::types::PrDetails,
@@ -872,7 +880,10 @@ pub trait AiProvider: Send + Sync {
             let _ = writeln!(
                 prompt,
                 "- {} ({}) +{} -{}\n",
-                file.filename, file.status, file.additions, file.deletions
+                sanitize_prompt_field(&file.filename),
+                sanitize_prompt_field(&file.status),
+                file.additions,
+                file.deletions
             );
 
             // Include patch if available (sanitize then truncate large patches)

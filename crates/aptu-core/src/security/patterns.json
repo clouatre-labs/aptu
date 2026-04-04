@@ -145,8 +145,8 @@
   },
   {
     "id": "prompt-injection-newline-system",
-    "description": "Detects newline-based SYSTEM role injection",
-    "pattern": "\\\\n\\s*(?i)system\\s*:",
+    "description": "Detects `system:` at the start of a line in a diff, a common prompt injection vector.",
+    "pattern": "(?m)^\\s*(?i)system\\s*:",
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-77",
