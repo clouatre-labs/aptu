@@ -94,6 +94,11 @@ static XML_DELIMITERS: LazyLock<Regex> =
 /// Tags are removed entirely (replaced with empty string) rather than substituted with a
 /// placeholder. A visible placeholder such as `[sanitized]` could cause the LLM to reason
 /// about the substitution marker itself, which is unnecessary and potentially confusing.
+///
+/// Nested or malformed XML is not a concern: the only delimiter this code inserts into the
+/// prompt is the exact string `<pull_request>` / `</pull_request>` (no attributes, no
+/// nesting). Stripping those two fixed forms is sufficient to prevent a user-supplied value
+/// from breaking out of the delimiter boundary.
 fn sanitize_prompt_field(s: &str) -> String {
     XML_DELIMITERS.replace_all(s, "").into_owned()
 }
