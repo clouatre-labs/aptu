@@ -83,6 +83,9 @@ const SCHEMA_PREAMBLE: &str = "\n\nRespond with valid JSON matching this schema:
 
 /// Matches `<pull_request>` and `</pull_request>` tags (case-insensitive) used as prompt
 /// delimiters. These must be stripped from user-controlled fields to prevent prompt injection.
+///
+/// The pattern is a fixed literal with no quantifiers or alternation, so `ReDoS` is not a
+/// concern: regex engine complexity is O(n) in the input length regardless of content.
 static XML_DELIMITERS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)</?pull_request>").expect("valid regex"));
 

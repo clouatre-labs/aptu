@@ -638,10 +638,17 @@ pub async fn fetch_pr_for_review(
 /// unified diff hunk format (`+`/`-`/context lines). Malformed or unexpected patch content
 /// degrades gracefully: `scan_diff` only inspects `+`-prefixed lines and ignores anything
 /// else, so corrupt hunks are skipped rather than causing errors.
+///
+/// Total output is capped at [`crate::ai::provider::MAX_TOTAL_DIFF_SIZE`] bytes to bound
+/// memory use on PRs with extremely large patches.
 fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
+    use crate::ai::provider::MAX_TOTAL_DIFF_SIZE;
     let mut diff = String::new();
     for file in files {
         if let Some(patch) = &file.patch {
+            if diff.len() >= MAX_TOTAL_DIFF_SIZE {
+                break;
+            }
             diff.push_str("+++ b/");
             diff.push_str(&file.filename);
             diff.push('\n');
