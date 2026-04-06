@@ -67,13 +67,13 @@ jobs:
           key: ${{ inputs.target }}
       - name: Install cargo-deb
         if: ${{ startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux') }}
-        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf # v2
+        uses: taiki-e/install-action@7a562dfa955aa2e4d5b0fd6ebd57ff9715c07b0b # v2
         with:
           tool: cargo-deb
       - name: Build and upload aptu
         if: ${{ !inputs.dry_run }}
         id: upload-cli
-        uses: taiki-e/upload-rust-binary-action@0e34102c043ded9f2ca39f7af5cd99a540c61aff # v1
+        uses: taiki-e/upload-rust-binary-action@10c1cf6a3da113ad4e60018e386570529aa5f1d3 # v1
         with:
           bin: aptu
           target: ${{ inputs.target }}
@@ -83,7 +83,7 @@ jobs:
       - name: Build and upload aptu-mcp
         if: ${{ !inputs.dry_run }}
         id: upload-mcp
-        uses: taiki-e/upload-rust-binary-action@0e34102c043ded9f2ca39f7af5cd99a540c61aff # v1
+        uses: taiki-e/upload-rust-binary-action@10c1cf6a3da113ad4e60018e386570529aa5f1d3 # v1
         with:
           bin: aptu-mcp
           target: ${{ inputs.target }}
