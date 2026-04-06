@@ -109,7 +109,7 @@ jobs:
       - name: Create GitHub release
         if: ${{ env.DRY_RUN != 'true' }}
         id: create_release
-        uses: taiki-e/create-gh-release-action@c5baa0b5dc700cf06439d87935e130220a6882d9 # v1
+        uses: taiki-e/create-gh-release-action@f67cf7b2dadd83d36b981e674a6b08063997ce68 # v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
