@@ -193,6 +193,7 @@ impl Renderable for PrReviewResult {
             if let Some(cost) = self.ai_stats.cost_usd {
                 writeln!(w, "  Cost: ${cost:.6}")?;
             }
+            writeln!(w, "  Prompt: {} chars", self.ai_stats.prompt_chars)?;
             writeln!(w)?;
         }
 
@@ -491,6 +492,7 @@ mod tests {
                 duration_ms: 1000,
                 cost_usd: None,
                 fallback_provider: None,
+                prompt_chars: 0,
             },
             security_findings,
             dry_run: false,

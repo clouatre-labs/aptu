@@ -407,6 +407,7 @@ pub trait AiProvider: Send + Sync {
             duration_ms,
             cost_usd,
             fallback_provider: None,
+            prompt_chars: 0,
         };
 
         // Emit structured metrics
@@ -846,15 +847,18 @@ pub trait AiProvider: Send + Sync {
         };
 
         // Send request and parse JSON with retry logic
-        let (review, ai_stats) = self
+        let (review, mut ai_stats) = self
             .send_and_parse::<super::types::PrReviewResponse>(&request)
             .await?;
+
+        ai_stats.prompt_chars = actual_prompt_chars;
 
         debug!(
             verdict = %review.verdict,
             input_tokens = ai_stats.input_tokens,
             output_tokens = ai_stats.output_tokens,
             duration_ms = ai_stats.duration_ms,
+            prompt_chars = ai_stats.prompt_chars,
             "PR review complete with stats"
         );
 
