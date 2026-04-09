@@ -520,8 +520,7 @@ pub async fn create_pull_request(
 #[inline]
 #[allow(dead_code)]
 fn should_skip_file(status: &str, patch: Option<&String>) -> bool {
-    status.to_lowercase().contains("removed")
-        || patch.is_none_or(String::is_empty)
+    status.to_lowercase().contains("removed") || patch.is_none_or(String::is_empty)
 }
 
 /// Decodes base64-encoded content and truncates to `max_chars` on character boundary.
