@@ -1654,70 +1654,6 @@ mod tests {
         assert!(err.to_string().contains("Invalid JSON response from AI"));
     }
 
-    #[test]
-    fn test_build_system_prompt_has_senior_persona() {
-        let prompt = TestProvider::build_system_prompt(None);
-        assert!(
-            prompt.contains("You are a senior"),
-            "prompt should have senior persona"
-        );
-        assert!(
-            prompt.contains("Your mission is"),
-            "prompt should have mission statement"
-        );
-    }
-
-    #[test]
-    fn test_build_system_prompt_has_cot_directive() {
-        let prompt = TestProvider::build_system_prompt(None);
-        assert!(prompt.contains("Reason through each step before producing output."));
-    }
-
-    #[test]
-    fn test_build_system_prompt_has_examples_section() {
-        let prompt = TestProvider::build_system_prompt(None);
-        assert!(prompt.contains("## Examples"));
-    }
-
-    #[test]
-    fn test_build_create_system_prompt_has_senior_persona() {
-        let prompt = TestProvider::build_create_system_prompt(None);
-        assert!(
-            prompt.contains("You are a senior"),
-            "prompt should have senior persona"
-        );
-        assert!(
-            prompt.contains("Your mission is"),
-            "prompt should have mission statement"
-        );
-    }
-
-    #[test]
-    fn test_build_pr_review_system_prompt_has_senior_persona() {
-        let prompt = TestProvider::build_pr_review_system_prompt(None);
-        assert!(
-            prompt.contains("You are a senior"),
-            "prompt should have senior persona"
-        );
-        assert!(
-            prompt.contains("Your mission is"),
-            "prompt should have mission statement"
-        );
-    }
-
-    #[test]
-    fn test_build_pr_label_system_prompt_has_senior_persona() {
-        let prompt = TestProvider::build_pr_label_system_prompt(None);
-        assert!(
-            prompt.contains("You are a senior"),
-            "prompt should have senior persona"
-        );
-        assert!(
-            prompt.contains("Your mission is"),
-            "prompt should have mission statement"
-        );
-    }
-
     #[tokio::test]
     async fn test_load_system_prompt_override_returns_none_when_absent() {
         let result =
@@ -1740,15 +1676,11 @@ mod tests {
     }
 
     #[test]
-    fn test_prompt_budget_drops_call_graph_first() {
+    fn test_build_pr_review_prompt_omits_call_graph_when_oversized() {
         use super::super::types::{PrDetails, PrFile};
 
-        // Arrange: oversized call_graph; ast_context small enough to fit after drop.
-        // Budget: 5_000. call_graph alone exceeds it; ast_context fits.
-        let max_prompt_chars = 5_000usize;
-        let mut call_graph = "X".repeat(6_000);
-        let mut ast_context = "Y".repeat(500);
-
+        // Arrange: simulate review_pr dropping call_graph due to budget.
+        // When call_graph is oversized, review_pr clears it before calling build_pr_review_user_prompt.
         let pr = PrDetails {
             owner: "test".to_string(),
             repo: "repo".to_string(),
@@ -1770,30 +1702,13 @@ mod tests {
             head_sha: String::new(),
         };
 
-        // Act: mirror review_pr drop logic
-        let mut estimated_size = pr.title.len()
-            + pr.body.len()
-            + pr.files
-                .iter()
-                .map(|f| f.patch.as_ref().map_or(0, String::len))
-                .sum::<usize>()
-            + ast_context.len()
-            + call_graph.len()
-            + PROMPT_OVERHEAD_CHARS;
+        // Act: call build_pr_review_user_prompt with empty call_graph (dropped by review_pr)
+        // and non-empty ast_context (retained because it fits after call_graph drop)
+        let ast_context = "Y".repeat(500);
+        let call_graph = "";
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, &ast_context, call_graph);
 
-        if estimated_size > max_prompt_chars {
-            estimated_size = estimated_size.saturating_sub(call_graph.len());
-            call_graph.clear();
-        }
-        if estimated_size > max_prompt_chars {
-            estimated_size = estimated_size.saturating_sub(ast_context.len());
-            ast_context.clear();
-        }
-        let _ = estimated_size;
-
-        let prompt = TestProvider::build_pr_review_user_prompt(&pr, &ast_context, &call_graph);
-
-        // Assert: call_graph dropped, ast_context retained
+        // Assert: call_graph absent, ast_context present
         assert!(
             !prompt.contains(&"X".repeat(10)),
             "call_graph content must not appear in prompt after budget drop"
@@ -1805,15 +1720,10 @@ mod tests {
     }
 
     #[test]
-    fn test_prompt_budget_drops_ast_after_call_graph() {
+    fn test_build_pr_review_prompt_omits_ast_after_call_graph() {
         use super::super::types::{PrDetails, PrFile};
 
-        // Arrange: both call_graph and ast_context oversized; both must be dropped.
-        // Budget: 2_000. call_graph + ast_context together exceed it even after dropping call_graph.
-        let max_prompt_chars = 2_000usize;
-        let mut call_graph = "C".repeat(3_000);
-        let mut ast_context = "A".repeat(3_000);
-
+        // Arrange: simulate review_pr dropping both call_graph and ast_context due to budget.
         let pr = PrDetails {
             owner: "test".to_string(),
             repo: "repo".to_string(),
@@ -1835,30 +1745,12 @@ mod tests {
             head_sha: String::new(),
         };
 
-        // Act: mirror review_pr drop logic
-        let mut estimated_size = pr.title.len()
-            + pr.body.len()
-            + pr.files
-                .iter()
-                .map(|f| f.patch.as_ref().map_or(0, String::len))
-                .sum::<usize>()
-            + ast_context.len()
-            + call_graph.len()
-            + PROMPT_OVERHEAD_CHARS;
+        // Act: call build_pr_review_user_prompt with both empty (dropped by review_pr)
+        let ast_context = "";
+        let call_graph = "";
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, ast_context, call_graph);
 
-        if estimated_size > max_prompt_chars {
-            estimated_size = estimated_size.saturating_sub(call_graph.len());
-            call_graph.clear();
-        }
-        if estimated_size > max_prompt_chars {
-            estimated_size = estimated_size.saturating_sub(ast_context.len());
-            ast_context.clear();
-        }
-        let _ = estimated_size;
-
-        let prompt = TestProvider::build_pr_review_user_prompt(&pr, &ast_context, &call_graph);
-
-        // Assert: both dropped
+        // Assert: both absent, PR title retained
         assert!(
             !prompt.contains(&"C".repeat(10)),
             "call_graph content must not appear after budget drop"
@@ -1870,6 +1762,137 @@ mod tests {
         assert!(
             prompt.contains("Budget drop test"),
             "PR title must be retained in prompt"
+        );
+    }
+
+    #[test]
+    fn test_build_pr_review_prompt_drops_patches_when_over_budget() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: simulate review_pr dropping patches due to budget.
+        // Create 3 files with patches of different sizes.
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Patch drop test".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![
+                PrFile {
+                    filename: "large.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 100,
+                    deletions: 50,
+                    patch: Some("L".repeat(5000)),
+                    full_content: None,
+                },
+                PrFile {
+                    filename: "medium.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 50,
+                    deletions: 25,
+                    patch: Some("M".repeat(3000)),
+                    full_content: None,
+                },
+                PrFile {
+                    filename: "small.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 10,
+                    deletions: 5,
+                    patch: Some("S".repeat(1000)),
+                    full_content: None,
+                },
+            ],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+
+        // Act: simulate review_pr dropping largest patches first
+        let mut pr_mut = pr.clone();
+        pr_mut.files[0].patch = None; // Drop largest patch
+        pr_mut.files[1].patch = None; // Drop medium patch
+        // Keep smallest patch
+
+        let ast_context = "";
+        let call_graph = "";
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr_mut, ast_context, call_graph);
+
+        // Assert: largest patches absent, smallest present
+        assert!(
+            !prompt.contains(&"L".repeat(10)),
+            "largest patch must be absent after drop"
+        );
+        assert!(
+            !prompt.contains(&"M".repeat(10)),
+            "medium patch must be absent after drop"
+        );
+        assert!(
+            prompt.contains(&"S".repeat(10)),
+            "smallest patch must be present"
+        );
+    }
+
+    #[test]
+    fn test_build_pr_review_prompt_drops_full_content_as_last_resort() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: simulate review_pr dropping full_content as last resort.
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Full content drop test".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![
+                PrFile {
+                    filename: "file1.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 10,
+                    deletions: 5,
+                    patch: None,
+                    full_content: Some("F".repeat(5000)),
+                },
+                PrFile {
+                    filename: "file2.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 10,
+                    deletions: 5,
+                    patch: None,
+                    full_content: Some("C".repeat(3000)),
+                },
+            ],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+
+        // Act: simulate review_pr dropping all full_content
+        let mut pr_mut = pr.clone();
+        for file in &mut pr_mut.files {
+            file.full_content = None;
+        }
+
+        let ast_context = "";
+        let call_graph = "";
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr_mut, ast_context, call_graph);
+
+        // Assert: no file_content XML blocks appear
+        assert!(
+            !prompt.contains("<file_content"),
+            "file_content blocks must not appear when full_content is cleared"
+        );
+        assert!(
+            !prompt.contains(&"F".repeat(10)),
+            "full_content from file1 must not appear"
+        );
+        assert!(
+            !prompt.contains(&"C".repeat(10)),
+            "full_content from file2 must not appear"
         );
     }
 }

@@ -325,7 +325,7 @@ mod fetch_file_contents_tests {
     }
 
     #[test]
-    fn test_prompt_budget_drops_call_graph_first() {
+    fn test_build_pr_review_prompt_includes_call_graph_when_present() {
         let pr = PrDetails {
             owner: "test".to_string(),
             repo: "repo".to_string(),

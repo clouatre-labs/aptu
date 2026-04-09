@@ -64,6 +64,9 @@ regex = "1"
 # URL encoding for tag names with special characters
 percent-encoding = { workspace = true }
 
+# Base64 encoding/decoding
+base64 = "0.22"
+
 [dev-dependencies]
 criterion = { workspace = true }
 serial_test = { workspace = true }

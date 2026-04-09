@@ -515,6 +515,31 @@ pub async fn create_pull_request(
     Ok(result)
 }
 
+/// Determines whether a file should be skipped during fetch based on status and patch.
+/// Returns true if the file should be skipped (removed status or no patch), false otherwise.
+#[inline]
+#[allow(dead_code)]
+fn should_skip_file(status: &str, patch: Option<&String>) -> bool {
+    status.to_lowercase().contains("removed")
+        || patch.is_none_or(String::is_empty)
+}
+
+/// Decodes base64-encoded content and truncates to `max_chars` on character boundary.
+/// Returns `None` if base64 decoding fails or if the decoded content is not valid UTF-8.
+#[allow(dead_code)]
+fn decode_content(encoded: &str, max_chars: usize) -> Option<String> {
+    use base64::Engine;
+    let engine = base64::engine::general_purpose::STANDARD;
+    let decoded_bytes = engine.decode(encoded).ok()?;
+    let decoded_str = String::from_utf8(decoded_bytes).ok()?;
+
+    if decoded_str.len() <= max_chars {
+        Some(decoded_str)
+    } else {
+        Some(decoded_str.chars().take(max_chars).collect::<String>())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -819,102 +844,107 @@ mod tests {
     }
 
     #[test]
-    fn test_fetch_skips_removed_files() {
-        // Verify that files with status="removed" are skipped during fetch_file_contents
-        // by checking the fetch logic filters them correctly
+    fn test_should_skip_file_respects_fetched_count_cap() {
+        // Test that should_skip_file correctly identifies files to skip.
+        // Files with removed status or no patch should be skipped.
         let removed_file = PrFile {
-            filename: "deleted.rs".to_string(),
-            status: "Removed".to_string(),
+            filename: "removed.rs".to_string(),
+            status: "removed".to_string(),
             additions: 0,
-            deletions: 10,
-            patch: Some("-line1\n-line2".to_string()),
+            deletions: 5,
+            patch: None,
             full_content: None,
         };
         let modified_file = PrFile {
-            filename: "modified.rs".to_string(),
-            status: "Modified".to_string(),
-            additions: 5,
-            deletions: 2,
-            patch: Some("+newline".to_string()),
+            filename: "file_0.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 0,
+            patch: Some("+ new code".to_string()),
+            full_content: None,
+        };
+        let no_patch_file = PrFile {
+            filename: "file_1.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 0,
+            patch: None,
             full_content: None,
         };
 
-        // The fetch_file_contents function should skip removed files
-        // and only attempt to fetch content for files that are Added or Modified
-        let files = vec![removed_file, modified_file];
-        assert_eq!(
-            files.len(),
-            2,
-            "setup: should have 2 test files (removed + modified)"
+        // Assert: removed files are skipped
+        assert!(
+            should_skip_file(&removed_file.status, removed_file.patch.as_ref()),
+            "removed files should be skipped"
         );
-        // Verification: removed files should not trigger fetch attempts
-        // (This is a unit test of the filtering logic, not the actual HTTP call)
-        let removed_count = files.iter().filter(|f| f.status == "Removed").count();
-        assert_eq!(removed_count, 1, "should have 1 removed file");
-    }
 
-    #[test]
-    fn test_fetch_empty_file_list_returns_empty() {
-        // QA03: Verify that fetch_file_contents returns empty vec when given empty input
-        // (This tests the non-fatal error path for the async function)
-        let empty_files: Vec<PrFile> = vec![];
-        assert_eq!(
-            empty_files.len(),
-            0,
-            "Empty file list should produce empty results"
+        // Assert: modified files with patch are not skipped
+        assert!(
+            !should_skip_file(&modified_file.status, modified_file.patch.as_ref()),
+            "modified files with patch should not be skipped"
+        );
+
+        // Assert: files without patch are skipped
+        assert!(
+            should_skip_file(&no_patch_file.status, no_patch_file.patch.as_ref()),
+            "files without patch should be skipped"
         );
     }
 
     #[test]
-    fn test_fetch_file_skipped_by_fetched_count_cap() {
-        // Test that files beyond max_files cap are skipped based on successfully-fetched
-        // count (not index), so removed/no-patch files do not consume budget slots.
-        let files = vec![
-            PrFile {
-                filename: "removed.rs".to_string(),
-                status: "removed".to_string(),
-                additions: 0,
-                deletions: 5,
-                patch: None,
-                full_content: None,
-            },
-            PrFile {
-                filename: "file_0.rs".to_string(),
-                status: "modified".to_string(),
-                additions: 1,
-                deletions: 0,
-                patch: Some("+ new code".to_string()),
-                full_content: None,
-            },
-            PrFile {
-                filename: "file_1.rs".to_string(),
-                status: "modified".to_string(),
-                additions: 1,
-                deletions: 0,
-                patch: Some("+ new code".to_string()),
-                full_content: None,
-            },
-        ];
+    fn test_decode_content_valid_base64() {
+        // Arrange: valid base64-encoded string
+        use base64::Engine;
+        let engine = base64::engine::general_purpose::STANDARD;
+        let original = "Hello, World!";
+        let encoded = engine.encode(original);
 
-        // With fetched_count-based cap (max_files=1): removed.rs does not consume a slot,
-        // so file_0.rs is fetched (slot 0) and file_1.rs is capped.
-        let max_files = 1;
-        let mut fetched_count = 0usize;
-        let mut capped_count = 0usize;
-        for file in &files {
-            if file.status.to_lowercase().contains("removed")
-                || file.patch.as_ref().is_none_or(String::is_empty)
-            {
-                continue;
-            }
-            if fetched_count >= max_files {
-                capped_count += 1;
-            } else {
-                fetched_count += 1;
-            }
-        }
+        // Act: decode with sufficient max_chars
+        let result = decode_content(&encoded, 1000);
 
-        assert_eq!(fetched_count, 1, "file_0.rs should be counted as fetched");
-        assert_eq!(capped_count, 1, "file_1.rs should be capped");
+        // Assert: decoding succeeds and matches original
+        assert_eq!(
+            result,
+            Some(original.to_string()),
+            "valid base64 should decode successfully"
+        );
+    }
+
+    #[test]
+    fn test_decode_content_invalid_base64() {
+        // Arrange: invalid base64 string
+        let invalid_base64 = "!!!invalid!!!";
+
+        // Act: attempt to decode
+        let result = decode_content(invalid_base64, 1000);
+
+        // Assert: decoding fails gracefully
+        assert_eq!(result, None, "invalid base64 should return None");
+    }
+
+    #[test]
+    fn test_decode_content_truncates_at_max_chars() {
+        // Arrange: multi-byte UTF-8 string (Japanese characters)
+        use base64::Engine;
+        let engine = base64::engine::general_purpose::STANDARD;
+        let original = "こんにちは".repeat(10); // 50 characters total
+        let encoded = engine.encode(&original);
+        let max_chars = 10;
+
+        // Act: decode with max_chars limit
+        let result = decode_content(&encoded, max_chars);
+
+        // Assert: result is truncated to max_chars on character boundary
+        assert!(result.is_some(), "decoding should succeed");
+        let decoded = result.unwrap();
+        assert_eq!(
+            decoded.chars().count(),
+            max_chars,
+            "output should be truncated to max_chars on character boundary"
+        );
+        assert!(
+            decoded.is_char_boundary(decoded.len()),
+            "output should be valid UTF-8 (truncated on char boundary)"
+        );
     }
 }

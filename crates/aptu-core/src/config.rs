@@ -915,4 +915,39 @@ model = "gemini-3.1-flash-lite-preview"
         assert_eq!(config.ai.model, "test-model-override");
         assert_eq!(config.ai.provider, "openrouter");
     }
+
+    #[test]
+    fn test_review_config_defaults() {
+        // Arrange / Act: construct ReviewConfig with defaults
+        let review_config = ReviewConfig::default();
+
+        // Assert: defaults match specification
+        assert_eq!(
+            review_config.max_prompt_chars, 120_000,
+            "max_prompt_chars should default to 120_000"
+        );
+        assert_eq!(
+            review_config.max_full_content_files, 10,
+            "max_full_content_files should default to 10"
+        );
+        assert_eq!(
+            review_config.max_chars_per_file, 4_000,
+            "max_chars_per_file should default to 4_000"
+        );
+
+        // Assert: AppConfig::default().review equals ReviewConfig::default()
+        let app_config = AppConfig::default();
+        assert_eq!(
+            app_config.review.max_prompt_chars, review_config.max_prompt_chars,
+            "AppConfig review defaults should match ReviewConfig defaults"
+        );
+        assert_eq!(
+            app_config.review.max_full_content_files, review_config.max_full_content_files,
+            "AppConfig review defaults should match ReviewConfig defaults"
+        );
+        assert_eq!(
+            app_config.review.max_chars_per_file, review_config.max_chars_per_file,
+            "AppConfig review defaults should match ReviewConfig defaults"
+        );
+    }
 }
