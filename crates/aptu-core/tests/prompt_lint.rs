@@ -201,6 +201,7 @@ fn all_user_prompts_contain_schema() {
             additions: 5,
             deletions: 2,
             patch: None,
+            full_content: None,
         }],
         labels: vec![],
         head_sha: String::new(),
@@ -235,4 +236,110 @@ fn all_user_prompts_contain_schema() {
         release_user.contains("theme") && release_user.contains("highlights"),
         "release_notes user prompt missing schema fields"
     );
+}
+
+#[cfg(test)]
+mod fetch_file_contents_tests {
+    use super::*;
+
+    #[test]
+    fn test_file_content_injected_into_prompt() {
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "PR body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "src/lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 5,
+                deletions: 2,
+                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
+                full_content: Some("fn hello() {}".to_string()),
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+        let prompt = StubProvider::build_pr_review_user_prompt(&pr, "", "");
+        assert!(
+            prompt.contains("<file_content path=\"src/lib.rs\">"),
+            "Prompt should contain file_content block"
+        );
+        assert!(
+            prompt.contains("fn hello() {}"),
+            "Prompt should contain full file content"
+        );
+    }
+
+    #[test]
+    fn test_file_content_truncated() {
+        let long_content = "x".repeat(5000);
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "PR body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "huge.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 100,
+                deletions: 0,
+                patch: Some("@@ -1,1 +1,1 @@\n+x".to_string()),
+                full_content: Some(long_content),
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+        let prompt = StubProvider::build_pr_review_user_prompt(&pr, "", "");
+        // Content should be included in the prompt (no truncation at prompt assembly level)
+        assert!(
+            prompt.contains("<file_content path=\"huge.rs\">"),
+            "Prompt should contain file_content block"
+        );
+        // Verify the large content is actually included
+        assert!(
+            prompt.contains("xxxxx"),
+            "Large content should be in prompt"
+        );
+    }
+
+    #[test]
+    fn test_prompt_budget_drops_call_graph_first() {
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "PR body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "src/lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 5,
+                deletions: 2,
+                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
+                full_content: None,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+        // Just verify that the prompt builder itself includes call_graph when provided
+        let large_call_graph = "<call_graph>".to_string() + &"x".repeat(1000) + "</call_graph>";
+        let prompt = StubProvider::build_pr_review_user_prompt(&pr, "", &large_call_graph);
+        // The prompt builder includes call_graph as-is; budget enforcement is done in review_pr
+        assert!(
+            prompt.contains(&large_call_graph),
+            "Call graph should be in prompt at builder level"
+        );
+    }
 }

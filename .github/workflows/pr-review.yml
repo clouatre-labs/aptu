@@ -31,3 +31,4 @@ jobs:
           skip-labeled: 'false'
           fallback-provider: 'openrouter'
           fallback-model: 'inception/mercury-2'
+          repo-path: ${{ github.workspace }}
