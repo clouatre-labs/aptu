@@ -161,7 +161,18 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
-          COMMIT_SHA="${GITHUB_SHA}"
+          # Resolve the commit SHA by dereferencing the annotated tag object.
+          # GITHUB_SHA is the tag object SHA for annotated tags, not the commit SHA.
+          # The refs API only accepts commit SHAs, so we must dereference here.
+          TAG_OBJECT_SHA="$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" --jq '.object.sha')"
+          TAG_TYPE="$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" --jq '.object.type')"
+          if [[ "$TAG_TYPE" == "tag" ]]; then
+            # Annotated tag: dereference to the commit
+            COMMIT_SHA="$(gh api "repos/${{ github.repository }}/git/tags/$TAG_OBJECT_SHA" --jq '.object.sha')"
+          else
+            # Lightweight tag: the ref points directly to the commit
+            COMMIT_SHA="$TAG_OBJECT_SHA"
+          fi
           # Derive floating minor tag: v0.3.1 -> v0.3, v1.0.0 -> v1.0
           MINOR_TAG="${TAG%.*}"
           if [[ ! "$MINOR_TAG" =~ ^v[0-9]+\.[0-9]+$ ]]; then
