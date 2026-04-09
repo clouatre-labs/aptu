@@ -135,7 +135,7 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
 
 /// Build cross-file call graph context for the changed files.
 ///
-/// For each function in each changed Rust file, looks up its callers.
+/// For each function in each changed file, looks up its callers.
 /// Output is capped at 3000 characters.
 pub async fn build_call_graph_context(repo_path: &str, files: &[PrFile]) -> String {
     let repo_path = repo_path.to_string();

@@ -10,7 +10,7 @@ use aptu_core::ai::prompts::{
     TOOLING_CONTEXT, build_create_system_prompt, build_pr_label_system_prompt,
     build_pr_review_system_prompt, build_release_notes_system_prompt, build_triage_system_prompt,
 };
-use aptu_core::ai::provider::AiProvider;
+use aptu_core::ai::provider::{AiProvider, MAX_FULL_CONTENT_CHARS};
 use aptu_core::ai::types::{IssueDetails, PrDetails, PrFile, PrSummary};
 
 // ---------------------------------------------------------------------------
@@ -276,8 +276,10 @@ mod fetch_file_contents_tests {
     }
 
     #[test]
-    fn test_file_content_truncated() {
-        let long_content = "x".repeat(5000);
+    fn test_file_content_truncated_at_prompt_assembly() {
+        // Arrange: full_content longer than MAX_FULL_CONTENT_CHARS
+        let long_content = "x".repeat(MAX_FULL_CONTENT_CHARS + 1000);
+        assert!(long_content.len() > MAX_FULL_CONTENT_CHARS);
         let pr = PrDetails {
             owner: "test".to_string(),
             repo: "repo".to_string(),
@@ -293,21 +295,32 @@ mod fetch_file_contents_tests {
                 additions: 100,
                 deletions: 0,
                 patch: Some("@@ -1,1 +1,1 @@\n+x".to_string()),
-                full_content: Some(long_content),
+                full_content: Some(long_content.clone()),
             }],
             labels: vec![],
             head_sha: String::new(),
         };
+
+        // Act
         let prompt = StubProvider::build_pr_review_user_prompt(&pr, "", "");
-        // Content should be included in the prompt (no truncation at prompt assembly level)
+
+        // Assert: block present but content capped at MAX_FULL_CONTENT_CHARS
         assert!(
             prompt.contains("<file_content path=\"huge.rs\">"),
             "Prompt should contain file_content block"
         );
-        // Verify the large content is actually included
-        assert!(
-            prompt.contains("xxxxx"),
-            "Large content should be in prompt"
+        let block_start = prompt
+            .find("<file_content path=\"huge.rs\">\n")
+            .expect("file_content block start");
+        let content_start = block_start + "<file_content path=\"huge.rs\">\n".len();
+        let content_end = prompt[content_start..]
+            .find("\n</file_content>")
+            .expect("file_content block end");
+        let included_content = &prompt[content_start..content_start + content_end];
+        assert_eq!(
+            included_content.len(),
+            MAX_FULL_CONTENT_CHARS,
+            "file_content in prompt must be capped at MAX_FULL_CONTENT_CHARS"
         );
     }
 

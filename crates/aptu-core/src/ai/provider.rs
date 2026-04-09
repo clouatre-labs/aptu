@@ -78,6 +78,11 @@ pub const MAX_LABELS: usize = 30;
 /// Maximum number of milestones to include in the prompt.
 pub const MAX_MILESTONES: usize = 10;
 
+/// Maximum characters per file's full content included in the PR review prompt.
+/// Content pre-truncated by `fetch_file_contents` may already be within this limit,
+/// but the prompt builder applies it as a second safety cap.
+pub const MAX_FULL_CONTENT_CHARS: usize = 4_000;
+
 /// Estimated overhead for XML tags, section headers, and schema preamble added by
 /// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
 /// non-content characters when estimating total prompt size.
@@ -777,7 +782,21 @@ pub trait AiProvider: Send + Sync {
             }
         }
 
-        tracing::debug!(
+        // Step 4: drop full_content on all files
+        if estimated_size > max_prompt_chars {
+            for file in &mut pr_mut.files {
+                if let Some(fc) = file.full_content.take() {
+                    estimated_size = estimated_size.saturating_sub(fc.len());
+                    tracing::warn!(
+                        bytes = fc.len(),
+                        filename = %file.filename,
+                        "prompt budget: dropping full_content"
+                    );
+                }
+            }
+        }
+
+        tracing::info!(
             prompt_chars = estimated_size,
             max_chars = max_prompt_chars,
             "PR review prompt assembled"
@@ -797,7 +816,7 @@ pub trait AiProvider: Send + Sync {
             Self::build_pr_review_user_prompt(&pr_mut, &ast_context, &call_graph);
         let actual_prompt_chars = assembled_prompt.len();
 
-        tracing::debug!(
+        tracing::info!(
             actual_prompt_chars,
             estimated_prompt_chars = estimated_size,
             max_chars = max_prompt_chars,
@@ -1005,13 +1024,19 @@ pub trait AiProvider: Send + Sync {
                 total_diff_size += patch_size;
             }
 
-            // Include full file content if available
+            // Include full file content if available (cap at MAX_FULL_CONTENT_CHARS)
             if let Some(content) = &file.full_content {
+                let sanitized = sanitize_prompt_field(content);
+                let displayed = if sanitized.len() > MAX_FULL_CONTENT_CHARS {
+                    sanitized[..MAX_FULL_CONTENT_CHARS].to_string()
+                } else {
+                    sanitized
+                };
                 let _ = writeln!(
                     prompt,
                     "<file_content path=\"{}\">\n{}\n</file_content>\n",
                     sanitize_prompt_field(&file.filename),
-                    sanitize_prompt_field(content)
+                    displayed
                 );
             }
 
@@ -1712,53 +1737,135 @@ mod tests {
 
     #[test]
     fn test_prompt_budget_drops_call_graph_first() {
-        // Test that when both ast_context and call_graph are present and over budget,
-        // call_graph is dropped first (before ast_context).
-        // This is verified by the presence of the "call_graph" warning in drop order.
+        use super::super::types::{PrDetails, PrFile};
 
-        // Create a large call_graph and moderate ast_context
-        let call_graph = "x".repeat(80_000);
-        let ast_context = "y".repeat(30_000);
+        // Arrange: oversized call_graph; ast_context small enough to fit after drop.
+        // Budget: 5_000. call_graph alone exceeds it; ast_context fits.
+        let max_prompt_chars = 5_000usize;
+        let mut call_graph = "X".repeat(6_000);
+        let mut ast_context = "Y".repeat(500);
 
-        // These would trigger drops during review_pr execution
-        // Verify that call_graph length > ast_context length
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Budget drop test".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 0,
+                patch: Some("+line".to_string()),
+                full_content: None,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+
+        // Act: mirror review_pr drop logic
+        let mut estimated_size = pr.title.len()
+            + pr.body.len()
+            + pr.files
+                .iter()
+                .map(|f| f.patch.as_ref().map_or(0, String::len))
+                .sum::<usize>()
+            + ast_context.len()
+            + call_graph.len()
+            + PROMPT_OVERHEAD_CHARS;
+
+        if estimated_size > max_prompt_chars {
+            estimated_size = estimated_size.saturating_sub(call_graph.len());
+            call_graph.clear();
+        }
+        if estimated_size > max_prompt_chars {
+            estimated_size = estimated_size.saturating_sub(ast_context.len());
+            ast_context.clear();
+        }
+        let _ = estimated_size;
+
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, &ast_context, &call_graph);
+
+        // Assert: call_graph dropped, ast_context retained
         assert!(
-            call_graph.len() > ast_context.len(),
-            "test setup: call_graph should be larger for drop order verification"
+            !prompt.contains(&"X".repeat(10)),
+            "call_graph content must not appear in prompt after budget drop"
         );
-        // In actual review_pr, drop order checks: if estimated_size > max (120k),
-        // drop call_graph first (80k), then if still over, drop ast_context (30k).
-        // This test verifies the drop order logic would be applied correctly.
+        assert!(
+            prompt.contains(&"Y".repeat(10)),
+            "ast_context content must appear in prompt (fits within budget)"
+        );
     }
 
     #[test]
     fn test_prompt_budget_drops_ast_after_call_graph() {
-        // Test that ast_context is dropped after call_graph when budget exceeded
-        let call_graph = "c".repeat(70_000);
-        let ast_context = "a".repeat(60_000);
+        use super::super::types::{PrDetails, PrFile};
 
-        assert!(
-            call_graph.len() + ast_context.len() > 120_000,
-            "test setup: combined should exceed max_prompt_chars"
-        );
-        // Verify drop order: call_graph first (70k), then ast_context (60k)
-        // estimated = 70_000 + 60_000 + 1_000 = 131_000
-        // After dropping call_graph: 131_000 - 70_000 = 61_000 (still under 120_000)
-        // So only call_graph is dropped
-        let mut dropped_size = 0;
-        let max_chars = 120_000;
-        let estimated = call_graph.len() + ast_context.len() + PROMPT_OVERHEAD_CHARS;
+        // Arrange: both call_graph and ast_context oversized; both must be dropped.
+        // Budget: 2_000. call_graph + ast_context together exceed it even after dropping call_graph.
+        let max_prompt_chars = 2_000usize;
+        let mut call_graph = "C".repeat(3_000);
+        let mut ast_context = "A".repeat(3_000);
 
-        if estimated > max_chars {
-            dropped_size += call_graph.len();
-            if estimated - dropped_size > max_chars {
-                dropped_size += ast_context.len();
-            }
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Budget drop test".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 0,
+                patch: Some("+line".to_string()),
+                full_content: None,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+
+        // Act: mirror review_pr drop logic
+        let mut estimated_size = pr.title.len()
+            + pr.body.len()
+            + pr.files
+                .iter()
+                .map(|f| f.patch.as_ref().map_or(0, String::len))
+                .sum::<usize>()
+            + ast_context.len()
+            + call_graph.len()
+            + PROMPT_OVERHEAD_CHARS;
+
+        if estimated_size > max_prompt_chars {
+            estimated_size = estimated_size.saturating_sub(call_graph.len());
+            call_graph.clear();
         }
+        if estimated_size > max_prompt_chars {
+            estimated_size = estimated_size.saturating_sub(ast_context.len());
+            ast_context.clear();
+        }
+        let _ = estimated_size;
 
-        assert_eq!(
-            dropped_size, 70_000,
-            "only call_graph should be dropped (ast_context fits after drop)"
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, &ast_context, &call_graph);
+
+        // Assert: both dropped
+        assert!(
+            !prompt.contains(&"C".repeat(10)),
+            "call_graph content must not appear after budget drop"
+        );
+        assert!(
+            !prompt.contains(&"A".repeat(10)),
+            "ast_context content must not appear after budget drop"
+        );
+        assert!(
+            prompt.contains("Budget drop test"),
+            "PR title must be retained in prompt"
         );
     }
 }

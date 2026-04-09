@@ -223,8 +223,9 @@ async fn fetch_file_contents(
     max_chars_per_file: usize,
 ) -> Vec<Option<String>> {
     let mut results = Vec::with_capacity(files.len());
+    let mut fetched_count = 0usize;
 
-    for (idx, file) in files.iter().enumerate() {
+    for file in files {
         // Skip deleted or removed files
         if file.status.to_lowercase().contains("removed") {
             debug!(file = %file.filename, "Skipping removed file");
@@ -239,13 +240,13 @@ async fn fetch_file_contents(
             continue;
         }
 
-        // Skip if beyond max_files cap
-        if idx >= max_files {
+        // Skip if beyond max_files cap (count only successfully-fetched files)
+        if fetched_count >= max_files {
             debug!(
                 file = %file.filename,
-                idx = idx,
+                fetched_count = fetched_count,
                 max_files = max_files,
-                "File index exceeds max_files cap"
+                "Fetched file count exceeds max_files cap"
             );
             results.push(None);
             continue;
@@ -275,6 +276,7 @@ async fn fetch_file_contents(
                             "File content fetched and truncated"
                         );
                         results.push(Some(truncated));
+                        fetched_count += 1;
                     } else {
                         tracing::warn!(
                             file = %file.filename,
@@ -864,10 +866,18 @@ mod tests {
     }
 
     #[test]
-    fn test_fetch_file_skipped_by_index_cap() {
-        // Test that files beyond max_files cap are skipped (full_content stays None)
-        // even if they could be fetched
+    fn test_fetch_file_skipped_by_fetched_count_cap() {
+        // Test that files beyond max_files cap are skipped based on successfully-fetched
+        // count (not index), so removed/no-patch files do not consume budget slots.
         let files = vec![
+            PrFile {
+                filename: "removed.rs".to_string(),
+                status: "removed".to_string(),
+                additions: 0,
+                deletions: 5,
+                patch: None,
+                full_content: None,
+            },
             PrFile {
                 filename: "file_0.rs".to_string(),
                 status: "modified".to_string(),
@@ -886,22 +896,25 @@ mod tests {
             },
         ];
 
-        // Simulate cap logic: only first file would be fetched if max_files=1
+        // With fetched_count-based cap (max_files=1): removed.rs does not consume a slot,
+        // so file_0.rs is fetched (slot 0) and file_1.rs is capped.
         let max_files = 1;
-        let fetched_count = files
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| *idx < max_files)
-            .count();
+        let mut fetched_count = 0usize;
+        let mut capped_count = 0usize;
+        for file in &files {
+            if file.status.to_lowercase().contains("removed")
+                || file.patch.as_ref().is_none_or(String::is_empty)
+            {
+                continue;
+            }
+            if fetched_count >= max_files {
+                capped_count += 1;
+            } else {
+                fetched_count += 1;
+            }
+        }
 
-        assert_eq!(
-            fetched_count, 1,
-            "With max_files=1, only the first file should be fetched"
-        );
-        assert_eq!(
-            files.len() - fetched_count,
-            1,
-            "One file should be skipped due to cap"
-        );
+        assert_eq!(fetched_count, 1, "file_0.rs should be counted as fetched");
+        assert_eq!(capped_count, 1, "file_1.rs should be capped");
     }
 }
