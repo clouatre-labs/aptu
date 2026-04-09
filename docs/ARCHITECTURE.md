@@ -2,7 +2,7 @@
 
 ## Overview
 
-Aptu is a Rust CLI application for AI-assisted GitHub issue triage. The architecture follows a layered design with clear separation of concerns: CLI interface, domain logic, external integrations, and secure credential management.
+Aptu is a Rust CLI application for AI-assisted GitHub issue triage and PR review. The architecture follows a layered design with clear separation of concerns: CLI interface, domain logic, external integrations, and secure credential management.
 
 ## Crate Structure
 
@@ -50,6 +50,16 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Gro
 - Implements unified `chat_completion()` interface
 - Manages provider-specific API endpoints and authentication
 - Handles rate limiting via `backon` retry strategy
+
+### PR Review Pipeline
+`aptu pr review` assembles the AI prompt in layers, each capped by `ReviewConfig`:
+
+1. Fetch PR diff and metadata via Octocrab
+2. Fetch full file content for changed files via GitHub Contents API (capped at `max_full_content_files`, `max_chars_per_file`)
+3. Build AST context: function signatures and imports for each changed file using `code-analyze-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
+4. Build call-graph context: cross-file caller chains for changed functions
+5. Enforce prompt budget (`max_prompt_chars`): drop sections in order (call graph, AST, full content, diff hunks) until budget is met
+6. Post inline review comments via GitHub REST API
 
 ### Facade Functions
 `aptu-core/facade.rs` provides high-level functions for CLI/FFI:
@@ -103,8 +113,12 @@ This means users can tune AI behavior without recompiling, and developers can au
 │   └── model = "mistralai/mistral-small-2603"
 ├── [ui]
 │   └── no_color = false
-└── [cache]
-    └── ttl_seconds = 300
+├── [cache]
+│   └── ttl_seconds = 300
+└── [review]
+    ├── max_prompt_chars = 120000
+    ├── max_full_content_files = 10
+    └── max_chars_per_file = 4000
 ```
 
 ## Testing Strategy

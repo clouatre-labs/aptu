@@ -3,7 +3,9 @@
 //! AST context injection for PR reviews.
 //!
 //! Extracts function signatures and cross-file call graph information from
-//! changed `.rs` files and appends structured context to the AI review prompt.
+//! changed source files and appends structured context to the AI review prompt.
+//! Supported languages: Rust, Python, Go, Java, TypeScript, TSX, JavaScript,
+//! C, C++, C#, and Fortran (determined by `code_analyze_core::language_for_extension`).
 //!
 //! # Feature Flag
 //!

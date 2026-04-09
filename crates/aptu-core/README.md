@@ -13,7 +13,7 @@ Core library for Aptu - AI-Powered Triage Utility.
 ## Features
 
 - **AI Triage** - Analyze issues with summaries, labels, and contributor guidance
-- **PR Review** - AI-powered pull request analysis and feedback
+- **PR Review** - AI-powered pull request analysis with full file content and multi-language AST context (Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
 - **Release Notes** - AI-generated release notes from PRs between tags
 - **Security Scanning** - Built-in security pattern detection with SARIF output
 - **Multiple Providers** - `OpenRouter` (default), Cerebras, Groq, Gemini, `Z.AI`, and `ZenMux`

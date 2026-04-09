@@ -112,6 +112,7 @@ Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.m
 | `skip-labeled` | No | `false` | Skip issues with existing labels |
 | `apply-labels` | No | `true` | Apply suggested labels (issues) |
 | `no-comment` | No | `false` | Skip posting comment (issues) |
+| `repo-path` | No | `''` | Local repository root for AST context injection into PR review prompts. When set, changed source files (Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran) are analysed and function signatures with call-graph context are appended to the prompt. Leave empty to skip AST context. |
 
 ## Permissions
 

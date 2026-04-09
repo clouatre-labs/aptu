@@ -78,8 +78,9 @@ inputs:
   repo-path:
     description: >
       Path to the local repository root for AST context injection into PR review prompts.
-      When set, `aptu pr review` will analyse changed Rust files and append function
-      signatures and call-graph context to the prompt. Leave empty to skip AST context.
+      When set, `aptu pr review` will analyse changed source files (Rust, Python, Go, Java,
+      TypeScript, TSX, JavaScript, C, C++, C#, Fortran) and append function signatures and
+      call-graph context to the prompt. Leave empty to skip AST context.
     required: false
     default: ''
 
