@@ -201,6 +201,19 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 **Free Tier:** x-ai/grok-code-fast-1 with 256K context window
 
+## PR Review Limits
+
+Control how much context `aptu pr review` fetches and injects into the AI prompt:
+
+```toml
+[review]
+max_prompt_chars = 120000      # Total prompt character budget (default: 120 000)
+max_full_content_files = 10    # Max files fetched in full via GitHub Contents API (default: 10)
+max_chars_per_file = 4000      # Max characters per full-content file snippet (default: 4 000)
+```
+
+When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest files first), diff hunks (largest first). The system prompt and PR metadata are never dropped.
+
 ## Prompt Customization
 
 Aptu ships with built-in system prompts compiled into the binary. You can override them at runtime without rebuilding.
