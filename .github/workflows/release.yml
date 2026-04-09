@@ -48,18 +48,20 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Verifying signature for tag: $TAG"
 
-          # Fetch the ref once; extract type and object SHA together
-          read -r TAG_TYPE TAG_SHA < <(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" \
-            --jq '[.object.type, .object.sha] | @tsv' | tr '\t' ' ')
+          # Fetch the ref once; extract type and object SHA from cached response
+          REF_JSON="$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG")"
+          TAG_TYPE="$(jq -r '.object.type' <<< "$REF_JSON")"
+          TAG_SHA="$(jq -r '.object.sha' <<< "$REF_JSON")"
 
           if [ "$TAG_TYPE" != "tag" ]; then
             echo "ERROR: $TAG is a lightweight tag (type: $TAG_TYPE), not an annotated/signed tag"
             exit 1
           fi
 
-          # Fetch the tag object once; extract verified and reason together
-          read -r VERIFIED REASON < <(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA" \
-            --jq '[.verification.verified | tostring, .verification.reason] | @tsv' | tr '\t' ' ')
+          # Fetch the tag object once; extract verified and reason from cached response
+          TAG_OBJ_JSON="$(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA")"
+          VERIFIED="$(jq -r '.verification.verified' <<< "$TAG_OBJ_JSON")"
+          REASON="$(jq -r '.verification.reason' <<< "$TAG_OBJ_JSON")"
 
           echo "Tag verification: verified=$VERIFIED, reason=$REASON"
 
@@ -164,8 +166,9 @@ jobs:
           # Resolve the commit SHA by dereferencing the annotated tag object.
           # GITHUB_SHA is the tag object SHA for annotated tags, not the commit SHA.
           # The refs API only accepts commit SHAs, so we must dereference here.
-          read -r TAG_TYPE TAG_OBJECT_SHA < <(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" \
-            --jq '[.object.type, .object.sha] | @tsv' | tr '\t' ' ')
+          REF_JSON="$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG")"
+          TAG_TYPE="$(jq -r '.object.type' <<< "$REF_JSON")"
+          TAG_OBJECT_SHA="$(jq -r '.object.sha' <<< "$REF_JSON")"
           if [[ "$TAG_TYPE" == "tag" ]]; then
             # Annotated tag: dereference to the commit
             COMMIT_SHA="$(gh api "repos/${{ github.repository }}/git/tags/$TAG_OBJECT_SHA" --jq '.object.sha')"
