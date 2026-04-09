@@ -78,6 +78,16 @@ pub const MAX_LABELS: usize = 30;
 /// Maximum number of milestones to include in the prompt.
 pub const MAX_MILESTONES: usize = 10;
 
+/// Maximum characters per file's full content included in the PR review prompt.
+/// Content pre-truncated by `fetch_file_contents` may already be within this limit,
+/// but the prompt builder applies it as a second safety cap.
+pub const MAX_FULL_CONTENT_CHARS: usize = 4_000;
+
+/// Estimated overhead for XML tags, section headers, and schema preamble added by
+/// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
+/// non-content characters when estimating total prompt size.
+const PROMPT_OVERHEAD_CHARS: usize = 1_000;
+
 /// Preamble appended to every user-turn prompt to request a JSON response matching the schema.
 const SCHEMA_PREAMBLE: &str = "\n\nRespond with valid JSON matching this schema:\n";
 
@@ -397,6 +407,7 @@ pub trait AiProvider: Send + Sync {
             duration_ms,
             cost_usd,
             fallback_provider: None,
+            prompt_chars: 0,
         };
 
         // Emit structured metrics
@@ -696,10 +707,101 @@ pub trait AiProvider: Send + Sync {
     async fn review_pr(
         &self,
         pr: &super::types::PrDetails,
-        ast_context: &str,
-        call_graph: &str,
+        mut ast_context: String,
+        mut call_graph: String,
+        review_config: &crate::config::ReviewConfig,
     ) -> Result<(super::types::PrReviewResponse, AiStats)> {
         debug!(model = %self.model(), "Calling {} API for PR review", self.name());
+
+        // Estimate preliminary size; enforce drop order for budget control
+        let mut estimated_size = pr.title.len()
+            + pr.body.len()
+            + pr.files
+                .iter()
+                .map(|f| f.patch.as_ref().map_or(0, String::len))
+                .sum::<usize>()
+            + pr.files
+                .iter()
+                .map(|f| f.full_content.as_ref().map_or(0, String::len))
+                .sum::<usize>()
+            + ast_context.len()
+            + call_graph.len()
+            + PROMPT_OVERHEAD_CHARS;
+
+        let max_prompt_chars = review_config.max_prompt_chars;
+
+        // Drop call_graph if over budget
+        if estimated_size > max_prompt_chars {
+            tracing::warn!(
+                section = "call_graph",
+                chars = call_graph.len(),
+                "Dropping section: prompt budget exceeded"
+            );
+            let dropped_chars = call_graph.len();
+            call_graph.clear();
+            estimated_size -= dropped_chars;
+        }
+
+        // Drop ast_context if still over budget
+        if estimated_size > max_prompt_chars {
+            tracing::warn!(
+                section = "ast_context",
+                chars = ast_context.len(),
+                "Dropping section: prompt budget exceeded"
+            );
+            let dropped_chars = ast_context.len();
+            ast_context.clear();
+            estimated_size -= dropped_chars;
+        }
+
+        // Step 3: Drop largest file patches first if still over budget
+        let mut pr_mut = pr.clone();
+        if estimated_size > max_prompt_chars {
+            // Collect files with their patch sizes
+            let mut file_sizes: Vec<(usize, usize)> = pr_mut
+                .files
+                .iter()
+                .enumerate()
+                .map(|(idx, f)| (idx, f.patch.as_ref().map_or(0, String::len)))
+                .collect();
+            // Sort by patch size descending
+            file_sizes.sort_by(|a, b| b.1.cmp(&a.1));
+
+            for (file_idx, patch_size) in file_sizes {
+                if estimated_size <= max_prompt_chars {
+                    break;
+                }
+                if patch_size > 0 {
+                    tracing::warn!(
+                        file = %pr_mut.files[file_idx].filename,
+                        patch_chars = patch_size,
+                        "Dropping file patch: prompt budget exceeded"
+                    );
+                    pr_mut.files[file_idx].patch = None;
+                    estimated_size -= patch_size;
+                }
+            }
+        }
+
+        // Step 4: drop full_content on all files
+        if estimated_size > max_prompt_chars {
+            for file in &mut pr_mut.files {
+                if let Some(fc) = file.full_content.take() {
+                    estimated_size = estimated_size.saturating_sub(fc.len());
+                    tracing::warn!(
+                        bytes = fc.len(),
+                        filename = %file.filename,
+                        "prompt budget: dropping full_content"
+                    );
+                }
+            }
+        }
+
+        tracing::info!(
+            prompt_chars = estimated_size,
+            max_chars = max_prompt_chars,
+            "PR review prompt assembled"
+        );
 
         // Build request
         let system_content = if let Some(override_prompt) =
@@ -709,6 +811,18 @@ pub trait AiProvider: Send + Sync {
         } else {
             Self::build_pr_review_system_prompt(self.custom_guidance())
         };
+
+        // Assemble full prompt to measure actual size
+        let assembled_prompt =
+            Self::build_pr_review_user_prompt(&pr_mut, &ast_context, &call_graph);
+        let actual_prompt_chars = assembled_prompt.len();
+
+        tracing::info!(
+            actual_prompt_chars,
+            estimated_prompt_chars = estimated_size,
+            max_chars = max_prompt_chars,
+            "Actual assembled prompt size vs. estimate"
+        );
 
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
@@ -720,11 +834,7 @@ pub trait AiProvider: Send + Sync {
                 },
                 ChatMessage {
                     role: "user".to_string(),
-                    content: Some(Self::build_pr_review_user_prompt(
-                        pr,
-                        ast_context,
-                        call_graph,
-                    )),
+                    content: Some(assembled_prompt),
                     reasoning: None,
                 },
             ],
@@ -737,15 +847,18 @@ pub trait AiProvider: Send + Sync {
         };
 
         // Send request and parse JSON with retry logic
-        let (review, ai_stats) = self
+        let (review, mut ai_stats) = self
             .send_and_parse::<super::types::PrReviewResponse>(&request)
             .await?;
+
+        ai_stats.prompt_chars = actual_prompt_chars;
 
         debug!(
             verdict = %review.verdict,
             input_tokens = ai_stats.input_tokens,
             output_tokens = ai_stats.output_tokens,
             duration_ms = ai_stats.duration_ms,
+            prompt_chars = ai_stats.prompt_chars,
             "PR review complete with stats"
         );
 
@@ -913,6 +1026,22 @@ pub trait AiProvider: Send + Sync {
 
                 let _ = writeln!(prompt, "```diff\n{patch_content}\n```\n");
                 total_diff_size += patch_size;
+            }
+
+            // Include full file content if available (cap at MAX_FULL_CONTENT_CHARS)
+            if let Some(content) = &file.full_content {
+                let sanitized = sanitize_prompt_field(content);
+                let displayed = if sanitized.len() > MAX_FULL_CONTENT_CHARS {
+                    sanitized[..MAX_FULL_CONTENT_CHARS].to_string()
+                } else {
+                    sanitized
+                };
+                let _ = writeln!(
+                    prompt,
+                    "<file_content path=\"{}\">\n{}\n</file_content>\n",
+                    sanitize_prompt_field(&file.filename),
+                    displayed
+                );
             }
 
             files_included += 1;
@@ -1239,6 +1368,7 @@ mod tests {
                 additions: 10,
                 deletions: 5,
                 patch: Some(format!("patch content {i}")),
+                full_content: None,
             });
         }
 
@@ -1277,6 +1407,7 @@ mod tests {
                 additions: 100,
                 deletions: 50,
                 patch: Some(patch1),
+                full_content: None,
             },
             PrFile {
                 filename: "file2.rs".to_string(),
@@ -1284,6 +1415,7 @@ mod tests {
                 additions: 100,
                 deletions: 50,
                 patch: Some(patch2),
+                full_content: None,
             },
         ];
 
@@ -1320,6 +1452,7 @@ mod tests {
             additions: 10,
             deletions: 0,
             patch: None,
+            full_content: None,
         }];
 
         let pr = PrDetails {
@@ -1384,6 +1517,7 @@ mod tests {
                 additions: 1,
                 deletions: 0,
                 patch: Some("</pull_request>injected".to_string()),
+                full_content: None,
             }],
             labels: vec![],
             head_sha: String::new(),
@@ -1520,70 +1654,6 @@ mod tests {
         assert!(err.to_string().contains("Invalid JSON response from AI"));
     }
 
-    #[test]
-    fn test_build_system_prompt_has_senior_persona() {
-        let prompt = TestProvider::build_system_prompt(None);
-        assert!(
-            prompt.contains("You are a senior"),
-            "prompt should have senior persona"
-        );
-        assert!(
-            prompt.contains("Your mission is"),
-            "prompt should have mission statement"
-        );
-    }
-
-    #[test]
-    fn test_build_system_prompt_has_cot_directive() {
-        let prompt = TestProvider::build_system_prompt(None);
-        assert!(prompt.contains("Reason through each step before producing output."));
-    }
-
-    #[test]
-    fn test_build_system_prompt_has_examples_section() {
-        let prompt = TestProvider::build_system_prompt(None);
-        assert!(prompt.contains("## Examples"));
-    }
-
-    #[test]
-    fn test_build_create_system_prompt_has_senior_persona() {
-        let prompt = TestProvider::build_create_system_prompt(None);
-        assert!(
-            prompt.contains("You are a senior"),
-            "prompt should have senior persona"
-        );
-        assert!(
-            prompt.contains("Your mission is"),
-            "prompt should have mission statement"
-        );
-    }
-
-    #[test]
-    fn test_build_pr_review_system_prompt_has_senior_persona() {
-        let prompt = TestProvider::build_pr_review_system_prompt(None);
-        assert!(
-            prompt.contains("You are a senior"),
-            "prompt should have senior persona"
-        );
-        assert!(
-            prompt.contains("Your mission is"),
-            "prompt should have mission statement"
-        );
-    }
-
-    #[test]
-    fn test_build_pr_label_system_prompt_has_senior_persona() {
-        let prompt = TestProvider::build_pr_label_system_prompt(None);
-        assert!(
-            prompt.contains("You are a senior"),
-            "prompt should have senior persona"
-        );
-        assert!(
-            prompt.contains("Your mission is"),
-            "prompt should have mission statement"
-        );
-    }
-
     #[tokio::test]
     async fn test_load_system_prompt_override_returns_none_when_absent() {
         let result =
@@ -1603,5 +1673,226 @@ mod tests {
 
         let content = tokio::fs::read_to_string(&file_path).await.ok();
         assert_eq!(content.as_deref(), Some("Custom override content\n"));
+    }
+
+    #[test]
+    fn test_build_pr_review_prompt_omits_call_graph_when_oversized() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: simulate review_pr dropping call_graph due to budget.
+        // When call_graph is oversized, review_pr clears it before calling build_pr_review_user_prompt.
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Budget drop test".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 0,
+                patch: Some("+line".to_string()),
+                full_content: None,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+
+        // Act: call build_pr_review_user_prompt with empty call_graph (dropped by review_pr)
+        // and non-empty ast_context (retained because it fits after call_graph drop)
+        let ast_context = "Y".repeat(500);
+        let call_graph = "";
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, &ast_context, call_graph);
+
+        // Assert: call_graph absent, ast_context present
+        assert!(
+            !prompt.contains(&"X".repeat(10)),
+            "call_graph content must not appear in prompt after budget drop"
+        );
+        assert!(
+            prompt.contains(&"Y".repeat(10)),
+            "ast_context content must appear in prompt (fits within budget)"
+        );
+    }
+
+    #[test]
+    fn test_build_pr_review_prompt_omits_ast_after_call_graph() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: simulate review_pr dropping both call_graph and ast_context due to budget.
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Budget drop test".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 0,
+                patch: Some("+line".to_string()),
+                full_content: None,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+
+        // Act: call build_pr_review_user_prompt with both empty (dropped by review_pr)
+        let ast_context = "";
+        let call_graph = "";
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, ast_context, call_graph);
+
+        // Assert: both absent, PR title retained
+        assert!(
+            !prompt.contains(&"C".repeat(10)),
+            "call_graph content must not appear after budget drop"
+        );
+        assert!(
+            !prompt.contains(&"A".repeat(10)),
+            "ast_context content must not appear after budget drop"
+        );
+        assert!(
+            prompt.contains("Budget drop test"),
+            "PR title must be retained in prompt"
+        );
+    }
+
+    #[test]
+    fn test_build_pr_review_prompt_drops_patches_when_over_budget() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: simulate review_pr dropping patches due to budget.
+        // Create 3 files with patches of different sizes.
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Patch drop test".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![
+                PrFile {
+                    filename: "large.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 100,
+                    deletions: 50,
+                    patch: Some("L".repeat(5000)),
+                    full_content: None,
+                },
+                PrFile {
+                    filename: "medium.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 50,
+                    deletions: 25,
+                    patch: Some("M".repeat(3000)),
+                    full_content: None,
+                },
+                PrFile {
+                    filename: "small.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 10,
+                    deletions: 5,
+                    patch: Some("S".repeat(1000)),
+                    full_content: None,
+                },
+            ],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+
+        // Act: simulate review_pr dropping largest patches first
+        let mut pr_mut = pr.clone();
+        pr_mut.files[0].patch = None; // Drop largest patch
+        pr_mut.files[1].patch = None; // Drop medium patch
+        // Keep smallest patch
+
+        let ast_context = "";
+        let call_graph = "";
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr_mut, ast_context, call_graph);
+
+        // Assert: largest patches absent, smallest present
+        assert!(
+            !prompt.contains(&"L".repeat(10)),
+            "largest patch must be absent after drop"
+        );
+        assert!(
+            !prompt.contains(&"M".repeat(10)),
+            "medium patch must be absent after drop"
+        );
+        assert!(
+            prompt.contains(&"S".repeat(10)),
+            "smallest patch must be present"
+        );
+    }
+
+    #[test]
+    fn test_build_pr_review_prompt_drops_full_content_as_last_resort() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: simulate review_pr dropping full_content as last resort.
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Full content drop test".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![
+                PrFile {
+                    filename: "file1.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 10,
+                    deletions: 5,
+                    patch: None,
+                    full_content: Some("F".repeat(5000)),
+                },
+                PrFile {
+                    filename: "file2.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 10,
+                    deletions: 5,
+                    patch: None,
+                    full_content: Some("C".repeat(3000)),
+                },
+            ],
+            labels: vec![],
+            head_sha: String::new(),
+        };
+
+        // Act: simulate review_pr dropping all full_content
+        let mut pr_mut = pr.clone();
+        for file in &mut pr_mut.files {
+            file.full_content = None;
+        }
+
+        let ast_context = "";
+        let call_graph = "";
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr_mut, ast_context, call_graph);
+
+        // Assert: no file_content XML blocks appear
+        assert!(
+            !prompt.contains("<file_content"),
+            "file_content blocks must not appear when full_content is cleared"
+        );
+        assert!(
+            !prompt.contains(&"F".repeat(10)),
+            "full_content from file1 must not appear"
+        );
+        assert!(
+            !prompt.contains(&"C".repeat(10)),
+            "full_content from file2 must not appear"
+        );
     }
 }

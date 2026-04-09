@@ -623,8 +623,11 @@ pub async fn fetch_pr_for_review(
     // Create GitHub client from provider
     let client = create_client_from_provider(provider)?;
 
+    // Load config to get review settings
+    let app_config = load_config().unwrap_or_default();
+
     // Fetch PR details
-    fetch_pr_details(&client, &owner, &repo, number)
+    fetch_pr_details(&client, &owner, &repo, number, &app_config.review)
         .await
         .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
@@ -734,6 +737,9 @@ pub async fn analyze_pr(
     repo_path: Option<String>,
     deep: bool,
 ) -> crate::Result<(crate::ai::types::PrReviewResponse, crate::history::AiStats)> {
+    // Load config once at function entry to ensure consistent review settings
+    let app_config = load_config().unwrap_or_default();
+    let review_config = app_config.review;
     let repo_path_ref = repo_path.as_deref();
     let (ast_ctx, call_graph_ctx) = tokio::join!(
         build_ctx_ast(repo_path_ref, &pr_details.files),
@@ -767,7 +773,8 @@ pub async fn analyze_pr(
         let pr = pr_details.clone();
         let ast = ast_ctx.clone();
         let call_graph = call_graph_ctx.clone();
-        async move { client.review_pr(&pr, &ast, &call_graph).await }
+        let review_cfg = review_config.clone();
+        async move { client.review_pr(&pr, ast, call_graph, &review_cfg).await }
     })
     .await
 }
@@ -871,8 +878,11 @@ pub async fn label_pr(
     // Create GitHub client from provider
     let client = create_client_from_provider(provider)?;
 
+    // Load config to get review settings
+    let app_config = load_config().unwrap_or_default();
+
     // Fetch PR details
-    let pr_details = fetch_pr_details(&client, &owner, &repo, number)
+    let pr_details = fetch_pr_details(&client, &owner, &repo, number, &app_config.review)
         .await
         .map_err(|e| AptuError::GitHub {
             message: e.to_string(),

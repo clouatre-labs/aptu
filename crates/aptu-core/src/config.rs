@@ -57,6 +57,9 @@ pub struct AppConfig {
     pub cache: CacheConfig,
     /// Repository settings.
     pub repos: ReposConfig,
+    /// PR review prompt settings.
+    #[serde(default)]
+    pub review: ReviewConfig,
 }
 
 /// User preferences.
@@ -303,6 +306,37 @@ pub struct ReposConfig {
 impl Default for ReposConfig {
     fn default() -> Self {
         Self { curated: true }
+    }
+}
+
+/// PR review prompt configuration.
+///
+/// Controls prompt token budgets and GitHub API constraints for PR reviews:
+///
+/// - `max_prompt_chars`: 120,000 chars is a conservative budget below common LLM context
+///   window limits (e.g., 128k token models), accounting for system prompt and response overhead.
+/// - `max_full_content_files`: 10 files caps GitHub Contents API calls per review to limit
+///   latency and rate limit usage.
+/// - `max_chars_per_file`: 4,000 chars per file keeps individual file snippets readable
+///   without dominating the prompt budget.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(default)]
+pub struct ReviewConfig {
+    /// Maximum total prompt character budget (default: `120_000`).
+    pub max_prompt_chars: usize,
+    /// Maximum number of files to fetch full content for (default: 10).
+    pub max_full_content_files: usize,
+    /// Maximum characters per file's full content (default: `4_000`).
+    pub max_chars_per_file: usize,
+}
+
+impl Default for ReviewConfig {
+    fn default() -> Self {
+        Self {
+            max_prompt_chars: 120_000, // Conservative budget for LLM context windows with overhead
+            max_full_content_files: 10, // Cap GitHub Contents API calls to limit latency and rate limits
+            max_chars_per_file: 4_000, // Keep individual file snippets readable without overwhelming prompt
+        }
     }
 }
 
@@ -880,5 +914,40 @@ model = "gemini-3.1-flash-lite-preview"
 
         assert_eq!(config.ai.model, "test-model-override");
         assert_eq!(config.ai.provider, "openrouter");
+    }
+
+    #[test]
+    fn test_review_config_defaults() {
+        // Arrange / Act: construct ReviewConfig with defaults
+        let review_config = ReviewConfig::default();
+
+        // Assert: defaults match specification
+        assert_eq!(
+            review_config.max_prompt_chars, 120_000,
+            "max_prompt_chars should default to 120_000"
+        );
+        assert_eq!(
+            review_config.max_full_content_files, 10,
+            "max_full_content_files should default to 10"
+        );
+        assert_eq!(
+            review_config.max_chars_per_file, 4_000,
+            "max_chars_per_file should default to 4_000"
+        );
+
+        // Assert: AppConfig::default().review equals ReviewConfig::default()
+        let app_config = AppConfig::default();
+        assert_eq!(
+            app_config.review.max_prompt_chars, review_config.max_prompt_chars,
+            "AppConfig review defaults should match ReviewConfig defaults"
+        );
+        assert_eq!(
+            app_config.review.max_full_content_files, review_config.max_full_content_files,
+            "AppConfig review defaults should match ReviewConfig defaults"
+        );
+        assert_eq!(
+            app_config.review.max_chars_per_file, review_config.max_chars_per_file,
+            "AppConfig review defaults should match ReviewConfig defaults"
+        );
     }
 }

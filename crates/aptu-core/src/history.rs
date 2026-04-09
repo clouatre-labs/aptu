@@ -34,6 +34,9 @@ pub struct AiStats {
     /// Fallback provider used if primary failed (None if primary succeeded).
     #[serde(default)]
     pub fallback_provider: Option<String>,
+    /// Prompt size in characters.
+    #[serde(default)]
+    pub prompt_chars: usize,
 }
 
 /// Status of a contribution.
@@ -277,6 +280,7 @@ mod tests {
             duration_ms: 1500,
             cost_usd: Some(0.0),
             fallback_provider: None,
+            prompt_chars: 0,
         };
 
         let json = serde_json::to_string(&stats).expect("serialize");
@@ -296,6 +300,7 @@ mod tests {
             duration_ms: 1500,
             cost_usd: Some(0.0),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         let json = serde_json::to_string(&contribution).expect("serialize");
@@ -337,6 +342,7 @@ mod tests {
             duration_ms: 1000,
             cost_usd: Some(0.01),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         let mut c2 = test_contribution();
@@ -348,6 +354,7 @@ mod tests {
             duration_ms: 2000,
             cost_usd: Some(0.02),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         data.contributions.push(c1);
@@ -370,6 +377,7 @@ mod tests {
             duration_ms: 1000,
             cost_usd: Some(0.01),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         let mut c2 = test_contribution();
@@ -381,6 +389,7 @@ mod tests {
             duration_ms: 2000,
             cost_usd: Some(0.02),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         data.contributions.push(c1);
@@ -402,6 +411,7 @@ mod tests {
             duration_ms: 1000,
             cost_usd: Some(0.01),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         let mut c2 = test_contribution();
@@ -413,6 +423,7 @@ mod tests {
             duration_ms: 2000,
             cost_usd: Some(0.02),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         data.contributions.push(c1);
@@ -440,6 +451,7 @@ mod tests {
             duration_ms: 1000,
             cost_usd: Some(0.01),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         let mut c2 = test_contribution();
@@ -451,6 +463,7 @@ mod tests {
             duration_ms: 2000,
             cost_usd: Some(0.02),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         let mut c3 = test_contribution();
@@ -462,6 +475,7 @@ mod tests {
             duration_ms: 1500,
             cost_usd: Some(0.015),
             fallback_provider: None,
+            prompt_chars: 0,
         });
 
         data.contributions.push(c1);

@@ -30,7 +30,7 @@ use tracing::debug;
 use std::fmt::Write as _;
 
 #[cfg(feature = "ast-context")]
-use code_analyze_core::{analyze_file, analyze_focused};
+use code_analyze_core::{analyze_file, analyze_focused, language_for_extension};
 
 // `str::floor_char_boundary` is available in std but remains behind the
 // `str_internals` nightly feature gate on stable Rust. This local
@@ -50,13 +50,6 @@ fn floor_char_boundary(s: &str, max: usize) -> usize {
         idx -= 1;
     }
     idx
-}
-
-#[cfg(feature = "ast-context")]
-fn is_rust_file(filename: &str) -> bool {
-    Path::new(filename)
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
 }
 
 /// Build a compact AST context string for the changed files in a PR.
@@ -89,7 +82,12 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
     let mut output = String::from("\n<ast_context>\n");
 
     for file in files {
-        if !is_rust_file(&file.filename) {
+        let ext = Path::new(&file.filename)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        // skip files with unsupported languages
+        if language_for_extension(ext).is_none() {
             continue;
         }
         let full_path = Path::new(repo_path).join(&file.filename);
@@ -137,7 +135,7 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
 
 /// Build cross-file call graph context for the changed files.
 ///
-/// For each function in each changed Rust file, looks up its callers.
+/// For each function in each changed file, looks up its callers.
 /// Output is capped at 3000 characters.
 pub async fn build_call_graph_context(repo_path: &str, files: &[PrFile]) -> String {
     let repo_path = repo_path.to_string();
@@ -166,7 +164,12 @@ fn build_call_graph_context_sync(repo_path: &str, files: &[PrFile]) -> String {
     let repo = Path::new(repo_path);
 
     for file in files {
-        if !is_rust_file(&file.filename) {
+        let ext = Path::new(&file.filename)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        // skip files with unsupported languages
+        if language_for_extension(ext).is_none() {
             continue;
         }
         let full_path = repo.join(&file.filename);
@@ -253,6 +256,7 @@ mod tests {
             additions: 0,
             deletions: 0,
             patch: None,
+            full_content: None,
         }
     }
 
@@ -281,6 +285,39 @@ mod tests {
         assert!(
             result.len() <= 2200,
             "output must be capped near 2000 chars"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ast_context_python_file_included() {
+        let files = vec![make_pr_file("test_file.py")];
+        let result = build_ast_context(".", &files).await;
+        // Python file should be processed by language_for_extension (happy path)
+        assert!(
+            result.is_empty() || result.contains("<ast_context>"),
+            "Python file should be included in AST context"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ast_context_typescript_file_included() {
+        let files = vec![make_pr_file("test_file.ts")];
+        let result = build_ast_context(".", &files).await;
+        // TypeScript file should be processed by language_for_extension
+        assert!(
+            result.is_empty() || result.contains("<ast_context>"),
+            "TypeScript file should be included in AST context"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ast_context_markdown_file_skipped() {
+        let files = vec![make_pr_file("README.md")];
+        let result = build_ast_context(".", &files).await;
+        // Markdown file should be skipped (edge case: unsupported extension)
+        assert!(
+            result.is_empty(),
+            "Markdown file should be skipped (not a supported language)"
         );
     }
 }

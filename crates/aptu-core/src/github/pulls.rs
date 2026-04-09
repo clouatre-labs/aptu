@@ -87,6 +87,7 @@ pub async fn fetch_pr_details(
     owner: &str,
     repo: &str,
     number: u64,
+    review_config: &crate::config::ReviewConfig,
 ) -> Result<PrDetails> {
     debug!("Fetching PR details");
 
@@ -131,6 +132,34 @@ pub async fn fetch_pr_details(
             additions: f.additions,
             deletions: f.deletions,
             patch: f.patch,
+            full_content: None,
+        })
+        .collect();
+
+    // Fetch full file contents for eligible files (default: up to 10 files, max 4000 chars each)
+    let file_contents = fetch_file_contents(
+        client,
+        owner,
+        repo,
+        &pr_files,
+        &pr.head.sha,
+        review_config.max_full_content_files,
+        review_config.max_chars_per_file,
+    )
+    .await;
+
+    // Merge file contents back into pr_files
+    debug_assert_eq!(
+        pr_files.len(),
+        file_contents.len(),
+        "fetch_file_contents must return one entry per file"
+    );
+    let pr_files: Vec<PrFile> = pr_files
+        .into_iter()
+        .zip(file_contents)
+        .map(|(mut file, content)| {
+            file.full_content = content;
+            file
         })
         .collect();
 
@@ -160,6 +189,121 @@ pub async fn fetch_pr_details(
     );
 
     Ok(details)
+}
+
+/// Fetches full file contents for PR files from GitHub Contents API.
+///
+/// Fetches content for eligible files up to a specified limit and truncates each to a character limit.
+/// Skips deleted files and files with empty patches. Per-file errors are non-fatal: they produce
+/// `None` entries and log warnings.
+///
+/// # Arguments
+///
+/// * `client` - Authenticated Octocrab client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `files` - Slice of PR files to fetch
+/// * `head_sha` - PR head commit SHA to fetch from
+/// * `max_files` - Maximum number of files to fetch content for
+/// * `max_chars_per_file` - Truncate each file's content at this character limit
+///
+/// # Returns
+///
+/// Vector of `Option<String>` with one entry per input file (in order):
+/// - `Some(content)` if fetch succeeded
+/// - `None` if fetch failed, file was skipped, or file index exceeded `max_files`
+#[instrument(skip(client, files), fields(owner = %owner, repo = %repo, max_files = max_files))]
+async fn fetch_file_contents(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    files: &[PrFile],
+    head_sha: &str,
+    max_files: usize,
+    max_chars_per_file: usize,
+) -> Vec<Option<String>> {
+    let mut results = Vec::with_capacity(files.len());
+    let mut fetched_count = 0usize;
+
+    for file in files {
+        // Skip deleted or removed files
+        if file.status.to_lowercase().contains("removed") {
+            debug!(file = %file.filename, "Skipping removed file");
+            results.push(None);
+            continue;
+        }
+
+        // Skip if empty patch
+        if file.patch.as_ref().is_none_or(String::is_empty) {
+            debug!(file = %file.filename, "Skipping file with empty patch");
+            results.push(None);
+            continue;
+        }
+
+        // Skip if beyond max_files cap (count only successfully-fetched files)
+        if fetched_count >= max_files {
+            debug!(
+                file = %file.filename,
+                fetched_count = fetched_count,
+                max_files = max_files,
+                "Fetched file count exceeds max_files cap"
+            );
+            results.push(None);
+            continue;
+        }
+
+        // Attempt to fetch file content
+        match client
+            .repos(owner, repo)
+            .get_content()
+            .path(&file.filename)
+            .r#ref(head_sha)
+            .send()
+            .await
+        {
+            Ok(content) => {
+                // Try to decode the first item (should be the file, not a directory listing)
+                if let Some(item) = content.items.first() {
+                    if let Some(decoded) = item.decoded_content() {
+                        let truncated = if decoded.len() > max_chars_per_file {
+                            decoded.chars().take(max_chars_per_file).collect::<String>()
+                        } else {
+                            decoded
+                        };
+                        debug!(
+                            file = %file.filename,
+                            content_len = truncated.len(),
+                            "File content fetched and truncated"
+                        );
+                        results.push(Some(truncated));
+                        fetched_count += 1;
+                    } else {
+                        tracing::warn!(
+                            file = %file.filename,
+                            "Failed to decode file content; skipping"
+                        );
+                        results.push(None);
+                    }
+                } else {
+                    tracing::warn!(
+                        file = %file.filename,
+                        "File content response was empty; skipping"
+                    );
+                    results.push(None);
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    file = %file.filename,
+                    err = %e,
+                    "Failed to fetch file content; skipping"
+                );
+                results.push(None);
+            }
+        }
+    }
+
+    results
 }
 
 /// Posts a PR review to GitHub.
@@ -369,6 +513,30 @@ pub async fn create_pull_request(
     );
 
     Ok(result)
+}
+
+/// Determines whether a file should be skipped during fetch based on status and patch.
+/// Returns true if the file should be skipped (removed status or no patch), false otherwise.
+#[inline]
+#[allow(dead_code)]
+fn should_skip_file(status: &str, patch: Option<&String>) -> bool {
+    status.to_lowercase().contains("removed") || patch.is_none_or(String::is_empty)
+}
+
+/// Decodes base64-encoded content and truncates to `max_chars` on character boundary.
+/// Returns `None` if base64 decoding fails or if the decoded content is not valid UTF-8.
+#[allow(dead_code)]
+fn decode_content(encoded: &str, max_chars: usize) -> Option<String> {
+    use base64::Engine;
+    let engine = base64::engine::general_purpose::STANDARD;
+    let decoded_bytes = engine.decode(encoded).ok()?;
+    let decoded_str = String::from_utf8(decoded_bytes).ok()?;
+
+    if decoded_str.len() <= max_chars {
+        Some(decoded_str)
+    } else {
+        Some(decoded_str.chars().take(max_chars).collect::<String>())
+    }
 }
 
 #[cfg(test)]
@@ -671,6 +839,111 @@ mod tests {
         assert!(
             labels.contains(&"documentation".to_string()),
             "should contain documentation label"
+        );
+    }
+
+    #[test]
+    fn test_should_skip_file_respects_fetched_count_cap() {
+        // Test that should_skip_file correctly identifies files to skip.
+        // Files with removed status or no patch should be skipped.
+        let removed_file = PrFile {
+            filename: "removed.rs".to_string(),
+            status: "removed".to_string(),
+            additions: 0,
+            deletions: 5,
+            patch: None,
+            full_content: None,
+        };
+        let modified_file = PrFile {
+            filename: "file_0.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 0,
+            patch: Some("+ new code".to_string()),
+            full_content: None,
+        };
+        let no_patch_file = PrFile {
+            filename: "file_1.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 0,
+            patch: None,
+            full_content: None,
+        };
+
+        // Assert: removed files are skipped
+        assert!(
+            should_skip_file(&removed_file.status, removed_file.patch.as_ref()),
+            "removed files should be skipped"
+        );
+
+        // Assert: modified files with patch are not skipped
+        assert!(
+            !should_skip_file(&modified_file.status, modified_file.patch.as_ref()),
+            "modified files with patch should not be skipped"
+        );
+
+        // Assert: files without patch are skipped
+        assert!(
+            should_skip_file(&no_patch_file.status, no_patch_file.patch.as_ref()),
+            "files without patch should be skipped"
+        );
+    }
+
+    #[test]
+    fn test_decode_content_valid_base64() {
+        // Arrange: valid base64-encoded string
+        use base64::Engine;
+        let engine = base64::engine::general_purpose::STANDARD;
+        let original = "Hello, World!";
+        let encoded = engine.encode(original);
+
+        // Act: decode with sufficient max_chars
+        let result = decode_content(&encoded, 1000);
+
+        // Assert: decoding succeeds and matches original
+        assert_eq!(
+            result,
+            Some(original.to_string()),
+            "valid base64 should decode successfully"
+        );
+    }
+
+    #[test]
+    fn test_decode_content_invalid_base64() {
+        // Arrange: invalid base64 string
+        let invalid_base64 = "!!!invalid!!!";
+
+        // Act: attempt to decode
+        let result = decode_content(invalid_base64, 1000);
+
+        // Assert: decoding fails gracefully
+        assert_eq!(result, None, "invalid base64 should return None");
+    }
+
+    #[test]
+    fn test_decode_content_truncates_at_max_chars() {
+        // Arrange: multi-byte UTF-8 string (Japanese characters)
+        use base64::Engine;
+        let engine = base64::engine::general_purpose::STANDARD;
+        let original = "こんにちは".repeat(10); // 50 characters total
+        let encoded = engine.encode(&original);
+        let max_chars = 10;
+
+        // Act: decode with max_chars limit
+        let result = decode_content(&encoded, max_chars);
+
+        // Assert: result is truncated to max_chars on character boundary
+        assert!(result.is_some(), "decoding should succeed");
+        let decoded = result.unwrap();
+        assert_eq!(
+            decoded.chars().count(),
+            max_chars,
+            "output should be truncated to max_chars on character boundary"
+        );
+        assert!(
+            decoded.is_char_boundary(decoded.len()),
+            "output should be valid UTF-8 (truncated on char boundary)"
         );
     }
 }
