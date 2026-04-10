@@ -143,13 +143,13 @@ fn default_retry_max_attempts() -> u32 {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct AiConfig {
-    /// AI provider: "openrouter" or "ollama".
+    /// AI provider: one of `"gemini"`, `"openrouter"`, `"groq"`, `"cerebras"`, `"zenmux"`, or `"zai"`.
     pub provider: String,
     /// Model identifier.
     pub model: String,
     /// Request timeout in seconds.
     pub timeout_seconds: u64,
-    /// Allow paid models (default: false for cost control).
+    /// Allow paid models (default: true).
     pub allow_paid_models: bool,
     /// Maximum tokens for API responses.
     pub max_tokens: u32,

@@ -466,8 +466,7 @@ pub async fn fetch_issue_with_repo_context(
     // Extract issue from nested structure
     let issue_data = data.get("issue").and_then(|v| v.get("issue"));
 
-    // Check if issue is null (not found)
-    if issue_data.is_none() || issue_data.is_some_and(serde_json::Value::is_null) {
+    let Some(issue_val) = issue_data.filter(|v| !v.is_null()) else {
         debug!("Issue not found in GraphQL response, checking if reference is a PR");
 
         // Try to fetch as a PR to provide a better error message
@@ -482,10 +481,10 @@ pub async fn fetch_issue_with_repo_context(
 
         // Not a PR, return the original error
         anyhow::bail!("Issue not found in GraphQL response");
-    }
+    };
 
-    let issue: IssueNodeDetailed = serde_json::from_value(issue_data.unwrap().clone())
-        .context("Failed to parse issue data")?;
+    let issue: IssueNodeDetailed =
+        serde_json::from_value(issue_val.clone()).context("Failed to parse issue data")?;
 
     let repo_data = data
         .get("repository")
