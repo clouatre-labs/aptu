@@ -1,56 +1,37 @@
 {
   "generated_at": "2026-04-10",
-  "note": "Baseline measured pre-#1096; after values are null placeholders (pending #1096 merge).",
+  "note": "Baseline measured pre-#1103; after values measured post-#1103 merge.",
   "operations": {
     "triage": {
-      "before": {
-        "persona_chars": 147,
-        "tooling_chars": 1370,
-        "guidelines_chars": 3240,
-        "total_chars": 4757
-      },
-      "after": null,
-      "reduction_pct": null
+      "before": {"persona_chars": 147, "tooling_chars": 1370, "guidelines_chars": 3240, "total_chars": 4757},
+      "after":  {"persona_chars": 147, "tooling_chars":  957, "guidelines_chars": 2233, "total_chars": 3337},
+      "reduction_pct": 29.9
     },
     "pr_review": {
-      "before": {
-        "persona_chars": 122,
-        "tooling_chars": 1370,
-        "guidelines_chars": 3212,
-        "total_chars": 4704
-      },
-      "after": null,
-      "reduction_pct": null
+      "before": {"persona_chars": 122, "tooling_chars": 1370, "guidelines_chars": 3212, "total_chars": 4704},
+      "after":  {"persona_chars": 122, "tooling_chars":  957, "guidelines_chars": 1859, "total_chars": 2938},
+      "reduction_pct": 37.5
     },
     "create": {
-      "before": {
-        "persona_chars": 131,
-        "tooling_chars": 1370,
-        "guidelines_chars": 2070,
-        "total_chars": 3571
-      },
-      "after": null,
-      "reduction_pct": null
+      "before": {"persona_chars": 131, "tooling_chars": 1370, "guidelines_chars": 2070, "total_chars": 3571},
+      "after":  {"persona_chars": 131, "tooling_chars":  957, "guidelines_chars": 1446, "total_chars": 2534},
+      "reduction_pct": 29.0
     },
     "release": {
-      "before": {
-        "persona_chars": 95,
-        "tooling_chars": 1370,
-        "guidelines_chars": 2480,
-        "total_chars": 3945
-      },
-      "after": null,
-      "reduction_pct": null
+      "before": {"persona_chars": 95, "tooling_chars": 1370, "guidelines_chars": 2480, "total_chars": 3945},
+      "after":  {"persona_chars": 95, "tooling_chars":  957, "guidelines_chars": 1733, "total_chars": 2785},
+      "reduction_pct": 29.4
     },
     "pr_label": {
-      "before": {
-        "persona_chars": 135,
-        "tooling_chars": 1370,
-        "guidelines_chars": 962,
-        "total_chars": 2467
-      },
-      "after": null,
-      "reduction_pct": null
+      "before": {"persona_chars": 135, "tooling_chars": 1370, "guidelines_chars":  962, "total_chars": 2467},
+      "after":  {"persona_chars": 135, "tooling_chars":  957, "guidelines_chars":  615, "total_chars": 1707},
+      "reduction_pct": 30.8
     }
+  },
+  "summary": {
+    "total_before": 19444,
+    "total_after": 13301,
+    "total_saved": 6143,
+    "overall_reduction_pct": 31.6
   }
 }
