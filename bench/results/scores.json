@@ -1,0 +1,30 @@
+{
+  "note": "Placeholder — populate by running bench/protocol.md steps 1-4 after #1096 merges.",
+  "threshold": ">=4/5 on all fixtures in both groups to pass",
+  "triage": {
+    "fixtures": ["clouatre-labs/aptu#737", "clouatre-labs/aptu#800", "clouatre-labs/aptu#850"],
+    "before": [
+      {"fixture": "clouatre-labs/aptu#737", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "clouatre-labs/aptu#800", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "clouatre-labs/aptu#850", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
+    ],
+    "after": [
+      {"fixture": "clouatre-labs/aptu#737", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "clouatre-labs/aptu#800", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "clouatre-labs/aptu#850", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
+    ]
+  },
+  "pr_review": {
+    "note": "Select 3 recently merged aptu PRs with known reviewer feedback — see bench/protocol.md section 2.",
+    "before": [
+      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
+    ],
+    "after": [
+      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
+    ]
+  }
+}
