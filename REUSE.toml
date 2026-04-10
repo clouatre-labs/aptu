@@ -49,6 +49,12 @@ SPDX-FileCopyrightText = "2026 Aptu Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
+path = ["bench/**/*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Aptu Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
 path = ["scripts/**/*"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Aptu Contributors"

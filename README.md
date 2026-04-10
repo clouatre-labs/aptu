@@ -158,6 +158,20 @@ Aptu is a multi-crate Rust workspace. See [docs/ARCHITECTURE.md](https://github.
 
 See [docs/ROADMAP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ROADMAP.md) for the project direction across near-term, medium-term, and long-term horizons.
 
+## Efficiency
+
+System prompt sizes (chars) — baseline measured pre-#1096; after values pending [#1096](https://github.com/clouatre-labs/aptu/pull/1096) merge.
+
+| Operation | Before (chars) | After (chars) | Reduction |
+|-----------|---------------|---------------|-----------|
+| triage    | 4757 | TBD | TBD |
+| pr_review | 4704 | TBD | TBD |
+| create    | 3571 | TBD | TBD |
+| release   | 3945 | TBD | TBD |
+| pr_label  | 2467 | TBD | TBD |
+
+See [`bench/`](bench/) for the measurement script, protocol, and scoring rubric.
+
 ## Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines. See [docs/REPO-STANDARDS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/REPO-STANDARDS.md) for a full artifact map and rationale covering CI workflows, tooling, and security controls.

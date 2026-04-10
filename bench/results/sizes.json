@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-04-10",
+  "note": "Baseline measured pre-#1096; after values are null placeholders (pending #1096 merge).",
+  "operations": {
+    "triage": {
+      "before": {
+        "persona_chars": 147,
+        "tooling_chars": 1370,
+        "guidelines_chars": 3240,
+        "total_chars": 4757
+      },
+      "after": null,
+      "reduction_pct": null
+    },
+    "pr_review": {
+      "before": {
+        "persona_chars": 122,
+        "tooling_chars": 1370,
+        "guidelines_chars": 3212,
+        "total_chars": 4704
+      },
+      "after": null,
+      "reduction_pct": null
+    },
+    "create": {
+      "before": {
+        "persona_chars": 131,
+        "tooling_chars": 1370,
+        "guidelines_chars": 2070,
+        "total_chars": 3571
+      },
+      "after": null,
+      "reduction_pct": null
+    },
+    "release": {
+      "before": {
+        "persona_chars": 95,
+        "tooling_chars": 1370,
+        "guidelines_chars": 2480,
+        "total_chars": 3945
+      },
+      "after": null,
+      "reduction_pct": null
+    },
+    "pr_label": {
+      "before": {
+        "persona_chars": 135,
+        "tooling_chars": 1370,
+        "guidelines_chars": 962,
+        "total_chars": 2467
+      },
+      "after": null,
+      "reduction_pct": null
+    }
+  }
+}
