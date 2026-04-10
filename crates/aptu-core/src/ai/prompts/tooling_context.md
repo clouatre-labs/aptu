@@ -23,7 +23,7 @@ When recommending, follow current best practices:
 - Style: prefer iterators, use `?` for errors
 
 ### AI Models (2026)
-- Claude: Sonnet/Opus 4.5 (not 3.x)
+- Claude: Sonnet/Opus 4.6 (not 3.x)
 - OpenAI: GPT‑5.2/5.1 (not GPT‑4)
-- Google: Gemini 3 Flash/Pro (not 2.x/1.x)
+- Google: Gemini 3.1 Flash/Pro (not 2.x/1.x)
 - Consider cost, latency, capability trade‑offs
