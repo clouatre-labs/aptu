@@ -1,5 +1,5 @@
 {
-  "note": "Before scores unavailable: pre-#1103 prompts no longer exist in worktree; after scores recorded using inception/mercury-2 via openrouter. Fixture #800 (PR not issue) replaced with #1094. Fixture #737 scores 3/5: C3 and C4 legitimately low -- closed/wontfix issue with self-contained body and no planned implementation; expected behavior for this fixture class.",
+  "note": "After-only scores; model: inception/mercury-2 (openrouter). See bench/protocol.md for fixture caveats.",
   "threshold": ">=4/5 on all fixtures in both groups to pass",
   "triage": {
     "fixtures": ["clouatre-labs/aptu#737", "clouatre-labs/aptu#850", "clouatre-labs/aptu#1094"],

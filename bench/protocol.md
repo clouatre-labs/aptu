@@ -30,3 +30,9 @@ Score each fixture using the evaluation rubric (`bench/rubric.md`). A pass requi
 Reference the generated JSON files:
 - `bench/results/sizes.json`
 - `bench/results/scores.json`
+
+## Fixture Caveats
+
+- **#800** is a pull request, not an issue; replaced with **#1094** for triage scoring.
+- **#737** is a closed/wontfix issue with a self-contained body. C3 (clarifying questions) and C4 (implementation_approach) legitimately score 0 for this fixture class; 3/5 is the expected result.
+- **Before scores** are unavailable: pre-#1103 prompts no longer exist in the worktree; only after scores were recorded.
