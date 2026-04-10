@@ -12,6 +12,9 @@ pub struct FfiCuratedRepo {
     /// TODO(#1100): always returns 0; fetching live counts requires a GitHub API call
     /// not yet implemented.
     pub open_issues_count: u32,
+    /// Last activity timestamp for this repository.
+    /// TODO(#1100): always returns `"unknown"`; fetching live timestamps requires a GitHub API call
+    /// not yet implemented.
     pub last_activity: String,
 }
 
