@@ -31,6 +31,17 @@ Reference the generated JSON files:
 - `bench/results/sizes.json`
 - `bench/results/scores.json`
 
+## Before Baseline Preservation
+
+To capture a valid `before` baseline for future prompt-changing PRs:
+
+1. Before merging the PR, run `bash bench/measure.sh` on the base branch and commit the updated `bench/results/sizes.json`.
+2. For each triage fixture, run `aptu issue triage <ref> --output json --dry-run > bench/results/before-triage-<ref>.json`.
+3. For each PR review fixture, run `aptu pr review <ref> --output json --dry-run > bench/results/before-pr-review-<ref>.json`.
+4. Commit the captured outputs. After the PR merges, repeat steps 2-3 for `after` outputs, then score both sets against `bench/rubric.md`.
+
+If the before state is missed (e.g. PR already merged), record only `after` scores and annotate the `before` arrays as `null` with an explanatory note -- as done in the initial run.
+
 ## Fixture Caveats
 
 - **#800** is a pull request, not an issue; replaced with **#1094** for triage scoring.
