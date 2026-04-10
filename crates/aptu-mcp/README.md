@@ -37,7 +37,7 @@ Add to your MCP client configuration:
       "args": ["run"],
       "env": {
         "GITHUB_TOKEN": "ghp_...",
-        "GROQ_API_KEY": "gsk_..."
+        "OPENROUTER_API_KEY": "sk-or-..."
       }
     }
   }
