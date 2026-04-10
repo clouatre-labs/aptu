@@ -26,7 +26,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptu-core = "0.2"
+aptu-core = "0.3"
 ```
 
 ### Optional Features
@@ -34,12 +34,13 @@ aptu-core = "0.2"
 | Feature | Description |
 |---------|-------------|
 | `keyring` | Secure token storage using system keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager) |
+| `ast-context` | AST and call-graph context injection for PR reviews (Rust, Go, Python, TypeScript, JS, C/C++, C#, Java, Fortran) |
 
 To enable optional features:
 
 ```toml
 [dependencies]
-aptu-core = { version = "0.2", features = ["keyring"] }
+aptu-core = { version = "0.3", features = ["keyring"] }
 ```
 
 ## Example
