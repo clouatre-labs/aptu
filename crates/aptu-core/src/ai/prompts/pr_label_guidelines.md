@@ -1,14 +1,10 @@
-Response format: json_object
-
-Reason through each step before producing output.
-
 Guidelines:
-- suggested_labels: Suggest 1-3 relevant GitHub labels based on the PR content. Common labels include: bug, enhancement, documentation, feature, refactor, performance, security, testing, ci, dependencies. Choose labels that best describe the type of change.
-- Focus on the PR title, description, and file paths to determine appropriate labels.
-- Prefer specific labels over generic ones when possible.
-- Only suggest labels that are commonly used in GitHub repositories.
+- suggested_labels: 1-3 labels (bug, enhancement, documentation, feature, refactor, performance, security, testing, ci, dependencies). Use PR title, description, files.
+- Prefer specific over generic. Use common labels.
 
-Be concise and practical.
+Concise.
+
+
 
 ## Examples
 

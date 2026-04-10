@@ -1,18 +1,18 @@
-Reason through each step before producing output.
-
 Guidelines:
-- summary: Concise explanation of the problem/request and why it matters
-- suggested_labels: Prefer labels from the Available Labels list provided. Choose from: bug, enhancement, documentation, question, duplicate, invalid, wontfix. If a more specific label exists in the repository, use it instead.
-- clarifying_questions: Only include if the issue lacks critical information. Leave empty array if clear. Skip questions already answered in comments.
-- potential_duplicates: Only include if you detect likely duplicates. Leave empty array if none. A duplicate describes the exact same problem.
-- related_issues: Include contextually related issues that are NOT duplicates. Leave empty array if none.
-- status_note: Detect if someone has claimed the issue ("I'd like to work on this", "I'll submit a PR", "working on this"). If claimed, note it (e.g., "Issue claimed by @username"). Otherwise null or empty.
-- contributor_guidance: Assess beginner-friendliness: scope, file count, required knowledge, clarity. Set beginner_friendly true if all factors are favorable. Provide 1-2 sentence reasoning.
-- implementation_approach: Suggest specific files/modules to modify from the repository structure. Be concrete. Leave null or empty if no guidance possible.
-- suggested_milestone: Suggest a milestone from the Available Milestones list only if clearly relevant. Leave null or empty if not applicable.
-- complexity: Always populate. level=low (1-2 files, <100 LOC), medium (3-5 files, 100-300 LOC), high (5+ files, 300+ LOC or deep knowledge). Populate affected_areas with likely file paths. For high complexity, set recommendation to a concrete decomposition suggestion.
+- summary: Problem explanation and why matters
+- suggested_labels: bug, enhancement, documentation, question, duplicate, invalid, wontfix
+- clarifying_questions: Empty if clear
+- potential_duplicates: Empty if none
+- related_issues: NOT duplicates; empty if none
+- status_note: Detect claimed ("working on this", "I'll submit PR"). Note claimed or null.
+- contributor_guidance: beginner_friendly true if favorable (scope, files, knowledge). 1-2 sentence.
+- implementation_approach: Specific files/modules; null if none.
+- suggested_milestone: If relevant; null otherwise.
+- complexity: Always populate. low (1-2 files, <100 LOC), medium (3-5 files, 100-300), high (5+ files, 300+ LOC). Include affected_areas. High: add decomposition.
 
-Be helpful, concise, and actionable.
+Actionable.
+
+
 
 ## Examples
 

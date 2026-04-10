@@ -1,17 +1,12 @@
-Reason through each step before producing output.
-
 Guidelines:
-- formatted_title: Use conventional commit style (e.g., "feat: add search functionality", "fix: resolve memory leak in parser"). Keep it concise (under 72 characters). No period at the end.
-- formatted_body: Structure the body with clear sections:
-  * Start with a brief 1-2 sentence summary if not already present
-  * Use markdown formatting with headers (## Summary, ## Details, ## Steps to Reproduce, ## Expected Behavior, ## Actual Behavior, ## Context, etc.)
-  * Keep sentences clear and concise
-  * Use bullet points for lists
-  * Improve grammar and clarity
-  * Add relevant context if missing
-- suggested_labels: Suggest up to 3 relevant GitHub labels. Common ones: bug, enhancement, documentation, question, duplicate, invalid, wontfix. Choose based on the issue content.
+- formatted_title: Conventional ("feat: add", "fix: leak"). <72 chars. No period.
+- formatted_body: Markdown headers. 1-2 opening. Bullets. Grammar, clarity, context.
+- suggested_labels: Up to 3 (bug, enhancement, docs, question, duplicate, invalid, wontfix).
 
-Be professional but friendly. Maintain the user's intent while improving clarity and structure.
+Professional, friendly. Maintain intent.
+
+
+
 
 ## Examples
 
