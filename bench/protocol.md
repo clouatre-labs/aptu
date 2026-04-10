@@ -30,3 +30,20 @@ Score each fixture using the evaluation rubric (`bench/rubric.md`). A pass requi
 Reference the generated JSON files:
 - `bench/results/sizes.json`
 - `bench/results/scores.json`
+
+## Before Baseline Preservation
+
+To capture a valid `before` baseline for future prompt-changing PRs:
+
+1. Before merging the PR, run `bash bench/measure.sh` on the base branch and commit the updated `bench/results/sizes.json`.
+2. For each triage fixture, run `aptu issue triage <ref> --output json --dry-run > bench/results/before-triage-<ref>.json`.
+3. For each PR review fixture, run `aptu pr review <ref> --output json --dry-run > bench/results/before-pr-review-<ref>.json`.
+4. Commit the captured outputs. After the PR merges, repeat steps 2-3 for `after` outputs, then score both sets against `bench/rubric.md`.
+
+If the before state is missed (e.g. PR already merged), record only `after` scores and annotate the `before` arrays as `null` with an explanatory note -- as done in the initial run.
+
+## Fixture Caveats
+
+- **#800** is a pull request, not an issue; replaced with **#1094** for triage scoring.
+- **#737** is a closed/wontfix issue with a self-contained body. C3 (clarifying questions) and C4 (implementation_approach) legitimately score 0 for this fixture class; 3/5 is the expected result.
+- **Before scores** are unavailable: pre-#1103 prompts no longer exist in the worktree; only after scores were recorded.

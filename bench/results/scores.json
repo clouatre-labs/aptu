@@ -1,30 +1,30 @@
 {
-  "note": "Placeholder — populate by running bench/protocol.md steps 1-4 after #1096 merges.",
+  "note": "After-only scores; model: inception/mercury-2 (openrouter). See bench/protocol.md for fixture caveats.",
   "threshold": ">=4/5 on all fixtures in both groups to pass",
   "triage": {
-    "fixtures": ["clouatre-labs/aptu#737", "clouatre-labs/aptu#800", "clouatre-labs/aptu#850"],
+    "fixtures": ["clouatre-labs/aptu#737", "clouatre-labs/aptu#850", "clouatre-labs/aptu#1094"],
     "before": [
       {"fixture": "clouatre-labs/aptu#737", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
-      {"fixture": "clouatre-labs/aptu#800", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
-      {"fixture": "clouatre-labs/aptu#850", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
+      {"fixture": "clouatre-labs/aptu#850", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "clouatre-labs/aptu#1094", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
     ],
     "after": [
-      {"fixture": "clouatre-labs/aptu#737", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
-      {"fixture": "clouatre-labs/aptu#800", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
-      {"fixture": "clouatre-labs/aptu#850", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
+      {"fixture": "clouatre-labs/aptu#737", "C1": 1, "C2": 1, "C3": 0, "C4": 0, "C5": 1, "score": 3, "note": "3/5 expected: closed/wontfix, self-contained body (C3=0), no planned implementation (C4=0)"},
+      {"fixture": "clouatre-labs/aptu#850", "C1": 1, "C2": 1, "C3": 0, "C4": 1, "C5": 1, "score": 4},
+      {"fixture": "clouatre-labs/aptu#1094", "C1": 1, "C2": 1, "C3": 1, "C4": 1, "C5": 1, "score": 5}
     ]
   },
   "pr_review": {
-    "note": "Select 3 recently merged aptu PRs with known reviewer feedback — see bench/protocol.md section 2.",
+    "note": "Fixtures: recently merged aptu PRs with known approve outcome.",
     "before": [
-      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
-      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
-      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
+      {"fixture": "clouatre-labs/aptu#1101", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "clouatre-labs/aptu#1098", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
+      {"fixture": "clouatre-labs/aptu#1091", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
     ],
     "after": [
-      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
-      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null},
-      {"fixture": "TBD", "C1": null, "C2": null, "C3": null, "C4": null, "C5": null, "score": null}
+      {"fixture": "clouatre-labs/aptu#1101", "C1": 1, "C2": 1, "C3": 1, "C4": 1, "C5": 1, "score": 5},
+      {"fixture": "clouatre-labs/aptu#1098", "C1": 1, "C2": 1, "C3": 1, "C4": 1, "C5": 1, "score": 5},
+      {"fixture": "clouatre-labs/aptu#1091", "C1": 1, "C2": 1, "C3": 1, "C4": 1, "C5": 1, "score": 5}
     ]
   }
 }
