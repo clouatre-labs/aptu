@@ -226,16 +226,7 @@ async fn fetch_file_contents(
     let mut fetched_count = 0usize;
 
     for file in files {
-        // Skip deleted or removed files
-        if file.status.to_lowercase().contains("removed") {
-            debug!(file = %file.filename, "Skipping removed file");
-            results.push(None);
-            continue;
-        }
-
-        // Skip if empty patch
-        if file.patch.as_ref().is_none_or(String::is_empty) {
-            debug!(file = %file.filename, "Skipping file with empty patch");
+        if should_skip_file(&file.filename, &file.status, file.patch.as_ref()) {
             results.push(None);
             continue;
         }
@@ -516,33 +507,37 @@ pub async fn create_pull_request(
 }
 
 /// Determines whether a file should be skipped during fetch based on status and patch.
-/// Returns true if the file should be skipped (removed status or no patch), false otherwise.
-#[inline]
-#[allow(dead_code)]
-fn should_skip_file(status: &str, patch: Option<&String>) -> bool {
-    status.to_lowercase().contains("removed") || patch.is_none_or(String::is_empty)
-}
-
-/// Decodes base64-encoded content and truncates to `max_chars` on character boundary.
-/// Returns `None` if base64 decoding fails or if the decoded content is not valid UTF-8.
-#[allow(dead_code)]
-fn decode_content(encoded: &str, max_chars: usize) -> Option<String> {
-    use base64::Engine;
-    let engine = base64::engine::general_purpose::STANDARD;
-    let decoded_bytes = engine.decode(encoded).ok()?;
-    let decoded_str = String::from_utf8(decoded_bytes).ok()?;
-
-    if decoded_str.len() <= max_chars {
-        Some(decoded_str)
-    } else {
-        Some(decoded_str.chars().take(max_chars).collect::<String>())
+/// Emits a debug log with the skip reason. Returns true if the file should be skipped
+/// (removed status or no patch), false otherwise.
+fn should_skip_file(filename: &str, status: &str, patch: Option<&String>) -> bool {
+    if status.to_lowercase().contains("removed") {
+        debug!(file = %filename, "Skipping removed file");
+        return true;
     }
+    if patch.is_none_or(String::is_empty) {
+        debug!(file = %filename, "Skipping file with empty patch");
+        return true;
+    }
+    false
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ai::types::CommentSeverity;
+
+    fn decode_content(encoded: &str, max_chars: usize) -> Option<String> {
+        use base64::Engine;
+        let engine = base64::engine::general_purpose::STANDARD;
+        let decoded_bytes = engine.decode(encoded).ok()?;
+        let decoded_str = String::from_utf8(decoded_bytes).ok()?;
+
+        if decoded_str.len() <= max_chars {
+            Some(decoded_str)
+        } else {
+            Some(decoded_str.chars().take(max_chars).collect::<String>())
+        }
+    }
 
     #[test]
     fn test_pr_create_result_fields() {
@@ -873,19 +868,31 @@ mod tests {
 
         // Assert: removed files are skipped
         assert!(
-            should_skip_file(&removed_file.status, removed_file.patch.as_ref()),
+            should_skip_file(
+                &removed_file.filename,
+                &removed_file.status,
+                removed_file.patch.as_ref()
+            ),
             "removed files should be skipped"
         );
 
         // Assert: modified files with patch are not skipped
         assert!(
-            !should_skip_file(&modified_file.status, modified_file.patch.as_ref()),
+            !should_skip_file(
+                &modified_file.filename,
+                &modified_file.status,
+                modified_file.patch.as_ref()
+            ),
             "modified files with patch should not be skipped"
         );
 
         // Assert: files without patch are skipped
         assert!(
-            should_skip_file(&no_patch_file.status, no_patch_file.patch.as_ref()),
+            should_skip_file(
+                &no_patch_file.filename,
+                &no_patch_file.status,
+                no_patch_file.patch.as_ref()
+            ),
             "files without patch should be skipped"
         );
     }
