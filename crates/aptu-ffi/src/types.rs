@@ -9,8 +9,8 @@ pub struct FfiCuratedRepo {
     pub description: String,
     pub language: String,
     /// Open issue count for this repository.
-    /// TODO: always returns 0; fetching live counts requires a GitHub API call
-    /// not yet implemented (tracked as Phase 2 work).
+    /// TODO(#1100): always returns 0; fetching live counts requires a GitHub API call
+    /// not yet implemented.
     pub open_issues_count: u32,
     pub last_activity: String,
 }
