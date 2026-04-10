@@ -2,7 +2,7 @@
 
 //! AI integration module.
 //!
-//! Provides AI-assisted issue triage using multiple AI providers (Gemini, `OpenRouter`, Groq, Cerebras).
+//! Provides AI-assisted issue triage using multiple AI providers (Gemini, `OpenRouter`, Groq, Cerebras, Zenmux, Z.AI).
 
 pub mod circuit_breaker;
 pub mod client;

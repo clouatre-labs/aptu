@@ -12,7 +12,7 @@ MCP server for Aptu - AI-Powered Triage Utility.
 
 ## Features
 
-- **5 Tools** - triage_issue, review_pr, scan_security, post_triage, post_review
+- **6 Tools** - triage_issue, review_pr, scan_security, post_triage, post_review, health
 - **2 Prompts** - triage_guide and review_checklist for guided workflows
 - **4 Resources** - curated repos, good first issues, config, and repo detail template
 - **Dual Transport** - stdio for local editors, HTTP for remote deployments
@@ -37,7 +37,7 @@ Add to your MCP client configuration:
       "args": ["run"],
       "env": {
         "GITHUB_TOKEN": "ghp_...",
-        "GROQ_API_KEY": "gsk_..."
+        "OPENROUTER_API_KEY": "sk-or-..."
       }
     }
   }
@@ -49,9 +49,9 @@ Add to your MCP client configuration:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GITHUB_TOKEN` | Yes | GitHub personal access token |
-| `GROQ_API_KEY` | Yes | Groq API key (default provider) |
+| `OPENROUTER_API_KEY` | Yes | OpenRouter API key (default provider) |
 | `AI_API_KEY` | No | AI provider API key (fallback for all providers) |
-| `OPENROUTER_API_KEY` | No | Provider-specific key (takes precedence over `AI_API_KEY`) |
+| `GROQ_API_KEY` | No | Groq API key (alternative provider) |
 | `RUST_LOG` | No | Logging level (default: `info`) |
 
 ## Development

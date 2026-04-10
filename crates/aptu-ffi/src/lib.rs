@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//! UniFFI bindings for Aptu.
+//!
+//! Exposes triage, PR review, and repository management functionality
+//! from `aptu-core` to Swift and Kotlin via the UniFFI foreign-function interface.
+
 pub mod auth;
 pub mod error;
 pub mod keychain;
