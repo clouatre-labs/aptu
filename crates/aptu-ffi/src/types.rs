@@ -8,9 +8,7 @@ pub struct FfiCuratedRepo {
     pub name: String,
     pub description: String,
     pub language: String,
-    /// Open issue count for this repository. Always returns 0 until #1100 is implemented.
     pub open_issues_count: u32,
-    /// Last activity timestamp for this repository. Always returns `"unknown"` until #1100 is implemented.
     pub last_activity: String,
 }
 
