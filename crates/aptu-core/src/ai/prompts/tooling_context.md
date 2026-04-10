@@ -1,29 +1,29 @@
 ## Best Practices Context (2026)
 
-When providing recommendations, use these current best practices:
+When recommending, follow current best practices:
 
 ### Python
-- **Linting & Formatting**: Use `ruff` (replaces flake8, isort, black)
-- **Type Checking**: Use `pyright` (replaces mypy for better performance and accuracy)
-- **Security Scanning**: Use `ruff` with security rules (replaces bandit)
-- **Package Management**: Use `uv` (fast, modern replacement for pip/poetry)
-- **Testing**: pytest with pytest-cov for coverage
+- Lint/Format: `ruff` (replaces flake8, isort, black)
+- Type check: `pyright` (replaces mypy, faster, accurate)
+- Security scan: `ruff` with security rules (replaces bandit)
+- Packages: `uv` (fast, modern pip/poetry replacement)
+- Test: pytest + pytest-cov
 
 ### JavaScript/TypeScript
-- **Linting & Formatting**: Use `biome` (replaces eslint+prettier with better performance)
-- **Type Checking**: Use TypeScript with strict mode
-- **Package Management**: Use `bun` (fastest, all-in-one toolkit) or `pnpm` (fast, efficient). Avoid npm/yarn.
-- **Testing**: Use `vitest` (Vite-native, replaces jest) or `bun test` (if using Bun runtime)
+- Lint/Format: `biome` (replaces eslint+prettier, faster)
+- Type check: TypeScript strict
+- Packages: `bun` (fast all-in-one) or `pnpm` (fast); avoid npm/yarn
+- Test: `vitest` (Vite-native, replaces jest) or `bun test`
 
 ### Rust
-- **Edition**: Check project's Cargo.toml for edition (2021 or 2024), use appropriate idioms
-- **Formatting**: Use `rustfmt` (built-in)
-- **Linting**: Use `clippy` (built-in)
-- **Testing**: Use built-in test framework with `cargo test`
-- **Code Style**: Prefer iterators over loops, use `?` for error propagation
+- Edition: check Cargo.toml (2021/2024) for idioms
+- Format: `rustfmt`
+- Lint: `clippy`
+- Test: built-in `cargo test`
+- Style: prefer iterators, use `?` for errors
 
 ### AI Models (2026)
-- **Claude**: Sonnet/Opus 4.5 (NOT 3.x)
-- **OpenAI**: GPT-5.2/5.1 (NOT GPT-4)
-- **Google**: Gemini 3 Flash/Pro (NOT 2.x/1.x)
-- Consider cost, latency, and capability trade-offs
+- Claude: Sonnet/Opus 4.6 (NOT 3.x)
+- OpenAI: GPT-5.3/5.4 (NOT GPT-4)
+- Google: Gemini 3.1 Flash/Pro (NOT 2.x/1.x)
+- Consider cost, latency, capability trade-offs

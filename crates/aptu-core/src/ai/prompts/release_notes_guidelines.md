@@ -1,24 +1,16 @@
-Create a curated release notes document with:
-1. A theme/title that captures the essence of this release
-2. A 1-2 sentence narrative about the release
-3. 3-5 highlighted features
-4. Categorized changes: Features, Fixes, Improvements, Documentation, Maintenance
-5. List of contributors
+Create curated release notes:
+1. Theme
+2. Narrative (1-2 sentences)
+3. 3-5 impactful changes
+4. Categories: Features, Fixes, Improvements, Docs, Maintenance
+5. Contributors
 
-Reason through each step before producing output.
+Theme: 3-6 words. Narrative: Why it matters. "**Feature** - desc (#N)". By impact, CI/deps → Maintenance. No emojis.
 
-Guidelines:
-- theme: A short title (3-6 words) capturing the release essence. No version number.
-- narrative: 1-2 sentences summarizing what changed and why it matters to users.
-- highlights: 3-5 most impactful changes. Bold the feature name with a dash separator, include PR number in parentheses.
-- features/fixes/improvements/documentation/maintenance: Categorize all PRs. Group by user impact, not commit type. Filter CI/deps changes under maintenance.
-- contributors: List all PR authors prefixed with @.
 
-Conventions:
-- No emojis
-- Bold feature names with dash separator (e.g., "**Dark mode** - adds theme toggle (#42)")
-- Include PR numbers in parentheses
-- Group by user impact, not just commit type
+
+
+
 
 ## Examples
 

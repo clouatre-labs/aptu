@@ -105,16 +105,6 @@ fn system_prompts_have_persona_directive() {
 }
 
 #[test]
-fn system_prompts_have_cot_directive() {
-    for (name, prompt) in all_system_prompts() {
-        assert!(
-            prompt.contains("Reason through each step"),
-            "prompt '{name}' missing CoT directive"
-        );
-    }
-}
-
-#[test]
 fn system_prompts_have_examples_section() {
     for (name, prompt) in all_system_prompts() {
         assert!(

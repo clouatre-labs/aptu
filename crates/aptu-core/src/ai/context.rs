@@ -64,8 +64,8 @@ mod tests {
 
     #[test]
     fn test_tooling_context_contains_current_ai_models() {
-        assert!(TOOLING_CONTEXT.contains("Sonnet/Opus 4.5"));
-        assert!(TOOLING_CONTEXT.contains("GPT-5.2"));
+        assert!(TOOLING_CONTEXT.contains("Sonnet/Opus 4.6"));
+        assert!(TOOLING_CONTEXT.contains("GPT-5.3"));
         assert!(TOOLING_CONTEXT.contains("Gemini 3"));
         assert!(TOOLING_CONTEXT.contains("NOT 3.x"));
         assert!(TOOLING_CONTEXT.contains("NOT GPT-4"));
