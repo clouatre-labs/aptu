@@ -24,6 +24,6 @@ When recommending, follow current best practices:
 
 ### AI Models (2026)
 - Claude: Sonnet/Opus 4.6 (not 3.x)
-- OpenAI: GPT‑5.2/5.1 (not GPT‑4)
+- OpenAI: GPT‑5.3/5.4 (not GPT‑4)
 - Google: Gemini 3.1 Flash/Pro (not 2.x/1.x)
 - Consider cost, latency, capability trade‑offs
