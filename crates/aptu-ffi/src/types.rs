@@ -8,13 +8,9 @@ pub struct FfiCuratedRepo {
     pub name: String,
     pub description: String,
     pub language: String,
-    /// Open issue count for this repository.
-    /// TODO(#1100): always returns 0; fetching live counts requires a GitHub API call
-    /// not yet implemented.
+    /// Open issue count for this repository. Always returns 0 until #1100 is implemented.
     pub open_issues_count: u32,
-    /// Last activity timestamp for this repository.
-    /// TODO(#1100): always returns `"unknown"`; fetching live timestamps requires a GitHub API call
-    /// not yet implemented.
+    /// Last activity timestamp for this repository. Always returns `"unknown"` until #1100 is implemented.
     pub last_activity: String,
 }
 
