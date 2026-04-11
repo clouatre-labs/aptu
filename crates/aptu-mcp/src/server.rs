@@ -666,8 +666,8 @@ async fn read_resource_by_uri(uri: &str) -> Result<ReadResourceResult, McpError>
 // ServerHandler (combines tool_handler + prompt_handler + manual resources)
 // ---------------------------------------------------------------------------
 
-#[tool_handler]
-#[prompt_handler]
+#[tool_handler(router = self.tool_router)]
+#[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for AptuServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(
