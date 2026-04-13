@@ -169,5 +169,14 @@
     "confidence": "medium",
     "cwe": "CWE-77",
     "file_extensions": []
+  },
+  {
+    "id": "prompt-injection-closing-tag-issue",
+    "description": "Attempt to escape issue_content XML delimiter boundary",
+    "pattern": "(?i)</issue_content>",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": []
   }
 ]

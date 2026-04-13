@@ -557,6 +557,24 @@ pub async fn analyze_issue(
             filter_labels_by_relevance(&issue_mut.available_labels, MAX_LABELS);
     }
 
+    // Pre-AI prompt injection scan (advisory gate)
+    let injection_findings: Vec<_> = SecurityScanner::new()
+        .scan_file(&issue_mut.body, "")
+        .into_iter()
+        .filter(|f| f.pattern_id.starts_with("prompt-injection"))
+        .collect();
+    if !injection_findings.is_empty() {
+        let pattern_ids: Vec<&str> = injection_findings
+            .iter()
+            .map(|f| f.pattern_id.as_str())
+            .collect();
+        warn!(
+            injection_count = injection_findings.len(),
+            ?pattern_ids,
+            "Prompt injection patterns detected in issue body; proceeding with AI triage"
+        );
+    }
+
     // Resolve task-specific provider and model
     let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Triage);
 
