@@ -42,6 +42,37 @@ To capture a valid `before` baseline for future prompt-changing PRs:
 
 If the before state is missed (e.g. PR already merged), record only `after` scores and annotate the `before` arrays as `null` with an explanatory note -- as done in the initial run.
 
+## Comparative Benchmark Arm
+
+This section documents the `raw_baseline` arm added for issue [#1122](https://github.com/clouatre-labs/aptu/issues/1122).
+
+### Purpose
+
+Establish a head-to-head comparison between `aptu+mercury-2` (structured, schema-enforced) and a raw `claude-opus-4.6` call with a minimal generic prompt (no schema, no rubric, no AST context).
+
+### Procedure
+
+For each of the 6 fixtures (triage: #737, #850, #1094; pr_review: #1101, #1098, #1091):
+
+1. Fetch the issue body or PR diff using `gh issue view` / `gh pr diff`.
+2. Truncate input to 8,000 characters.
+3. POST to `https://openrouter.ai/api/v1/chat/completions` with model `anthropic/claude-opus-4.6`.
+4. Triage prompt: `"Triage this issue. Here is the body: <body>"`
+5. PR review prompt: `"Review this PR for issues. Here is the diff: <diff>"`
+6. Record wall-clock latency (`time.time()` before/after `urlopen`). Note: measurements are single-run and subject to network and provider variance; the spread in `latency_samples_ms` reflects this, not model behavior differences.
+7. Record cost from `usage.cost_details.upstream_inference_cost` (the top-level `cost` field is 0 in OpenRouter BYOK mode).
+
+### Scoring
+
+Apply the rubric in `bench/rubric.md` (C1-C5 binary criteria). C5=0 for all raw_baseline entries by design: the raw prompt enforces no output schema, so JSON conformance cannot be verified.
+
+For PR review C3 (verdict match), a response that only lists issues without an explicit approve/request-changes verdict is scored 0.
+
+### Data Files
+
+- Efficiency data (cost, latency): `bench/results/efficiency.json`
+- Quality scores: `bench/results/scores.json` key `raw_baseline`
+
 ## Fixture Caveats
 
 - **#800** is a pull request, not an issue; replaced with **#1094** for triage scoring.

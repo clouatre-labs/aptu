@@ -1,0 +1,22 @@
+{
+  "note": "n=1 per fixture (6 total samples per arm). Latency values are single-run measurements; p50 is computed across 6 fixtures, not repeated runs. raw_opus46 cost uses upstream_inference_cost from OpenRouter cost_details (the top-level cost field is 0 in BYOK mode). aptu_mercury2 cost uses ai_stats.cost_usd from the aptu --output json response.",
+  "n_per_arm": 6,
+  "fixtures": ["clouatre-labs/aptu#737", "clouatre-labs/aptu#850", "clouatre-labs/aptu#1094", "clouatre-labs/aptu#1101", "clouatre-labs/aptu#1098", "clouatre-labs/aptu#1091"],
+  "aptu_mercury2": {
+    "model": "inception/mercury-2",
+    "provider": "openrouter",
+    "cost_usd_per_call": 0.001135,
+    "latency_p50_ms": 1934,
+    "latency_samples_ms": [1381, 1053, 2363, 2056, 1907, 1961],
+    "cost_samples_usd": [0.000802, 0.000762, 0.001039, 0.001114, 0.001913, 0.001181]
+  },
+  "raw_opus46": {
+    "model": "anthropic/claude-opus-4.6",
+    "provider": "openrouter",
+    "prompt": "two-sentence generic prompt (no schema, no rubric, no AST context)",
+    "cost_usd_per_call": 0.019254,
+    "latency_p50_ms": 16032,
+    "latency_samples_ms": [16320, 8253, 9474, 16994, 15744, 19435],
+    "cost_samples_usd": [0.01522, 0.011615, 0.008375, 0.022625, 0.030685, 0.027005]
+  }
+}
