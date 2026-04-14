@@ -16,6 +16,19 @@
 
 Aptu is a context-engineering experiment: instead of throwing big models at problems, it crafts tight prompts that let smaller models do the job with fewer tokens and surprising precision.
 
+## Benchmarks
+
+Head-to-head comparison of `aptu+mercury-2` vs a raw `claude-opus-4.6` call (no schema, no rubric, no AST context) across 6 fixtures (3 triage, 3 PR review).
+
+| Arm | Quality (mean, /5) | Cost/call | Latency p50 |
+|-----|----------------|-----------|-------------|
+| aptu+mercury-2 | 4.8/5 | $0.0011 | 1,934 ms |
+| raw claude-opus-4.6 | 2.2/5 | $0.0193 | 16,032 ms |
+
+*Measured across aptu #737, #850, #1094 (triage) and #1091, #1098, #1101 (PR review); n=1 per fixture.*
+
+See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md) for full methodology, fixture breakdown, and C1-C5 scores.
+
 ## Demo
 
 ![Aptu Demo](https://raw.githubusercontent.com/clouatre-labs/aptu/main/assets/demo.gif)
@@ -142,19 +155,6 @@ Aptu is a multi-crate Rust workspace. See [docs/ARCHITECTURE.md](https://github.
 ## Roadmap
 
 See [docs/ROADMAP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ROADMAP.md) for the project direction across near-term, medium-term, and long-term horizons.
-
-## Benchmarks
-
-Head-to-head comparison of `aptu+mercury-2` vs a raw `claude-opus-4.6` call (no schema, no rubric, no AST context) across 6 fixtures (3 triage, 3 PR review).
-
-| Arm | Quality (mean, /5) | Cost/call | Latency p50 |
-|-----|----------------|-----------|-------------|
-| aptu+mercury-2 | 4.8/5 | $0.0011 | 1,934 ms |
-| raw claude-opus-4.6 | 2.2/5 | $0.0193 | 16,032 ms |
-
-*Measured across aptu #737, #850, #1094 (triage) and #1091, #1098, #1101 (PR review); n=1 per fixture.*
-
-See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md) for full methodology, fixture breakdown, and C1-C5 scores.
 
 ## Contributing
 
