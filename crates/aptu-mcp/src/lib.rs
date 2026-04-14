@@ -110,26 +110,16 @@ fn apply_bearer_middleware(router: axum::Router, allow_unauthenticated: bool) ->
             }))
         }
         Ok(_) => {
-            if allow_unauthenticated {
-                tracing::warn!(
-                    "MCP_BEARER_TOKEN is empty and --allow-unauthenticated is set; HTTP endpoint is unauthenticated"
-                );
-                router
-            } else {
+            if !allow_unauthenticated {
                 tracing::warn!("MCP_BEARER_TOKEN is empty; HTTP endpoint is unauthenticated");
-                router
             }
+            router
         }
         Err(_) => {
-            if allow_unauthenticated {
-                tracing::warn!(
-                    "MCP_BEARER_TOKEN is not set and --allow-unauthenticated is set; HTTP endpoint is unauthenticated"
-                );
-                router
-            } else {
+            if !allow_unauthenticated {
                 tracing::warn!("MCP_BEARER_TOKEN is not set; HTTP endpoint is unauthenticated");
-                router
             }
+            router
         }
     }
 }
