@@ -147,7 +147,7 @@ See [docs/ROADMAP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ROADM
 
 Head-to-head comparison of `aptu+mercury-2` vs a raw `claude-opus-4.6` call (no schema, no rubric, no AST context) across 6 fixtures (3 triage, 3 PR review).
 
-| Arm | Quality (mean) | Cost/call | Latency p50 |
+| Arm | Quality (mean, /5) | Cost/call | Latency p50 |
 |-----|----------------|-----------|-------------|
 | aptu+mercury-2 | 4.8/5 | $0.0011 | 1,934 ms |
 | raw claude-opus-4.6 | 2.2/5 | $0.0193 | 16,032 ms |
