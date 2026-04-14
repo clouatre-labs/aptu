@@ -430,8 +430,6 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
             Some("ios")
         } else if path.starts_with("docs/") {
             Some("documentation")
-        } else if path.starts_with("snap/") {
-            Some("distribution")
         } else {
             None
         };
@@ -738,12 +736,6 @@ mod tests {
                 vec!["docs/GITHUB_ACTION.md"],
                 vec!["enhancement", "documentation"],
                 "docs path should map to documentation scope",
-            ),
-            (
-                "feat: snap",
-                vec!["snap/snapcraft.yaml"],
-                vec!["enhancement", "distribution"],
-                "snap path should map to distribution scope",
             ),
             (
                 "feat: workflow",
