@@ -48,7 +48,7 @@ This section documents the `raw_baseline` arm added for issue [#1122](https://gi
 
 ### Purpose
 
-Establish a head-to-head comparison between `aptu+mercury-2` (structured, schema-enforced) and a raw `claude-opus-4.6` call with a minimal vague prompt (no schema, no rubric, no AST context).
+Establish a head-to-head comparison between `aptu+mercury-2` (structured, schema-enforced) and a raw `claude-opus-4.6` call with a minimal generic prompt (no schema, no rubric, no AST context).
 
 ### Procedure
 

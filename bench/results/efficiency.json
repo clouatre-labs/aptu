@@ -13,7 +13,7 @@
   "raw_opus46": {
     "model": "anthropic/claude-opus-4.6",
     "provider": "openrouter",
-    "prompt": "two-sentence vague prompt (no schema, no rubric, no AST context)",
+    "prompt": "two-sentence generic prompt (no schema, no rubric, no AST context)",
     "cost_usd_per_call": 0.019254,
     "latency_p50_ms": 16032,
     "latency_samples_ms": [16320, 8253, 9474, 16994, 15744, 19435],

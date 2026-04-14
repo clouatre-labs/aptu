@@ -52,14 +52,14 @@ Evaluator: `inception/mercury-2` via OpenRouter. Threshold: >= 4/5 on all non-ex
 
 ## Comparative Benchmark
 
-Head-to-head comparison of `aptu+mercury-2` (structured, schema-enforced triage/review) vs a raw `claude-opus-4.6` call with a two-sentence vague prompt (no schema, no rubric, no AST context). Issue [#1122](https://github.com/clouatre-labs/aptu/issues/1122).
+Head-to-head comparison of `aptu+mercury-2` (structured, schema-enforced triage/review) vs a raw `claude-opus-4.6` call with a two-sentence generic prompt (no schema, no rubric, no AST context). Issue [#1122](https://github.com/clouatre-labs/aptu/issues/1122).
 
 ### Setup
 
 | Arm | Model | Provider | Prompt |
 |-----|-------|----------|--------|
 | aptu+mercury-2 | `inception/mercury-2` | openrouter | Full aptu structured prompt (schema, rubric, AST context) |
-| raw_opus46 | `anthropic/claude-opus-4.6` | openrouter | Two-sentence vague prompt; no schema, no rubric, no AST context |
+| raw_opus46 | `anthropic/claude-opus-4.6` | openrouter | Two-sentence generic prompt; no schema, no rubric, no AST context |
 
 ### Quality Scores
 
