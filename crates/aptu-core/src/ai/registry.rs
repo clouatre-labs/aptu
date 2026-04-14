@@ -418,10 +418,10 @@ impl CachedModelRegistry<'_> {
         // Build request incrementally with provider-specific authentication
         let request = match provider {
             "gemini" => {
-                // Gemini uses query parameter authentication
+                // Gemini uses header authentication
                 self.client
                     .get(url)
-                    .query(&[("key", api_key.expose_secret())])
+                    .header("x-goog-api-key", api_key.expose_secret())
             }
             "openrouter" | "groq" | "cerebras" | "zenmux" | "zai" => {
                 // These providers use Bearer token authentication

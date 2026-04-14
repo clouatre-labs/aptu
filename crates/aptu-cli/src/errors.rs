@@ -128,7 +128,7 @@ pub fn format_error(error: &Error) -> String {
             }
             AptuError::SecurityScan { message: _ } => {
                 format!(
-                    "{aptu_err}\n\nTip: Security scan encountered an error. Check the pattern definitions and try again."
+                    "{aptu_err}\n\nTip: Prompt injection patterns detected; operation blocked for security."
                 )
             }
         }

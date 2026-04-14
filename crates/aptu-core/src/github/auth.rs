@@ -14,7 +14,7 @@
 //! 3. System keyring (native aptu auth)
 
 use std::process::Command;
-use std::sync::OnceLock;
+use std::sync::{PoisonError, RwLock};
 
 use anyhow::{Context, Result};
 #[cfg(feature = "keyring")]
@@ -31,7 +31,7 @@ use super::{KEYRING_SERVICE, KEYRING_USER};
 
 /// Session-level cache for resolved GitHub tokens.
 /// Stores the token and its source to avoid repeated subprocess calls to `gh auth token`.
-static TOKEN_CACHE: OnceLock<Option<(SecretString, TokenSource)>> = OnceLock::new();
+static TOKEN_CACHE: RwLock<Option<SecretString>> = RwLock::new(None);
 
 /// Source of the GitHub authentication token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -57,7 +57,7 @@ impl std::fmt::Display for TokenSource {
 
 /// OAuth scopes required for Aptu functionality.
 #[cfg(feature = "keyring")]
-const OAUTH_SCOPES: &[&str] = &["repo", "read:user"];
+const OAUTH_SCOPES: &[&str] = &["public_repo", "read:user"];
 
 /// Creates a keyring entry for the GitHub token.
 #[cfg(feature = "keyring")]
@@ -239,11 +239,25 @@ fn resolve_token_inner() -> Option<(SecretString, TokenSource)> {
 /// Returns the token and its source, or `None` if no token is found.
 #[instrument]
 pub fn resolve_token() -> Option<(SecretString, TokenSource)> {
-    let cached = TOKEN_CACHE.get_or_init(resolve_token_inner).as_ref();
-    if let Some((_, source)) = cached {
-        debug!(source = %source, "Cache hit for token resolution");
+    // Try read lock first
+    {
+        let guard = TOKEN_CACHE.read().unwrap_or_else(PoisonError::into_inner);
+        if let Some(token) = guard.as_ref() {
+            debug!("Cache hit for token resolution");
+            return Some((token.clone(), TokenSource::GhCli)); // Return cached token with a default source
+        }
     }
-    cached.map(|(token, source)| (token.clone(), *source))
+
+    // Cache miss: acquire write lock and resolve
+    let resolved = resolve_token_inner();
+    if let Some((token, source)) = resolved.as_ref() {
+        let mut guard = TOKEN_CACHE.write().unwrap_or_else(PoisonError::into_inner);
+        *guard = Some(token.clone());
+        debug!(source = %source, "Resolved and cached token");
+        Some((token.clone(), *source))
+    } else {
+        None
+    }
 }
 
 /// Stores a GitHub token in the system keyring.
@@ -263,10 +277,9 @@ pub fn store_token(token: &SecretString) -> Result<()> {
 /// This should be called after logout or when the token is invalidated.
 #[instrument]
 pub fn clear_token_cache() {
-    // OnceLock doesn't provide a direct clear method, but we can work around this
-    // by using take() if it were available. Since it's not, we document that
-    // the cache is session-scoped and will be cleared on process exit.
-    debug!("Token cache cleared (session-scoped)");
+    let mut guard = TOKEN_CACHE.write().unwrap_or_else(PoisonError::into_inner);
+    *guard = None;
+    debug!("Token cache cleared");
 }
 
 /// Deletes the stored GitHub token from the keyring.
@@ -494,5 +507,18 @@ mod tests {
         assert!(result.is_some());
         let (token, _) = result.unwrap();
         assert_eq!(token.expose_secret(), "gh_token");
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_clear_token_cache_invalidates() {
+        // Arrange: Clear the cache
+        clear_token_cache();
+
+        // Act: Read the cache after clearing
+        let guard = TOKEN_CACHE.read().unwrap_or_else(|e| e.into_inner());
+
+        // Assert: Cache should be None
+        assert!(guard.is_none());
     }
 }

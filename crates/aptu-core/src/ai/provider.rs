@@ -26,6 +26,16 @@ use super::prompts::{
     build_release_notes_system_prompt, build_triage_system_prompt,
 };
 
+/// Redacts error body to prevent leaking sensitive API details.
+/// Truncates to 200 characters and appends "[truncated]" if longer.
+fn redact_api_error_body(body: &str) -> String {
+    if body.len() <= 200 {
+        body.to_owned()
+    } else {
+        format!("{} [truncated]", &body[..200])
+    }
+}
+
 /// Parses JSON response from AI provider, detecting truncated responses.
 ///
 /// If the JSON parsing fails with an EOF error (indicating the response was cut off),
@@ -259,7 +269,7 @@ pub trait AiProvider: Send + Sync {
                 "{} API error (HTTP {}): {}",
                 self.name(),
                 status.as_u16(),
-                error_body
+                redact_api_error_body(&error_body)
             );
         }
 
@@ -1974,5 +1984,31 @@ mod tests {
             !prompt.contains(&"C".repeat(10)),
             "full_content from file2 must not appear"
         );
+    }
+
+    #[test]
+    fn test_redact_api_error_body_truncates() {
+        // Arrange: Create a long error body
+        let long_body = "x".repeat(300);
+
+        // Act: Redact the error body
+        let result = redact_api_error_body(&long_body);
+
+        // Assert: Result should be truncated and marked
+        assert!(result.len() < long_body.len());
+        assert!(result.ends_with("[truncated]"));
+        assert_eq!(result.len(), 200 + " [truncated]".len());
+    }
+
+    #[test]
+    fn test_redact_api_error_body_short() {
+        // Arrange: Create a short error body
+        let short_body = "Short error";
+
+        // Act: Redact the error body
+        let result = redact_api_error_body(short_body);
+
+        // Assert: Result should be unchanged
+        assert_eq!(result, short_body);
     }
 }

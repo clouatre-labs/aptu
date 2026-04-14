@@ -11,6 +11,7 @@ pub mod keychain;
 pub mod types;
 
 use crate::error::AptuFfiError;
+use crate::error::ffi_error_from_anyhow;
 use crate::keychain::KeychainProviderRef;
 use crate::types::{
     FfiApplyResult, FfiCuratedRepo, FfiDiscoveredRepo, FfiIssueNode, FfiLabelPrResult,
@@ -26,9 +27,7 @@ pub fn list_curated_repos() -> Result<Vec<FfiCuratedRepo>, AptuFfiError> {
     RUNTIME.block_on(async {
         match aptu_core::list_curated_repos().await {
             Ok(repos) => Ok(repos.iter().map(FfiCuratedRepo::from).collect()),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -69,9 +68,7 @@ pub fn fetch_issues(keychain: KeychainProviderRef) -> Result<Vec<FfiIssueNode>, 
                 }
                 Ok(ffi_issues)
             }
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -105,9 +102,8 @@ pub fn analyze_issue(
 ) -> Result<FfiTriageResponse, AptuFfiError> {
     RUNTIME.block_on(async {
         // Load configuration at FFI boundary
-        let config = aptu_core::config::load_config().map_err(|e| AptuFfiError::InternalError {
-            message: format!("Failed to load config: {e}"),
-        })?;
+        let config = aptu_core::config::load_config()
+            .map_err(|e| ffi_error_from_anyhow(anyhow::Error::from(e)))?;
 
         let provider = auth::FfiTokenProvider::new(keychain);
 
@@ -124,9 +120,7 @@ pub fn analyze_issue(
 
         match aptu_core::analyze_issue(&provider, &core_issue, &config.ai).await {
             Ok(ai_response) => Ok(FfiTriageResponse::from(ai_response.triage)),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -214,9 +208,7 @@ pub fn post_pr_review(
         .await
         {
             Ok(review_id) => Ok(review_id),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -244,9 +236,7 @@ pub fn add_custom_repo(owner: String, name: String) -> Result<FfiCuratedRepo, Ap
     RUNTIME.block_on(async {
         match aptu_core::add_custom_repo(&owner, &name).await {
             Ok(repo) => Ok(FfiCuratedRepo::from(&repo)),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -269,9 +259,7 @@ pub fn add_custom_repo(owner: String, name: String) -> Result<FfiCuratedRepo, Ap
 pub fn remove_custom_repo(owner: String, name: String) -> Result<bool, AptuFfiError> {
     match aptu_core::remove_custom_repo(&owner, &name) {
         Ok(removed) => Ok(removed),
-        Err(e) => Err(AptuFfiError::InternalError {
-            message: e.to_string(),
-        }),
+        Err(e) => Err(ffi_error_from_anyhow(e.into())),
     }
 }
 
@@ -299,9 +287,7 @@ pub fn list_repos(filter_type: String) -> Result<Vec<FfiCuratedRepo>, AptuFfiErr
 
         match aptu_core::list_repos(filter).await {
             Ok(repos) => Ok(repos.iter().map(FfiCuratedRepo::from).collect()),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -369,9 +355,7 @@ pub fn fetch_issue_for_triage(
                 };
                 Ok(ffi_issue)
             }
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -425,9 +409,7 @@ pub fn post_triage_comment(
 
         match aptu_core::post_triage_comment(&provider, &issue_details, &core_triage).await {
             Ok(comment_url) => Ok(comment_url),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -486,9 +468,7 @@ pub fn apply_triage_labels(
 
         match aptu_core::apply_triage_labels(&provider, &issue_details, &core_triage).await {
             Ok(result) => Ok(FfiApplyResult::from(result)),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -540,9 +520,7 @@ pub fn generate_release_notes(
         .await
         {
             Ok(response) => Ok(FfiReleaseNotesResponse::from(response)),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -582,9 +560,7 @@ pub fn post_release_notes(
 
         match aptu_core::post_release_notes(&provider, &owner, &repo, &tag, &body).await {
             Ok(url) => Ok(url),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -623,8 +599,6 @@ pub fn format_issue(
     body: String,
     repo: String,
 ) -> Result<crate::types::FfiCreateIssueResponse, AptuFfiError> {
-    // Bridge async Rust to synchronous C FFI by blocking on the async runtime.
-    // This is necessary because C/Swift cannot directly call async Rust functions.
     RUNTIME.block_on(async {
         let provider = auth::FfiTokenProvider::new(keychain);
 
@@ -632,17 +606,13 @@ pub fn format_issue(
         let config = match aptu_core::load_config() {
             Ok(cfg) => cfg,
             Err(e) => {
-                return Err(AptuFfiError::InternalError {
-                    message: format!("Failed to load config: {e}"),
-                });
+                return Err(ffi_error_from_anyhow(anyhow::Error::from(e)));
             }
         };
 
         match aptu_core::format_issue(&provider, &title, &body, &repo, &config.ai).await {
             Ok(response) => Ok(crate::types::FfiCreateIssueResponse::from(response)),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -689,9 +659,7 @@ pub fn post_issue(
 
         match aptu_core::post_issue(&provider, &owner, &repo, &title, &body).await {
             Ok((url, number)) => Ok(crate::types::FfiPostIssueResult::from((url, number))),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -731,9 +699,8 @@ pub fn auto_label_pr(
 ) -> Result<FfiLabelPrResult, AptuFfiError> {
     RUNTIME.block_on(async {
         // Load configuration at FFI boundary
-        let config = aptu_core::config::load_config().map_err(|e| AptuFfiError::InternalError {
-            message: format!("Failed to load config: {e}"),
-        })?;
+        let config = aptu_core::config::load_config()
+            .map_err(|e| ffi_error_from_anyhow(anyhow::Error::from(e)))?;
 
         let provider = auth::FfiTokenProvider::new(keychain);
 
@@ -752,9 +719,7 @@ pub fn auto_label_pr(
                 body,
                 applied_labels,
             ))),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -803,9 +768,7 @@ pub fn discover_repos(
 
         match aptu_core::discover_repos(&provider, filter).await {
             Ok(repos) => Ok(repos.into_iter().map(FfiDiscoveredRepo::from).collect()),
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
@@ -862,9 +825,7 @@ pub fn list_models(provider_name: String) -> Result<Vec<crate::types::FfiAiModel
                     .collect();
                 Ok(ffi_models)
             }
-            Err(e) => Err(AptuFfiError::InternalError {
-                message: e.to_string(),
-            }),
+            Err(e) => Err(ffi_error_from_anyhow(e.into())),
         }
     })
 }
