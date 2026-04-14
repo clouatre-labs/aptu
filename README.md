@@ -51,9 +51,6 @@ The small specialized model is not smarter, just less distracted. In real-world 
 # Homebrew (macOS/Linux)
 brew install clouatre-labs/tap/aptu
 
-# Snap (Linux)
-snap install aptu
-
 # Cargo-binstall (fast)
 cargo binstall aptu-cli
 
