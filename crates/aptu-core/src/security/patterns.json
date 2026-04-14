@@ -24,7 +24,14 @@
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-89",
-    "file_extensions": [".rs", ".py", ".js", ".ts", ".java", ".php"]
+    "file_extensions": [
+      ".rs",
+      ".py",
+      ".js",
+      ".ts",
+      ".java",
+      ".php"
+    ]
   },
   {
     "id": "sql-injection-format",
@@ -33,7 +40,14 @@
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-89",
-    "file_extensions": [".rs", ".py", ".js", ".ts", ".java", ".php"]
+    "file_extensions": [
+      ".rs",
+      ".py",
+      ".js",
+      ".ts",
+      ".java",
+      ".php"
+    ]
   },
   {
     "id": "path-traversal",
@@ -60,7 +74,12 @@
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-79",
-    "file_extensions": [".js", ".ts", ".jsx", ".tsx"]
+    "file_extensions": [
+      ".js",
+      ".ts",
+      ".jsx",
+      ".tsx"
+    ]
   },
   {
     "id": "insecure-random",
@@ -69,7 +88,12 @@
     "severity": "medium",
     "confidence": "low",
     "cwe": "CWE-338",
-    "file_extensions": [".js", ".ts", ".py", ".java"]
+    "file_extensions": [
+      ".js",
+      ".ts",
+      ".py",
+      ".java"
+    ]
   },
   {
     "id": "weak-crypto-md5",
@@ -96,7 +120,11 @@
     "severity": "critical",
     "confidence": "high",
     "cwe": "CWE-502",
-    "file_extensions": [".py", ".php", ".java"]
+    "file_extensions": [
+      ".py",
+      ".php",
+      ".java"
+    ]
   },
   {
     "id": "xxe-vulnerability",
@@ -105,7 +133,10 @@
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-611",
-    "file_extensions": [".java", ".xml"]
+    "file_extensions": [
+      ".java",
+      ".xml"
+    ]
   },
   {
     "id": "insecure-tls",
@@ -177,6 +208,24 @@
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-77",
+    "file_extensions": []
+  },
+  {
+    "id": "ssrf-http-request",
+    "description": "Potential SSRF: HTTP client called with variable URL. Verify the URL is validated against an allowlist before use.",
+    "pattern": "(?i)(reqwest::get|reqwest::Client|fetch|urllib\\.request\\.urlopen|axios\\.(get|post|put|delete)|http\\.get|http\\.post|curl_exec|wget)\\s*[\\(\\[](?:[^\\\"'\\)]*[a-z_][a-z0-9_]*(?:\\.[a-z_][a-z0-9_]*)*)",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-918",
+    "file_extensions": []
+  },
+  {
+    "id": "open-redirect",
+    "description": "Potential open redirect: redirect target may be controlled by user input. Validate and restrict redirect URLs.",
+    "pattern": "(?i)(location\\.href|location\\.replace|location\\.assign|response\\.redirect|res\\.redirect|header\\s*\\(\\s*['\"]Location)\\s*[=:(]\\s*[^;]*?(req\\.|request\\.|params\\.|query\\.|args\\.)",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-601",
     "file_extensions": []
   }
 ]

@@ -681,9 +681,9 @@ dependencies = [
 
 [[package]]
 name = "code-analyze-core"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68927f74de533e0b67848799cc909bb9775b9b27fbdb2cfae3410bd3f5a1a546"
+checksum = "c4d88f4e2d1f7e92d5a02949be5f990f6af22342547866b1721a821cf1f17b71"
 dependencies = [
  "base64",
  "ignore",
@@ -1781,9 +1781,9 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "lru"
-version = "0.16.3"
+version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1dc47f592c06f33f8e3aea9591776ec7c9f9e4124778ff8a3c3b87159f7e593"
+checksum = "7f66e8d5d03f609abc3a39e6f08e4164ebf1447a732906d39eb9b99b7919ef39"
 dependencies = [
  "hashbrown 0.16.1",
 ]

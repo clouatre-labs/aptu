@@ -100,7 +100,8 @@ async fn bearer_auth(expected: Arc<str>, req: Request, next: Next) -> Response {
 /// Apply bearer token middleware to `router` if `MCP_BEARER_TOKEN` is set and non-empty.
 ///
 /// Logs a warning when the env var is absent or empty so operators notice an unprotected endpoint.
-fn apply_bearer_middleware(router: axum::Router) -> axum::Router {
+/// If `allow_unauthenticated` is true and token is absent/empty, skips middleware application.
+fn apply_bearer_middleware(router: axum::Router, allow_unauthenticated: bool) -> axum::Router {
     match std::env::var("MCP_BEARER_TOKEN") {
         Ok(token) if !token.is_empty() => {
             let token = Arc::from(token.as_str());
@@ -109,11 +110,15 @@ fn apply_bearer_middleware(router: axum::Router) -> axum::Router {
             }))
         }
         Ok(_) => {
-            tracing::warn!("MCP_BEARER_TOKEN is empty; HTTP endpoint is unauthenticated");
+            if !allow_unauthenticated {
+                tracing::warn!("MCP_BEARER_TOKEN is empty; HTTP endpoint is unauthenticated");
+            }
             router
         }
         Err(_) => {
-            tracing::warn!("MCP_BEARER_TOKEN is not set; HTTP endpoint is unauthenticated");
+            if !allow_unauthenticated {
+                tracing::warn!("MCP_BEARER_TOKEN is not set; HTTP endpoint is unauthenticated");
+            }
             router
         }
     }
@@ -129,7 +134,12 @@ fn parse_socket_addr(host: &str, port: u16) -> anyhow::Result<std::net::SocketAd
     addr_str.parse().map_err(Into::into)
 }
 
-pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<()> {
+pub async fn run_http(
+    host: &str,
+    port: u16,
+    read_only: bool,
+    allow_unauthenticated: bool,
+) -> anyhow::Result<()> {
     use anyhow::Context;
     use axum::Router;
     use rmcp::transport::streamable_http_server::{
@@ -137,6 +147,23 @@ pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<
     };
     use std::sync::Arc;
     use tokio::net::TcpListener;
+
+    // SEC-007: Check for MCP_BEARER_TOKEN if authentication is required
+    if !allow_unauthenticated && std::env::var("MCP_BEARER_TOKEN").map_or(true, |v| v.is_empty()) {
+        eprintln!(
+            "error: MCP_BEARER_TOKEN is not set. Set the env var or pass --allow-unauthenticated to start without authentication."
+        );
+        return Err(anyhow::anyhow!("MCP_BEARER_TOKEN required"));
+    }
+
+    // SEC-008: Warn when starting without bearer token authentication
+    if allow_unauthenticated && std::env::var("MCP_BEARER_TOKEN").map_or(true, |v| v.is_empty()) {
+        tracing::warn!(
+            "MCP server starting without bearer token authentication. \
+             This exposes all tools to unauthenticated callers. \
+             Set MCP_BEARER_TOKEN to enable authentication."
+        );
+    }
 
     tracing::info!("Starting aptu MCP HTTP server on {}:{}", host, port);
 
@@ -157,7 +184,7 @@ pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<
     );
 
     let router = Router::new().nest_service("/mcp", service);
-    let router = apply_bearer_middleware(router);
+    let router = apply_bearer_middleware(router, allow_unauthenticated);
 
     let addr = parse_socket_addr(host, port)?;
     let listener = TcpListener::bind(addr).await?;
@@ -213,5 +240,75 @@ mod tests {
     #[test]
     fn test_constant_time_eq_different_content() {
         assert!(!constant_time_eq(b"abc", b"abd"));
+    }
+
+    #[allow(unsafe_code)] // SAFETY: serial test; no concurrent env access
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_run_http_rejects_missing_token() {
+        // Arrange: ensure MCP_BEARER_TOKEN is not set
+        let original_token = std::env::var("MCP_BEARER_TOKEN").ok();
+        unsafe { std::env::remove_var("MCP_BEARER_TOKEN") };
+
+        // Act: call run_http with allow_unauthenticated=false on a high port (to avoid binding conflict)
+        let result = run_http("127.0.0.1", 0, false, false).await;
+
+        // Restore env
+        if let Some(token) = original_token {
+            unsafe { std::env::set_var("MCP_BEARER_TOKEN", &token) };
+        }
+
+        // Assert: must return Err containing "MCP_BEARER_TOKEN"
+        assert!(
+            result.is_err(),
+            "run_http should reject startup without token"
+        );
+        let err_msg = format!("{:?}", result.unwrap_err());
+        assert!(
+            err_msg.contains("MCP_BEARER_TOKEN"),
+            "error message should mention MCP_BEARER_TOKEN"
+        );
+    }
+
+    #[allow(unsafe_code)] // SAFETY: serial test; no concurrent env access
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_run_http_allows_unauthenticated_flag() {
+        // Arrange: ensure MCP_BEARER_TOKEN is not set
+        let original_token = std::env::var("MCP_BEARER_TOKEN").ok();
+        unsafe { std::env::remove_var("MCP_BEARER_TOKEN") };
+
+        // Act: call run_http with allow_unauthenticated=true using timeout.
+        // Server runs forever, so timeout means it successfully bypassed the token check.
+        // Use port 0 to let the OS assign an ephemeral port.
+        let result = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            run_http("127.0.0.1", 0, false, true),
+        )
+        .await;
+
+        // Restore env
+        if let Some(token) = original_token {
+            unsafe { std::env::set_var("MCP_BEARER_TOKEN", &token) };
+        }
+
+        // Assert: timeout means server started (allow_unauthenticated bypassed token check).
+        // Err containing "MCP_BEARER_TOKEN required" is a test failure.
+        match result {
+            Err(_elapsed) => {
+                // Timeout = server started and ran = allow_unauthenticated=true worked
+            }
+            Ok(Err(e)) => {
+                let err_msg = format!("{:?}", e);
+                assert!(
+                    !err_msg.contains("MCP_BEARER_TOKEN required"),
+                    "allow_unauthenticated=true should skip the token check; got: {}",
+                    err_msg
+                );
+            }
+            Ok(Ok(())) => {
+                // Server returned Ok immediately - unexpected but not a failure
+            }
+        }
     }
 }

@@ -157,8 +157,17 @@ Kiro uses `${env:VAR}` syntax for environment variable substitution in headers.
 
 ### Self-hosted
 
+With bearer token authentication (recommended for production):
+
 ```bash
+export MCP_BEARER_TOKEN=$(openssl rand -hex 32)
 aptu-mcp --transport http --host 0.0.0.0 --port 8080
+```
+
+Without authentication (insecure, development only):
+
+```bash
+aptu-mcp --transport http --host 0.0.0.0 --port 8080 --allow-unauthenticated
 ```
 
 ### Deploy to Fly.io
@@ -196,13 +205,19 @@ Remove `--read-only` to enable write tools (`post_triage`, `post_review`). See [
 
 ## Authentication (operator)
 
-The HTTP server supports optional bearer token authentication. By default it is
-**disabled** -- the hosted instance at `aptu-mcp.fly.dev` accepts connections without any
-token.
+The HTTP server requires bearer token authentication by default. The server will refuse to start if `MCP_BEARER_TOKEN` is absent or empty, unless `--allow-unauthenticated` is explicitly passed.
 
-To enable it, set `MCP_BEARER_TOKEN` on the server before or after deploying. Every
-incoming HTTP request must then present a matching `Authorization: Bearer <token>` header;
-requests with a missing or wrong token receive a 401 response.
+Set `MCP_BEARER_TOKEN` before starting the server:
+
+```sh
+export MCP_BEARER_TOKEN=$(openssl rand -hex 32)
+```
+
+Every incoming HTTP request must then present a matching `Authorization: Bearer <token>` header; requests with a missing or wrong token receive a 401 response.
+
+To disable authentication (insecure, not recommended for production), pass `--allow-unauthenticated` at startup.
+
+The hosted instance at `aptu-mcp.fly.dev` runs with `--allow-unauthenticated` because it handles authentication at the proxy layer (Fly's internal network).
 
 ### Fly.io
 
