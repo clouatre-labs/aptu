@@ -252,6 +252,7 @@ mod tests {
         assert!(!constant_time_eq(b"abc", b"abd"));
     }
 
+    #[allow(unsafe_code)] // SAFETY: serial test; no concurrent env access
     #[tokio::test]
     #[serial_test::serial]
     async fn test_run_http_rejects_missing_token() {
@@ -279,6 +280,7 @@ mod tests {
         );
     }
 
+    #[allow(unsafe_code)] // SAFETY: serial test; no concurrent env access
     #[tokio::test]
     #[serial_test::serial]
     async fn test_run_http_allows_unauthenticated_flag() {

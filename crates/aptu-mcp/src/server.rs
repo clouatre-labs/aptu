@@ -1183,7 +1183,7 @@ mod tests {
 
     #[tokio::test]
     async fn scan_security_has_structured_content() {
-        let server = AptuServer::new(false);
+        let _server = AptuServer::new(false);
         let params = ScanSecurityParams {
             diff: "+ let password = \"secret123\";".to_string(),
         };
@@ -1198,7 +1198,7 @@ mod tests {
 
     #[tokio::test]
     async fn scan_security_has_no_cache_meta() {
-        let server = AptuServer::new(false);
+        let _server = AptuServer::new(false);
         let params = ScanSecurityParams {
             diff: "- old line\n+ new line".to_string(),
         };
@@ -1233,14 +1233,14 @@ mod tests {
     async fn test_scan_security_rejects_oversized_diff() {
         // Arrange: create a diff larger than MAX_SCAN_DIFF_BYTES
         let oversized_diff = " ".repeat(MAX_SCAN_DIFF_BYTES + 1);
-        let server = AptuServer::new(false);
+        let _server = AptuServer::new(false);
         let params = ScanSecurityParams {
             diff: oversized_diff,
         };
 
         // Act: call the handler directly with oversized diff
         let scanner = aptu_core::security::SecurityScanner::new();
-        let findings = scanner.scan_diff(&params.diff);
+        let _findings = scanner.scan_diff(&params.diff);
 
         // Assert: handler should not crash; we verify the size check logic separately
         // by confirming params.diff exceeds the limit
