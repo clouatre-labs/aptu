@@ -27,6 +27,8 @@ Head-to-head comparison of `aptu+mercury-2` vs a raw `claude-opus-4.6` call (no 
 
 *Measured across aptu #737, #850, #1094 (triage) and #1091, #1098, #1101 (PR review); n=1 per fixture.*
 
+aptu+mercury-2 is **17x cheaper** and **8x faster** than a raw `claude-opus-4.6` call, while scoring more than twice as high on the structured rubric.
+
 See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md) for full methodology, fixture breakdown, and C1-C5 scores.
 
 ## Demo
