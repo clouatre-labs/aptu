@@ -5,7 +5,7 @@
 
 ## Comparative Benchmark
 
-Head-to-head comparison of `aptu+mercury-2` (structured, schema-enforced triage/review) vs a raw `claude-opus-4.6` call with a two-sentence generic prompt (no schema, no rubric, no AST context). Issue [#1122](https://github.com/clouatre-labs/aptu/issues/1122).
+Head-to-head comparison of `aptu+mercury-2` ([Mercury 2](https://openrouter.ai/inception/mercury-2) by Inception Labs -- a small, efficient, diffusion-based LLM -- with structured, schema-enforced prompts) vs a raw `claude-opus-4.6` call with a two-sentence generic prompt (no schema, no rubric, no AST context). Issue [#1122](https://github.com/clouatre-labs/aptu/issues/1122).
 
 ### Setup
 

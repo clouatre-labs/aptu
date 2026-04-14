@@ -18,7 +18,7 @@ Aptu is a context-engineering experiment: instead of throwing big models at prob
 
 ## Benchmarks
 
-Head-to-head comparison of `aptu+mercury-2` vs a raw `claude-opus-4.6` call (no schema, no rubric, no AST context) across 6 fixtures (3 triage, 3 PR review).
+Head-to-head comparison of `aptu+mercury-2` ([Mercury 2](https://openrouter.ai/inception/mercury-2), a small diffusion-based LLM by Inception Labs) vs a raw `claude-opus-4.6` call (no schema, no rubric, no AST context) across 6 fixtures (3 triage, 3 PR review).
 
 | Arm | Quality (mean, /5) | Cost/call | Latency p50 |
 |-----|----------------|-----------|-------------|
