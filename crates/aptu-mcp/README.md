@@ -27,7 +27,7 @@ Suitable for environments where GitHub write access is not desired.
 aptu-mcp --read-only
 ```
 
-See [MCP Server documentation](../../docs/MCP_SERVER.md) for full configuration.
+See [MCP Server documentation](https://github.com/clouatre-labs/aptu/blob/main/docs/MCP_SERVER.md) for full configuration.
 
 ## Hosted Instance
 
@@ -46,7 +46,7 @@ Add to Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_conf
 }
 ```
 
-See [MCP Server documentation](../../docs/MCP_SERVER.md) for VS Code and other client configuration.
+See [MCP Server documentation](https://github.com/clouatre-labs/aptu/blob/main/docs/MCP_SERVER.md) for VS Code and other client configuration.
 
 ## Installation
 

@@ -12,7 +12,7 @@
   <a href="https://www.bestpractices.dev/projects/11662"><img alt="OpenSSF Best Practices" src="https://img.shields.io/cii/level/11662?style=for-the-badge" height="20"></a>
 </p>
 
-> **31.6% fewer tokens. 5/5 quality sweep.** — [See Benchmarks](docs/BENCHMARKS.md)
+> **31.6% fewer tokens. 5/5 quality sweep.** — [See Benchmarks](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md)
 
 <p align="center"><strong>AI-Powered Triage Utility</strong> - A CLI for OSS issue triage with AI assistance.</p>
 
@@ -170,12 +170,12 @@ System prompt sizes (chars) — baseline measured pre-#1096; after values landed
 | pr_label  | 2,467 | 1,707 | −30.8% |
 | **Total** | **19,444** | **13,301** | **−31.6%** |
 
-PR review: clean 5/5 across all fixtures. Triage: 4/5 average on non-exempt fixtures (evaluator: `inception/mercury-2`). [Full results](docs/BENCHMARKS.md)
+PR review: clean 5/5 across all fixtures. Triage: 4/5 average on non-exempt fixtures (evaluator: `inception/mercury-2`). [Full results](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md)
 
 ## Benchmarks
 
 Verified prompt compression and quality scores from PRs #1103–#1105.
-See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for full methodology and results.
+See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md) for full methodology and results.
 
 ## Contributing
 
