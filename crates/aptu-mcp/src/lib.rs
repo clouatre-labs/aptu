@@ -280,25 +280,37 @@ mod tests {
         let original_token = std::env::var("MCP_BEARER_TOKEN").ok();
         unsafe { std::env::remove_var("MCP_BEARER_TOKEN") };
 
-        // Act: call run_http with allow_unauthenticated=true
-        // This will attempt to bind and run; we just verify it passes the token check
-        // by not returning early with the token error. The actual binding may fail due
-        // to port conflict, but that's a different error.
-        let result = run_http("127.0.0.1", 65535, false, true).await;
+        // Act: call run_http with allow_unauthenticated=true using timeout.
+        // Server runs forever, so timeout means it successfully bypassed the token check.
+        // Use port 0 to let the OS assign an ephemeral port.
+        let result = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            run_http("127.0.0.1", 0, false, true),
+        )
+        .await;
 
         // Restore env
         if let Some(token) = original_token {
             unsafe { std::env::set_var("MCP_BEARER_TOKEN", &token) };
         }
 
-        // Assert: if it errors, it should NOT be the "MCP_BEARER_TOKEN required" error
-        if let Err(e) = &result {
-            let err_msg = format!("{:?}", e);
-            assert!(
-                !err_msg.contains("MCP_BEARER_TOKEN required"),
-                "allow_unauthenticated=true should skip the token check; got: {}",
-                err_msg
-            );
+        // Assert: timeout means server started (allow_unauthenticated bypassed token check).
+        // Err containing "MCP_BEARER_TOKEN required" is a test failure.
+        match result {
+            Err(_elapsed) => {
+                // Timeout = server started and ran = allow_unauthenticated=true worked
+            }
+            Ok(Err(e)) => {
+                let err_msg = format!("{:?}", e);
+                assert!(
+                    !err_msg.contains("MCP_BEARER_TOKEN required"),
+                    "allow_unauthenticated=true should skip the token check; got: {}",
+                    err_msg
+                );
+            }
+            Ok(Ok(())) => {
+                // Server returned Ok immediately - unexpected but not a failure
+            }
         }
     }
 }
