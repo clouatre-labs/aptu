@@ -59,7 +59,7 @@ For each of the 6 fixtures (triage: #737, #850, #1094; pr_review: #1101, #1098, 
 3. POST to `https://openrouter.ai/api/v1/chat/completions` with model `anthropic/claude-opus-4.6`.
 4. Triage prompt: `"Triage this issue. Here is the body: <body>"`
 5. PR review prompt: `"Review this PR for issues. Here is the diff: <diff>"`
-6. Record wall-clock latency (`time.time()` before/after `urlopen`).
+6. Record wall-clock latency (`time.time()` before/after `urlopen`). Note: measurements are single-run and subject to network and provider variance; the spread in `latency_samples_ms` reflects this, not model behavior differences.
 7. Record cost from `usage.cost_details.upstream_inference_cost` (the top-level `cost` field is 0 in OpenRouter BYOK mode).
 
 ### Scoring
