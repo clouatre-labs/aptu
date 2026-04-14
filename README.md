@@ -152,6 +152,8 @@ Head-to-head comparison of `aptu+mercury-2` vs a raw `claude-opus-4.6` call (no 
 | aptu+mercury-2 | 4.8/5 | $0.0011 | 1,934 ms |
 | raw claude-opus-4.6 | 2.2/5 | $0.0193 | 16,032 ms |
 
+*Measured across aptu #737, #850, #1094 (triage) and #1091, #1098, #1101 (PR review); n=1 per fixture.*
+
 See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md) for full methodology, fixture breakdown, and C1-C5 scores.
 
 ## Contributing
