@@ -20,18 +20,6 @@ Aptu is a context-engineering experiment: instead of throwing big models at prob
 
 ![Aptu Demo](https://raw.githubusercontent.com/clouatre-labs/aptu/main/assets/demo.gif)
 
-## Why It Works
-
-Aptu uses **task specialization** over raw model capability:
-
-| Factor | Aptu | General Agent |
-|--------|------|---------------|
-| Context | Only the diff | Entire conversation + tools |
-| Prompt | Tuned for code review patterns | General reasoning |
-| Attention | 100% on code quality | Split across many tasks |
-
-The small specialized model is not smarter, just less distracted. In real-world testing, aptu's PR review (using the default openrouter/mistral-small-2603) caught regex-based HTML parsing and missing error handling that claude-opus-4.5 shipped as "done".
-
 ## Features
 
 - **AI Triage** - Summaries, suggested labels, clarifying questions, and contributor guidance
@@ -154,20 +142,6 @@ Aptu is a multi-crate Rust workspace. See [docs/ARCHITECTURE.md](https://github.
 ## Roadmap
 
 See [docs/ROADMAP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ROADMAP.md) for the project direction across near-term, medium-term, and long-term horizons.
-
-## Efficiency
-
-System prompt sizes (chars) — baseline measured pre-#1096; after values pending [#1096](https://github.com/clouatre-labs/aptu/pull/1096) merge.
-
-| Operation | Before (chars) | After (chars) | Reduction |
-|-----------|---------------|---------------|-----------|
-| triage    | 4757 | TBD | TBD |
-| pr_review | 4704 | TBD | TBD |
-| create    | 3571 | TBD | TBD |
-| release   | 3945 | TBD | TBD |
-| pr_label  | 2467 | TBD | TBD |
-
-See [`bench/`](bench/) for the measurement script, protocol, and scoring rubric.
 
 ## Contributing
 

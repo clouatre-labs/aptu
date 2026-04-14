@@ -17,7 +17,36 @@ MCP server for Aptu - AI-Powered Triage Utility.
 - **4 Resources** - curated repos, good first issues, config, and repo detail template
 - **Dual Transport** - stdio for local editors, HTTP for remote deployments
 - **Multiple Providers** - `OpenRouter` (default), Cerebras, Groq, Gemini, `Z.AI`, and `ZenMux`
-- **Read-Only Mode** - Use --read-only flag to disable write operations (post_triage, post_review)
+
+## Read-Only Mode
+
+Start the server with `--read-only` to disable write tools (`post_triage`, `post_review`).
+Suitable for environments where GitHub write access is not desired.
+
+```bash
+aptu-mcp --read-only
+```
+
+See [MCP Server documentation](https://github.com/clouatre-labs/aptu/blob/main/docs/MCP_SERVER.md) for full configuration.
+
+## Hosted Instance
+
+A public instance is available at `aptu-mcp.fly.dev` — no local installation required.
+
+Add to Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "aptu": {
+      "url": "https://aptu-mcp.fly.dev/mcp",
+      "transport": "http"
+    }
+  }
+}
+```
+
+See [MCP Server documentation](https://github.com/clouatre-labs/aptu/blob/main/docs/MCP_SERVER.md) for VS Code and other client configuration.
 
 ## Installation
 
