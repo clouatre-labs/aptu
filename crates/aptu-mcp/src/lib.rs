@@ -100,7 +100,8 @@ async fn bearer_auth(expected: Arc<str>, req: Request, next: Next) -> Response {
 /// Apply bearer token middleware to `router` if `MCP_BEARER_TOKEN` is set and non-empty.
 ///
 /// Logs a warning when the env var is absent or empty so operators notice an unprotected endpoint.
-fn apply_bearer_middleware(router: axum::Router) -> axum::Router {
+/// If `allow_unauthenticated` is true and token is absent/empty, skips middleware application.
+fn apply_bearer_middleware(router: axum::Router, allow_unauthenticated: bool) -> axum::Router {
     match std::env::var("MCP_BEARER_TOKEN") {
         Ok(token) if !token.is_empty() => {
             let token = Arc::from(token.as_str());
@@ -109,12 +110,20 @@ fn apply_bearer_middleware(router: axum::Router) -> axum::Router {
             }))
         }
         Ok(_) => {
-            tracing::warn!("MCP_BEARER_TOKEN is empty; HTTP endpoint is unauthenticated");
-            router
+            if allow_unauthenticated {
+                router
+            } else {
+                tracing::warn!("MCP_BEARER_TOKEN is empty; HTTP endpoint is unauthenticated");
+                router
+            }
         }
         Err(_) => {
-            tracing::warn!("MCP_BEARER_TOKEN is not set; HTTP endpoint is unauthenticated");
-            router
+            if allow_unauthenticated {
+                router
+            } else {
+                tracing::warn!("MCP_BEARER_TOKEN is not set; HTTP endpoint is unauthenticated");
+                router
+            }
         }
     }
 }
@@ -144,11 +153,7 @@ pub async fn run_http(
     use tokio::net::TcpListener;
 
     // SEC-007: Check for MCP_BEARER_TOKEN if authentication is required
-    if !allow_unauthenticated
-        && std::env::var("MCP_BEARER_TOKEN")
-            .map(|v| v.is_empty())
-            .unwrap_or(true)
-    {
+    if !allow_unauthenticated && std::env::var("MCP_BEARER_TOKEN").map_or(true, |v| v.is_empty()) {
         eprintln!(
             "error: MCP_BEARER_TOKEN is not set. Set the env var or pass --allow-unauthenticated to start without authentication."
         );
@@ -174,7 +179,7 @@ pub async fn run_http(
     );
 
     let router = Router::new().nest_service("/mcp", service);
-    let router = apply_bearer_middleware(router);
+    let router = apply_bearer_middleware(router, allow_unauthenticated);
 
     let addr = parse_socket_addr(host, port)?;
     let listener = TcpListener::bind(addr).await?;
