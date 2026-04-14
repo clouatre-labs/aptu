@@ -3,53 +3,6 @@
 
 # Benchmarks
 
-This document records the prompt size reduction and quality verification from the system prompt compression initiative (PRs #1103-#1105).
-
-## Methodology
-
-**Prompt Measurement:** `bench/measure.sh` measures system prompt character counts per operation (triage, pr_review, create, release, pr_label). Measurements are taken as aggregate character counts across persona, tooling, and guidelines sections.
-
-**Quality Rubric:** `bench/rubric.md` defines a binary C1-C5 scoring rubric with these criteria:
-- C1: Precision (no false positives)
-- C2: Recall (catches real issues)
-- C3: Scope (matches issue scope)
-- C4: Actionability (fixes are clear)
-- C5: Tone (constructive and encouraging)
-
-Threshold: **>= 4/5 on all non-exempt fixtures** to pass the quality gate.
-
-**Evaluator:** `inception/mercury-2` via OpenRouter. Evaluations are post-compression only; baseline comparisons are informational.
-
-## Prompt Size
-
-| Operation | Before (chars) | After (chars) | Reduction |
-|-----------|----------------|---------------|-----------|
-| triage | 4,757 | 3,337 | −29.9% |
-| pr_review | 4,704 | 2,938 | −37.5% |
-| create | 3,571 | 2,534 | −29.0% |
-| release | 3,945 | 2,785 | −29.4% |
-| pr_label | 2,467 | 1,707 | −30.8% |
-| **Total** | **19,444** | **13,301** | **−31.6%** |
-
-## Quality Scores
-
-| Fixture | Type | Score | Result |
-|---------|------|-------|--------|
-| clouatre-labs/aptu#1091 | pr_review | 5/5 | PASS |
-| clouatre-labs/aptu#1098 | pr_review | 5/5 | PASS |
-| clouatre-labs/aptu#1101 | pr_review | 5/5 | PASS |
-| clouatre-labs/aptu#850 | triage | 4/5 | PASS |
-| clouatre-labs/aptu#1094 | triage | 5/5 | PASS |
-| clouatre-labs/aptu#737 | triage | 3/5 | exempted (closed/wontfix by design) |
-
-Evaluator: `inception/mercury-2` via OpenRouter. Threshold: >= 4/5 on all non-exempt fixtures.
-
-## References
-
-- [#1103](https://github.com/clouatre-labs/aptu/pull/1103) compress prompt files (−34% chars)
-- [#1104](https://github.com/clouatre-labs/aptu/pull/1104) record post-#1103 prompt size measurements
-- [#1105](https://github.com/clouatre-labs/aptu/pull/1105) record quality smoke-test scores
-
 ## Comparative Benchmark
 
 Head-to-head comparison of `aptu+mercury-2` (structured, schema-enforced triage/review) vs a raw `claude-opus-4.6` call with a two-sentence generic prompt (no schema, no rubric, no AST context). Issue [#1122](https://github.com/clouatre-labs/aptu/issues/1122).
@@ -92,3 +45,52 @@ aptu+mercury-2 is **17x cheaper** and **8x faster** than a raw opus-4.6 call, wh
 - aptu arm cost from `ai_stats.cost_usd` in `--output json --dry-run` response
 - raw_opus46 cost from `usage.cost_details.upstream_inference_cost` (OpenRouter BYOK mode returns top-level cost=0)
 - Raw data: [bench/results/efficiency.json](https://github.com/clouatre-labs/aptu/blob/main/bench/results/efficiency.json), [bench/results/scores.json](https://github.com/clouatre-labs/aptu/blob/main/bench/results/scores.json)
+
+## Quality Scores (aptu+mercury-2)
+
+Post-compression quality gate verification. Evaluator: `inception/mercury-2` via OpenRouter. Threshold: >= 4/5 on all non-exempt fixtures.
+
+| Fixture | Type | Score | Result |
+|---------|------|-------|--------|
+| clouatre-labs/aptu#1091 | pr_review | 5/5 | PASS |
+| clouatre-labs/aptu#1098 | pr_review | 5/5 | PASS |
+| clouatre-labs/aptu#1101 | pr_review | 5/5 | PASS |
+| clouatre-labs/aptu#850 | triage | 4/5 | PASS |
+| clouatre-labs/aptu#1094 | triage | 5/5 | PASS |
+| clouatre-labs/aptu#737 | triage | 3/5 | exempted (closed/wontfix by design) |
+
+## Prompt Size
+
+Prompt size reduction from the system prompt compression initiative (PRs [#1103](https://github.com/clouatre-labs/aptu/pull/1103)–[#1105](https://github.com/clouatre-labs/aptu/pull/1105)).
+
+| Operation | Before (chars) | After (chars) | Reduction |
+|-----------|----------------|---------------|-----------|
+| triage | 4,757 | 3,337 | −29.9% |
+| pr_review | 4,704 | 2,938 | −37.5% |
+| create | 3,571 | 2,534 | −29.0% |
+| release | 3,945 | 2,785 | −29.4% |
+| pr_label | 2,467 | 1,707 | −30.8% |
+| **Total** | **19,444** | **13,301** | **−31.6%** |
+
+Measured with `bench/measure.sh` (character counts across persona, tooling, and guidelines sections per operation).
+
+## Methodology
+
+**Quality Rubric:** `bench/rubric.md` defines a binary C1-C5 scoring rubric:
+
+- C1: Precision (no false positives)
+- C2: Recall (catches real issues)
+- C3: Scope (matches issue scope)
+- C4: Actionability (fixes are clear)
+- C5: Tone (constructive and encouraging)
+
+**Prompt Measurement:** `bench/measure.sh` measures system prompt character counts per operation.
+
+**Comparative Arm:** Raw `claude-opus-4.6` via OpenRouter with a two-sentence generic prompt -- no schema, no rubric, no AST context injection. See `bench/protocol.md` for the full procedure.
+
+## References
+
+- [#1103](https://github.com/clouatre-labs/aptu/pull/1103) compress prompt files (−34% chars)
+- [#1104](https://github.com/clouatre-labs/aptu/pull/1104) record post-#1103 prompt size measurements
+- [#1105](https://github.com/clouatre-labs/aptu/pull/1105) record quality smoke-test scores
+- [#1122](https://github.com/clouatre-labs/aptu/issues/1122) comparative benchmark issue
