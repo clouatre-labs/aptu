@@ -12,8 +12,6 @@
   <a href="https://www.bestpractices.dev/projects/11662"><img alt="OpenSSF Best Practices" src="https://img.shields.io/cii/level/11662?style=for-the-badge" height="20"></a>
 </p>
 
-> **31.6% fewer tokens. 5/5 quality sweep.** — [See Benchmarks](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md)
-
 <p align="center"><strong>AI-Powered Triage Utility</strong> - A CLI for OSS issue triage with AI assistance.</p>
 
 Aptu is a context-engineering experiment: instead of throwing big models at problems, it crafts tight prompts that let smaller models do the job with fewer tokens and surprising precision.
@@ -22,17 +20,20 @@ Aptu is a context-engineering experiment: instead of throwing big models at prob
 
 ![Aptu Demo](https://raw.githubusercontent.com/clouatre-labs/aptu/main/assets/demo.gif)
 
-## Why It Works
+## Benchmarks
 
-Aptu uses **task specialization** over raw model capability:
+System prompt sizes (chars) — baseline pre-#1096, after values landed via #1103, #1104, and #1105.
 
-| Factor | Aptu | General Agent |
-|--------|------|---------------|
-| Context | Only the diff | Entire conversation + tools |
-| Prompt | Tuned for code review patterns | General reasoning |
-| Attention | 100% on code quality | Split across many tasks |
+| Operation | Before (chars) | After (chars) | Reduction |
+|-----------|---------------|---------------|-----------|
+| triage    | 4,757 | 3,337 | −29.9% |
+| pr_review | 4,704 | 2,938 | −37.5% |
+| create    | 3,571 | 2,534 | −29.0% |
+| release   | 3,945 | 2,785 | −29.4% |
+| pr_label  | 2,467 | 1,707 | −30.8% |
+| **Total** | **19,444** | **13,301** | **−31.6%** |
 
-The small specialized model is not smarter, just less distracted. In real-world testing, aptu's PR review (using the default openrouter/mistral-small-2603) caught regex-based HTML parsing and missing error handling that claude-opus-4.6 shipped as "done".
+PR review: clean 5/5 across all fixtures. Triage: 4/5 average on non-exempt fixtures (evaluator: `inception/mercury-2`). [Full methodology and results](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md)
 
 ## Features
 
@@ -156,26 +157,6 @@ Aptu is a multi-crate Rust workspace. See [docs/ARCHITECTURE.md](https://github.
 ## Roadmap
 
 See [docs/ROADMAP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ROADMAP.md) for the project direction across near-term, medium-term, and long-term horizons.
-
-## Efficiency
-
-System prompt sizes (chars) — baseline measured pre-#1096; after values landed via #1103, #1104, and #1105.
-
-| Operation | Before (chars) | After (chars) | Reduction |
-|-----------|---------------|---------------|-----------|
-| triage    | 4,757 | 3,337 | −29.9% |
-| pr_review | 4,704 | 2,938 | −37.5% |
-| create    | 3,571 | 2,534 | −29.0% |
-| release   | 3,945 | 2,785 | −29.4% |
-| pr_label  | 2,467 | 1,707 | −30.8% |
-| **Total** | **19,444** | **13,301** | **−31.6%** |
-
-PR review: clean 5/5 across all fixtures. Triage: 4/5 average on non-exempt fixtures (evaluator: `inception/mercury-2`). [Full results](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md)
-
-## Benchmarks
-
-Verified prompt compression and quality scores from PRs #1103–#1105.
-See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md) for full methodology and results.
 
 ## Contributing
 
