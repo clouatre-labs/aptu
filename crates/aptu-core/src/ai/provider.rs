@@ -26,13 +26,16 @@ use super::prompts::{
     build_release_notes_system_prompt, build_triage_system_prompt,
 };
 
+/// Maximum number of characters retained from an AI provider error response body.
+const MAX_ERROR_BODY_LENGTH: usize = 200;
+
 /// Redacts error body to prevent leaking sensitive API details.
-/// Truncates to 200 characters and appends "[truncated]" if longer.
+/// Truncates to [`MAX_ERROR_BODY_LENGTH`] characters and appends "[truncated]" if longer.
 fn redact_api_error_body(body: &str) -> String {
-    if body.chars().count() <= 200 {
+    if body.chars().count() <= MAX_ERROR_BODY_LENGTH {
         body.to_owned()
     } else {
-        let truncated: String = body.chars().take(200).collect();
+        let truncated: String = body.chars().take(MAX_ERROR_BODY_LENGTH).collect();
         format!("{truncated} [truncated]")
     }
 }
