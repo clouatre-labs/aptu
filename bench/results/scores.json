@@ -12,6 +12,11 @@
       {"fixture": "clouatre-labs/aptu#737", "C1": 1, "C2": 1, "C3": 0, "C4": 0, "C5": 1, "score": 3, "note": "3/5 expected: closed/wontfix, self-contained body (C3=0), no planned implementation (C4=0)"},
       {"fixture": "clouatre-labs/aptu#850", "C1": 1, "C2": 1, "C3": 0, "C4": 1, "C5": 1, "score": 4},
       {"fixture": "clouatre-labs/aptu#1094", "C1": 1, "C2": 1, "C3": 1, "C4": 1, "C5": 1, "score": 5}
+    ],
+    "raw_baseline": [
+      {"fixture": "clouatre-labs/aptu#737", "C1": 1, "C2": 1, "C3": 0, "C4": 0, "C5": 0, "score": 2, "note": "C5=0 by design (no schema enforcement). C3=0 (no answerable clarifying question). C4=0 (no specific file or function cited)."},
+      {"fixture": "clouatre-labs/aptu#850", "C1": 1, "C2": 1, "C3": 0, "C4": 0, "C5": 0, "score": 2, "note": "C5=0 by design. C3=0, C4=0: response provides labels and rationale but no specific file or answerable clarifying question."},
+      {"fixture": "clouatre-labs/aptu#1094", "C1": 1, "C2": 1, "C3": 0, "C4": 0, "C5": 0, "score": 2, "note": "C5=0 by design. C3=0 (no clarifying question posed). C4=0 (tracking issue analysis cites no specific file or function)."}
     ]
   },
   "pr_review": {
@@ -25,6 +30,11 @@
       {"fixture": "clouatre-labs/aptu#1101", "C1": 1, "C2": 1, "C3": 1, "C4": 1, "C5": 1, "score": 5},
       {"fixture": "clouatre-labs/aptu#1098", "C1": 1, "C2": 1, "C3": 1, "C4": 1, "C5": 1, "score": 5},
       {"fixture": "clouatre-labs/aptu#1091", "C1": 1, "C2": 1, "C3": 1, "C4": 1, "C5": 1, "score": 5}
+    ],
+    "raw_baseline": [
+      {"fixture": "clouatre-labs/aptu#1101", "C1": 0, "C2": 1, "C3": 0, "C4": 1, "C5": 0, "score": 2, "note": "C5=0 by design. C1=0: response cites file names but no line numbers. C3=0: no explicit approve/request-changes verdict (only issues listed)."},
+      {"fixture": "clouatre-labs/aptu#1098", "C1": 0, "C2": 1, "C3": 0, "C4": 1, "C5": 0, "score": 2, "note": "C5=0 by design. C1=0: file refs present (config.rs, discovery.rs) but no line numbers. C3=0: no explicit verdict."},
+      {"fixture": "clouatre-labs/aptu#1091", "C1": 1, "C2": 1, "C3": 0, "C4": 1, "C5": 0, "score": 3, "note": "C5=0 by design. C1=1: .github/workflows/release.yml line 155 cited. C3=0: no explicit approve/request-changes verdict."}
     ]
   }
 }

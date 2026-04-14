@@ -49,3 +49,46 @@ Evaluator: `inception/mercury-2` via OpenRouter. Threshold: >= 4/5 on all non-ex
 - [#1103](https://github.com/clouatre-labs/aptu/pull/1103) compress prompt files (−34% chars)
 - [#1104](https://github.com/clouatre-labs/aptu/pull/1104) record post-#1103 prompt size measurements
 - [#1105](https://github.com/clouatre-labs/aptu/pull/1105) record quality smoke-test scores
+
+## Comparative Benchmark
+
+Head-to-head comparison of `aptu+mercury-2` (structured, schema-enforced triage/review) vs a raw `claude-opus-4.6` call with a two-sentence vague prompt (no schema, no rubric, no AST context). Issue [#1122](https://github.com/clouatre-labs/aptu/issues/1122).
+
+### Setup
+
+| Arm | Model | Provider | Prompt |
+|-----|-------|----------|--------|
+| aptu+mercury-2 | `inception/mercury-2` | openrouter | Full aptu structured prompt (schema, rubric, AST context) |
+| raw_opus46 | `anthropic/claude-opus-4.6` | openrouter | Two-sentence vague prompt; no schema, no rubric, no AST context |
+
+### Quality Scores
+
+Rubric: [bench/rubric.md](https://github.com/clouatre-labs/aptu/blob/main/bench/rubric.md). C5=0 for raw_baseline by design (no schema enforcement).
+
+| Fixture | Type | aptu C1-C5 | aptu Score | raw C1-C5 | raw Score |
+|---------|------|------------|------------|-----------|-----------|
+| [#737](https://github.com/clouatre-labs/aptu/issues/737) | triage | 1,1,0,0,1 | 3/5 (exempted) | 1,1,0,0,0 | 2/5 |
+| [#850](https://github.com/clouatre-labs/aptu/issues/850) | triage | 1,1,0,1,1 | 4/5 | 1,1,0,0,0 | 2/5 |
+| [#1094](https://github.com/clouatre-labs/aptu/issues/1094) | triage | 1,1,1,1,1 | 5/5 | 1,1,0,0,0 | 2/5 |
+| [#1101](https://github.com/clouatre-labs/aptu/pulls/1101) | pr_review | 1,1,1,1,1 | 5/5 | 0,1,0,1,0 | 2/5 |
+| [#1098](https://github.com/clouatre-labs/aptu/pulls/1098) | pr_review | 1,1,1,1,1 | 5/5 | 0,1,0,1,0 | 2/5 |
+| [#1091](https://github.com/clouatre-labs/aptu/pulls/1091) | pr_review | 1,1,1,1,1 | 5/5 | 1,1,0,1,0 | 3/5 |
+
+Mean (non-exempt triage + all pr_review): aptu **4.8/5**, raw_opus46 **2.2/5**.
+
+### Efficiency
+
+| Arm | Cost/call (mean) | Latency p50 |
+|-----|------------------|-------------|
+| aptu+mercury-2 | $0.001135 | 1,934 ms |
+| raw_opus46 | $0.019254 | 16,032 ms |
+
+aptu+mercury-2 is **17x cheaper** and **8x faster** than a raw opus-4.6 call, while scoring more than twice as high on the structured rubric.
+
+### Methodology
+
+- Evaluator: human rubric evaluation against [bench/rubric.md](https://github.com/clouatre-labs/aptu/blob/main/bench/rubric.md)
+- n=1 per fixture (6 total samples per arm); latency p50 computed across 6 fixtures, not repeated runs
+- aptu arm cost from `ai_stats.cost_usd` in `--output json --dry-run` response
+- raw_opus46 cost from `usage.cost_details.upstream_inference_cost` (OpenRouter BYOK mode returns top-level cost=0)
+- Raw data: [bench/results/efficiency.json](https://github.com/clouatre-labs/aptu/blob/main/bench/results/efficiency.json), [bench/results/scores.json](https://github.com/clouatre-labs/aptu/blob/main/bench/results/scores.json)
