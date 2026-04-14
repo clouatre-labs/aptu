@@ -160,6 +160,15 @@ pub async fn run_http(
         return Err(anyhow::anyhow!("MCP_BEARER_TOKEN required"));
     }
 
+    // SEC-008: Warn when starting without bearer token authentication
+    if allow_unauthenticated && std::env::var("MCP_BEARER_TOKEN").map_or(true, |v| v.is_empty()) {
+        tracing::warn!(
+            "MCP server starting without bearer token authentication. \
+             This exposes all tools to unauthenticated callers. \
+             Set MCP_BEARER_TOKEN to enable authentication."
+        );
+    }
+
     tracing::info!("Starting aptu MCP HTTP server on {}:{}", host, port);
 
     let ai_config = aptu_core::config::load_config()
