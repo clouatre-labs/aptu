@@ -129,7 +129,12 @@ fn parse_socket_addr(host: &str, port: u16) -> anyhow::Result<std::net::SocketAd
     addr_str.parse().map_err(Into::into)
 }
 
-pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<()> {
+pub async fn run_http(
+    host: &str,
+    port: u16,
+    read_only: bool,
+    allow_unauthenticated: bool,
+) -> anyhow::Result<()> {
     use anyhow::Context;
     use axum::Router;
     use rmcp::transport::streamable_http_server::{
@@ -137,6 +142,18 @@ pub async fn run_http(host: &str, port: u16, read_only: bool) -> anyhow::Result<
     };
     use std::sync::Arc;
     use tokio::net::TcpListener;
+
+    // SEC-007: Check for MCP_BEARER_TOKEN if authentication is required
+    if !allow_unauthenticated
+        && std::env::var("MCP_BEARER_TOKEN")
+            .map(|v| v.is_empty())
+            .unwrap_or(true)
+    {
+        eprintln!(
+            "error: MCP_BEARER_TOKEN is not set. Set the env var or pass --allow-unauthenticated to start without authentication."
+        );
+        return Err(anyhow::anyhow!("MCP_BEARER_TOKEN required"));
+    }
 
     tracing::info!("Starting aptu MCP HTTP server on {}:{}", host, port);
 
@@ -213,5 +230,61 @@ mod tests {
     #[test]
     fn test_constant_time_eq_different_content() {
         assert!(!constant_time_eq(b"abc", b"abd"));
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_run_http_rejects_missing_token() {
+        // Arrange: ensure MCP_BEARER_TOKEN is not set
+        let original_token = std::env::var("MCP_BEARER_TOKEN").ok();
+        unsafe { std::env::remove_var("MCP_BEARER_TOKEN") };
+
+        // Act: call run_http with allow_unauthenticated=false on a high port (to avoid binding conflict)
+        let result = run_http("127.0.0.1", 0, false, false).await;
+
+        // Restore env
+        if let Some(token) = original_token {
+            unsafe { std::env::set_var("MCP_BEARER_TOKEN", &token) };
+        }
+
+        // Assert: must return Err containing "MCP_BEARER_TOKEN"
+        assert!(
+            result.is_err(),
+            "run_http should reject startup without token"
+        );
+        let err_msg = format!("{:?}", result.unwrap_err());
+        assert!(
+            err_msg.contains("MCP_BEARER_TOKEN"),
+            "error message should mention MCP_BEARER_TOKEN"
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_run_http_allows_unauthenticated_flag() {
+        // Arrange: ensure MCP_BEARER_TOKEN is not set
+        let original_token = std::env::var("MCP_BEARER_TOKEN").ok();
+        unsafe { std::env::remove_var("MCP_BEARER_TOKEN") };
+
+        // Act: call run_http with allow_unauthenticated=true
+        // This will attempt to bind and run; we just verify it passes the token check
+        // by not returning early with the token error. The actual binding may fail due
+        // to port conflict, but that's a different error.
+        let result = run_http("127.0.0.1", 65535, false, true).await;
+
+        // Restore env
+        if let Some(token) = original_token {
+            unsafe { std::env::set_var("MCP_BEARER_TOKEN", &token) };
+        }
+
+        // Assert: if it errors, it should NOT be the "MCP_BEARER_TOKEN required" error
+        if let Err(e) = &result {
+            let err_msg = format!("{:?}", e);
+            assert!(
+                !err_msg.contains("MCP_BEARER_TOKEN required"),
+                "allow_unauthenticated=true should skip the token check; got: {}",
+                err_msg
+            );
+        }
     }
 }

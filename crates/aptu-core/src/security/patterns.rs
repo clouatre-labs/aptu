@@ -126,8 +126,8 @@ mod tests {
     fn test_pattern_engine_loads() {
         let engine = PatternEngine::from_embedded_json().unwrap();
         assert!(
-            engine.pattern_count() >= 10,
-            "Should have at least 10 patterns"
+            engine.pattern_count() >= 22,
+            "Should have at least 22 patterns"
         );
     }
 
@@ -245,6 +245,49 @@ mod tests {
         assert!(
             findings.is_empty(),
             "Should not have false positives on safe code"
+        );
+    }
+
+    #[test]
+    fn test_ssrf_detection() {
+        let engine = PatternEngine::global();
+
+        // Test bare variable call
+        let code_bare = r#"
+            let response = reqwest::get(user_url).await;
+        "#;
+        let findings_bare = engine.scan(code_bare, "app.rs");
+        assert!(
+            findings_bare
+                .iter()
+                .any(|f| f.pattern_id == "ssrf-http-request"),
+            "Should detect SSRF pattern with bare variable URL"
+        );
+
+        // Test concatenation call
+        let code_concat = r#"
+            let response = reqwest::get(user_url + "/path").await;
+        "#;
+        let findings_concat = engine.scan(code_concat, "app.rs");
+        assert!(
+            findings_concat
+                .iter()
+                .any(|f| f.pattern_id == "ssrf-http-request"),
+            "Should detect SSRF pattern with concatenated variable URL"
+        );
+    }
+
+    #[test]
+    fn test_open_redirect_detection() {
+        let engine = PatternEngine::global();
+        let code = r#"
+            location.href = req.query.url;
+        "#;
+
+        let findings = engine.scan(code, "app.js");
+        assert!(
+            findings.iter().any(|f| f.pattern_id == "open-redirect"),
+            "Should detect open redirect pattern from user input"
         );
     }
 

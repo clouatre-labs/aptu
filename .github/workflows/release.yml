@@ -147,7 +147,6 @@ jobs:
       cross: ${{ matrix.cross }}
       version: ${{ needs.create-release.outputs.version }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
-    secrets: inherit
 
   update-marketplace-tag:
     name: Update Marketplace Floating Tag
