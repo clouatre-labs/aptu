@@ -33,7 +33,8 @@ pub fn aptu_error_to_mcp(err: &AptuError) -> ErrorData {
     let code = match err {
         AptuError::TypeMismatch { .. }
         | AptuError::ModelValidation { .. }
-        | AptuError::Config { .. } => ErrorCode::INVALID_PARAMS,
+        | AptuError::Config { .. }
+        | AptuError::SecurityScan { .. } => ErrorCode::INVALID_PARAMS,
         AptuError::NotAuthenticated | AptuError::AiProviderNotAuthenticated { .. } => {
             ErrorCode::INVALID_REQUEST
         }
@@ -116,7 +117,7 @@ pub fn aptu_error_to_mcp(err: &AptuError) -> ErrorData {
         AptuError::SecurityScan { .. } => Some(error_meta(
             "SECURITY_SCAN_ERROR",
             false,
-            "Fix the security issues identified in the diff",
+            "Prompt injection patterns detected; operation blocked for security",
         )),
         #[cfg(feature = "keyring")]
         AptuError::Keyring(_) => Some(error_meta(
