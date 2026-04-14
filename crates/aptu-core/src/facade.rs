@@ -568,13 +568,12 @@ pub async fn analyze_issue(
             .iter()
             .map(|f| f.pattern_id.as_str())
             .collect();
-        error!(patterns = ?pattern_ids, "Prompt injection detected; blocking operation");
-        return Err(AptuError::SecurityScan {
-            message: format!(
-                "Prompt injection patterns detected: {}",
-                pattern_ids.join(", ")
-            ),
-        });
+        let message = format!(
+            "Prompt injection patterns detected: {}",
+            pattern_ids.join(", ")
+        );
+        error!(patterns = ?pattern_ids, message = %message, "Prompt injection detected; operation blocked");
+        return Err(AptuError::SecurityScan { message });
     }
 
     // Resolve task-specific provider and model
@@ -781,13 +780,12 @@ pub async fn analyze_pr(
             .iter()
             .map(|f| f.pattern_id.as_str())
             .collect();
-        error!(patterns = ?pattern_ids, "Prompt injection detected; blocking operation");
-        return Err(AptuError::SecurityScan {
-            message: format!(
-                "Prompt injection patterns detected: {}",
-                pattern_ids.join(", ")
-            ),
-        });
+        let message = format!(
+            "Prompt injection patterns detected: {}",
+            pattern_ids.join(", ")
+        );
+        error!(patterns = ?pattern_ids, message = %message, "Prompt injection detected; operation blocked");
+        return Err(AptuError::SecurityScan { message });
     }
 
     // Use fallback chain if configured

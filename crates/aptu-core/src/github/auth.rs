@@ -31,7 +31,7 @@ use super::{KEYRING_SERVICE, KEYRING_USER};
 
 /// Session-level cache for resolved GitHub tokens.
 /// Stores the token and its source to avoid repeated subprocess calls to `gh auth token`.
-static TOKEN_CACHE: RwLock<Option<SecretString>> = RwLock::new(None);
+static TOKEN_CACHE: RwLock<Option<(SecretString, TokenSource)>> = RwLock::new(None);
 
 /// Source of the GitHub authentication token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -242,9 +242,9 @@ pub fn resolve_token() -> Option<(SecretString, TokenSource)> {
     // Try read lock first
     {
         let guard = TOKEN_CACHE.read().unwrap_or_else(PoisonError::into_inner);
-        if let Some(token) = guard.as_ref() {
-            debug!("Cache hit for token resolution");
-            return Some((token.clone(), TokenSource::GhCli)); // Return cached token with a default source
+        if let Some((token, source)) = guard.as_ref() {
+            debug!(source = %source, "Cache hit for token resolution");
+            return Some((token.clone(), *source));
         }
     }
 
@@ -252,7 +252,7 @@ pub fn resolve_token() -> Option<(SecretString, TokenSource)> {
     let resolved = resolve_token_inner();
     if let Some((token, source)) = resolved.as_ref() {
         let mut guard = TOKEN_CACHE.write().unwrap_or_else(PoisonError::into_inner);
-        *guard = Some(token.clone());
+        *guard = Some((token.clone(), *source));
         debug!(source = %source, "Resolved and cached token");
         Some((token.clone(), *source))
     } else {

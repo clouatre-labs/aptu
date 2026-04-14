@@ -29,10 +29,11 @@ use super::prompts::{
 /// Redacts error body to prevent leaking sensitive API details.
 /// Truncates to 200 characters and appends "[truncated]" if longer.
 fn redact_api_error_body(body: &str) -> String {
-    if body.len() <= 200 {
+    if body.chars().count() <= 200 {
         body.to_owned()
     } else {
-        format!("{} [truncated]", &body[..200])
+        let truncated: String = body.chars().take(200).collect();
+        format!("{truncated} [truncated]")
     }
 }
 
