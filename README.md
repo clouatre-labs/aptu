@@ -20,21 +20,6 @@ Aptu is a context-engineering experiment: instead of throwing big models at prob
 
 ![Aptu Demo](https://raw.githubusercontent.com/clouatre-labs/aptu/main/assets/demo.gif)
 
-## Benchmarks
-
-System prompt sizes (chars) — baseline pre-#1096, after values landed via #1103, #1104, and #1105.
-
-| Operation | Before (chars) | After (chars) | Reduction |
-|-----------|---------------|---------------|-----------|
-| triage    | 4,757 | 3,337 | −29.9% |
-| pr_review | 4,704 | 2,938 | −37.5% |
-| create    | 3,571 | 2,534 | −29.0% |
-| release   | 3,945 | 2,785 | −29.4% |
-| pr_label  | 2,467 | 1,707 | −30.8% |
-| **Total** | **19,444** | **13,301** | **−31.6%** |
-
-PR review: clean 5/5 across all fixtures. Triage: 4/5 average on non-exempt fixtures (evaluator: `inception/mercury-2`). [Full methodology and results](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md)
-
 ## Features
 
 - **AI Triage** - Summaries, suggested labels, clarifying questions, and contributor guidance
