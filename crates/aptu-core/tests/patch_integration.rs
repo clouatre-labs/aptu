@@ -31,21 +31,32 @@ fn setup_repo() -> (TempDir, TempDir) {
             "--bare",
             bare.path().to_str().expect("bare path"),
         ],
-        Path::new("/tmp"),
+        bare.path(),
     );
 
     // Init working repo.
     let w = work.path();
     run(
         &["git", "init", "-b", "main", w.to_str().expect("work path")],
-        Path::new("/tmp"),
+        w,
     );
     git(w, &["config", "user.email", "test@example.com"]);
     git(w, &["config", "user.name", "Test User"]);
     git(w, &["config", "commit.gpgSign", "false"]);
     // Disable hooks inherited from global git templates so tests are not
     // affected by repository-local commit hooks (e.g. email allowlists).
-    git(w, &["config", "core.hooksPath", "/dev/null"]);
+    // Use a subdirectory of the work tmpdir rather than /dev/null for
+    // cross-platform compatibility.
+    let hooks_dir = work.path().join("hooks");
+    std::fs::create_dir_all(&hooks_dir).expect("create hooks dir");
+    git(
+        w,
+        &[
+            "config",
+            "core.hooksPath",
+            hooks_dir.to_str().expect("hooks path"),
+        ],
+    );
 
     // Wire origin.
     git(
