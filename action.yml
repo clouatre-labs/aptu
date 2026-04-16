@@ -316,6 +316,7 @@ runs:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO: ${{ github.repository }}
         REPO_PATH: ${{ inputs.repo-path }}
+        DEEP: ${{ inputs.deep }}
       run: |
         set -e
         
