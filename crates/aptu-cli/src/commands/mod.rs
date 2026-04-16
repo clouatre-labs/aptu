@@ -2,7 +2,6 @@
 
 //! Command handlers for Aptu CLI.
 
-pub mod agent;
 pub mod auth;
 pub mod completion;
 pub mod create;
@@ -27,7 +26,6 @@ use crate::cli::{
     AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
     OutputFormat, PrCommand, RepoCommand,
 };
-use crate::commands::agent::run_agent_command;
 use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewOutcome};
 use crate::output;
 use aptu_core::{AppConfig, State, check_already_triaged};
@@ -816,6 +814,9 @@ async fn run_pr_command(
             body,
             branch,
             base,
+            diff,
+            draft,
+            force,
         } => {
             let spinner = maybe_spinner(&ctx, "Creating pull request...");
             let result = pr::run_pr_create(
@@ -826,6 +827,9 @@ async fn run_pr_command(
                 body,
                 branch,
                 base,
+                diff,
+                draft,
+                force,
             )
             .await?;
             if let Some(s) = spinner {
@@ -899,6 +903,5 @@ pub async fn run(
         Commands::Pr(pr_cmd) => run_pr_command(pr_cmd, ctx, config, inferred_repo).await,
         Commands::Models(models_cmd) => run_models_command(models_cmd, ctx).await,
         Commands::Completion(completion_cmd) => run_completion_command(&completion_cmd, ctx),
-        Commands::Agent { command } => run_agent_command(&ctx, command).await,
     }
 }

@@ -462,6 +462,7 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
 ///
 /// Returns an error if the API call fails or the user lacks write access.
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, head = %head_branch, base = %base_branch))]
+#[allow(clippy::too_many_arguments)]
 pub async fn create_pull_request(
     client: &Octocrab,
     owner: &str,
@@ -470,6 +471,7 @@ pub async fn create_pull_request(
     head_branch: &str,
     base_branch: &str,
     body: Option<&str>,
+    draft: bool,
 ) -> anyhow::Result<PrCreateResult> {
     debug!("Creating pull request");
 
@@ -477,7 +479,7 @@ pub async fn create_pull_request(
         .pulls(owner, repo)
         .create(title, head_branch, base_branch)
         .body(body.unwrap_or_default())
-        .draft(false)
+        .draft(draft)
         .send()
         .await
         .with_context(|| {

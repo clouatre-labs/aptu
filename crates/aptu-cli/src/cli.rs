@@ -214,12 +214,6 @@ pub enum Commands {
     /// Generate or install shell completion scripts
     #[command(subcommand)]
     Completion(CompletionCommand),
-
-    /// Agent orchestration
-    Agent {
-        #[command(subcommand)]
-        command: AgentCommand,
-    },
 }
 
 /// Authentication subcommands
@@ -456,26 +450,18 @@ pub enum PrCommand {
         /// Base branch. Defaults to main.
         #[arg(long, default_value = "main")]
         base: String,
-    },
-}
 
-/// Agent orchestration subcommands
-#[derive(Debug, Subcommand)]
-pub enum AgentCommand {
-    /// Run the full issue-to-PR orchestration workflow
-    #[command(hide = true)]
-    Run {
-        /// Issue reference (e.g., org/repo#123)
-        issue_ref: String,
-        /// Run only a specific phase (plan, build, check, pr)
+        /// Unified diff file to apply and commit before creating the PR
+        #[arg(long, value_name = "FILE")]
+        diff: Option<std::path::PathBuf>,
+
+        /// Create PR as draft
         #[arg(long)]
-        phase: Option<String>,
-        /// Directory for handoff JSON files
-        #[arg(long, default_value = ".aptu/handoff")]
-        handoff_dir: String,
-        /// Dry run -- skip PR creation
+        draft: bool,
+
+        /// Force patch application despite security findings
         #[arg(long)]
-        dry_run: bool,
+        force: bool,
     },
 }
 
