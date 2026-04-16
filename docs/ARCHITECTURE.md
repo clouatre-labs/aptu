@@ -11,6 +11,7 @@ aptu/
 ├── aptu-cli          # CLI entry point, command routing, user I/O
 ├── aptu-core         # Domain logic, GitHub API, AI providers
 │   ├── ai/           # AI provider abstraction and routing
+│   ├── git/          # Patch application, branch management, git utilities
 │   ├── github/       # GitHub API integration (Octocrab wrapper)
 │   ├── repos/        # Repository discovery and management
 │   └── ...           # Config, cache, history, triage logic
@@ -60,6 +61,20 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Gro
 4. Build call-graph context: cross-file caller chains for changed functions
 5. Enforce prompt budget (`max_prompt_chars`): drop sections in order (call graph, AST, full content, diff hunks) until budget is met
 6. Post inline review comments via GitHub REST API
+
+### apply_patch_and_push (`aptu-core::git::patch`)
+
+`apply_patch_and_push` drives the full patch-to-PR pipeline:
+
+1. Git version gate (>= 2.39.2, CVE-2023-23946)
+2. Patch validation: 50 MB size cap, path-traversal rejection, symlink-mode rejection
+3. Security scan via `SecurityScanner::scan_diff()` (bypassable with `--force`)
+4. Dry-run apply check (`git apply --check`) before any branch is created
+5. Branch creation from `origin/<base>` with collision-resistant naming (date suffix, then hex suffix)
+6. Patch application, staging, and commit (with optional DCO `--signoff` and GPG `-S` when `commit.gpgSign=true`)
+7. Push to `origin`
+
+Returns the branch name that was pushed, or a `PatchError` variant on any failure.
 
 ### Facade Functions
 `aptu-core/facade.rs` provides high-level functions for CLI/FFI:

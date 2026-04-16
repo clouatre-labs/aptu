@@ -137,7 +137,7 @@ pub mod cache;
 pub mod config;
 pub mod error;
 pub mod facade;
-#[allow(missing_docs)]
+/// Git utilities: patch application, branch management, and version gating.
 pub mod git;
 pub mod github;
 pub mod history;
