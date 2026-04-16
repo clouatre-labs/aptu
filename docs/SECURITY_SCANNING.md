@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: 2024 Clouatre Labs -->
+<!-- SPDX-FileCopyrightText: 2026 Aptu Contributors -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
 # Security Scanning

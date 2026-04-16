@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 Clouatre Labs
+# SPDX-FileCopyrightText: 2026 Aptu Contributors
 
 # VHS demo script for Aptu - AI-Powered Triage Utility
 # Showcases curated repository discovery, issue listing, and AI-powered triage

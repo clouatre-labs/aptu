@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2026 Block, Inc.
+# SPDX-FileCopyrightText: 2026 Aptu Contributors
 set -euo pipefail
 
 # Build script for Rust FFI library (aptu-ffi)
