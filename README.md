@@ -41,7 +41,6 @@ See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BE
 - **Issue Discovery** - Find good-first-issues from curated repositories
 - **PR Analysis** - AI-powered pull request review and feedback
 - **Prompt Customization** - Override built-in system prompts per operation or append custom guidance via config
-- **Release Notes** - AI-curated changelogs from merged PRs
 - **GitHub Action** - Auto-triage incoming issues with labels and comments
 - **MCP Server** - Model Context Protocol integration for AI assistants
 - **Multiple Providers** - OpenRouter (default), Gemini, Groq, Cerebras, Z.AI, and ZenMux

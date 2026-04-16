@@ -10,7 +10,6 @@ pub mod history;
 pub mod issue;
 pub mod models;
 pub mod pr;
-pub mod release;
 pub mod repo;
 pub mod triage;
 pub mod types;
@@ -898,33 +897,6 @@ pub async fn run(
             Ok(())
         }
         Commands::Pr(pr_cmd) => run_pr_command(pr_cmd, ctx, config, inferred_repo).await,
-        Commands::Release {
-            tag,
-            repo,
-            from,
-            to,
-            unreleased,
-            update,
-            dry_run,
-        } => {
-            let spinner = maybe_spinner(&ctx, "Generating release notes...");
-            let result = release::run_generate(
-                tag.as_deref(),
-                repo.as_deref(),
-                from.as_deref(),
-                to.as_deref(),
-                unreleased,
-                update,
-                dry_run,
-                &ctx,
-            )
-            .await?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            output::render(&result, &ctx)?;
-            Ok(())
-        }
         Commands::Models(models_cmd) => run_models_command(models_cmd, ctx).await,
         Commands::Completion(completion_cmd) => run_completion_command(&completion_cmd, ctx),
         Commands::Agent { command } => run_agent_command(&ctx, command).await,

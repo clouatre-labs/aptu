@@ -12,7 +12,6 @@ TOOLING_PATH="$REPO_ROOT/crates/aptu-core/src/ai/prompts/tooling_context.md"
 TRIAGE_GUIDELINES_PATH="$REPO_ROOT/crates/aptu-core/src/ai/prompts/triage_guidelines.md"
 PR_REVIEW_GUIDELINES_PATH="$REPO_ROOT/crates/aptu-core/src/ai/prompts/pr_review_guidelines.md"
 CREATE_GUIDELINES_PATH="$REPO_ROOT/crates/aptu-core/src/ai/prompts/create_guidelines.md"
-RELEASE_GUIDELINES_PATH="$REPO_ROOT/crates/aptu-core/src/ai/prompts/release_notes_guidelines.md"
 PR_LABEL_GUIDELINES_PATH="$REPO_ROOT/crates/aptu-core/src/ai/prompts/pr_label_guidelines.md"
 
 # Extract persona byte counts from mod.rs.
@@ -43,7 +42,6 @@ funcs = [
     ('triage',    'build_triage_system_prompt'),
     ('pr_review', 'build_pr_review_system_prompt'),
     ('create',    'build_create_system_prompt'),
-    ('release',   'build_release_notes_system_prompt'),
     ('pr_label',  'build_pr_label_system_prompt'),
 ]
 for key, fn in funcs:
@@ -61,14 +59,12 @@ TOOLING=$(wc -c < "$TOOLING_PATH")
 TRIAGE_GUIDELINES=$(wc -c < "$TRIAGE_GUIDELINES_PATH")
 PR_REVIEW_GUIDELINES=$(wc -c < "$PR_REVIEW_GUIDELINES_PATH")
 CREATE_GUIDELINES=$(wc -c < "$CREATE_GUIDELINES_PATH")
-RELEASE_GUIDELINES=$(wc -c < "$RELEASE_GUIDELINES_PATH")
 PR_LABEL_GUIDELINES=$(wc -c < "$PR_LABEL_GUIDELINES_PATH")
 
 # Totals (persona + tooling + guidelines)
 TRIAGE_TOTAL=$((PERSONA_triage + TOOLING + TRIAGE_GUIDELINES))
 PR_REVIEW_TOTAL=$((PERSONA_pr_review + TOOLING + PR_REVIEW_GUIDELINES))
 CREATE_TOTAL=$((PERSONA_create + TOOLING + CREATE_GUIDELINES))
-RELEASE_TOTAL=$((PERSONA_release + TOOLING + RELEASE_GUIDELINES))
 PR_LABEL_TOTAL=$((PERSONA_pr_label + TOOLING + PR_LABEL_GUIDELINES))
 
 # Print markdown table
@@ -78,7 +74,6 @@ cat <<EOF
 | triage    | $PERSONA_triage | $TOOLING | $TRIAGE_GUIDELINES | $TRIAGE_TOTAL |
 | pr_review | $PERSONA_pr_review | $TOOLING | $PR_REVIEW_GUIDELINES | $PR_REVIEW_TOTAL |
 | create    | $PERSONA_create | $TOOLING | $CREATE_GUIDELINES | $CREATE_TOTAL |
-| release   | $PERSONA_release | $TOOLING | $RELEASE_GUIDELINES | $RELEASE_TOTAL |
 | pr_label  | $PERSONA_pr_label | $TOOLING | $PR_LABEL_GUIDELINES | $PR_LABEL_TOTAL |
 EOF
 
@@ -94,9 +89,6 @@ jq -n \
   --argjson create_persona       "$PERSONA_create" \
   --argjson create_guidelines    "$CREATE_GUIDELINES" \
   --argjson create_total         "$CREATE_TOTAL" \
-  --argjson release_persona      "$PERSONA_release" \
-  --argjson release_guidelines   "$RELEASE_GUIDELINES" \
-  --argjson release_total        "$RELEASE_TOTAL" \
   --argjson pr_label_persona     "$PERSONA_pr_label" \
   --argjson pr_label_guidelines  "$PR_LABEL_GUIDELINES" \
   --argjson pr_label_total       "$PR_LABEL_TOTAL" \
@@ -108,7 +100,6 @@ jq -n \
       triage:    { before: { persona_chars: $triage_persona,    tooling_chars: $tooling, guidelines_chars: $triage_guidelines,    total_chars: $triage_total    }, after: null, reduction_pct: null },
       pr_review: { before: { persona_chars: $pr_review_persona, tooling_chars: $tooling, guidelines_chars: $pr_review_guidelines, total_chars: $pr_review_total }, after: null, reduction_pct: null },
       create:    { before: { persona_chars: $create_persona,    tooling_chars: $tooling, guidelines_chars: $create_guidelines,    total_chars: $create_total    }, after: null, reduction_pct: null },
-      release:   { before: { persona_chars: $release_persona,   tooling_chars: $tooling, guidelines_chars: $release_guidelines,   total_chars: $release_total   }, after: null, reduction_pct: null },
       pr_label:  { before: { persona_chars: $pr_label_persona,  tooling_chars: $tooling, guidelines_chars: $pr_label_guidelines,  total_chars: $pr_label_total  }, after: null, reduction_pct: null }
     }
   }' > "$REPO_ROOT/bench/results/sizes.json"

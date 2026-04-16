@@ -23,7 +23,7 @@ use crate::history::AiStats;
 
 use super::prompts::{
     build_create_system_prompt, build_pr_label_system_prompt, build_pr_review_system_prompt,
-    build_release_notes_system_prompt, build_triage_system_prompt,
+    build_triage_system_prompt,
 };
 
 /// Maximum number of characters retained from an AI provider error response body.
@@ -1153,91 +1153,6 @@ pub trait AiProvider: Send + Sync {
         prompt.push_str(crate::ai::prompts::PR_LABEL_SCHEMA);
 
         prompt
-    }
-
-    /// Generate release notes from PR summaries.
-    ///
-    /// # Arguments
-    ///
-    /// * `prs` - List of PR summaries to synthesize
-    /// * `version` - Version being released
-    ///
-    /// # Returns
-    ///
-    /// Structured release notes with theme, highlights, and categorized changes.
-    #[instrument(skip(self, prs))]
-    async fn generate_release_notes(
-        &self,
-        prs: Vec<super::types::PrSummary>,
-        version: &str,
-    ) -> Result<(super::types::ReleaseNotesResponse, AiStats)> {
-        let system_content = if let Some(override_prompt) =
-            super::context::load_system_prompt_override("release_notes_system").await
-        {
-            override_prompt
-        } else {
-            let context = super::context::load_custom_guidance(self.custom_guidance());
-            build_release_notes_system_prompt(&context)
-        };
-        let prompt = Self::build_release_notes_prompt(&prs, version);
-        let request = ChatCompletionRequest {
-            model: self.model().to_string(),
-            messages: vec![
-                ChatMessage {
-                    role: "system".to_string(),
-                    content: Some(system_content),
-                    reasoning: None,
-                },
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: Some(prompt),
-                    reasoning: None,
-                },
-            ],
-            response_format: Some(ResponseFormat {
-                format_type: "json_object".to_string(),
-                json_schema: None,
-            }),
-            temperature: Some(0.7),
-            max_tokens: Some(self.max_tokens()),
-        };
-
-        let (parsed, ai_stats) = self
-            .send_and_parse::<super::types::ReleaseNotesResponse>(&request)
-            .await?;
-
-        debug!(
-            input_tokens = ai_stats.input_tokens,
-            output_tokens = ai_stats.output_tokens,
-            duration_ms = ai_stats.duration_ms,
-            "Release notes generation complete with stats"
-        );
-
-        Ok((parsed, ai_stats))
-    }
-
-    /// Build the user prompt for release notes generation.
-    #[must_use]
-    fn build_release_notes_prompt(prs: &[super::types::PrSummary], version: &str) -> String {
-        let pr_list = prs
-            .iter()
-            .map(|pr| {
-                format!(
-                    "- #{}: {} (by @{})\n  {}",
-                    pr.number,
-                    pr.title,
-                    pr.author,
-                    pr.body.lines().next().unwrap_or("")
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        format!(
-            "Generate release notes for version {version} based on these merged PRs:\n\n{pr_list}{}{}",
-            SCHEMA_PREAMBLE,
-            crate::ai::prompts::RELEASE_NOTES_SCHEMA
-        )
     }
 }
 

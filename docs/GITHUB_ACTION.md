@@ -43,7 +43,6 @@ The action auto-detects the event type and runs the appropriate command:
 |-------|---------|-------------|
 | `issues` | `aptu issue triage` | Analyze issue, suggest labels and milestone, post comment |
 | `pull_request` | `aptu pr label` | Classify PR type and apply conventional label |
-| `release` | `aptu release --repo --update` | Generate AI-curated release notes |
 
 ### Feature-Specific Workflows
 
@@ -67,15 +66,6 @@ on:
 permissions:
   pull-requests: write
   contents: read
-```
-
-**Release notes only** (`.github/workflows/release-notes.yml`):
-```yaml
-on:
-  release:
-    types: [published]
-permissions:
-  contents: write
 ```
 
 ## AI Providers
@@ -120,5 +110,4 @@ Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.m
 |------------|--------------|
 | `issues: write` | Issue triage (comments, labels) |
 | `pull-requests: write` | PR labeling (comments, labels) |
-| `contents: write` | Release notes (update release body) |
 | `contents: read` | Repository context (all features) |
