@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Patch application and Git utilities for automated patch deployment.
-#![allow(missing_docs)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -37,28 +36,52 @@ pub enum PatchError {
     NotFound(PathBuf),
     /// Patch file exceeds 50MB limit.
     #[error("patch file too large ({size} bytes); maximum is 50MB")]
-    TooLarge { size: u64 },
+    TooLarge {
+        /// Actual file size in bytes.
+        size: u64,
+    },
     /// Patch contains unsafe path traversal.
     #[error("patch contains unsafe path: {path} - refusing to apply")]
-    PathTraversal { path: String },
+    PathTraversal {
+        /// The offending path extracted from the patch header.
+        path: String,
+    },
     /// Patch attempts to create a symlink.
     #[error("patch creates a symlink ({path}) - refusing to apply")]
-    SymlinkMode { path: String },
+    SymlinkMode {
+        /// The offending path extracted from the patch header.
+        path: String,
+    },
     /// Security scanner found issues in patch.
     #[error("security findings in patch ({count}). Pass --force to apply anyway.")]
-    SecurityFindings { count: usize },
+    SecurityFindings {
+        /// Number of security findings detected.
+        count: usize,
+    },
     /// Patch does not apply cleanly to target branch.
     #[error("patch does not apply cleanly:\n{detail}")]
-    ApplyCheckFailed { detail: String },
+    ApplyCheckFailed {
+        /// Stderr output from `git apply --check`.
+        detail: String,
+    },
     /// Branch name already exists on origin.
     #[error("branch {name} already exists. Use --branch to specify a different name.")]
-    BranchCollision { name: String },
+    BranchCollision {
+        /// The branch name that collided.
+        name: String,
+    },
     /// Git version is too old for safe patching.
     #[error("git >= 2.39.2 required (found {version}). CVE-2023-23946 is unpatched.")]
-    GitTooOld { version: String },
+    GitTooOld {
+        /// The version string reported by the system git binary.
+        version: String,
+    },
     /// Git command execution failed.
     #[error("git command failed: {detail}")]
-    GitFailed { detail: String },
+    GitFailed {
+        /// Stderr output from the failed git invocation.
+        detail: String,
+    },
     /// I/O error.
     #[error(transparent)]
     Io(#[from] std::io::Error),

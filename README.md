@@ -39,7 +39,7 @@ See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BE
 
 - **AI Triage** - Summaries, suggested labels, clarifying questions, and contributor guidance
 - **Issue Discovery** - Find good-first-issues from curated repositories
-- **PR Analysis** - AI-powered pull request review and feedback
+- **PR Analysis** - AI-powered pull request review and feedback; `aptu pr create --diff <file>` applies a patch, commits, and opens a PR
 - **Prompt Customization** - Override built-in system prompts per operation or append custom guidance via config
 - **GitHub Action** - Auto-triage incoming issues with labels and comments
 - **MCP Server** - Model Context Protocol integration for AI assistants

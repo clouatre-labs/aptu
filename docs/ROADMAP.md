@@ -4,6 +4,10 @@ _Near-Term: Q2 2026 | Medium-Term: Q3–Q4 2026 | Long-Term: 2027+_
 
 This document describes the project direction across three time horizons. Items are based on open issues, the project specification, and known user needs. Dates are approximate and depend on maintainer availability.
 
+## Recently Shipped
+
+- **PR creation automation** (#1130): `aptu pr create --diff <file>` applies a unified diff to a new branch, commits with optional DCO sign-off, and opens a pull request. Includes a security validation pipeline (size cap, path-traversal rejection, `SecurityScanner::scan_diff()` gate) and collision-resistant branch naming.
+
 ## Near-Term (next 3-6 months)
 
 These items address known gaps and complete features already partially implemented.

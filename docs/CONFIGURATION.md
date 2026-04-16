@@ -214,6 +214,41 @@ max_chars_per_file = 4000      # Max characters per full-content file snippet (d
 
 When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest files first), diff hunks (largest first). The system prompt and PR metadata are never dropped.
 
+## DCO Sign-off (`dco_signoff`)
+
+When creating a branch and commit via `aptu pr create --diff`, Aptu can append a
+`Signed-off-by` trailer to the commit message to satisfy
+[Developer Certificate of Origin](https://developercertificate.org/) requirements.
+
+### Global default (config.toml)
+
+Set `dco_signoff = true` in the `[repos]` section of `~/.config/aptu/config.toml` to
+enable sign-off for every repository:
+
+```toml
+[repos]
+dco_signoff = true
+```
+
+### Per-repository override (repos.toml)
+
+Override the global default for a specific repository in `~/.config/aptu/repos.toml`:
+
+```toml
+[[repo]]
+owner = "clouatre-labs"
+name = "aptu"
+dco_signoff = true   # require DCO for this repo regardless of global default
+
+[[repo]]
+owner = "some-org"
+name = "permissive-project"
+dco_signoff = false  # opt out even if global default is true
+```
+
+The per-repo value always takes precedence over the global default. The `--dco-signoff`
+CLI flag on `aptu pr create` overrides both.
+
 ## Prompt Customization
 
 Aptu ships with built-in system prompts compiled into the binary. You can override them at runtime without rebuilding.
