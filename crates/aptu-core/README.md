@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- SPDX-FileCopyrightText: 2025 Aptu Contributors -->
+<!-- SPDX-FileCopyrightText: 2026 Aptu Contributors -->
 
 # aptu-core
 
