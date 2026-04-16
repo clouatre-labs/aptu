@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core library
-aptu-core = { path = "../aptu-core", version = "0.3", features = ["keyring", "ast-context"] }
+aptu-core = { path = "../aptu-core", version = "0.4", features = ["keyring", "ast-context"] }
 
 # CLI framework
 clap = { workspace = true }
