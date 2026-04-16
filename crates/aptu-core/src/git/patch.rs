@@ -91,16 +91,20 @@ fn git_config_get(key: &str, cwd: &Path) -> Option<String> {
 }
 
 /// Parse a git version string like `"git version 2.39.2"` or `"git version 2.46.2 (Apple Git-139)"`.
-/// Returns `Err(PatchError::GitTooOld)` if version < 2.39.2.
+/// Returns `Err(PatchError::GitTooOld)` if version < 2.39.2 or if parsing fails.
 pub fn parse_git_version_str(s: &str) -> Result<(), PatchError> {
     // "git version 2.39.2" or "git version 2.46.2 (Apple Git-139)"
     let version_part = s
         .split_whitespace()
         .nth(2)
-        .unwrap_or("")
+        .ok_or_else(|| PatchError::GitTooOld {
+            version: s.to_string(),
+        })?
         .split('(')
         .next()
-        .unwrap_or("")
+        .ok_or_else(|| PatchError::GitTooOld {
+            version: s.to_string(),
+        })?
         .trim_end_matches('.')
         .to_string();
 

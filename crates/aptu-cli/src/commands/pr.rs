@@ -7,7 +7,7 @@
 //! Split into `fetch()` and `analyze()` for proper display flow (show PR details
 //! before AI spinner).
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use aptu_core::ai::types::PrReviewComment;
 use aptu_core::{
     PrDetails, PrReviewResponse, render_pr_review_comment_body, render_pr_review_markdown,
@@ -225,13 +225,17 @@ pub async fn run_pr_create(
             // Suppress progress in text output mode; could show if is_interactive()
         };
 
+        // Load config to determine dco_signoff setting for this repo
+        let config = aptu_core::load_config().context("Failed to load configuration")?;
+        let dco_signoff = config.repos.dco_signoff;
+
         head = aptu_core::apply_patch_and_push(
             &patch_path,
             &repo_root,
             None,
             &base,
             &title,
-            false,
+            dco_signoff,
             force,
             false,
             progress,
