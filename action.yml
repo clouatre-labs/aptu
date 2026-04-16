@@ -1,5 +1,5 @@
 name: Aptu Triage
-description: Automatically triage GitHub issues and generate release notes using AI-powered analysis with aptu
+description: Automatically triage GitHub issues and review pull requests using AI-powered analysis with aptu
 author: Aptu Contributors
 
 branding:
@@ -83,6 +83,19 @@ inputs:
       call-graph context to the prompt. Leave empty to skip AST context.
     required: false
     default: ''
+  deep:
+    description: >
+      Enable cross-file call graph context in PR review (requires repo-path to be set).
+      Has no effect if repo-path is not provided.
+    required: false
+    default: 'false'
+  since:
+    description: >
+      For scheduled batch triage: triage all issues without labels created since this date
+      (YYYY-MM-DD or RFC3339). If empty, all unlabeled issues in the repository are triaged.
+      Only used when the workflow is triggered by a schedule event.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -123,6 +136,7 @@ runs:
         INPUT_DRY_RUN: ${{ inputs.dry-run }}
         INPUT_APPLY_LABELS: ${{ inputs.apply-labels }}
         INPUT_NO_COMMENT: ${{ inputs.no-comment }}
+        INPUT_DEEP: ${{ inputs.deep }}
       run: |  # zizmor: ignore[github-env]
         # Set shared environment variables for subsequent steps
         # Values from inputs (originally secrets) are auto-masked by GitHub
@@ -138,6 +152,7 @@ runs:
         echo "DRY_RUN=$INPUT_DRY_RUN" >> "$GITHUB_ENV"
         echo "APPLY_LABELS=$INPUT_APPLY_LABELS" >> "$GITHUB_ENV"
         echo "NO_COMMENT=$INPUT_NO_COMMENT" >> "$GITHUB_ENV"
+        echo "DEEP=$INPUT_DEEP" >> "$GITHUB_ENV"
 
         # Write fallback chain config when a fallback provider is configured.
         # Array values are not reliably settable via APTU_AI__* env vars, so we
@@ -250,6 +265,30 @@ runs:
         echo "Running: aptu issue triage $ARGS $ISSUE_REF"
         aptu issue triage $ARGS "$ISSUE_REF"
 
+    - name: Run aptu issue triage (scheduled batch)
+      if: github.event_name == 'schedule' && steps.check-skip.outputs.skip != 'true'
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        SINCE: ${{ inputs.since }}
+      run: |
+        set -e
+        ARGS="--repo $REPO"
+        if [[ -n "$SINCE" ]]; then
+          ARGS="$ARGS --since $SINCE"
+        fi
+        if [[ "$DRY_RUN" == "true" ]]; then
+          ARGS="$ARGS --dry-run"
+        fi
+        if [[ "$APPLY_LABELS" == "false" ]]; then
+          ARGS="$ARGS --no-apply"
+        fi
+        if [[ "$NO_COMMENT" == "true" ]]; then
+          ARGS="$ARGS --no-comment"
+        fi
+        echo "Running: aptu issue triage $ARGS"
+        aptu issue triage $ARGS
+
     - name: Run aptu PR label
       if: github.event_name == 'pull_request'
       shell: bash
@@ -277,6 +316,7 @@ runs:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO: ${{ github.repository }}
         REPO_PATH: ${{ inputs.repo-path }}
+        DEEP: ${{ inputs.deep }}
       run: |
         set -e
         
@@ -298,24 +338,10 @@ runs:
         if [[ -n "$REPO_PATH" ]]; then
           ARGS="$ARGS --repo-path $REPO_PATH"
         fi
+        if [[ "$DEEP" == "true" && -n "$REPO_PATH" ]]; then
+          ARGS="$ARGS --deep"
+        fi
         
         echo "Running: aptu pr review $ARGS $PR_REF"
         aptu pr review $ARGS "$PR_REF"
 
-    - name: Run aptu release
-      if: github.event_name == 'release'
-      shell: bash
-      env:
-        TAG: ${{ github.event.release.tag_name }}
-        REPO: ${{ github.repository }}
-      run: |
-        set -e
-        
-        ARGS="--update"
-        
-        if [[ "$DRY_RUN" == "true" ]]; then
-          ARGS="$ARGS --dry-run"
-        fi
-        
-        echo "Running: aptu release --repo $REPO $ARGS $TAG"
-        aptu release --repo "$REPO" $ARGS "$TAG"
