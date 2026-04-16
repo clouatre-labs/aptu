@@ -16,8 +16,8 @@ pub enum PatchStep {
     ValidatingPatch,
     /// Scanning patch content for security findings.
     SecurityScan,
-    /// Performing dry-run application check.
-    DryRunCheck,
+    /// Running `git apply --check` to verify the patch applies cleanly before committing.
+    ApplyCheck,
     /// Creating feature branch from base.
     CreatingBranch,
     /// Applying patch to working directory.
@@ -296,8 +296,8 @@ pub async fn apply_patch_and_push(
         });
     }
 
-    // Step 4: Dry-run apply check
-    progress(PatchStep::DryRunCheck);
+    // Step 4: Verify patch applies cleanly before touching the branch
+    progress(PatchStep::ApplyCheck);
     let patch_abs = patch_path
         .canonicalize()
         .unwrap_or_else(|_| patch_path.to_path_buf());
