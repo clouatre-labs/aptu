@@ -465,44 +465,6 @@ pub struct PrLabelResponse {
     pub suggested_labels: Vec<String>,
 }
 
-/// Summary of a PR for release notes context.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PrSummary {
-    /// PR number.
-    pub number: u64,
-    /// PR title.
-    pub title: String,
-    /// PR description/body.
-    pub body: String,
-    /// Author login.
-    pub author: String,
-    /// Merged at timestamp.
-    pub merged_at: Option<String>,
-}
-
-/// Structured release notes response from AI.
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-pub struct ReleaseNotesResponse {
-    /// Release theme/title.
-    pub theme: String,
-    /// 1-2 sentence narrative.
-    pub narrative: String,
-    /// Highlighted features.
-    pub highlights: Vec<String>,
-    /// Features section.
-    pub features: Vec<String>,
-    /// Fixes section.
-    pub fixes: Vec<String>,
-    /// Improvements section.
-    pub improvements: Vec<String>,
-    /// Documentation section.
-    pub documentation: Vec<String>,
-    /// Maintenance section.
-    pub maintenance: Vec<String>,
-    /// Contributor list.
-    pub contributors: Vec<String>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

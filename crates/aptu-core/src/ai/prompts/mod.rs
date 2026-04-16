@@ -32,10 +32,6 @@ pub const PR_REVIEW_GUIDELINES: &str = include_str!("pr_review_guidelines.md");
 pub const PR_LABEL_SCHEMA: &str = include_str!("pr_label_schema.json");
 /// Guidelines and examples for PR label suggestion system prompts.
 pub const PR_LABEL_GUIDELINES: &str = include_str!("pr_label_guidelines.md");
-/// JSON schema for release notes responses.
-pub const RELEASE_NOTES_SCHEMA: &str = include_str!("release_notes_schema.json");
-/// Guidelines and examples for release notes system prompts.
-pub const RELEASE_NOTES_GUIDELINES: &str = include_str!("release_notes_guidelines.md");
 /// Best-practices context injected into all system prompts (tooling recommendations).
 pub const TOOLING_CONTEXT: &str = include_str!("tooling_context.md");
 
@@ -84,16 +80,5 @@ pub fn build_pr_label_system_prompt(context: &str) -> String {
          labels for a pull request based on its content.\n\n\
          {context}\n\n\
          {PR_LABEL_GUIDELINES}"
-    )
-}
-
-/// Builds the system prompt for release notes generation.
-#[must_use]
-pub fn build_release_notes_system_prompt(context: &str) -> String {
-    format!(
-        "You are a senior release manager. Your mission is to produce clear, structured release \
-         notes.\n\n\
-         {context}\n\n\
-         {RELEASE_NOTES_GUIDELINES}"
     )
 }

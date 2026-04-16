@@ -40,8 +40,7 @@ pub use cache::{CacheEntry, FileCache, FileCacheImpl};
 // ============================================================================
 
 pub use ai::types::{
-    IssueComment, IssueDetails, PrDetails, PrFile, PrReviewResponse, PrSummary,
-    ReleaseNotesResponse, ReviewEvent, TriageResponse,
+    IssueComment, IssueDetails, PrDetails, PrFile, PrReviewResponse, ReviewEvent, TriageResponse,
 };
 pub use ai::{AiClient, AiModel, ModelProvider, ProviderConfig, all_providers, get_provider};
 
@@ -79,7 +78,7 @@ pub use repos::{CuratedRepo, RepoFilter};
 
 pub use triage::{
     APTU_SIGNATURE, TriageStatus, check_already_triaged, render_pr_review_comment_body,
-    render_pr_review_markdown, render_release_notes_markdown, render_triage_markdown,
+    render_pr_review_markdown, render_triage_markdown,
 };
 
 // ============================================================================
@@ -109,9 +108,9 @@ pub use utils::{
 
 pub use facade::{
     add_custom_repo, analyze_issue, analyze_pr, apply_triage_labels, create_pr, discover_repos,
-    fetch_issue_for_triage, fetch_issues, fetch_pr_for_review, format_issue,
-    generate_release_notes, label_pr, list_curated_repos, list_models, list_repos, post_issue,
-    post_pr_review, post_release_notes, post_triage_comment, remove_custom_repo, validate_model,
+    fetch_issue_for_triage, fetch_issues, fetch_pr_for_review, format_issue, label_pr,
+    list_curated_repos, list_models, list_repos, post_issue, post_pr_review, post_triage_comment,
+    remove_custom_repo, validate_model,
 };
 pub use github::issues::ApplyResult;
 pub use github::pulls::PrCreateResult;

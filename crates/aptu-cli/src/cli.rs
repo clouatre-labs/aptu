@@ -204,36 +204,6 @@ pub enum Commands {
     #[command(subcommand)]
     Pr(PrCommand),
 
-    /// Generate AI-curated release notes from PRs between tags
-    Release {
-        /// Tag to generate release notes for (defaults to inferring previous tag)
-        tag: Option<String>,
-
-        /// Repository in owner/repo format (inferred from git if not provided)
-        #[arg(long)]
-        repo: Option<String>,
-
-        /// Starting tag (defaults to previous tag)
-        #[arg(long)]
-        from: Option<String>,
-
-        /// Ending tag (defaults to HEAD)
-        #[arg(long)]
-        to: Option<String>,
-
-        /// Generate release notes for unreleased changes (HEAD since last tag)
-        #[arg(long)]
-        unreleased: bool,
-
-        /// Post release notes to GitHub
-        #[arg(long)]
-        update: bool,
-
-        /// Preview release notes without posting
-        #[arg(long)]
-        dry_run: bool,
-    },
-
     /// Show your contribution history
     History,
 

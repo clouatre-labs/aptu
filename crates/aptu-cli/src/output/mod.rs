@@ -90,6 +90,5 @@ mod history;
 mod issues;
 mod models;
 mod pr;
-mod release;
 mod repos;
 mod triage;

@@ -65,7 +65,6 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Gro
 `aptu-core/facade.rs` provides high-level functions for CLI/FFI:
 - `fetch_issues()`, `analyze_issue()`, `post_triage_comment()`
 - `review_pr()`, `post_pr_review()`
-- `generate_release_notes()`
 
 Each function accepts a `&dyn TokenProvider` for credential resolution.
 
