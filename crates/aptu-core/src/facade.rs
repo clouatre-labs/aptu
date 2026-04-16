@@ -1528,6 +1528,7 @@ pub async fn post_issue(
 /// - GitHub API call fails
 /// - User lacks write access to the repository
 #[instrument(skip(provider), fields(owner = %owner, repo = %repo, head = %head_branch, base = %base_branch))]
+#[allow(clippy::too_many_arguments)]
 pub async fn create_pr(
     provider: &dyn TokenProvider,
     owner: &str,
@@ -1536,6 +1537,7 @@ pub async fn create_pr(
     base_branch: &str,
     head_branch: &str,
     body: Option<&str>,
+    draft: bool,
 ) -> crate::Result<crate::github::pulls::PrCreateResult> {
     // Create GitHub client from provider
     let client = create_client_from_provider(provider)?;
@@ -1549,6 +1551,7 @@ pub async fn create_pr(
         head_branch,
         base_branch,
         body,
+        draft,
     )
     .await
     .map_err(|e| AptuError::GitHub {

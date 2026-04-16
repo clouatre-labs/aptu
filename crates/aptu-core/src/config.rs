@@ -301,11 +301,17 @@ impl Default for CacheConfig {
 pub struct ReposConfig {
     /// Include curated repositories (default: true).
     pub curated: bool,
+    /// DCO sign-off on commits (default: false).
+    #[serde(default)]
+    pub dco_signoff: bool,
 }
 
 impl Default for ReposConfig {
     fn default() -> Self {
-        Self { curated: true }
+        Self {
+            curated: true,
+            dco_signoff: false,
+        }
     }
 }
 

@@ -7,7 +7,7 @@
 //! Split into `fetch()` and `analyze()` for proper display flow (show PR details
 //! before AI spinner).
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use aptu_core::ai::types::PrReviewComment;
 use aptu_core::{
     PrDetails, PrReviewResponse, render_pr_review_comment_body, render_pr_review_markdown,
@@ -175,6 +175,7 @@ pub async fn post(
 /// * `branch` - Optional head branch (defaults to current git branch)
 /// * `base` - Base branch to merge into
 #[instrument(skip_all)]
+#[allow(clippy::too_many_arguments)]
 pub async fn run_pr_create(
     repo: Option<String>,
     inferred_repo: Option<String>,
@@ -183,6 +184,9 @@ pub async fn run_pr_create(
     body: Option<String>,
     branch: Option<String>,
     base: String,
+    diff: Option<std::path::PathBuf>,
+    draft: bool,
+    force: bool,
 ) -> anyhow::Result<aptu_core::PrCreateResult> {
     use aptu_core::github::parse_owner_repo;
 
@@ -199,7 +203,7 @@ pub async fn run_pr_create(
     let (owner, repo_name) = parse_owner_repo(resolved_repo)?;
 
     // Resolve head branch
-    let head = if let Some(b) = branch {
+    let mut head = if let Some(b) = branch {
         b
     } else {
         let output = std::process::Command::new("git")
@@ -212,6 +216,33 @@ pub async fn run_pr_create(
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     };
 
+    // If diff is provided, apply the patch and get the branch name
+    if let Some(patch_path) = diff {
+        let repo_root = std::env::current_dir()
+            .map_err(|e| anyhow::anyhow!("Failed to get current directory: {e}"))?;
+
+        let progress = |_step: aptu_core::PatchStep| {
+            // Suppress progress in text output mode; could show if is_interactive()
+        };
+
+        // Load config to determine dco_signoff setting for this repo
+        let config = aptu_core::load_config().context("Failed to load configuration")?;
+        let dco_signoff = config.repos.dco_signoff;
+
+        head = aptu_core::apply_patch_and_push(
+            &patch_path,
+            &repo_root,
+            None,
+            &base,
+            &title,
+            dco_signoff,
+            force,
+            false,
+            progress,
+        )
+        .await?;
+    }
+
     let provider = CliTokenProvider;
 
     aptu_core::create_pr(
@@ -222,6 +253,7 @@ pub async fn run_pr_create(
         &base,
         &head,
         body.as_deref(),
+        draft,
     )
     .await
     .map_err(Into::into)

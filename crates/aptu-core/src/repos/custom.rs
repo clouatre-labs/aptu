@@ -41,6 +41,9 @@ pub struct CustomRepoEntry {
     pub language: String,
     /// Short description.
     pub description: String,
+    /// DCO sign-off on commits (overrides global config if set).
+    #[serde(default)]
+    pub dco_signoff: Option<bool>,
 }
 
 impl From<CustomRepoEntry> for CuratedRepo {
@@ -111,6 +114,7 @@ pub fn write_custom_repos(repos: &[CuratedRepo]) -> crate::Result<()> {
                 name: repo.name.clone(),
                 language: repo.language.clone(),
                 description: repo.description.clone(),
+                dco_signoff: None,
             },
         );
     }
@@ -201,6 +205,7 @@ mod tests {
                     name: repo.name.clone(),
                     language: repo.language.clone(),
                     description: repo.description.clone(),
+                    dco_signoff: None,
                 },
             );
         }

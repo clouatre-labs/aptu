@@ -137,6 +137,8 @@ pub mod cache;
 pub mod config;
 pub mod error;
 pub mod facade;
+#[allow(missing_docs)]
+pub mod git;
 pub mod github;
 pub mod history;
 pub mod repos;
@@ -144,3 +146,5 @@ pub mod retry;
 pub mod security;
 pub mod triage;
 pub mod utils;
+
+pub use git::patch::{PatchError, PatchStep, apply_patch_and_push};
