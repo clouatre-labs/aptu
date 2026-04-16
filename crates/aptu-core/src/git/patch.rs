@@ -265,7 +265,6 @@ pub async fn apply_patch_and_push(
     title: &str,
     dco_signoff: bool,
     force: bool,
-    dry_run: bool,
     progress: impl Fn(PatchStep),
 ) -> Result<String, PatchError> {
     const MAX_SIZE: u64 = 50 * 1024 * 1024; // 50MB
@@ -320,11 +319,6 @@ pub async fn apply_patch_and_push(
 
     // Collision check and suffix logic
     let branch_name = resolve_branch_name(&branch_name, repo_root)?;
-
-    // Early return for dry-run (no side effects past this point)
-    if dry_run {
-        return Ok(branch_name);
-    }
 
     // Step 5: Create branch
     progress(PatchStep::CreatingBranch);

@@ -237,7 +237,6 @@ pub async fn run_pr_create(
             &title,
             dco_signoff,
             force,
-            false,
             progress,
         )
         .await?;

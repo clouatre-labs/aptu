@@ -6,6 +6,7 @@
 //! directory and wired up as `origin` for the working repository.
 
 use aptu_core::git::patch::{PatchError, PatchStep, apply_patch_and_push};
+use serial_test::serial;
 use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
@@ -141,7 +142,6 @@ async fn test_apply_patch_happy_path() {
         "test: happy path",
         false,
         false,
-        false,
         progress,
     )
     .await
@@ -169,41 +169,6 @@ async fn test_apply_patch_happy_path() {
     );
 }
 
-/// Dry-run: patch validates successfully but no commit is created.
-#[tokio::test]
-async fn test_apply_patch_dry_run_no_commits() {
-    let (work, _bare) = setup_repo();
-    let w = work.path();
-    let diff_path = write_diff(w);
-
-    let branch = apply_patch_and_push(
-        &diff_path,
-        w,
-        Some("test/dry-run"),
-        "main",
-        "test: dry run",
-        false,
-        false,
-        true, // dry_run = true
-        |_| {},
-    )
-    .await
-    .expect("dry-run should return branch name");
-
-    assert_eq!(branch, "test/dry-run");
-
-    // No commit should have been created for that branch.
-    let result = Command::new("git")
-        .args(["rev-parse", "test/dry-run"])
-        .current_dir(w)
-        .output()
-        .expect("git rev-parse");
-    assert!(
-        !result.status.success(),
-        "branch 'test/dry-run' should not exist after dry-run"
-    );
-}
-
 /// Bad patch: `git apply --check` fails and `PatchError::ApplyCheckFailed` is returned.
 #[tokio::test]
 async fn test_apply_patch_bad_patch_rejected() {
@@ -222,7 +187,6 @@ async fn test_apply_patch_bad_patch_rejected() {
         Some("test/bad-patch"),
         "main",
         "test: bad patch",
-        false,
         false,
         false,
         |_| {},
@@ -257,7 +221,6 @@ async fn test_apply_patch_branch_collision_suffix() {
         "test: collision",
         false,
         false,
-        false,
         |_| {},
     )
     .await
@@ -288,7 +251,6 @@ async fn test_apply_patch_dco_signoff() {
         "main",
         "test: dco signoff",
         true, // dco_signoff = true
-        false,
         false,
         |_| {},
     )
@@ -331,11 +293,61 @@ async fn test_apply_patch_signing_gate() {
         "test: gpg signing",
         false,
         false,
-        false,
         |_| {},
     )
     .await
     .expect("apply_patch_and_push should succeed with GPG signing");
 
     assert_eq!(branch, "test/gpg");
+}
+
+/// Security force flag: with force=false, security findings block the patch;
+/// with force=true, the patch applies despite findings.
+#[tokio::test]
+#[serial]
+async fn test_apply_patch_security_force_flag() {
+    let (work, _bare) = setup_repo();
+    let w = work.path();
+
+    // Patch that adds a password string to trigger security scanner.
+    let patch_with_secret =
+        "--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-hello world\n+password=\"secret123\"\n";
+    let patch_path = w.join("security.diff");
+    std::fs::write(&patch_path, patch_with_secret).expect("write security patch");
+
+    // Test 1: force=false should reject due to security findings
+    let result_no_force = apply_patch_and_push(
+        &patch_path,
+        w,
+        Some("test/security-reject"),
+        "main",
+        "test: security reject",
+        false,
+        false, // force=false
+        |_| {},
+    )
+    .await;
+
+    assert!(
+        matches!(result_no_force, Err(PatchError::SecurityFindings { .. })),
+        "expected SecurityFindings error with force=false, got: {result_no_force:?}"
+    );
+
+    // Test 2: force=true should accept despite security findings
+    let result_force = apply_patch_and_push(
+        &patch_path,
+        w,
+        Some("test/security-accept"),
+        "main",
+        "test: security accept",
+        false,
+        true, // force=true
+        |_| {},
+    )
+    .await;
+
+    assert!(
+        matches!(result_force, Ok(ref branch) if branch == "test/security-accept"),
+        "expected Ok with force=true, got: {result_force:?}"
+    );
 }
