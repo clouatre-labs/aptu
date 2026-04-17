@@ -145,7 +145,7 @@ This means users can tune AI behavior without recompiling, and developers can au
 ## Rust Edition & Tooling
 
 - **Edition**: Rust 2024
-- **MSRV**: 1.92.0
+- **MSRV**: 1.94.1
 - **Linting**: Clippy with pedantic warnings
 - **Formatting**: Rustfmt
 - **Auditing**: Cargo-deny for vulnerabilities and license compliance

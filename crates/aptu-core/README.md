@@ -25,8 +25,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptu-core = "0.3"
+aptu-core = "*"
 ```
+
+> **Note:** Replace `*` with the [current version on crates.io](https://crates.io/crates/aptu-core) when used in production.
 
 ### Optional Features
 
@@ -39,7 +41,7 @@ To enable optional features:
 
 ```toml
 [dependencies]
-aptu-core = { version = "0.3", features = ["keyring"] }
+aptu-core = { version = "*", features = ["keyring"] }
 ```
 
 ## Example
@@ -98,6 +100,22 @@ Head-to-head comparison of `aptu+mercury-2` vs a raw `claude-opus-4.6` call (no 
 aptu+mercury-2 is **17x cheaper** and **8x faster** than a raw `claude-opus-4.6` call, while scoring more than twice as high on the structured rubric.
 
 See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BENCHMARKS.md) for full methodology, fixture breakdown, and C1-C5 scores.
+
+## FAQ
+
+**Q: The install examples use `"*"` -- what version should I pin in production?**
+
+The `"*"` wildcard in documentation examples means "any version" and is used so the docs stay accurate across releases. For production use or library dependencies, always pin to a specific version:
+
+```toml
+[dependencies]
+aptu-core = "0.4"            # semver-compatible: accepts patch and minor updates
+# or for exact pinning:
+aptu-core = "=0.4.0"         # exact: only this release
+```
+
+Check [crates.io/crates/aptu-core](https://crates.io/crates/aptu-core) for the latest published version.
+`aptu-core` follows [Semantic Versioning](https://semver.org): patch releases are bug-fixes only; minor releases may add new APIs but remain backward-compatible with existing usage.
 
 ## Support
 
