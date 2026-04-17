@@ -373,8 +373,7 @@ fn resolve_branch_name(name: &str, repo_root: &Path) -> Result<String, PatchErro
     // Try with random hex suffix
     let seed = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or(0);
+        .map_or(0, |d| d.subsec_nanos());
     let hex_suffix = format!("{seed:06x}");
     let with_hex = format!("{name}-{hex_suffix}");
     if !branch_exists_remote(&with_hex, repo_root) {

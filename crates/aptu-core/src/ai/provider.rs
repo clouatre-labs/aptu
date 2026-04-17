@@ -802,7 +802,7 @@ pub trait AiProvider: Send + Sync {
                 .map(|(idx, f)| (idx, f.patch.as_ref().map_or(0, String::len)))
                 .collect();
             // Sort by patch size descending
-            file_sizes.sort_by(|a, b| b.1.cmp(&a.1));
+            file_sizes.sort_by_key(|x| std::cmp::Reverse(x.1));
 
             for (file_idx, patch_size) in file_sizes {
                 if estimated_size <= max_prompt_chars {
