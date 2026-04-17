@@ -16,7 +16,7 @@ Not a coder? You can still help Aptu grow:
 
 ### Prerequisites
 
-- **Rust 1.92.0** - Automatically managed via `rust-toolchain.toml`
+- **Rust 1.94.1** - Automatically managed via `rust-toolchain.toml` (when bumping the toolchain, also update the MSRV string in this file and `docs/ARCHITECTURE.md`)
 - **Just** - Task runner for common commands
 
 Install Just:
