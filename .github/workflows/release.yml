@@ -345,7 +345,7 @@ jobs:
           git config user.name "Hugues Clouatre"
           git checkout -b "$BRANCH_NAME"
           git add Formula/aptu.rb Formula/aptu-mcp.rb
-          git commit --signoff -m "Update aptu and aptu-mcp formulas for ${RELEASE_TAG}"
+          git commit -S --signoff -m "Update aptu and aptu-mcp formulas for ${RELEASE_TAG}"
           git push origin "$BRANCH_NAME"
 
       - name: Create pull request with auto-merge

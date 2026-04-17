@@ -14,9 +14,13 @@ on:
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    paths:
+      - '**/*.rs'
+      - '**/*.toml'
+      - 'Cargo.lock'
+      - 'LICENSES/**'
+      - '.reuse/**'
+      - '.github/workflows/reuse.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
