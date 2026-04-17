@@ -25,8 +25,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptu-core = "0.3"
+aptu-core = "*"
 ```
+
+> **Note:** Replace `*` with the [current version on crates.io](https://crates.io/crates/aptu-core) when used in production.
 
 ### Optional Features
 
@@ -39,7 +41,7 @@ To enable optional features:
 
 ```toml
 [dependencies]
-aptu-core = { version = "0.3", features = ["keyring"] }
+aptu-core = { version = "*", features = ["keyring"] }
 ```
 
 ## Example
