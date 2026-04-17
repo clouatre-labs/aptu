@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-    paths:
+    paths: &reuse-paths
       - '**/*.rs'
       - '**/*.toml'
       - 'Cargo.lock'
@@ -14,9 +14,7 @@ on:
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    paths: *reuse-paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
