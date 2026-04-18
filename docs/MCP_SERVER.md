@@ -72,14 +72,6 @@ Add to `~/.config/Claude/claude_desktop_config.json` (macOS/Linux) or `%APPDATA%
 
 ## Remote (HTTP)
 
-### Hosted Instance
-
-
-
-The hosted instance holds no credentials and requires no authentication token. Tool calls
-that require GitHub or AI keys (`triage_issue`, `review_pr`, etc.) must supply credentials
-via per-request HTTP headers (see below).
-
 ### Per-request credential forwarding
 
 Header names map from provider environment variable names: `GEMINI_API_KEY` →
@@ -91,7 +83,7 @@ Header names map from provider environment variable names: `GEMINI_API_KEY` →
 extensions:
   aptu:
     type: streamable_http
-    uri: https://aptu.localhost:8080/mcp
+    uri: http://localhost:8080/mcp
     env_keys:
       - GITHUB_TOKEN
       - GEMINI_API_KEY
@@ -117,7 +109,7 @@ substituted without declaring them in `env_keys`.
   "mcpServers": {
     "aptu": {
       "type": "http",
-      "url": "https://aptu.localhost:8080/mcp",
+      "url": "http://localhost:8080/mcp",
       "headers": {
         "X-Github-Token": "${GITHUB_TOKEN}",
         "X-Gemini-Api-Key": "${GEMINI_API_KEY}",
@@ -138,7 +130,7 @@ is needed for HTTP connections.
   "mcpServers": {
     "aptu": {
       "type": "http",
-      "url": "https://aptu.localhost:8080/mcp",
+      "url": "http://localhost:8080/mcp",
       "headers": {
         "X-Github-Token": "${env:GITHUB_TOKEN}",
         "X-Gemini-Api-Key": "${env:GEMINI_API_KEY}",
