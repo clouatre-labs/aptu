@@ -29,20 +29,7 @@ aptu-mcp --read-only
 
 See [MCP Server documentation](https://github.com/clouatre-labs/aptu/blob/main/docs/MCP_SERVER.md) for full configuration.
 
-## Hosted Instance
-
-A public instance is available at `aptu-mcp.fly.dev` — no local installation required.
-
-Add to Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "aptu": {
-      "url": "https://aptu-mcp.fly.dev/mcp",
-      "transport": "http"
-    }
-  }
+## Installation
 }
 ```
 

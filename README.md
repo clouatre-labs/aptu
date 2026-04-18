@@ -60,7 +60,7 @@ cargo binstall aptu-cli
 cargo install aptu-cli
 ```
 
-**MCP Server (hosted, read-only):** `https://aptu-mcp.fly.dev/mcp` - no install required for AI assistant integrations.
+**MCP Server (read-only):** Install locally or self-host via Docker.
 
 ## Quick Start
 
