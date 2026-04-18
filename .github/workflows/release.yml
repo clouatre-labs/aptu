@@ -185,18 +185,20 @@ jobs:
 
           # PATCH with force:true is atomic: creates or updates in one call.
           # This is the canonical approach per GitHub Actions release management docs.
-          gh api \
-            --method PATCH \
-            "repos/${{ github.repository }}/git/refs/tags/$MINOR_TAG" \
-            -f sha="$COMMIT_SHA" \
-            -F force=true || {
-              # Tag does not exist yet -- create it
-              gh api \
-                --method POST \
-                "repos/${{ github.repository }}/git/refs" \
-                -f ref="refs/tags/$MINOR_TAG" \
-                -f sha="$COMMIT_SHA"
-            }
+          if gh api \
+            --method POST \
+            "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/tags/$MINOR_TAG" \
+            -f sha="$COMMIT_SHA" 2>/dev/null; then
+            echo "Created new floating tag $MINOR_TAG"
+          else
+            gh api \
+              --method PATCH \
+              "repos/${{ github.repository }}/git/refs/tags/$MINOR_TAG" \
+              -f sha="$COMMIT_SHA" \
+              -F force=true
+            echo "Moved existing floating tag $MINOR_TAG"
+          fi
 
           echo "$MINOR_TAG now points to $COMMIT_SHA ($TAG)"
 
@@ -387,7 +389,13 @@ jobs:
         uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1
 
       - name: Publish aptu-core
-        run: cargo publish -p aptu-core
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if cargo search aptu-core --limit 1 2>/dev/null | grep -q "^aptu-core = \"$VERSION\""; then
+            echo "aptu-core $VERSION already published, skipping"
+          else
+            cargo publish -p aptu-core
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
@@ -395,7 +403,13 @@ jobs:
         run: sleep 30
 
       - name: Publish aptu-cli
-        run: cargo publish -p aptu-cli
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if cargo search aptu-cli --limit 1 2>/dev/null | grep -q "^aptu-cli = \"$VERSION\""; then
+            echo "aptu-cli $VERSION already published, skipping"
+          else
+            cargo publish -p aptu-cli
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
@@ -403,6 +417,12 @@ jobs:
         run: sleep 30
 
       - name: Publish aptu-mcp
-        run: cargo publish -p aptu-mcp
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if cargo search aptu-mcp --limit 1 2>/dev/null | grep -q "^aptu-mcp = \"$VERSION\""; then
+            echo "aptu-mcp $VERSION already published, skipping"
+          else
+            cargo publish -p aptu-mcp
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
