@@ -183,20 +183,22 @@ jobs:
           fi
           echo "Moving floating tag $MINOR_TAG to $COMMIT_SHA (released as $TAG)"
 
-          # PATCH with force:true is atomic: creates or updates in one call.
-          # This is the canonical approach per GitHub Actions release management docs.
-          gh api \
-            --method PATCH \
-            "repos/${{ github.repository }}/git/refs/tags/$MINOR_TAG" \
-            -f sha="$COMMIT_SHA" \
-            -F force=true || {
-              # Tag does not exist yet -- create it
-              gh api \
-                --method POST \
-                "repos/${{ github.repository }}/git/refs" \
-                -f ref="refs/tags/$MINOR_TAG" \
-                -f sha="$COMMIT_SHA"
-            }
+          # All gh api calls are explicitly scoped to ${{ github.repository }}.
+          # POST (create) first; fall back to PATCH --force (move) if the tag already exists.
+          if gh api \
+            --method POST \
+            "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/tags/$MINOR_TAG" \
+            -f sha="$COMMIT_SHA" 2>/dev/null; then
+            echo "Created new floating tag $MINOR_TAG"
+          else
+            gh api \
+              --method PATCH \
+              "repos/${{ github.repository }}/git/refs/tags/$MINOR_TAG" \
+              -f sha="$COMMIT_SHA" \
+              -F force=true
+            echo "Moved existing floating tag $MINOR_TAG"
+          fi
 
           echo "$MINOR_TAG now points to $COMMIT_SHA ($TAG)"
 
