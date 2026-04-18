@@ -184,20 +184,25 @@ jobs:
           echo "Moving floating tag $MINOR_TAG to $COMMIT_SHA (released as $TAG)"
 
           # All gh api calls are explicitly scoped to ${{ github.repository }}.
-          # POST (create) first; fall back to PATCH --force (move) if the tag already exists.
-          if gh api \
-            --method POST \
-            "repos/${{ github.repository }}/git/refs" \
-            -f ref="refs/tags/$MINOR_TAG" \
-            -f sha="$COMMIT_SHA" 2>/dev/null; then
-            echo "Created new floating tag $MINOR_TAG"
-          else
+          # GET-first: probe whether the floating tag already exists (200) or not (404).
+          # POST-first is ambiguous: GitHub returns 422 "Reference update failed" on first-ever
+          # creation, indistinguishable from other POST failures, causing the PATCH fallback to
+          # fail with 404 when the ref truly does not exist yet.
+          # Note: a command in an if-condition does not trigger set -e on failure.
+          if gh api "repos/${{ github.repository }}/git/refs/tags/$MINOR_TAG" 2>/dev/null; then
             gh api \
               --method PATCH \
               "repos/${{ github.repository }}/git/refs/tags/$MINOR_TAG" \
               -f sha="$COMMIT_SHA" \
               -F force=true
             echo "Moved existing floating tag $MINOR_TAG"
+          else
+            gh api \
+              --method POST \
+              "repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/tags/$MINOR_TAG" \
+              -f sha="$COMMIT_SHA"
+            echo "Created new floating tag $MINOR_TAG"
           fi
 
           echo "$MINOR_TAG now points to $COMMIT_SHA ($TAG)"
