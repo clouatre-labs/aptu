@@ -389,14 +389,7 @@ jobs:
         uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1
 
       - name: Publish aptu-core
-        run: |
-          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "aptu-core") | .version')
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://crates.io/api/v1/crates/aptu-core/$VERSION")
-          if [ "$STATUS" = "200" ]; then
-            echo "aptu-core $VERSION already published, skipping"
-          else
-            cargo publish -p aptu-core
-          fi
+        run: cargo publish -p aptu-core
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
@@ -404,14 +397,7 @@ jobs:
         run: sleep 30
 
       - name: Publish aptu-cli
-        run: |
-          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "aptu-cli") | .version')
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://crates.io/api/v1/crates/aptu-cli/$VERSION")
-          if [ "$STATUS" = "200" ]; then
-            echo "aptu-cli $VERSION already published, skipping"
-          else
-            cargo publish -p aptu-cli
-          fi
+        run: cargo publish -p aptu-cli
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
@@ -419,13 +405,6 @@ jobs:
         run: sleep 30
 
       - name: Publish aptu-mcp
-        run: |
-          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "aptu-mcp") | .version')
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://crates.io/api/v1/crates/aptu-mcp/$VERSION")
-          if [ "$STATUS" = "200" ]; then
-            echo "aptu-mcp $VERSION already published, skipping"
-          else
-            cargo publish -p aptu-mcp
-          fi
+        run: cargo publish -p aptu-mcp
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
