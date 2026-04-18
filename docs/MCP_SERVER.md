@@ -72,18 +72,6 @@ Add to `~/.config/Claude/claude_desktop_config.json` (macOS/Linux) or `%APPDATA%
 
 ## Remote (HTTP)
 
-### Hosted Instance
-
-A public read-only instance runs at:
-
-```
-https://aptu-mcp.fly.dev/mcp
-```
-
-The hosted instance holds no credentials and requires no authentication token. Tool calls
-that require GitHub or AI keys (`triage_issue`, `review_pr`, etc.) must supply credentials
-via per-request HTTP headers (see below).
-
 ### Per-request credential forwarding
 
 Header names map from provider environment variable names: `GEMINI_API_KEY` →
@@ -95,7 +83,7 @@ Header names map from provider environment variable names: `GEMINI_API_KEY` →
 extensions:
   aptu:
     type: streamable_http
-    uri: https://aptu-mcp.fly.dev/mcp
+    uri: http://localhost:8080/mcp
     env_keys:
       - GITHUB_TOKEN
       - GEMINI_API_KEY
@@ -121,7 +109,7 @@ substituted without declaring them in `env_keys`.
   "mcpServers": {
     "aptu": {
       "type": "http",
-      "url": "https://aptu-mcp.fly.dev/mcp",
+      "url": "http://localhost:8080/mcp",
       "headers": {
         "X-Github-Token": "${GITHUB_TOKEN}",
         "X-Gemini-Api-Key": "${GEMINI_API_KEY}",
@@ -142,7 +130,7 @@ is needed for HTTP connections.
   "mcpServers": {
     "aptu": {
       "type": "http",
-      "url": "https://aptu-mcp.fly.dev/mcp",
+      "url": "http://localhost:8080/mcp",
       "headers": {
         "X-Github-Token": "${env:GITHUB_TOKEN}",
         "X-Gemini-Api-Key": "${env:GEMINI_API_KEY}",
@@ -170,23 +158,6 @@ Without authentication (insecure, development only):
 aptu-mcp --transport http --host 0.0.0.0 --port 8080 --allow-unauthenticated
 ```
 
-### Deploy to Fly.io
-
-Tag releases redeploy automatically via the `Deploy MCP Server` GitHub Actions workflow. For manual deploys, run from the repo root:
-
-```bash
-fly deploy --config crates/aptu-mcp/fly.toml
-```
-
-The app runs with `--read-only` (enforced via `[processes]` in `fly.toml`). No secrets are stored on the server.
-
-**One-time setup** (repo maintainer, already done):
-```bash
-fly apps create aptu-mcp
-fly tokens create deploy -x 999999h --app aptu-mcp
-# Store output as FLY_API_TOKEN in GitHub → Settings → Environments → fly-production
-```
-
 ## Docker
 
 ```bash
@@ -197,7 +168,7 @@ docker run -p 8080:8080 \
   aptu-mcp
 ```
 
-Works with any container platform (Cloud Run, Fly.io, Railway, Render, self-hosted).
+Works with any container platform (Cloud Run, Railway, Render, self-hosted).
 
 ## Options
 
@@ -216,14 +187,6 @@ export MCP_BEARER_TOKEN=$(openssl rand -hex 32)
 Every incoming HTTP request must then present a matching `Authorization: Bearer <token>` header; requests with a missing or wrong token receive a 401 response.
 
 To disable authentication (insecure, not recommended for production), pass `--allow-unauthenticated` at startup.
-
-The hosted instance at `aptu-mcp.fly.dev` runs with `--allow-unauthenticated` because it handles authentication at the proxy layer (Fly's internal network).
-
-### Fly.io
-
-```sh
-fly secrets set MCP_BEARER_TOKEN=$(openssl rand -hex 32) --app aptu-mcp
-```
 
 ### Self-hosted (Docker / other)
 
