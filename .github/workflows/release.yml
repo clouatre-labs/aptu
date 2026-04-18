@@ -390,7 +390,7 @@ jobs:
 
       - name: Publish aptu-core
         run: |
-          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
           if cargo search aptu-core --limit 1 2>/dev/null | grep -q "^aptu-core = \"$VERSION\""; then
             echo "aptu-core $VERSION already published, skipping"
           else
@@ -404,7 +404,7 @@ jobs:
 
       - name: Publish aptu-cli
         run: |
-          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
           if cargo search aptu-cli --limit 1 2>/dev/null | grep -q "^aptu-cli = \"$VERSION\""; then
             echo "aptu-cli $VERSION already published, skipping"
           else
@@ -418,7 +418,7 @@ jobs:
 
       - name: Publish aptu-mcp
         run: |
-          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
           if cargo search aptu-mcp --limit 1 2>/dev/null | grep -q "^aptu-mcp = \"$VERSION\""; then
             echo "aptu-mcp $VERSION already published, skipping"
           else
