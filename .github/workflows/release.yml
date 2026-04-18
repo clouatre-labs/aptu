@@ -183,8 +183,8 @@ jobs:
           fi
           echo "Moving floating tag $MINOR_TAG to $COMMIT_SHA (released as $TAG)"
 
-          # PATCH with force:true is atomic: creates or updates in one call.
-          # This is the canonical approach per GitHub Actions release management docs.
+          # All gh api calls are explicitly scoped to ${{ github.repository }}.
+          # POST (create) first; fall back to PATCH --force (move) if the tag already exists.
           if gh api \
             --method POST \
             "repos/${{ github.repository }}/git/refs" \
@@ -391,7 +391,8 @@ jobs:
       - name: Publish aptu-core
         run: |
           VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "aptu-core") | .version')
-          if cargo search aptu-core --limit 1 2>/dev/null | grep -q "^aptu-core = \"$VERSION\""; then
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://crates.io/api/v1/crates/aptu-core/$VERSION")
+          if [ "$STATUS" = "200" ]; then
             echo "aptu-core $VERSION already published, skipping"
           else
             cargo publish -p aptu-core
@@ -405,7 +406,8 @@ jobs:
       - name: Publish aptu-cli
         run: |
           VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "aptu-cli") | .version')
-          if cargo search aptu-cli --limit 1 2>/dev/null | grep -q "^aptu-cli = \"$VERSION\""; then
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://crates.io/api/v1/crates/aptu-cli/$VERSION")
+          if [ "$STATUS" = "200" ]; then
             echo "aptu-cli $VERSION already published, skipping"
           else
             cargo publish -p aptu-cli
@@ -419,7 +421,8 @@ jobs:
       - name: Publish aptu-mcp
         run: |
           VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "aptu-mcp") | .version')
-          if cargo search aptu-mcp --limit 1 2>/dev/null | grep -q "^aptu-mcp = \"$VERSION\""; then
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://crates.io/api/v1/crates/aptu-mcp/$VERSION")
+          if [ "$STATUS" = "200" ]; then
             echo "aptu-mcp $VERSION already published, skipping"
           else
             cargo publish -p aptu-mcp
