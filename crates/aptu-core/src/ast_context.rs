@@ -5,12 +5,12 @@
 //! Extracts function signatures and cross-file call graph information from
 //! changed source files and appends structured context to the AI review prompt.
 //! Supported languages: Rust, Python, Go, Java, TypeScript, TSX, JavaScript,
-//! C, C++, C#, and Fortran (determined by `code_analyze_core::language_for_extension`).
+//! C, C++, C#, and Fortran (determined by `aptu_coder_core::language_for_extension`).
 //!
 //! # Feature Flag
 //!
 //! Most functionality is gated behind the `ast-context` Cargo feature, which
-//! enables the optional `code-analyze-core` dependency. When the feature is
+//! enables the optional `aptu-coder-core` dependency. When the feature is
 //! disabled, [`build_ast_context`] and [`build_call_graph_context`] return
 //! empty strings immediately without performing any I/O.
 //!
@@ -32,7 +32,7 @@ use tracing::debug;
 use std::fmt::Write as _;
 
 #[cfg(feature = "ast-context")]
-use code_analyze_core::{analyze_file, analyze_focused, language_for_extension};
+use aptu_coder_core::{analyze_file, analyze_focused, language_for_extension};
 
 // `str::floor_char_boundary` is available in std but remains behind the
 // `str_internals` nightly feature gate on stable Rust. This local
@@ -185,7 +185,7 @@ fn build_call_graph_context_sync(repo_path: &str, files: &[PrFile]) -> String {
                 .iter()
                 .map(|f| {
                     // Extract function name from the compact signature format produced by
-                    // code-analyze-core ("name(params) -> return_type"). The crate version
+                    // aptu-coder-core ("name(params) -> return_type"). The crate version
                     // is pinned in Cargo.toml; a format change would require updating this.
                     f.compact_signature()
                         .split('(')
