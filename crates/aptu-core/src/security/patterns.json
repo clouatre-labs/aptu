@@ -190,7 +190,7 @@
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-77",
-    "file_extensions": []
+    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
   },
   {
     "id": "prompt-injection-jailbreak-preamble",
@@ -208,7 +208,52 @@
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-77",
-    "file_extensions": []
+    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+  },
+  {
+    "id": "prompt-injection-closing-tag-issue-body",
+    "description": "Attempt to escape issue_body XML delimiter boundary",
+    "pattern": "(?i)</issue_body>",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+  },
+  {
+    "id": "prompt-injection-closing-tag-pr-diff",
+    "description": "Attempt to escape pr_diff XML delimiter boundary",
+    "pattern": "(?i)</pr_diff>",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+  },
+  {
+    "id": "prompt-injection-closing-tag-commit-message",
+    "description": "Attempt to escape commit_message XML delimiter boundary",
+    "pattern": "(?i)</commit_message>",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+  },
+  {
+    "id": "prompt-injection-closing-tag-pr-comment",
+    "description": "Attempt to escape pr_comment XML delimiter boundary",
+    "pattern": "(?i)</pr_comment>",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+  },
+  {
+    "id": "prompt-injection-closing-tag-file-content",
+    "description": "Attempt to escape file_content XML delimiter boundary",
+    "pattern": "(?i)</file_content>",
+    "severity": "high",
+    "confidence": "medium",
+    "cwe": "CWE-77",
+    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
   },
   {
     "id": "ssrf-http-request",

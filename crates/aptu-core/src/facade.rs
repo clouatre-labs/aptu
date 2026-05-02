@@ -571,7 +571,7 @@ pub async fn analyze_issue(
 
     // Pre-AI prompt injection scan (advisory gate)
     let injection_findings: Vec<_> = SecurityScanner::new()
-        .scan_file(&issue_mut.body, "")
+        .scan_file(&issue_mut.body, "issue.md")
         .into_iter()
         .filter(|f| f.pattern_id.starts_with("prompt-injection"))
         .collect();
