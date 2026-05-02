@@ -116,6 +116,19 @@ pub enum AptuError {
         /// Error message.
         message: String,
     },
+
+    /// A user-supplied input field exceeds its configured byte limit.
+    #[error(
+        "input field `{field}` exceeds limit: {actual_bytes} bytes (limit: {limit_bytes} bytes)"
+    )]
+    InputExceedsLimit {
+        /// Name of the field that exceeded the limit.
+        field: String,
+        /// Actual byte count of the input.
+        actual_bytes: usize,
+        /// Configured byte limit.
+        limit_bytes: usize,
+    },
 }
 
 /// GitHub resource type for type mismatch errors.

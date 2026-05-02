@@ -105,14 +105,19 @@ const PROMPT_OVERHEAD_CHARS: usize = 1_000;
 /// Preamble appended to every user-turn prompt to request a JSON response matching the schema.
 const SCHEMA_PREAMBLE: &str = "\n\nRespond with valid JSON matching this schema:\n";
 
-/// Matches `<pull_request>`, `</pull_request>`, `<issue_content>`, and `</issue_content>` tags
-/// (case-insensitive) used as prompt delimiters. These must be stripped from user-controlled
-/// fields to prevent prompt injection.
+/// Matches structural XML delimiter tags (case-insensitive) used as prompt delimiters.
+/// These must be stripped from user-controlled fields to prevent prompt injection.
+///
+/// Covers: `pull_request`, `issue_content`, `issue_body`, `pr_diff`, `commit_message`, `pr_comment`, `file_content`.
 ///
 /// The pattern uses a simple alternation with no quantifiers, so `ReDoS` is not a concern:
 /// regex engine complexity is O(n) in the input length regardless of content.
-static XML_DELIMITERS: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)</?(?:pull_request|issue_content)>").expect("valid regex"));
+static XML_DELIMITERS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)</?(?:pull_request|issue_content|issue_body|pr_diff|commit_message|pr_comment|file_content)>",
+    )
+    .expect("valid regex")
+});
 
 /// Removes `<pull_request>` / `</pull_request>` and `<issue_content>` / `</issue_content>`
 /// XML delimiter tags from a user-supplied string, preventing prompt injection via XML tag
@@ -1119,20 +1124,24 @@ pub trait AiProvider: Send + Sync {
 
         let mut prompt = String::new();
 
+        // Sanitize title and body to prevent prompt injection
+        let sanitized_title = sanitize_prompt_field(title);
+        let sanitized_body = sanitize_prompt_field(body);
+
         prompt.push_str("<pull_request>\n");
-        let _ = writeln!(prompt, "Title: {title}\n");
+        let _ = writeln!(prompt, "Title: {sanitized_title}\n");
 
         // PR description
-        let body_content = if body.is_empty() {
+        let body_content = if sanitized_body.is_empty() {
             "[No description provided]".to_string()
-        } else if body.len() > MAX_BODY_LENGTH {
+        } else if sanitized_body.len() > MAX_BODY_LENGTH {
             format!(
                 "{}...\n[Description truncated - original length: {} chars]",
-                &body[..MAX_BODY_LENGTH],
-                body.len()
+                &sanitized_body[..MAX_BODY_LENGTH],
+                sanitized_body.len()
             )
         } else {
-            body.to_string()
+            sanitized_body.clone()
         };
         let _ = writeln!(prompt, "Description:\n{body_content}\n");
 
