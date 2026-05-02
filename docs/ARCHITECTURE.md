@@ -57,7 +57,7 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Gro
 
 1. Fetch PR diff and metadata via Octocrab
 2. Fetch full file content for changed files via GitHub Contents API (capped at `max_full_content_files`, `max_chars_per_file`)
-3. Build AST context: function signatures and imports for each changed file using `code-analyze-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
+3. Build AST context: function signatures and imports for each changed file using `aptu-coder-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
 4. Build call-graph context: cross-file caller chains for changed functions
 5. Enforce prompt budget (`max_prompt_chars`): drop sections in order (call graph, AST, full content, diff hunks) until budget is met
 6. Post inline review comments via GitHub REST API
