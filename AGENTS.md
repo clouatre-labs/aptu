@@ -45,7 +45,7 @@ Bearer token auth for the HTTP endpoint: set `MCP_BEARER_TOKEN` env var; omittin
 
 ## Config & Data Paths (XDG)
 
-- `~/.config/aptu/config.toml` - provider, model, review budgets, prompt byte limits
+- `~/.config/aptu/config.toml` - provider, model, defaults, and `[prompt]` section (byte limits for issues, diffs, and commits)
 - `~/.config/aptu/repos.toml` - curated repo list
 - `~/.local/share/aptu/history.json` - contribution history
 
