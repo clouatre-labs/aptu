@@ -69,7 +69,10 @@ static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::
         .build()
         .unwrap_or_else(|e| {
             error!(%e, "Failed to build HTTP client, falling back to default");
-            reqwest::Client::new()
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_default()
         })
 });
 
