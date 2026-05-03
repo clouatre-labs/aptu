@@ -447,7 +447,7 @@ impl AptuServer {
         };
 
         // Check AI API key presence
-        let ai_api_key_status = match provider.ai_api_key("gemini") {
+        let ai_api_key_status = match provider.ai_api_key(&self.ai_config.provider) {
             None => CredentialStatus::Missing,
             Some(key) => {
                 let key_str = key.expose_secret();
