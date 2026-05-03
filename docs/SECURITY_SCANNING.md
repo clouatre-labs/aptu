@@ -78,6 +78,10 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run security scan
+        # || true ensures the SARIF file is always written so upload-sarif
+        # never skips. To gate the workflow on findings, add --fail-on and
+        # remove || true, or add a separate blocking job using the CI
+        # self-audit gate pattern below.
         run: aptu scan-security . --output sarif > findings.sarif || true
 
       - name: Upload SARIF report
