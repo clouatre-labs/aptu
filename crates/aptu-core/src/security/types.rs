@@ -73,6 +73,12 @@ pub struct PatternDefinition {
     /// Optional CWE identifier.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cwe: Option<String>,
+    /// Actionable remediation guidance for this vulnerability class.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remediation: Option<String>,
+    /// Authoritative reference URL (e.g. CWE or OWASP entry).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authority_url: Option<String>,
     /// File extensions to scan (empty = all files).
     #[serde(default)]
     pub file_extensions: Vec<String>,

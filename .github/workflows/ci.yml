@@ -224,6 +224,30 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: bats tests/integration.bats
 
+  scan-self:
+    name: Scan Self
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    needs: [changes, test]
+    timeout-minutes: 15
+    if: needs.changes.outputs.code == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: "aptu"
+      - name: Build binary
+        run: cargo build --profile ci -p aptu-cli
+      - name: Run security scan
+        run: ./target/ci/aptu scan-security crates/ --fail-on critical,high --exclude crates/aptu-core/src/security/tests --output github-annotations
+
   zizmor:
     name: zizmor
     runs-on: ubuntu-24.04
@@ -258,7 +282,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions: {}
     if: always()
-    needs: [commitlint, check-base, deny, format, lint, test, integration, zizmor, gitleaks]
+    needs: [commitlint, check-base, deny, format, lint, test, integration, scan-self, zizmor, gitleaks]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |

@@ -64,6 +64,9 @@ pub enum OutputFormat {
     Markdown,
     /// SARIF output for security scanning tools
     Sarif,
+    /// GitHub Actions annotation output (`::error file=...,line=...,title=...::message`)
+    #[value(name = "github-annotations")]
+    GithubAnnotations,
 }
 
 /// Issue state filter for triage operations.
@@ -97,7 +100,11 @@ impl OutputContext {
     pub fn from_cli(format: OutputFormat, verbose: bool) -> Self {
         let quiet = matches!(
             format,
-            OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown | OutputFormat::Sarif
+            OutputFormat::Json
+                | OutputFormat::Yaml
+                | OutputFormat::Markdown
+                | OutputFormat::Sarif
+                | OutputFormat::GithubAnnotations
         );
         Self {
             format,
@@ -214,6 +221,18 @@ pub enum Commands {
     /// Generate or install shell completion scripts
     #[command(subcommand)]
     Completion(CompletionCommand),
+
+    /// Scan a file or directory for security issues
+    ScanSecurity {
+        /// Path to scan (file or directory)
+        path: std::path::PathBuf,
+        /// Fail with exit code 1 if findings match these severities (comma-separated: critical,high,medium,low)
+        #[arg(long, value_delimiter = ',')]
+        fail_on: Vec<String>,
+        /// Exclude paths matching this prefix (repeatable)
+        #[arg(long)]
+        exclude: Vec<String>,
+    },
 }
 
 /// Authentication subcommands

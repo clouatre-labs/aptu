@@ -10,6 +10,7 @@ pub mod issue;
 pub mod models;
 pub mod pr;
 pub mod repo;
+pub mod scan_security;
 pub mod triage;
 pub mod types;
 
@@ -903,5 +904,13 @@ pub async fn run(
         Commands::Pr(pr_cmd) => run_pr_command(pr_cmd, ctx, config, inferred_repo).await,
         Commands::Models(models_cmd) => run_models_command(models_cmd, ctx).await,
         Commands::Completion(completion_cmd) => run_completion_command(&completion_cmd, ctx),
+        Commands::ScanSecurity {
+            path,
+            fail_on,
+            exclude,
+        } => {
+            scan_security::run_scan_security_command(path, fail_on, exclude, ctx.format, config)
+                .await
+        }
     }
 }

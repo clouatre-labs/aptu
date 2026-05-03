@@ -42,6 +42,10 @@ pub fn render<T: Renderable>(result: &T, ctx: &OutputContext) -> Result<()> {
                 .context("Failed to serialize empty SARIF report")?;
             println!("{json}");
         }
+        OutputFormat::GithubAnnotations => {
+            // GitHub annotation output is handled per-command (scan_security.rs).
+            // For non-scan commands, emit nothing meaningful in this format.
+        }
         OutputFormat::Markdown => {
             result
                 .render_markdown(&mut io::stdout(), ctx)
@@ -61,6 +65,19 @@ pub fn render_pr_review(
     result: &crate::commands::types::PrReviewResult,
     ctx: &OutputContext,
 ) -> Result<()> {
+    if matches!(ctx.format, OutputFormat::GithubAnnotations) {
+        // Emit GitHub annotation lines for security findings found during PR review
+        if let Some(findings) = &result.security_findings {
+            for f in findings {
+                println!(
+                    "::error file={},line={},title={}::{}",
+                    f.file_path, f.line_number, f.pattern_id, f.description
+                );
+            }
+        }
+        return Ok(());
+    }
+
     if matches!(ctx.format, OutputFormat::Sarif) {
         // Convert security findings to SARIF format
         if let Some(findings) = &result.security_findings {
