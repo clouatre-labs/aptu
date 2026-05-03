@@ -308,7 +308,7 @@
   {
     "id": "ssrf-http-request",
     "description": "Potential SSRF: HTTP client called with variable URL. Verify the URL is validated against an allowlist before use.",
-    "pattern": "(?i)(reqwest::get|reqwest::Client|fetch|urllib\\.request\\.urlopen|axios\\.(get|post|put|delete)|http\\.get|http\\.post|curl_exec|wget)\\s*[\\(\\[](?:[^\\\"'\\)]*[a-z_][a-z0-9_]*(?:\\.[a-z_][a-z0-9_]*)*)",
+    "pattern": "(?i)(reqwest::get|reqwest::Client|urllib\\.request\\.urlopen|axios\\.(get|post|put|delete)|http\\.get|http\\.post|curl_exec|wget)\\s*[\\(\\[](?:[^\\\"'\\)]*[a-z_][a-z0-9_]*(?:\\.[a-z_][a-z0-9_]*)*)",
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-918",

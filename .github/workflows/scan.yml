@@ -30,7 +30,7 @@ jobs:
       - name: Run security scan
         run: ./target/ci/aptu scan-security . --output sarif 2>/dev/null > findings.sarif || true
       - name: Upload SARIF report
-        uses: github/codeql-action/upload-sarif@14c9a0cbe6373488c2a41f7e75c8dd142bb2aba8 # v3.35.3
+        uses: github/codeql-action/upload-sarif@0daab03d71ff584ef619d027a3fd9146679c5d84 # v3.35.3
         with:
           sarif_file: findings.sarif
           category: aptu-scan-security

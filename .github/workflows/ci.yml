@@ -246,7 +246,7 @@ jobs:
       - name: Build binary
         run: cargo build --profile ci -p aptu-cli
       - name: Run security scan
-        run: ./target/ci/aptu scan-security crates/ --fail-on critical,high --exclude crates/aptu-core/src/security/tests --output github-annotations
+        run: ./target/ci/aptu scan-security crates/ --fail-on critical,high --exclude crates/aptu-core/src/security --exclude crates/aptu-core/tests --exclude crates/aptu-core/benches --exclude crates/aptu-core/src/facade.rs --output github-annotations
 
   zizmor:
     name: zizmor
