@@ -63,7 +63,14 @@ fn embedded_defaults() -> Vec<CuratedRepo> {
 /// Network errors propagate; JSON parse failures fall back to embedded defaults.
 async fn fetch_from_remote(url: &str) -> crate::Result<Vec<CuratedRepo>> {
     debug!("Fetching curated repositories from {}", url);
-    let response = reqwest::Client::new().get(url).send().await?;
+    // Use a 30s timeout consistent with the AI-layer HTTP clients; a hung remote
+    // would otherwise block this async task indefinitely.
+    let response = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?
+        .get(url)
+        .send()
+        .await?;
     if let Ok(repos) = response.json::<Vec<CuratedRepo>>().await {
         Ok(repos)
     } else {

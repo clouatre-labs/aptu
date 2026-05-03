@@ -118,52 +118,17 @@ runs:
         fi
         echo "skip=false" >> $GITHUB_OUTPUT
 
-    - name: Set environment variables
-      if: steps.check-skip.outputs.skip != 'true'
+    - name: Write fallback AI config
+      if: inputs.fallback-provider != '' || inputs.fallback-model != ''
       shell: bash
       env:
-        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
-        INPUT_GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        INPUT_OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        INPUT_GROQ_API_KEY: ${{ inputs.groq-api-key }}
-        INPUT_CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
-        INPUT_ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        INPUT_ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         INPUT_FALLBACK_PROVIDER: ${{ inputs.fallback-provider }}
         INPUT_FALLBACK_MODEL: ${{ inputs.fallback-model }}
-        INPUT_MODEL: ${{ inputs.model }}
-        INPUT_PROVIDER: ${{ inputs.provider }}
-        INPUT_DRY_RUN: ${{ inputs.dry-run }}
-        INPUT_APPLY_LABELS: ${{ inputs.apply-labels }}
-        INPUT_NO_COMMENT: ${{ inputs.no-comment }}
-        INPUT_DEEP: ${{ inputs.deep }}
-      run: |  # zizmor: ignore[github-env]
-        # Set shared environment variables for subsequent steps
-        # Values from inputs (originally secrets) are auto-masked by GitHub
-        echo "GITHUB_TOKEN=$INPUT_GITHUB_TOKEN" >> "$GITHUB_ENV"
-        echo "GEMINI_API_KEY=$INPUT_GEMINI_API_KEY" >> "$GITHUB_ENV"
-        echo "OPENROUTER_API_KEY=$INPUT_OPENROUTER_API_KEY" >> "$GITHUB_ENV"
-        echo "GROQ_API_KEY=$INPUT_GROQ_API_KEY" >> "$GITHUB_ENV"
-        echo "CEREBRAS_API_KEY=$INPUT_CEREBRAS_API_KEY" >> "$GITHUB_ENV"
-        echo "ZAI_API_KEY=$INPUT_ZAI_API_KEY" >> "$GITHUB_ENV"
-        echo "ZENMUX_API_KEY=$INPUT_ZENMUX_API_KEY" >> "$GITHUB_ENV"
-        echo "APTU_AI__MODEL=$INPUT_MODEL" >> "$GITHUB_ENV"
-        echo "APTU_AI__PROVIDER=$INPUT_PROVIDER" >> "$GITHUB_ENV"
-        echo "DRY_RUN=$INPUT_DRY_RUN" >> "$GITHUB_ENV"
-        echo "APPLY_LABELS=$INPUT_APPLY_LABELS" >> "$GITHUB_ENV"
-        echo "NO_COMMENT=$INPUT_NO_COMMENT" >> "$GITHUB_ENV"
-        echo "DEEP=$INPUT_DEEP" >> "$GITHUB_ENV"
-
-        # Write fallback chain config when a fallback provider is configured.
-        # Array values are not reliably settable via APTU_AI__* env vars, so we
-        # write a minimal config.toml instead. Use > (overwrite) to stay
-        # idempotent on re-runs; no pre-existing config.toml is expected in CI.
-        if [[ -n "$INPUT_FALLBACK_PROVIDER" && -n "$INPUT_FALLBACK_MODEL" ]]; then
-          mkdir -p "$HOME/.config/aptu"
-          printf '[ai.fallback]\nchain = [{ provider = "%s", model = "%s" }]\n' \
-            "$INPUT_FALLBACK_PROVIDER" "$INPUT_FALLBACK_MODEL" \
-            > "$HOME/.config/aptu/config.toml"
-        fi
+      run: |
+        mkdir -p "$HOME/.config/aptu"
+        printf '[ai.fallback]\nchain = [{ provider = "%s", model = "%s" }]\n' \
+          "$INPUT_FALLBACK_PROVIDER" "$INPUT_FALLBACK_MODEL" \
+          > "$HOME/.config/aptu/config.toml"
 
     - name: Resolve aptu version
       id: resolve-version
@@ -244,6 +209,18 @@ runs:
       env:
         ISSUE_NUMBER: ${{ github.event.issue.number }}
         REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ inputs.github-token || github.token }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        ZAI_API_KEY: ${{ inputs.zai-api-key }}
+        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__PROVIDER: ${{ inputs.provider }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        APPLY_LABELS: ${{ inputs.apply-labels }}
+        NO_COMMENT: ${{ inputs.no-comment }}
       run: |
         set -e
         
@@ -271,6 +248,18 @@ runs:
       env:
         REPO: ${{ github.repository }}
         SINCE: ${{ inputs.since }}
+        GH_TOKEN: ${{ inputs.github-token || github.token }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        ZAI_API_KEY: ${{ inputs.zai-api-key }}
+        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__PROVIDER: ${{ inputs.provider }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        APPLY_LABELS: ${{ inputs.apply-labels }}
+        NO_COMMENT: ${{ inputs.no-comment }}
       run: |
         set -e
         ARGS="--repo $REPO"
@@ -295,6 +284,16 @@ runs:
       env:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ inputs.github-token || github.token }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        ZAI_API_KEY: ${{ inputs.zai-api-key }}
+        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__PROVIDER: ${{ inputs.provider }}
+        DRY_RUN: ${{ inputs.dry-run }}
       run: |
         set -e
         
@@ -317,6 +316,18 @@ runs:
         REPO: ${{ github.repository }}
         REPO_PATH: ${{ inputs.repo-path }}
         DEEP: ${{ inputs.deep }}
+        GH_TOKEN: ${{ inputs.github-token || github.token }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        ZAI_API_KEY: ${{ inputs.zai-api-key }}
+        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__PROVIDER: ${{ inputs.provider }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        APPLY_LABELS: ${{ inputs.apply-labels }}
+        NO_COMMENT: ${{ inputs.no-comment }}
       run: |
         set -e
         
