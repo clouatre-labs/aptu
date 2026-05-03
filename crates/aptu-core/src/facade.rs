@@ -28,6 +28,7 @@ use crate::github::issues::{create_issue as gh_create_issue, filter_labels_by_re
 use crate::github::pulls::{fetch_pr_details, post_pr_review as gh_post_pr_review};
 use crate::repos::{self, CuratedRepo};
 use crate::retry::is_retryable_anyhow;
+use crate::sanitize::sanitise_user_field;
 use crate::security::SecurityScanner;
 use secrecy::SecretString;
 
@@ -522,6 +523,17 @@ pub async fn analyze_issue(
     issue: &IssueDetails,
     ai_config: &AiConfig,
 ) -> crate::Result<AiResponse> {
+    // Load config for prompt injection defence settings
+    let app_config = load_config().unwrap_or_default();
+
+    // Byte-limit pre-check (prompt injection defence)
+    // sanitise_user_field validates the byte limit and wraps in XML tags
+    let _ = sanitise_user_field(
+        "issue_body",
+        &issue.body,
+        app_config.prompt.max_issue_body_bytes,
+    )?;
+
     // Clone issue into mutable local variable for potential label enrichment
     let mut issue_mut = issue.clone();
 
@@ -559,7 +571,7 @@ pub async fn analyze_issue(
 
     // Pre-AI prompt injection scan (advisory gate)
     let injection_findings: Vec<_> = SecurityScanner::new()
-        .scan_file(&issue_mut.body, "")
+        .scan_file(&issue_mut.body, "issue.md")
         .into_iter()
         .filter(|f| f.pattern_id.starts_with("prompt-injection"))
         .collect();
@@ -759,6 +771,15 @@ pub async fn analyze_pr(
     // Load config once at function entry to ensure consistent review settings
     let app_config = load_config().unwrap_or_default();
     let review_config = app_config.review;
+
+    // Byte-limit pre-check (prompt injection defence)
+    // Concatenate all patches and validate via sanitise_user_field
+    let all_patches: String = pr_details
+        .files
+        .iter()
+        .map(|f| f.patch.as_deref().unwrap_or(""))
+        .collect();
+    let _ = sanitise_user_field("pr_diff", &all_patches, app_config.prompt.max_diff_bytes)?;
     let repo_path_ref = repo_path.as_deref();
     let (ast_ctx, call_graph_ctx) = tokio::join!(
         build_ctx_ast(repo_path_ref, &pr_details.files),
@@ -907,6 +928,15 @@ pub async fn label_pr(
         .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
         })?;
+
+    // Byte-limit pre-check (prompt injection defence)
+    // Concatenate all patches and validate via sanitise_user_field
+    let all_patches: String = pr_details
+        .files
+        .iter()
+        .map(|f| f.patch.as_deref().unwrap_or(""))
+        .collect();
+    let _ = sanitise_user_field("pr_diff", &all_patches, app_config.prompt.max_diff_bytes)?;
 
     // Extract labels from PR metadata (deterministic approach)
     let file_paths: Vec<String> = pr_details

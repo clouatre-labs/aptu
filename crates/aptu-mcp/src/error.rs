@@ -34,7 +34,8 @@ pub fn aptu_error_to_mcp(err: &AptuError) -> ErrorData {
         AptuError::TypeMismatch { .. }
         | AptuError::ModelValidation { .. }
         | AptuError::Config { .. }
-        | AptuError::SecurityScan { .. } => ErrorCode::INVALID_PARAMS,
+        | AptuError::SecurityScan { .. }
+        | AptuError::InputExceedsLimit { .. } => ErrorCode::INVALID_PARAMS,
         AptuError::NotAuthenticated | AptuError::AiProviderNotAuthenticated { .. } => {
             ErrorCode::INVALID_REQUEST
         }
@@ -118,6 +119,17 @@ pub fn aptu_error_to_mcp(err: &AptuError) -> ErrorData {
             "SECURITY_SCAN_ERROR",
             false,
             "Prompt injection patterns detected; operation blocked for security",
+        )),
+        AptuError::InputExceedsLimit {
+            field,
+            actual_bytes,
+            limit_bytes,
+        } => Some(error_meta(
+            "INPUT_LIMIT_EXCEEDED",
+            false,
+            &format!(
+                "input field `{field}` exceeds limit: {actual_bytes} bytes (limit: {limit_bytes} bytes)"
+            ),
         )),
         #[cfg(feature = "keyring")]
         AptuError::Keyring(_) => Some(error_meta(

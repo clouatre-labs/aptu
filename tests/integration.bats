@@ -18,7 +18,7 @@ load test_helper
 
 @test "issue list with real GitHub API" {
     skip_if_no_gh_token
-    run "$APTU_BIN" issue list block/goose
+    run "$APTU_BIN" issue list clouatre-labs/aptu
     assert_success
 }
 

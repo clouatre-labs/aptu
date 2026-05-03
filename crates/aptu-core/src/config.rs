@@ -60,6 +60,9 @@ pub struct AppConfig {
     /// PR review prompt settings.
     #[serde(default)]
     pub review: ReviewConfig,
+    /// Prompt injection defence settings.
+    #[serde(default)]
+    pub prompt: PromptConfig,
 }
 
 /// User preferences.
@@ -342,6 +345,44 @@ impl Default for ReviewConfig {
             max_prompt_chars: 120_000, // Conservative budget for LLM context windows with overhead
             max_full_content_files: 10, // Cap GitHub Contents API calls to limit latency and rate limits
             max_chars_per_file: 4_000, // Keep individual file snippets readable without overwhelming prompt
+        }
+    }
+}
+
+/// Per-field byte limits for user-supplied content before prompt assembly.
+/// These limits defend against prompt injection by enforcing a hard cap on
+/// how much user-controlled data can reach the AI model.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(default)]
+pub struct PromptConfig {
+    /// Maximum bytes for an issue body (default: 32 KiB).
+    ///
+    /// Limits the size of user-supplied issue body text before it is wrapped
+    /// in XML tags and sent to the AI model. Larger limits allow more context
+    /// but increase token usage and prompt injection surface area. The default
+    /// (32 KiB) balances context richness against cost and security.
+    pub max_issue_body_bytes: usize,
+    /// Maximum bytes for a PR diff (default: 128 KiB).
+    ///
+    /// Limits the total size of all file patches in a PR before they are
+    /// wrapped in XML tags and sent to the AI model. The default (128 KiB)
+    /// accommodates typical multi-file changes while keeping token usage
+    /// reasonable and reducing prompt injection risk.
+    pub max_diff_bytes: usize,
+    /// Maximum bytes for a commit message (default: 4 KiB).
+    ///
+    /// Limits the size of commit message text before wrapping. The default
+    /// (4 KiB) is conservative, as commit messages are typically short;
+    /// this prevents abuse via artificially large commit messages.
+    pub max_commit_message_bytes: usize,
+}
+
+impl Default for PromptConfig {
+    fn default() -> Self {
+        Self {
+            max_issue_body_bytes: 32_768,
+            max_diff_bytes: 131_072,
+            max_commit_message_bytes: 4_096,
         }
     }
 }

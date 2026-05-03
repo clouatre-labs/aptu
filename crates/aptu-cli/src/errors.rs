@@ -131,6 +131,15 @@ pub fn format_error(error: &Error) -> String {
                     "{aptu_err}\n\nTip: Prompt injection patterns detected; operation blocked for security."
                 )
             }
+            AptuError::InputExceedsLimit {
+                field,
+                actual_bytes,
+                limit_bytes,
+            } => {
+                format!(
+                    "input field `{field}` exceeds limit: {actual_bytes} bytes (limit: {limit_bytes} bytes)\n\nTip: The input is too large for safe processing. Consider reducing the size of the {field} field."
+                )
+            }
         }
     } else {
         // Not an AptuError, return the original error chain

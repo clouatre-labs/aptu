@@ -143,6 +143,7 @@ pub mod github;
 pub mod history;
 pub mod repos;
 pub mod retry;
+pub mod sanitize;
 pub mod security;
 pub mod triage;
 pub mod utils;
