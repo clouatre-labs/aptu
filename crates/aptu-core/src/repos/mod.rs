@@ -16,7 +16,7 @@ pub mod discovery;
 
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use crate::cache::FileCache;
 use crate::config::load_config;
@@ -67,7 +67,10 @@ static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+        .unwrap_or_else(|e| {
+            error!(%e, "Failed to build HTTP client, falling back to default");
+            reqwest::Client::new()
+        })
 });
 
 async fn fetch_from_remote(url: &str) -> crate::Result<Vec<CuratedRepo>> {
