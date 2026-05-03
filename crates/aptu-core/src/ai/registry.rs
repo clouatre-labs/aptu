@@ -459,7 +459,7 @@ impl CachedModelRegistry<'_> {
 impl ModelRegistry for CachedModelRegistry<'_> {
     async fn list_models(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         // Try fresh cache first
-        if let Ok(Some(models)) = self.cache.get(provider) {
+        if let Ok(Some(models)) = self.cache.get(provider).await {
             return Ok(models);
         }
 
@@ -467,12 +467,12 @@ impl ModelRegistry for CachedModelRegistry<'_> {
         match self.fetch_from_api(provider).await {
             Ok(models) => {
                 // Save to cache (ignore errors)
-                let _ = self.cache.set(provider, &models);
+                let _ = self.cache.set(provider, &models).await;
                 Ok(models)
             }
             Err(api_error) => {
                 // Try stale cache as fallback
-                match self.cache.get_stale(provider) {
+                match self.cache.get_stale(provider).await {
                     Ok(Some(models)) => {
                         tracing::warn!(
                             provider = provider,

@@ -6,17 +6,18 @@
 //! (timestamp, optional etag). Cache entries are validated against TTL settings
 //! from configuration.
 
-use std::fs;
+#![allow(clippy::async_yields_async)]
+
 use std::path::PathBuf;
-use std::sync::Once;
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use tracing::warn;
+use tracing::{debug, warn};
 
 /// Ensures the cache unavailable warning is only emitted once.
-static CACHE_UNAVAILABLE_WARNING: Once = Once::new();
+static CACHE_UNAVAILABLE_WARNING: OnceLock<()> = OnceLock::new();
 
 /// Default TTL for issue cache entries (in minutes).
 pub const DEFAULT_ISSUE_TTL_MINS: i64 = 60;
@@ -103,7 +104,7 @@ pub trait FileCache<V> {
     /// # Returns
     ///
     /// The cached value if it exists and is within TTL, `None` otherwise.
-    fn get(&self, key: &str) -> Result<Option<V>>;
+    async fn get(&self, key: &str) -> Result<Option<V>>;
 
     /// Get a cached value regardless of TTL (stale fallback).
     ///
@@ -114,7 +115,7 @@ pub trait FileCache<V> {
     /// # Returns
     ///
     /// The cached value if it exists, `None` otherwise.
-    fn get_stale(&self, key: &str) -> Result<Option<V>>;
+    async fn get_stale(&self, key: &str) -> Result<Option<V>>;
 
     /// Set a cached value.
     ///
@@ -122,14 +123,14 @@ pub trait FileCache<V> {
     ///
     /// * `key` - Cache key (filename without extension)
     /// * `value` - Value to cache
-    fn set(&self, key: &str, value: &V) -> Result<()>;
+    async fn set(&self, key: &str, value: &V) -> Result<()>;
 
     /// Remove a cached value.
     ///
     /// # Arguments
     ///
     /// * `key` - Cache key (filename without extension)
-    fn remove(&self, key: &str) -> Result<()>;
+    async fn remove(&self, key: &str) -> Result<()>;
 }
 
 /// File-based cache implementation with TTL support.
@@ -160,7 +161,7 @@ where
     pub fn new(subdirectory: impl Into<String>, ttl: Duration) -> Self {
         let cache_dir = cache_dir();
         if cache_dir.is_none() {
-            CACHE_UNAVAILABLE_WARNING.call_once(|| {
+            CACHE_UNAVAILABLE_WARNING.get_or_init(|| {
                 warn!("Cache directory unavailable, caching disabled");
             });
         }
@@ -218,13 +219,76 @@ where
             .as_ref()
             .map(|dir| dir.join(&self.subdirectory).join(filename))
     }
+
+    /// Evict cache files older than the specified TTL.
+    ///
+    /// Scans the cache subdirectory and removes files with `cached_at` timestamps
+    /// older than `eviction_days`. Returns the count of files removed.
+    ///
+    /// # Arguments
+    ///
+    /// * `eviction_days` - Number of days to retain files
+    ///
+    /// # Returns
+    ///
+    /// The number of files evicted.
+    pub async fn evict_stale(&self, eviction_days: i64) -> usize {
+        if !self.is_enabled() {
+            return 0;
+        }
+
+        let Some(cache_dir) = &self.cache_dir else {
+            return 0;
+        };
+
+        let subdir = cache_dir.join(&self.subdirectory);
+
+        // Check if subdirectory exists
+        if !tokio::fs::try_exists(&subdir).await.unwrap_or(false) {
+            return 0;
+        }
+
+        let mut read_dir = match tokio::fs::read_dir(&subdir).await {
+            Ok(rd) => rd,
+            Err(_) => return 0,
+        };
+
+        let mut evicted_count = 0;
+        let cutoff_time = Utc::now() - Duration::days(eviction_days);
+
+        while let Ok(Some(entry)) = read_dir.next_entry().await {
+            let path = entry.path();
+
+            // Only process .json files
+            if path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+            {
+                // Try to read and parse the file
+                if let Ok(contents) = tokio::fs::read_to_string(&path).await {
+                    if let Ok(entry_data) =
+                        serde_json::from_str::<CacheEntry<serde_json::Value>>(&contents)
+                    {
+                        if entry_data.cached_at < cutoff_time {
+                            if tokio::fs::remove_file(&path).await.is_ok() {
+                                debug!("Evicted stale cache file: {}", path.display());
+                                evicted_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        evicted_count
+    }
 }
 
 impl<V> FileCache<V> for FileCacheImpl<V>
 where
     V: Serialize + for<'de> Deserialize<'de>,
 {
-    fn get(&self, key: &str) -> Result<Option<V>> {
+    async fn get(&self, key: &str) -> Result<Option<V>> {
         if !self.is_enabled() {
             return Ok(None);
         }
@@ -233,11 +297,15 @@ where
             return Ok(None);
         };
 
-        if !path.exists() {
+        if !tokio::fs::try_exists(&path)
+            .await
+            .with_context(|| format!("Failed to check cache file: {}", path.display()))?
+        {
             return Ok(None);
         }
 
-        let contents = fs::read_to_string(&path)
+        let contents = tokio::fs::read_to_string(&path)
+            .await
             .with_context(|| format!("Failed to read cache file: {}", path.display()))?;
 
         let entry: CacheEntry<V> = serde_json::from_str(&contents)
@@ -250,7 +318,7 @@ where
         }
     }
 
-    fn get_stale(&self, key: &str) -> Result<Option<V>> {
+    async fn get_stale(&self, key: &str) -> Result<Option<V>> {
         if !self.is_enabled() {
             return Ok(None);
         }
@@ -259,11 +327,15 @@ where
             return Ok(None);
         };
 
-        if !path.exists() {
+        if !tokio::fs::try_exists(&path)
+            .await
+            .with_context(|| format!("Failed to check cache file: {}", path.display()))?
+        {
             return Ok(None);
         }
 
-        let contents = fs::read_to_string(&path)
+        let contents = tokio::fs::read_to_string(&path)
+            .await
             .with_context(|| format!("Failed to read cache file: {}", path.display()))?;
 
         let entry: CacheEntry<V> = serde_json::from_str(&contents)
@@ -272,7 +344,7 @@ where
         Ok(Some(entry.data))
     }
 
-    fn set(&self, key: &str, value: &V) -> Result<()> {
+    async fn set(&self, key: &str, value: &V) -> Result<()> {
         if !self.is_enabled() {
             return Ok(());
         }
@@ -283,7 +355,7 @@ where
 
         // Create parent directories if needed
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
+            tokio::fs::create_dir_all(parent).await.with_context(|| {
                 format!("Failed to create cache directory: {}", parent.display())
             })?;
         }
@@ -294,16 +366,18 @@ where
 
         // Atomic write: write to temp file, then rename
         let temp_path = path.with_extension("tmp");
-        fs::write(&temp_path, contents)
+        tokio::fs::write(&temp_path, contents)
+            .await
             .with_context(|| format!("Failed to write cache temp file: {}", temp_path.display()))?;
 
-        fs::rename(&temp_path, &path)
+        tokio::fs::rename(&temp_path, &path)
+            .await
             .with_context(|| format!("Failed to rename cache file: {}", path.display()))?;
 
         Ok(())
     }
 
-    fn remove(&self, key: &str) -> Result<()> {
+    async fn remove(&self, key: &str) -> Result<()> {
         if !self.is_enabled() {
             return Ok(());
         }
@@ -312,8 +386,12 @@ where
             return Ok(());
         };
 
-        if path.exists() {
-            fs::remove_file(&path)
+        if tokio::fs::try_exists(&path)
+            .await
+            .with_context(|| format!("Failed to check cache file: {}", path.display()))?
+        {
+            tokio::fs::remove_file(&path)
+                .await
                 .with_context(|| format!("Failed to remove cache file: {}", path.display()))?;
         }
         Ok(())
@@ -404,8 +482,8 @@ mod tests {
         assert_eq!(parsed.etag, Some(etag));
     }
 
-    #[test]
-    fn test_file_cache_get_set() {
+    #[tokio::test]
+    async fn test_file_cache_get_set() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
         let data = TestData {
             value: "test".to_string(),
@@ -413,27 +491,27 @@ mod tests {
         };
 
         // Set value
-        cache.set("test_key", &data).expect("set cache");
+        cache.set("test_key", &data).await.expect("set cache");
 
         // Get value
-        let result = cache.get("test_key").expect("get cache");
+        let result = cache.get("test_key").await.expect("get cache");
         assert!(result.is_some());
         assert_eq!(result.unwrap(), data);
 
         // Cleanup
-        cache.remove("test_key").ok();
+        cache.remove("test_key").await.ok();
     }
 
-    #[test]
-    fn test_file_cache_get_miss() {
+    #[tokio::test]
+    async fn test_file_cache_get_miss() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
 
-        let result = cache.get("nonexistent").expect("get cache");
+        let result = cache.get("nonexistent").await.expect("get cache");
         assert!(result.is_none());
     }
 
-    #[test]
-    fn test_file_cache_get_stale() {
+    #[tokio::test]
+    async fn test_file_cache_get_stale() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::seconds(0));
         let data = TestData {
             value: "stale".to_string(),
@@ -441,26 +519,26 @@ mod tests {
         };
 
         // Set value
-        cache.set("stale_key", &data).expect("set cache");
+        cache.set("stale_key", &data).await.expect("set cache");
 
         // Wait for TTL to expire
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
         // get() should return None (expired)
-        let result = cache.get("stale_key").expect("get cache");
+        let result = cache.get("stale_key").await.expect("get cache");
         assert!(result.is_none());
 
         // get_stale() should return the value
-        let stale_result = cache.get_stale("stale_key").expect("get stale cache");
+        let stale_result = cache.get_stale("stale_key").await.expect("get stale cache");
         assert!(stale_result.is_some());
         assert_eq!(stale_result.unwrap(), data);
 
         // Cleanup
-        cache.remove("stale_key").ok();
+        cache.remove("stale_key").await.ok();
     }
 
-    #[test]
-    fn test_file_cache_remove() {
+    #[tokio::test]
+    async fn test_file_cache_remove() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
         let data = TestData {
             value: "remove_me".to_string(),
@@ -468,72 +546,138 @@ mod tests {
         };
 
         // Set value
-        cache.set("remove_key", &data).expect("set cache");
+        cache.set("remove_key", &data).await.expect("set cache");
 
         // Verify it exists
-        assert!(cache.get("remove_key").expect("get cache").is_some());
+        assert!(cache.get("remove_key").await.expect("get cache").is_some());
 
         // Remove it
-        cache.remove("remove_key").expect("remove cache");
+        cache.remove("remove_key").await.expect("remove cache");
 
         // Verify it's gone
-        assert!(cache.get("remove_key").expect("get cache").is_none());
+        assert!(cache.get("remove_key").await.expect("get cache").is_none());
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "cache key must not contain path separators")]
-    fn test_cache_key_rejects_forward_slash() {
+    async fn test_cache_key_rejects_forward_slash() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
-        let _ = cache.get("../etc/passwd");
+        let _ = cache.get("../etc/passwd").await;
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "cache key must not contain path separators")]
-    fn test_cache_key_rejects_backslash() {
+    async fn test_cache_key_rejects_backslash() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
-        let _ = cache.get("..\\windows\\system32");
+        let _ = cache.get("..\\windows\\system32").await;
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "cache key must not contain path separators")]
-    fn test_cache_key_rejects_parent_dir() {
+    async fn test_cache_key_rejects_parent_dir() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
-        let _ = cache.get("foo..bar");
+        let _ = cache.get("foo..bar").await;
     }
 
-    #[test]
-    fn test_disabled_cache_get_returns_none() {
+    #[tokio::test]
+    async fn test_disabled_cache_get_returns_none() {
         let cache: FileCacheImpl<TestData> =
             FileCacheImpl::with_dir(None, "test_cache", Duration::hours(1));
-        let result = cache.get("any_key").expect("get should succeed");
+        let result = cache.get("any_key").await.expect("get should succeed");
         assert!(result.is_none());
     }
 
-    #[test]
-    fn test_disabled_cache_set_succeeds_silently() {
+    #[tokio::test]
+    async fn test_disabled_cache_set_succeeds_silently() {
         let cache: FileCacheImpl<TestData> =
             FileCacheImpl::with_dir(None, "test_cache", Duration::hours(1));
         let data = TestData {
             value: "test".to_string(),
             count: 42,
         };
-        cache.set("any_key", &data).expect("set should succeed");
+        cache
+            .set("any_key", &data)
+            .await
+            .expect("set should succeed");
     }
 
-    #[test]
-    fn test_disabled_cache_remove_succeeds_silently() {
+    #[tokio::test]
+    async fn test_disabled_cache_remove_succeeds_silently() {
         let cache: FileCacheImpl<TestData> =
             FileCacheImpl::with_dir(None, "test_cache", Duration::hours(1));
-        cache.remove("any_key").expect("remove should succeed");
+        cache
+            .remove("any_key")
+            .await
+            .expect("remove should succeed");
     }
 
-    #[test]
-    fn test_disabled_cache_get_stale_returns_none() {
+    #[tokio::test]
+    async fn test_disabled_cache_get_stale_returns_none() {
         let cache: FileCacheImpl<TestData> =
             FileCacheImpl::with_dir(None, "test_cache", Duration::hours(1));
         let result = cache
             .get_stale("any_key")
+            .await
             .expect("get_stale should succeed");
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_evict_stale_removes_old_files() {
+        let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_evict", Duration::hours(1));
+        let data = TestData {
+            value: "old".to_string(),
+            count: 1,
+        };
+
+        // Set a value
+        cache.set("old_key", &data).await.expect("set cache");
+
+        // Manually modify the cached_at timestamp to be old
+        if let Some(path) = cache.cache_path("old_key") {
+            let contents = tokio::fs::read_to_string(&path)
+                .await
+                .expect("read cache file");
+            let mut entry: CacheEntry<TestData> =
+                serde_json::from_str(&contents).expect("parse cache entry");
+            entry.cached_at = Utc::now() - Duration::days(10);
+            let new_contents = serde_json::to_string_pretty(&entry).expect("serialize cache entry");
+            tokio::fs::write(&path, new_contents)
+                .await
+                .expect("write cache file");
+        }
+
+        // Evict files older than 7 days
+        let evicted = cache.evict_stale(7).await;
+        assert_eq!(evicted, 1);
+
+        // Verify the file is gone
+        let result = cache.get("old_key").await.expect("get cache");
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_evict_stale_preserves_fresh_files() {
+        let cache: FileCacheImpl<TestData> =
+            FileCacheImpl::new("test_evict_fresh", Duration::hours(1));
+        let data = TestData {
+            value: "fresh".to_string(),
+            count: 2,
+        };
+
+        // Set a value
+        cache.set("fresh_key", &data).await.expect("set cache");
+
+        // Evict files older than 7 days (this file is fresh, so it should be preserved)
+        let evicted = cache.evict_stale(7).await;
+        assert_eq!(evicted, 0);
+
+        // Verify the file still exists
+        let result = cache.get("fresh_key").await.expect("get cache");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), data);
+
+        // Cleanup
+        cache.remove("fresh_key").await.ok();
     }
 }
