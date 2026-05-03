@@ -91,7 +91,7 @@ pub async fn fetch_issues(
 
         for repo in &repos_to_query {
             let cache_key = format!("{}_{}", repo.owner, repo.name);
-            if let Ok(Some(issues)) = cache.get(&cache_key) {
+            if let Ok(Some(issues)) = cache.get(&cache_key).await {
                 cached_results.push((repo.full_name(), issues));
             } else {
                 repos_to_fetch.push(repo.clone());
@@ -119,7 +119,7 @@ pub async fn fetch_issues(
         for (repo_name, issues) in &api_results {
             if let Some(repo) = repos_to_fetch.iter().find(|r| r.full_name() == *repo_name) {
                 let cache_key = format!("{}_{}", repo.owner, repo.name);
-                let _ = cache.set(&cache_key, issues);
+                let _ = cache.set(&cache_key, issues).await;
             }
         }
 

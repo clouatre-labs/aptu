@@ -188,7 +188,7 @@ pub async fn search_repositories(
 
     let cache: crate::cache::FileCacheImpl<Vec<DiscoveredRepo>> =
         crate::cache::FileCacheImpl::new("discovery", ttl);
-    if let Ok(Some(repos)) = cache.get(&cache_key) {
+    if let Ok(Some(repos)) = cache.get(&cache_key).await {
         debug!("Using cached discovered repositories");
         return Ok(repos);
     }
@@ -249,7 +249,7 @@ pub async fn search_repositories(
     discovered.truncate(filter.limit as usize);
 
     // Cache the results
-    let _ = cache.set(&cache_key, &discovered);
+    let _ = cache.set(&cache_key, &discovered).await;
 
     debug!(
         "Found and cached {} discovered repositories",

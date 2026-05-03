@@ -110,7 +110,7 @@ impl FindingCache {
     ///
     /// The cached validated finding if it exists and is within TTL, `None` otherwise.
     #[instrument(skip(self, matched_text), fields(cache_key))]
-    pub fn get(
+    pub async fn get(
         &self,
         repo_owner: &str,
         repo_name: &str,
@@ -123,6 +123,7 @@ impl FindingCache {
 
         self.cache
             .get(&key)
+            .await
             .map(|opt| opt.map(|cached| cached.validated))
     }
 
@@ -137,7 +138,7 @@ impl FindingCache {
     /// * `matched_text` - The matched code snippet
     /// * `validated` - The validated finding to cache
     #[instrument(skip(self, matched_text, validated), fields(cache_key))]
-    pub fn set(
+    pub async fn set(
         &self,
         repo_owner: &str,
         repo_name: &str,
@@ -150,7 +151,7 @@ impl FindingCache {
         tracing::Span::current().record("cache_key", &key);
 
         let cached = CachedFinding::new(validated);
-        self.cache.set(&key, &cached)
+        self.cache.set(&key, &cached).await
     }
 }
 
@@ -212,8 +213,8 @@ mod tests {
         assert!(!key.contains("sk-"));
     }
 
-    #[test]
-    fn test_finding_cache_hit() {
+    #[tokio::test]
+    async fn test_finding_cache_hit() {
         let cache = FindingCache::new();
         let validated = ValidatedFinding {
             finding: Finding {
@@ -241,11 +242,13 @@ mod tests {
                 "test code",
                 validated.clone(),
             )
+            .await
             .expect("set cache");
 
         // Get cache hit
         let result = cache
             .get("owner", "repo", "src/test.rs", "test-pattern", "test code")
+            .await
             .expect("get cache");
 
         assert!(result.is_some());
@@ -253,22 +256,23 @@ mod tests {
 
         // Cleanup
         let key = cache_key("owner", "repo", "src/test.rs", "test-pattern", "test code");
-        cache.cache.remove(&key).ok();
+        cache.cache.remove(&key).await.ok();
     }
 
-    #[test]
-    fn test_finding_cache_miss() {
+    #[tokio::test]
+    async fn test_finding_cache_miss() {
         let cache = FindingCache::new();
 
         let result = cache
             .get("owner", "repo", "src/nonexistent.rs", "pattern", "code")
+            .await
             .expect("get cache");
 
         assert!(result.is_none());
     }
 
-    #[test]
-    fn test_finding_cache_different_context() {
+    #[tokio::test]
+    async fn test_finding_cache_different_context() {
         let cache = FindingCache::new();
         let validated = ValidatedFinding {
             finding: Finding {
@@ -296,17 +300,19 @@ mod tests {
                 "code",
                 validated,
             )
+            .await
             .expect("set cache");
 
         // Different owner should miss
         let result = cache
             .get("owner2", "repo1", "src/file.rs", "pattern", "code")
+            .await
             .expect("get cache");
         assert!(result.is_none());
 
         // Cleanup
         let key = cache_key("owner1", "repo1", "src/file.rs", "pattern", "code");
-        cache.cache.remove(&key).ok();
+        cache.cache.remove(&key).await.ok();
     }
 
     #[test]

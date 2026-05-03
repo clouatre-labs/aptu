@@ -113,14 +113,14 @@ pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
     // Try cache first
     let cache: crate::cache::FileCacheImpl<Vec<CuratedRepo>> =
         crate::cache::FileCacheImpl::new("repos", ttl);
-    if let Ok(Some(repos)) = cache.get("curated_repos") {
+    if let Ok(Some(repos)) = cache.get("curated_repos").await {
         debug!("Using cached curated repositories");
         return Ok(repos);
     }
 
     // Fetch from remote and cache the result
     let repos = fetch_from_remote(url).await?;
-    let _ = cache.set("curated_repos", &repos);
+    let _ = cache.set("curated_repos", &repos).await;
     debug!("Fetched and cached {} curated repositories", repos.len());
 
     Ok(repos)
