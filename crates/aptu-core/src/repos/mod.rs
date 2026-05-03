@@ -16,7 +16,7 @@ pub mod discovery;
 
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use crate::cache::FileCache;
 use crate::config::load_config;
@@ -61,9 +61,26 @@ fn embedded_defaults() -> Vec<CuratedRepo> {
 /// Fetch repositories from remote URL.
 ///
 /// Network errors propagate; JSON parse failures fall back to embedded defaults.
+/// Shared HTTP client with a 30s timeout, consistent with the AI-layer clients.
+/// A static client benefits from connection pooling across repeated calls.
+static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
+    // LazyLock closures must return a value, not Result, so errors cannot be
+    // propagated. build() fails only on TLS initialisation errors; in that case
+    // a second builder with the same options would fail identically, so the
+    // fallback uses Client::default() (infallible). The timeout is absent on the
+    // fallback path, but if TLS is broken all outbound HTTP will fail regardless.
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .unwrap_or_else(|e| {
+            error!(%e, "Failed to build HTTP client, falling back to default");
+            reqwest::Client::default()
+        })
+});
+
 async fn fetch_from_remote(url: &str) -> crate::Result<Vec<CuratedRepo>> {
     debug!("Fetching curated repositories from {}", url);
-    let response = reqwest::Client::new().get(url).send().await?;
+    let response = HTTP_CLIENT.get(url).send().await?;
     if let Ok(repos) = response.json::<Vec<CuratedRepo>>().await {
         Ok(repos)
     } else {
