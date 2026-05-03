@@ -61,13 +61,12 @@ pub async fn run_scan_security_command(
     if !fail_on.is_empty() {
         let fail_severities: Vec<String> = fail_on.iter().map(|s| s.to_lowercase()).collect();
 
-        let should_fail = findings.iter().any(|f| {
-            let sev = format!("{:?}", f.severity).to_lowercase();
-            fail_severities.contains(&sev)
-        });
+        let should_fail = findings
+            .iter()
+            .any(|f| fail_severities.iter().any(|s| s == f.severity.as_str()));
 
         if should_fail {
-            std::process::exit(1);
+            return Err(anyhow::Error::new(crate::errors::ScanFindingsExit));
         }
     }
 

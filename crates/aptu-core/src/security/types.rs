@@ -20,6 +20,19 @@ pub enum Severity {
     Low,
 }
 
+impl Severity {
+    /// Returns the lowercase string representation used in `--fail-on` flag matching.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Critical => "critical",
+            Self::High => "high",
+            Self::Medium => "medium",
+            Self::Low => "low",
+        }
+    }
+}
+
 /// Confidence level of a security finding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "lowercase")]
