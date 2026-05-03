@@ -68,11 +68,17 @@ static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .unwrap_or_else(|e| {
-            error!(%e, "Failed to build HTTP client, falling back to default");
+            error!(%e, "Failed to build HTTP client with timeout, retrying without options");
+            // LazyLock closures must return a value, not Result, so we cannot
+            // propagate this error. Client::default() is infallible and equivalent
+            // to Client::new(); a second error! makes a double-failure observable.
             reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
-                .unwrap_or_default()
+                .unwrap_or_else(|e| {
+                    error!(%e, "Failed to build HTTP client on retry, using bare default");
+                    reqwest::Client::default()
+                })
         })
 });
 
