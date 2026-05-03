@@ -65,7 +65,10 @@ fn embedded_defaults() -> Vec<CuratedRepo> {
 /// A static client benefits from connection pooling across repeated calls.
 static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
     // LazyLock closures must return a value, not Result, so errors cannot be
-    // propagated. Client::default() is infallible and equivalent to Client::new().
+    // propagated. build() fails only on TLS initialisation errors; in that case
+    // a second builder with the same options would fail identically, so the
+    // fallback uses Client::default() (infallible). The timeout is absent on the
+    // fallback path, but if TLS is broken all outbound HTTP will fail regardless.
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
