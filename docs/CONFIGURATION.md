@@ -214,6 +214,24 @@ max_chars_per_file = 4000      # Max characters per full-content file snippet (d
 
 When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest files first), diff hunks (largest first). The system prompt and PR metadata are never dropped.
 
+## Input Size Limits
+
+Aptu enforces per-field byte limits before inserting user-supplied content into AI prompts. This bounds indirect prompt-injection surface (OWASP LLM01:2025).
+
+```toml
+[prompt]
+max_issue_body_bytes    = 32768   # 32 KiB  — issue body
+max_diff_bytes          = 131072  # 128 KiB — PR diff
+max_commit_message_bytes = 4096   # 4 KiB   — individual commit messages
+```
+
+When a field exceeds its limit:
+
+- **CLI** (`aptu issue triage`, `aptu pr review`): exits non-zero with a diagnostic message.
+- **MCP server**: returns a `ToolExecutionError` so the model can self-correct.
+
+Note: `aptu scan-security` performs local pattern matching and does not invoke AI; these limits do not apply to it.
+
 ## DCO Sign-off (`dco_signoff`)
 
 When creating a branch and commit via `aptu pr create --diff`, Aptu can append a

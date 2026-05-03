@@ -111,3 +111,9 @@ Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.m
 | `issues: write` | Issue triage (comments, labels) |
 | `pull-requests: write` | PR labeling (comments, labels) |
 | `contents: read` | Repository context (all features) |
+
+## Security Scanning
+
+The composite action handles issue triage and PR review. For standalone security scanning, create a separate workflow using the `aptu scan-security` subcommand.
+
+See [docs/SECURITY_SCANNING.md](SECURITY_SCANNING.md) for the canonical `scan.yml` workflow, CI self-audit gate pattern, and full flag reference.
