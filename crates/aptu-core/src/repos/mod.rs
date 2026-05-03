@@ -61,16 +61,18 @@ fn embedded_defaults() -> Vec<CuratedRepo> {
 /// Fetch repositories from remote URL.
 ///
 /// Network errors propagate; JSON parse failures fall back to embedded defaults.
+/// Shared HTTP client with a 30s timeout, consistent with the AI-layer clients.
+/// A static client benefits from connection pooling across repeated calls.
+static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+});
+
 async fn fetch_from_remote(url: &str) -> crate::Result<Vec<CuratedRepo>> {
     debug!("Fetching curated repositories from {}", url);
-    // Use a 30s timeout consistent with the AI-layer HTTP clients; a hung remote
-    // would otherwise block this async task indefinitely.
-    let response = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()?
-        .get(url)
-        .send()
-        .await?;
+    let response = HTTP_CLIENT.get(url).send().await?;
     if let Ok(repos) = response.json::<Vec<CuratedRepo>>().await {
         Ok(repos)
     } else {
