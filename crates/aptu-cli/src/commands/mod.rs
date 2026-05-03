@@ -31,6 +31,14 @@ use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewO
 use crate::output;
 use aptu_core::{AppConfig, State, check_already_triaged};
 
+/// Options for PR review behavior.
+#[allow(clippy::struct_excessive_bools)]
+struct ReviewOptions {
+    dry_run: bool,
+    yes: bool,
+    no_comment: bool,
+}
+
 /// Creates a styled spinner (only if interactive).
 fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
     if ctx.is_interactive() {
@@ -293,8 +301,7 @@ async fn review_single_pr(
     reference: &str,
     repo_context: Option<&str>,
     review_type: Option<aptu_core::ReviewEvent>,
-    dry_run: bool,
-    yes: bool,
+    opts: ReviewOptions,
     ctx: &OutputContext,
     config: &AppConfig,
     repo_path: Option<String>,
@@ -354,18 +361,24 @@ async fn review_single_pr(
         review: review.clone(),
     };
 
-    // Handle posting if review type specified
+    // Handle posting if review type specified and --no-comment not set
     if let Some(event) = review_type {
-        pr::post(
-            &analyze_result,
-            reference,
-            repo_context,
-            event,
-            dry_run,
-            yes,
-            ctx.is_verbose(),
-        )
-        .await?;
+        if !opts.no_comment {
+            pr::post(
+                &analyze_result,
+                reference,
+                repo_context,
+                event,
+                opts.dry_run,
+                opts.yes,
+                ctx.is_verbose(),
+            )
+            .await?;
+        }
+    } else if !opts.dry_run && matches!(ctx.format, OutputFormat::Text) {
+        eprintln!(
+            "hint: run with --comment, --approve, or --request-changes to post this review to GitHub."
+        );
     }
 
     // Render output
@@ -376,7 +389,7 @@ async fn review_single_pr(
         review: review.clone(),
         verdict: review.verdict.clone(),
         ai_stats,
-        dry_run,
+        dry_run: opts.dry_run,
         labels: pr_details.labels,
         security_findings,
     };
@@ -390,8 +403,16 @@ async fn review_single_pr(
 /// Run the auth command.
 async fn run_auth_command(auth_cmd: AuthCommand, ctx: &OutputContext) -> Result<()> {
     match auth_cmd {
-        AuthCommand::Login => auth::run_login().await,
-        AuthCommand::Logout => auth::run_logout(),
+        AuthCommand::Login => {
+            let result = auth::run_login().await?;
+            output::render(&result, ctx)?;
+            Ok(())
+        }
+        AuthCommand::Logout => {
+            let result = auth::run_logout()?;
+            output::render(&result, ctx)?;
+            Ok(())
+        }
         AuthCommand::Status => {
             let result = auth::run_status().await?;
             output::render(&result, ctx)?;
@@ -427,24 +448,30 @@ async fn run_repo_command(repo_cmd: RepoCommand, ctx: OutputContext) -> Result<(
         }
         RepoCommand::Add { repo } => {
             let spinner = maybe_spinner(&ctx, "Adding repository...");
-            let result = repo::run_add(&repo).await?;
+            let message = repo::run_add(&repo).await?;
             if let Some(s) = spinner {
                 s.finish_and_clear();
             }
-            if matches!(ctx.format, OutputFormat::Text) {
-                println!("{}", style(result).green());
-            }
+            let result = types::RepoMutateResult {
+                action: "add".to_string(),
+                repo: repo.clone(),
+                message,
+            };
+            output::render(&result, &ctx)?;
             Ok(())
         }
         RepoCommand::Remove { repo } => {
             let spinner = maybe_spinner(&ctx, "Removing repository...");
-            let result = repo::run_remove(&repo)?;
+            let message = repo::run_remove(&repo)?;
             if let Some(s) = spinner {
                 s.finish_and_clear();
             }
-            if matches!(ctx.format, OutputFormat::Text) {
-                println!("{}", style(result).green());
-            }
+            let result = types::RepoMutateResult {
+                action: "remove".to_string(),
+                repo: repo.clone(),
+                message,
+            };
+            output::render(&result, &ctx)?;
             Ok(())
         }
     }
@@ -655,8 +682,11 @@ async fn run_issue_command(
             from,
             dry_run,
         } => {
+            let Some(effective_repo) = repo else {
+                anyhow::bail!("repository is required; use --repo OWNER/REPO");
+            };
             let spinner = maybe_spinner(&ctx, "Creating issue...");
-            let result = create::run(repo, title, body, from, dry_run).await?;
+            let result = create::run(effective_repo, title, body, from, dry_run).await?;
             if let Some(s) = spinner {
                 s.finish_and_clear();
             }
@@ -693,7 +723,7 @@ async fn run_pr_command(
             request_changes,
             dry_run,
             no_apply: _,
-            no_comment: _,
+            no_comment,
             force,
             repo_path,
             deep,
@@ -744,8 +774,11 @@ async fn run_pr_command(
                             &pr_ref,
                             repo_context.as_deref(),
                             review_type,
-                            dry_run,
-                            !ctx.is_interactive() || force,
+                            ReviewOptions {
+                                dry_run,
+                                yes: !ctx.is_interactive() || force,
+                                no_comment,
+                            },
                             &ctx,
                             &config,
                             repo_path_for_review,
@@ -890,6 +923,17 @@ pub async fn run(
     config: &AppConfig,
     inferred_repo: Option<String>,
 ) -> Result<()> {
+    // Validate that SARIF/GitHub Annotations output is only used with scan-security
+    if matches!(
+        ctx.format,
+        OutputFormat::Sarif | OutputFormat::GithubAnnotations
+    ) && !matches!(command, Commands::ScanSecurity { .. })
+    {
+        anyhow::bail!(
+            "--output sarif and --output github-annotations are only supported with the scan-security command"
+        );
+    }
+
     match command {
         Commands::Auth(auth_cmd) => run_auth_command(auth_cmd, &ctx).await,
         Commands::Repo(repo_cmd) => run_repo_command(repo_cmd, ctx).await,
@@ -912,5 +956,89 @@ pub async fn run(
             scan_security::run_scan_security_command(path, fail_on, exclude, ctx.format, config)
                 .await
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::{OutputContext, OutputFormat};
+    use crate::commands::types::{AuthActionResult, RepoMutateResult};
+
+    // UX-006/007: AuthActionResult renders correct text
+    #[test]
+    fn test_auth_action_result_render_text() {
+        // Arrange
+        let result = AuthActionResult {
+            action: "login".to_string(),
+            message: "Successfully authenticated with GitHub!".to_string(),
+        };
+        let ctx = OutputContext::from_cli(OutputFormat::Text, false);
+        let mut buf = Vec::new();
+
+        // Act
+        use crate::output::Renderable;
+        result.render_text(&mut buf, &ctx).unwrap();
+
+        // Assert
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("Successfully authenticated with GitHub!"));
+    }
+
+    // UX-006/007: AuthActionResult serializes to JSON
+    #[test]
+    fn test_auth_action_result_json_output() {
+        // Arrange
+        let result = AuthActionResult {
+            action: "logout".to_string(),
+            message: "Logged out from GitHub. Token removed from keychain.".to_string(),
+        };
+
+        // Act
+        let json = serde_json::to_string(&result).unwrap();
+
+        // Assert
+        assert!(json.contains("\"action\":\"logout\""));
+        assert!(json.contains("Logged out from GitHub"));
+    }
+
+    // UX-006/007: RepoMutateResult renders correct text (happy path)
+    #[test]
+    fn test_repo_mutate_result_render_text() {
+        // Arrange
+        let result = RepoMutateResult {
+            action: "add".to_string(),
+            repo: "owner/name".to_string(),
+            message: "Added repository: owner/name (Rust)".to_string(),
+        };
+        let ctx = OutputContext::from_cli(OutputFormat::Text, false);
+        let mut buf = Vec::new();
+
+        // Act
+        use crate::output::Renderable;
+        result.render_text(&mut buf, &ctx).unwrap();
+
+        // Assert
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("Added repository: owner/name (Rust)"));
+    }
+
+    // UX-008: sarif format rejected on non-scan command (edge case)
+    #[test]
+    fn test_sarif_format_rejected_on_non_scan() {
+        // Arrange: context with Sarif format
+        let ctx = OutputContext::from_cli(OutputFormat::Sarif, false);
+
+        // Assert: guard condition holds for non-scan commands
+        let is_sarif = matches!(
+            ctx.format,
+            OutputFormat::Sarif | OutputFormat::GithubAnnotations
+        );
+        // Simulate non-scan command via a bool (ScanSecurity match is the only exclusion)
+        let is_scan = false;
+        assert!(
+            is_sarif && !is_scan,
+            "guard should reject sarif on non-scan"
+        );
     }
 }

@@ -4,60 +4,49 @@
 
 use anyhow::Result;
 use aptu_core::github::{OAUTH_CLIENT_ID, auth};
-use console::style;
 use secrecy::SecretString;
 use tracing::info;
 
+use crate::commands::types::AuthActionResult;
+
 /// Run the login command - authenticate with GitHub.
-pub async fn run_login() -> Result<()> {
+pub async fn run_login() -> Result<AuthActionResult> {
     // Check if already authenticated via any source
     if let Some((_, source)) = auth::resolve_token() {
-        println!(
-            "{} Already authenticated with GitHub (via {}).",
-            style("!").yellow().bold(),
-            source
-        );
-        println!(
-            "Run {} to remove keyring token and re-authenticate.",
-            style("aptu auth logout").cyan()
-        );
-        return Ok(());
+        return Ok(AuthActionResult {
+            action: "login".to_string(),
+            message: format!(
+                "Already authenticated with GitHub (via {source}). Run `aptu auth logout` to remove keyring token and re-authenticate."
+            ),
+        });
     }
 
     let client_id = SecretString::from(OAUTH_CLIENT_ID);
 
-    println!(
-        "{} Starting GitHub authentication...",
-        style("*").cyan().bold()
-    );
-
     auth::authenticate(&client_id).await?;
 
-    println!();
-    println!(
-        "{} Successfully authenticated with GitHub!",
-        style("*").green().bold()
-    );
-
-    Ok(())
+    Ok(AuthActionResult {
+        action: "login".to_string(),
+        message: "Successfully authenticated with GitHub!".to_string(),
+    })
 }
 
 /// Run the logout command - remove stored credentials.
-pub fn run_logout() -> Result<()> {
+pub fn run_logout() -> Result<AuthActionResult> {
     if !auth::has_keyring_token() {
-        println!("{} No token stored in keyring.", style("!").yellow().bold());
-        return Ok(());
+        return Ok(AuthActionResult {
+            action: "logout".to_string(),
+            message: "No token stored in keyring.".to_string(),
+        });
     }
 
     auth::delete_token()?;
 
     info!("Logged out from GitHub");
-    println!(
-        "{} Logged out from GitHub. Token removed from keychain.",
-        style("*").green().bold()
-    );
-
-    Ok(())
+    Ok(AuthActionResult {
+        action: "logout".to_string(),
+        message: "Logged out from GitHub. Token removed from keychain.".to_string(),
+    })
 }
 
 /// Run the status command - show current authentication state.

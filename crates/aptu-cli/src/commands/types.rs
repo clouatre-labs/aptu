@@ -251,3 +251,25 @@ pub struct DiscoverResult {
     /// List of discovered repositories.
     pub repos: Vec<DiscoveredRepo>,
 }
+
+/// Result from auth login or logout actions.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AuthActionResult {
+    /// Action performed (e.g., "login", "logout").
+    pub action: String,
+    /// Human-readable message describing the outcome.
+    pub message: String,
+}
+
+/// Result from repo add or remove actions.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RepoMutateResult {
+    /// Action performed (e.g., "add", "remove").
+    pub action: String,
+    /// Repository affected (e.g., "owner/name").
+    pub repo: String,
+    /// Human-readable message describing the outcome.
+    pub message: String,
+}

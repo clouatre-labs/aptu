@@ -5,7 +5,7 @@ use console::style;
 use std::io::{self, Write};
 
 use crate::cli::{OutputContext, OutputFormat};
-use crate::commands::types::{DiscoverResult, ReposResult};
+use crate::commands::types::{DiscoverResult, RepoMutateResult, ReposResult};
 
 use super::Renderable;
 
@@ -126,6 +126,13 @@ impl ReposResult {
                 super::render(self, ctx)?;
             }
         }
+        Ok(())
+    }
+}
+
+impl Renderable for RepoMutateResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w, "{} {}", style("*").green().bold(), self.message)?;
         Ok(())
     }
 }

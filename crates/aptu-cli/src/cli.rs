@@ -295,7 +295,8 @@ pub enum RepoCommand {
 pub enum IssueCommand {
     /// List open issues suitable for contribution
     List {
-        /// Repository to filter issues (e.g., "block/goose")
+        /// Repository (OWNER/REPO) to filter issues
+        #[arg(long, short = 'r')]
         repo: Option<String>,
 
         /// Disable caching of issue data
@@ -340,8 +341,9 @@ pub enum IssueCommand {
 
     /// Create a GitHub issue with AI assistance
     Create {
-        /// Repository for the issue (e.g., "owner/repo")
-        repo: String,
+        /// Repository (OWNER/REPO) for the issue
+        #[arg(long, short = 'r')]
+        repo: Option<String>,
 
         /// Issue title (interactive prompt if not provided)
         #[arg(long)]
@@ -479,7 +481,7 @@ pub enum PrCommand {
         draft: bool,
 
         /// Force patch application despite security findings
-        #[arg(long)]
+        #[arg(long, short = 'f')]
         force: bool,
     },
 }
@@ -515,4 +517,39 @@ pub enum ModelsCommand {
         #[arg(long)]
         filter: Option<String>,
     },
+}
+
+#[cfg(test)]
+mod clap_conflict_tests {
+    use super::*;
+
+    #[test]
+    fn test_issue_list_with_repo_flag() {
+        let result = Cli::try_parse_from(&["prog", "issue", "list", "--repo", "owner/repo"]);
+        match result {
+            Ok(cli) => {
+                if let Commands::Issue(IssueCommand::List { repo, .. }) = cli.command {
+                    assert_eq!(repo, Some("owner/repo".to_string()));
+                }
+            }
+            Err(e) => {
+                panic!("Failed to parse issue list with --repo flag: {}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_issue_create_with_repo_flag() {
+        let result = Cli::try_parse_from(&["prog", "issue", "create", "--repo", "owner/repo"]);
+        match result {
+            Ok(cli) => {
+                if let Commands::Issue(IssueCommand::Create { repo, .. }) = cli.command {
+                    assert_eq!(repo, Some("owner/repo".to_string()));
+                }
+            }
+            Err(e) => {
+                panic!("Failed to parse issue create with --repo flag: {}", e);
+            }
+        }
+    }
 }

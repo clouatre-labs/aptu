@@ -4,7 +4,7 @@ use console::style;
 use std::io::{self, Write};
 
 use crate::cli::OutputContext;
-use crate::commands::types::AuthStatusResult;
+use crate::commands::types::{AuthActionResult, AuthStatusResult};
 
 use super::Renderable;
 
@@ -44,6 +44,13 @@ impl Renderable for AuthStatusResult {
         } else {
             writeln!(w, "**Status:** Not authenticated")?;
         }
+        Ok(())
+    }
+}
+
+impl Renderable for AuthActionResult {
+    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
+        writeln!(w, "{} {}", style("*").green().bold(), self.message)?;
         Ok(())
     }
 }
