@@ -9,7 +9,7 @@ use hex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::types::Finding;
+use super::types::{Finding, PatternDefinition};
 
 /// SARIF report structure (SARIF 2.1.0).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +51,9 @@ pub struct SarifDriver {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "informationUri")]
     pub information_uri: Option<String>,
+    /// Rule definitions (pattern metadata).
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub rules: Vec<SarifRule>,
 }
 
 /// A single result (finding).
@@ -75,6 +78,33 @@ pub struct SarifResult {
 pub struct SarifMessage {
     /// Message text.
     pub text: String,
+}
+
+/// Help text for a rule, supporting plain text and markdown.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SarifHelp {
+    /// Plain-text remediation guidance.
+    pub text: String,
+    /// Markdown-formatted remediation guidance.
+    pub markdown: String,
+}
+
+/// A rule definition (pattern metadata) embedded in the SARIF driver.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SarifRule {
+    /// Rule identifier (matches ruleId in results).
+    pub id: String,
+    /// Short, one-line description.
+    pub short_description: SarifMessage,
+    /// Longer description with more detail.
+    pub full_description: SarifMessage,
+    /// Remediation help text.
+    pub help: SarifHelp,
+    /// Authoritative reference URL (CWE, OWASP, etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub help_uri: Option<String>,
 }
 
 /// Location information.
@@ -131,6 +161,55 @@ impl From<Vec<Finding>> for SarifReport {
                         name: "aptu-security-scanner".to_string(),
                         version: Some(env!("CARGO_PKG_VERSION").to_string()),
                         information_uri: Some("https://github.com/clouatre-labs/aptu".to_string()),
+                        rules: Vec::new(),
+                    },
+                },
+                results,
+            }],
+        }
+    }
+}
+
+impl SarifReport {
+    /// Build a SARIF report with rule metadata embedded in the driver.
+    ///
+    /// Rule objects are built from `patterns`; result objects are built from `findings`.
+    /// Use this constructor when you have pattern metadata available (e.g. from the CLI
+    /// `scan-security` subcommand). Prefer `From<Vec<Finding>>` for lightweight usage.
+    pub fn with_rules(findings: Vec<Finding>, patterns: &[PatternDefinition]) -> Self {
+        let rules: Vec<SarifRule> = patterns
+            .iter()
+            .map(|p| {
+                let help_text = p.remediation.clone().unwrap_or_default();
+                SarifRule {
+                    id: p.id.clone(),
+                    short_description: SarifMessage {
+                        text: p.description.clone(),
+                    },
+                    full_description: SarifMessage {
+                        text: p.description.clone(),
+                    },
+                    help: SarifHelp {
+                        text: help_text.clone(),
+                        markdown: help_text,
+                    },
+                    help_uri: p.authority_url.clone(),
+                }
+            })
+            .collect();
+
+        let results: Vec<SarifResult> = findings.into_iter().map(SarifResult::from).collect();
+
+        SarifReport {
+            version: "2.1.0".to_string(),
+            schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json".to_string(),
+            runs: vec![SarifRun {
+                tool: SarifTool {
+                    driver: SarifDriver {
+                        name: "aptu-security-scanner".to_string(),
+                        version: Some(env!("CARGO_PKG_VERSION").to_string()),
+                        information_uri: Some("https://github.com/clouatre-labs/aptu".to_string()),
+                        rules,
                     },
                 },
                 results,

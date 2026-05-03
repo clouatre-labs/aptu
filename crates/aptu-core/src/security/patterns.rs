@@ -115,6 +115,12 @@ impl PatternEngine {
     pub fn pattern_count(&self) -> usize {
         self.patterns.len()
     }
+
+    /// Returns cloned pattern definitions (for SARIF rule metadata injection).
+    #[must_use]
+    pub fn definitions(&self) -> Vec<PatternDefinition> {
+        self.patterns.iter().map(|c| c.definition.clone()).collect()
+    }
 }
 
 #[cfg(test)]
@@ -288,6 +294,59 @@ mod tests {
         assert!(
             findings.iter().any(|f| f.pattern_id == "open-redirect"),
             "Should detect open redirect pattern from user input"
+        );
+    }
+
+    #[test]
+    fn test_all_patterns_have_remediation_and_authority_url() {
+        let engine = PatternEngine::from_embedded_json().unwrap();
+        for def in engine.definitions() {
+            assert!(
+                def.remediation.as_deref().is_some_and(|s| !s.is_empty()),
+                "Pattern '{}' is missing a non-empty remediation",
+                def.id
+            );
+            assert!(
+                def.authority_url.as_deref().is_some_and(|s| !s.is_empty()),
+                "Pattern '{}' is missing a non-empty authority_url",
+                def.id
+            );
+        }
+    }
+
+    #[test]
+    fn test_sarif_with_rules_includes_rule_metadata() {
+        use crate::security::sarif::SarifReport;
+        use crate::security::types::{Confidence, Severity};
+
+        let engine = PatternEngine::from_embedded_json().unwrap();
+        let patterns = engine.definitions();
+
+        let finding = Finding {
+            pattern_id: "hardcoded-api-key".to_string(),
+            description: "Hardcoded API key detected".to_string(),
+            severity: Severity::Critical,
+            confidence: Confidence::High,
+            file_path: "src/config.rs".to_string(),
+            line_number: 1,
+            matched_text: "api_key = \"sk-abc\"".to_string(),
+            cwe: Some("CWE-798".to_string()),
+        };
+
+        let report = SarifReport::with_rules(vec![finding], &patterns);
+        let json = serde_json::to_string(&report).unwrap();
+
+        assert!(
+            !report.runs[0].tool.driver.rules.is_empty(),
+            "rules array must not be empty"
+        );
+        assert!(
+            json.contains("hardcoded-api-key"),
+            "JSON must contain rule id"
+        );
+        assert!(
+            json.contains("helpUri") || json.contains("help_uri") || json.contains("cwe.mitre.org"),
+            "JSON must contain authority URL"
         );
     }
 

@@ -20,6 +20,19 @@ pub enum Severity {
     Low,
 }
 
+impl Severity {
+    /// Returns the lowercase string representation used in `--fail-on` flag matching.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Critical => "critical",
+            Self::High => "high",
+            Self::Medium => "medium",
+            Self::Low => "low",
+        }
+    }
+}
+
 /// Confidence level of a security finding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "lowercase")]
@@ -73,6 +86,12 @@ pub struct PatternDefinition {
     /// Optional CWE identifier.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cwe: Option<String>,
+    /// Actionable remediation guidance for this vulnerability class.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remediation: Option<String>,
+    /// Authoritative reference URL (e.g. CWE or OWASP entry).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authority_url: Option<String>,
     /// File extensions to scan (empty = all files).
     #[serde(default)]
     pub file_extensions: Vec<String>,

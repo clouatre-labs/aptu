@@ -267,3 +267,16 @@ mod tests {
         assert_eq!(formatted, "Some generic error");
     }
 }
+
+/// Sentinel error returned by `scan-security` when findings match `--fail-on`.
+/// `main` handles this by exiting with code 1 without printing an error message.
+#[derive(Debug)]
+pub struct ScanFindingsExit;
+
+impl std::fmt::Display for ScanFindingsExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "security findings exceeded --fail-on threshold")
+    }
+}
+
+impl std::error::Error for ScanFindingsExit {}

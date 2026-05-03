@@ -81,6 +81,9 @@ async fn main() -> Result<()> {
 
     match commands::run(cli.command, output_ctx, &config, cli.inferred_repo).await {
         Ok(()) => Ok(()),
+        Err(ref e) if e.is::<errors::ScanFindingsExit>() => {
+            std::process::exit(1);
+        }
         Err(e) => {
             let formatted = errors::format_error(&e);
             eprintln!("Error: {formatted}");

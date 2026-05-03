@@ -49,6 +49,7 @@ secrecy = { workspace = true }
 
 # Paths
 dirs = { workspace = true }
+walkdir = { workspace = true }
 
 # Concurrency
 futures = { workspace = true }

@@ -121,6 +121,9 @@ impl IssuesResult {
                             .context("Failed to serialize empty SARIF report")?;
                         println!("{json}");
                     }
+                    OutputFormat::GithubAnnotations => {
+                        // No findings for issues list; emit nothing.
+                    }
                     OutputFormat::Markdown => {
                         println!("No curated repository matches '{filter}'");
                     }
