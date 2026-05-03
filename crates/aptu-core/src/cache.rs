@@ -98,6 +98,11 @@ pub fn cache_dir() -> Option<PathBuf> {
 /// Trait for TTL-based filesystem caching.
 ///
 /// Provides a unified interface for caching serializable data with time-to-live validation.
+///
+/// `async_fn_in_trait` is suppressed because this trait is re-exported for use by crate
+/// consumers but is never intended to be implemented externally or used as `dyn FileCache`.
+/// All known implementors are in this crate, so auto-trait bounds are not a concern.
+#[allow(async_fn_in_trait)]
 pub trait FileCache<V> {
     /// Get a cached value if it exists and is valid.
     ///
@@ -252,9 +257,8 @@ where
             return 0;
         }
 
-        let mut read_dir = match tokio::fs::read_dir(&subdir).await {
-            Ok(rd) => rd,
-            Err(_) => return 0,
+        let Ok(mut read_dir) = tokio::fs::read_dir(&subdir).await else {
+            return 0;
         };
 
         let mut evicted_count = 0;
@@ -264,23 +268,25 @@ where
             let path = entry.path();
 
             // Only process .json files
-            if path
+            if !path
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
             {
-                // Try to read and parse the file
-                if let Ok(contents) = tokio::fs::read_to_string(&path).await {
-                    if let Ok(entry_data) =
-                        serde_json::from_str::<CacheEntry<serde_json::Value>>(&contents)
-                    {
-                        if entry_data.cached_at < cutoff_time {
-                            if tokio::fs::remove_file(&path).await.is_ok() {
-                                debug!("Evicted stale cache file: {}", path.display());
-                                evicted_count += 1;
-                            }
-                        }
-                    }
-                }
+                continue;
+            }
+
+            let Ok(contents) = tokio::fs::read_to_string(&path).await else {
+                continue;
+            };
+
+            let Ok(entry_data) = serde_json::from_str::<CacheEntry<serde_json::Value>>(&contents)
+            else {
+                continue;
+            };
+
+            if entry_data.cached_at < cutoff_time && tokio::fs::remove_file(&path).await.is_ok() {
+                debug!("Evicted stale cache file: {}", path.display());
+                evicted_count += 1;
             }
         }
 
