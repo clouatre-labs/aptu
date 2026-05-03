@@ -31,6 +31,25 @@ impl Default for CacheConfig {
     }
 }
 
+impl CacheConfig {
+    /// Validates cache configuration.
+    ///
+    /// Ensures `file_eviction_days` is positive (> 0).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `file_eviction_days <= 0`.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.file_eviction_days <= 0 {
+            return Err(format!(
+                "file_eviction_days must be > 0, got {}",
+                self.file_eviction_days
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Repository settings.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]

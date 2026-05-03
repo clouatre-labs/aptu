@@ -6,6 +6,9 @@
 //! (timestamp, optional etag). Cache entries are validated against TTL settings
 //! from configuration.
 
+// `async_yields_async` is suppressed because the FileCache trait uses async fn (RPITIT,
+// stable in Rust 1.95 / edition 2024). The trait is internal and never used as `dyn FileCache`,
+// so the lint warning is a false positive in this context.
 #![allow(clippy::async_yields_async)]
 
 use std::path::PathBuf;

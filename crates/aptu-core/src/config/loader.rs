@@ -198,6 +198,12 @@ pub fn load_config() -> Result<AppConfig, AptuError> {
 
     let app_config: AppConfig = config.try_deserialize()?;
 
+    // Validate cache configuration
+    app_config
+        .cache
+        .validate()
+        .map_err(|e| AptuError::Config { message: e })?;
+
     Ok(app_config)
 }
 
