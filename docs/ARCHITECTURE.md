@@ -128,11 +128,17 @@ This means users can tune AI behavior without recompiling, and developers can au
 ├── [ui]
 │   └── no_color = false
 ├── [cache]
-│   └── ttl_seconds = 300
-└── [review]
-    ├── max_prompt_chars = 120000
-    ├── max_full_content_files = 10
-    └── max_chars_per_file = 4000
+│   ├── issue_ttl_minutes = 60
+│   ├── repo_ttl_hours = 24
+│   └── file_eviction_days = 7
+├── [review]
+│   ├── max_prompt_chars = 120000
+│   ├── max_full_content_files = 10
+│   └── max_chars_per_file = 4000
+└── [prompt]
+    ├── max_issue_body_bytes = 32768
+    ├── max_diff_bytes = 131072
+    └── max_commit_message_bytes = 4096
 ```
 
 ## Testing Strategy

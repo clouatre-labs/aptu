@@ -214,6 +214,23 @@ max_chars_per_file = 4000      # Max characters per full-content file snippet (d
 
 When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest files first), diff hunks (largest first). The system prompt and PR metadata are never dropped.
 
+## Cache Configuration
+
+Control caching behavior for issues, repositories, and file-based cache entries:
+
+```toml
+[cache]
+issue_ttl_minutes = 60      # TTL for cached issue responses (default: 60)
+repo_ttl_hours = 24         # TTL for cached repository metadata (default: 24)
+file_eviction_days = 7      # Age threshold for evicting file-based cache entries (default: 7)
+```
+
+- **`issue_ttl_minutes`**: How long (in minutes) to cache AI responses for issue triage before refetching. Set to 0 to disable caching.
+- **`repo_ttl_hours`**: How long (in hours) to cache repository metadata (stars, description, topics, etc.) before refetching. Set to 0 to disable caching.
+- **`file_eviction_days`**: Age threshold (in days) for removing stale cache files from disk. Must be greater than 0. Older cache files are automatically cleaned up.
+
+All three keys are optional. Omitting any key restores the default listed above.
+
 ## Input Size Limits
 
 Aptu enforces per-field byte limits before inserting user-supplied content into AI prompts. This bounds indirect prompt-injection surface (OWASP LLM01:2025).
@@ -296,7 +313,6 @@ Supported operation names:
 | `~/.config/aptu/prompts/review.md` | PR review system prompt |
 | `~/.config/aptu/prompts/pr_label.md` | PR label suggestion system prompt |
 | `~/.config/aptu/prompts/create.md` | Issue creation system prompt |
-| `~/.config/aptu/prompts/release_notes.md` | Release notes system prompt |
 
 **Example:** customize the triage prompt for a monorepo:
 
