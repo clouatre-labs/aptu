@@ -73,7 +73,7 @@ apple-native-keyring-store = { version = "1", features = ["keychain"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 linux-keyutils-keyring-store = { version = "1" }
 
-[target.'cfg(windows)'.dependencies]
+[target.'cfg(target_os = "windows")'.dependencies]
 windows-native-keyring-store = { version = "1" }
 
 [dev-dependencies]
