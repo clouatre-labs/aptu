@@ -66,24 +66,33 @@ pub fn keyring_init() -> crate::Result<()> {
     #[cfg(target_os = "macos")]
     {
         use apple_native_keyring_store::keychain::Store;
-        let store =
-            Store::new().map_err(|e| keyring_core::error::Error::PlatformFailure(Box::new(e)))?;
+        let store = Store::new().map_err(|e| {
+            keyring_core::error::Error::PlatformFailure(
+                format!("Failed to initialize macOS keychain: {e}").into(),
+            )
+        })?;
         keyring_core::set_default_store(store);
     }
 
     #[cfg(target_os = "linux")]
     {
         use linux_keyutils_keyring_store::Store;
-        let store =
-            Store::new().map_err(|e| keyring_core::error::Error::PlatformFailure(Box::new(e)))?;
+        let store = Store::new().map_err(|e| {
+            keyring_core::error::Error::PlatformFailure(
+                format!("Failed to initialize Linux keyutils store: {e}").into(),
+            )
+        })?;
         keyring_core::set_default_store(store);
     }
 
     #[cfg(windows)]
     {
         use windows_native_keyring_store::Store;
-        let store =
-            Store::new().map_err(|e| keyring_core::error::Error::PlatformFailure(Box::new(e)))?;
+        let store = Store::new().map_err(|e| {
+            keyring_core::error::Error::PlatformFailure(
+                format!("Failed to initialize Windows credential store: {e}").into(),
+            )
+        })?;
         keyring_core::set_default_store(store);
     }
 
