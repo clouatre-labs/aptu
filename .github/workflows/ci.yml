@@ -210,7 +210,7 @@ jobs:
           cargo build --profile ci -p aptu-cli
           chmod +x target/ci/aptu
       - name: Setup Bats testing framework
-        uses: bats-core/bats-action@e412797c46257a2dbf3775f6f6010b33ee6cb99f # v3  # zizmor: ignore[impostor-commit]
+        uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0  # zizmor: ignore[impostor-commit]
         with:
           support-path: ${{ github.workspace }}/.bats-libs/bats-support
           assert-path: ${{ github.workspace }}/.bats-libs/bats-assert
