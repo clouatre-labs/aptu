@@ -229,6 +229,8 @@ file_eviction_days = 7      # Age threshold for evicting file-based cache entrie
 - **`repo_ttl_hours`**: How long (in hours) to cache repository metadata (stars, description, topics, etc.) before refetching. Set to 0 to disable caching.
 - **`file_eviction_days`**: Age threshold (in days) for removing stale cache files from disk. Must be greater than 0. Older cache files are automatically cleaned up.
 
+All three keys are optional. Omitting any key restores the default listed above.
+
 ## Input Size Limits
 
 Aptu enforces per-field byte limits before inserting user-supplied content into AI prompts. This bounds indirect prompt-injection surface (OWASP LLM01:2025).
