@@ -30,6 +30,13 @@ async fn main() -> Result<()> {
 
     let output_ctx = OutputContext::from_cli(cli.output, cli.verbose);
 
+    // Initialize keyring store
+    #[cfg(feature = "keyring")]
+    if let Err(e) = aptu_core::github::keyring_init() {
+        eprintln!("Failed to initialize keyring: {e}");
+        std::process::exit(1);
+    }
+
     // Load config early to validate it works (Option A from plan)
     let mut config = config::load_config().context("Failed to load configuration")?;
     debug!("Configuration loaded successfully");
@@ -79,7 +86,7 @@ async fn main() -> Result<()> {
         debug!("Overriding AI model to: {model}");
     }
 
-    match commands::run(cli.command, output_ctx, &config, cli.inferred_repo).await {
+    let result = match commands::run(cli.command, output_ctx, &config, cli.inferred_repo).await {
         Ok(()) => Ok(()),
         Err(ref e) if e.is::<errors::ScanFindingsExit>() => {
             std::process::exit(1);
@@ -89,5 +96,11 @@ async fn main() -> Result<()> {
             eprintln!("Error: {formatted}");
             Err(e)
         }
-    }
+    };
+
+    // Tear down keyring store
+    #[cfg(feature = "keyring")]
+    aptu_core::github::keyring_deinit();
+
+    result
 }

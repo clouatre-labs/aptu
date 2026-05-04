@@ -18,7 +18,7 @@ use std::sync::{PoisonError, RwLock};
 
 use anyhow::{Context, Result};
 #[cfg(feature = "keyring")]
-use keyring::Entry;
+use keyring_core::Entry;
 use octocrab::Octocrab;
 #[cfg(feature = "keyring")]
 use reqwest::header::ACCEPT;
@@ -58,6 +58,44 @@ impl std::fmt::Display for TokenSource {
 /// OAuth scopes required for Aptu functionality.
 #[cfg(feature = "keyring")]
 const OAUTH_SCOPES: &[&str] = &["public_repo", "read:user"];
+
+/// Initialize the platform keyring store. Must be called once at application startup
+/// before any keyring operations. Returns an error if the platform store cannot be opened.
+#[cfg(feature = "keyring")]
+pub fn keyring_init() -> crate::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        use apple_native_keyring_store::keychain::Store;
+        let store =
+            Store::new().map_err(|e| keyring_core::error::Error::PlatformFailure(Box::new(e)))?;
+        keyring_core::set_default_store(store);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use linux_keyutils_keyring_store::Store;
+        let store =
+            Store::new().map_err(|e| keyring_core::error::Error::PlatformFailure(Box::new(e)))?;
+        keyring_core::set_default_store(store);
+    }
+
+    #[cfg(windows)]
+    {
+        use windows_native_keyring_store::Store;
+        let store =
+            Store::new().map_err(|e| keyring_core::error::Error::PlatformFailure(Box::new(e)))?;
+        keyring_core::set_default_store(store);
+    }
+
+    Ok(())
+}
+
+/// Tear down the platform keyring store. Call at application shutdown after all
+/// keyring operations are complete.
+#[cfg(feature = "keyring")]
+pub fn keyring_deinit() {
+    keyring_core::unset_default_store();
+}
 
 /// Creates a keyring entry for the GitHub token.
 #[cfg(feature = "keyring")]
@@ -438,9 +476,16 @@ mod tests {
     #[cfg(feature = "keyring")]
     #[test]
     fn test_keyring_entry_creation() {
-        // Just verify we can create an entry without panicking
+        // Set up mock store before creating entry
+        let mock_store = keyring_core::mock::Store::new().expect("Failed to create mock store");
+        keyring_core::set_default_store(mock_store);
+
+        // Verify we can create an entry without panicking
         let result = keyring_entry();
         assert!(result.is_ok());
+
+        // Clean up
+        keyring_core::unset_default_store();
     }
 
     #[test]
