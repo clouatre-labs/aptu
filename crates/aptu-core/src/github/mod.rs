@@ -13,6 +13,10 @@ pub mod issues;
 pub mod pulls;
 pub mod ratelimit;
 
+// Re-export keyring lifecycle functions
+#[cfg(feature = "keyring")]
+pub use auth::{keyring_deinit, keyring_init};
+
 /// OAuth Client ID for Aptu CLI (safe to embed per RFC 8252).
 ///
 /// This is a public client ID for native/CLI applications. Per OAuth 2.0 for

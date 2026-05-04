@@ -33,7 +33,7 @@ backon = { workspace = true }
 # Configuration
 config = { workspace = true }
 dirs = { workspace = true }
-keyring = { workspace = true, optional = true }
+keyring-core = { workspace = true, optional = true }
 
 # Optional: AST analysis for context injection
 aptu-coder-core = { version = "0.8.0", optional = true, default-features = false, features = ["lang-rust", "lang-go", "lang-java", "lang-python", "lang-typescript", "lang-tsx", "lang-fortran", "lang-javascript", "lang-cpp", "lang-csharp"] }
@@ -67,6 +67,15 @@ percent-encoding = { workspace = true }
 # Base64 encoding/decoding
 base64 = "0.22"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+linux-keyutils-keyring-store = { version = "1" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = { version = "1" }
+
 [dev-dependencies]
 criterion = { workspace = true }
 serial_test = { workspace = true }
@@ -79,7 +88,7 @@ harness = false
 [features]
 default = []
 # Enable system keyring for secure token storage
-keyring = ["dep:keyring"]
+keyring = ["dep:keyring-core"]
 # Enable AST context injection for PR reviews
 ast-context = ["dep:aptu-coder-core"]
 

@@ -77,7 +77,7 @@ pub enum AptuError {
     /// Keyring/credential storage error.
     #[cfg(feature = "keyring")]
     #[error("Keyring error: {0}")]
-    Keyring(#[from] keyring::Error),
+    Keyring(#[from] keyring_core::error::Error),
 
     /// Circuit breaker is open - AI provider is unavailable.
     #[error("Circuit breaker is open - AI provider is temporarily unavailable")]
