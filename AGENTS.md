@@ -39,7 +39,7 @@ Tools: `triage_issue`, `review_pr`, `scan_security`, `post_triage`, `post_review
 Resources: `aptu://repos`, `aptu://issues`, `aptu://config`
 Prompts: `triage_guide`, `review_checklist`
 Write tools (`post_triage`, `post_review`) are disabled in `--read-only` mode.
-Bearer token auth for the HTTP endpoint: set `MCP_BEARER_TOKEN` env var; omitting it leaves the endpoint unauthenticated (warning logged). Note: Ensure this is used over HTTPS as the token is sent in plain text.
+Bearer token auth for the HTTP endpoint: set `MCP_BEARER_TOKEN` env var; the server refuses to start if the token is absent or empty unless `--allow-unauthenticated` is explicitly passed (a warning is logged in that case). Note: Ensure this is used over HTTPS as the token is sent in plain text.
 
 ## Config & Data Paths (XDG)
 

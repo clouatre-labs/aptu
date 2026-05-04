@@ -7,6 +7,7 @@ This document describes the project direction across three time horizons. Items 
 ## Recently Shipped
 
 - **PR creation automation** (#1130): `aptu pr create --diff <file>` applies a unified diff to a new branch, commits with optional DCO sign-off, and opens a pull request. Includes a security validation pipeline (size cap, path-traversal rejection, `SecurityScanner::scan_diff()` gate) and collision-resistant branch naming.
+- **File-based TTL cache eviction** (#1172): `[cache]` config now supports per-field TTL settings (`issue_ttl_minutes`, `repo_ttl_hours`, `file_eviction_days`); stale cache entries are automatically pruned on startup.
 
 ## Near-Term (next 3-6 months)
 
@@ -24,7 +25,7 @@ These items require significant design work or external dependencies.
 - **iOS and Android SDK**: expose `aptu-core` to Swift and Kotlin via UniFFI-generated bindings; ship a companion app for mobile triage review
 - **Web UI**: read-only dashboard backed by the MCP server; no framework dependency, plain HTML and fetch
 - **Provider health dashboard**: `aptu models list --health` shows real-time availability and latency across configured providers
-- **Persistent cache layer**: SQLite-backed response cache with TTL eviction to reduce redundant AI calls across sessions
+- **SQLite-backed persistent cache**: replace file-based TTL cache with a SQLite database for faster lookups and cross-session persistence
 - **History export**: `aptu history export` in JSON and CSV for personal productivity tracking
 
 ## Long-Term (18+ months)

@@ -79,7 +79,7 @@ Aptu includes built-in security pattern detection for PR reviews. Scanning is pe
 
 ```bash
 aptu pr review owner/repo#123                       # Review with security scanning
-aptu pr review owner/repo#123 --output sarif        # SARIF for GitHub Code Scanning
+aptu scan-security . --output sarif                 # SARIF for GitHub Code Scanning
 ```
 
 See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md) for SARIF upload and GitHub integration.

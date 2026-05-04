@@ -61,6 +61,8 @@ GitHub and AI provider responses are deserialized with serde into typed Rust str
 
 Issue and PR content is inserted into AI prompts as quoted strings. Aptu does not execute or evaluate any content from issue bodies, PR diffs, or commit messages. Prompt injection may cause unexpected AI output but cannot cause Aptu to execute code or access unauthorized resources.
 
+To further limit prompt injection exposure, Aptu enforces configurable byte limits on all user-supplied content via the `[prompt]` configuration section (`max_issue_body_bytes`, `max_diff_bytes`, `max_commit_message_bytes`). Content exceeding these limits is rejected before it reaches the AI provider; the CLI exits non-zero and the MCP server returns a `ToolExecutionError`.
+
 ## Security Controls
 
 | Control | Implementation | Status |
@@ -75,6 +77,7 @@ Issue and PR content is inserted into AI prompts as quoted strings. Aptu does no
 | Signed commits | GPG-signed, DCO sign-off enforced | Active |
 | Security disclosure process | Private reporting via GitHub Security Advisories | Active |
 | Dependency pinning | Actions pinned to SHA; `cargo deny` blocks unmaintained crates | Active |
+| Prompt injection size limits | `[prompt]` config enforces per-field byte caps; CLI exits non-zero, MCP returns `ToolExecutionError` on breach (OWASP LLM01:2025) | Active |
 
 ## Residual Risks
 
