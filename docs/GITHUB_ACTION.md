@@ -103,6 +103,9 @@ Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.m
 | `repo-path` | No | `''` | Local repository root for AST context injection into PR review prompts. When set, changed source files (Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran) are analysed and function signatures with call-graph context are appended to the prompt. Leave empty to skip AST context. |
 | `deep` | No | `false` | Enable cross-file call-graph context for richer AI analysis. Requires `repo-path` to be set. |
 | `since` | No | `''` | Only triage issues created on or after this date (ISO 8601, e.g. `2024-01-01`). Useful for scheduled batch triage. |
+| `command` | No | `issue` | Top-level command to run (`issue` or `pr`). Normally auto-detected from event type. |
+| `subcommand` | No | `triage` | Subcommand to run (`triage` for issues; `label` or `review` for PRs). |
+| `reference` | No | `''` | Issue or PR number/URL to process. If empty, the action processes the event target. |
 
 ## Permissions
 
