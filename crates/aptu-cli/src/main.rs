@@ -32,10 +32,7 @@ async fn main() -> Result<()> {
 
     // Initialize keyring store
     #[cfg(feature = "keyring")]
-    if let Err(e) = aptu_core::github::keyring_init() {
-        eprintln!("Failed to initialize keyring: {e}");
-        std::process::exit(1);
-    }
+    aptu_core::github::keyring_init().context("Failed to initialize keyring")?;
 
     // Load config early to validate it works (Option A from plan)
     let mut config = config::load_config().context("Failed to load configuration")?;
