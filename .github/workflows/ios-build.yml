@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - develop
     paths:
       - 'AptuApp/**'
       - 'crates/aptu-ffi/**'
@@ -15,7 +14,6 @@ on:
   pull_request:
     branches:
       - main
-      - develop
     paths:
       - 'AptuApp/**'
       - 'crates/aptu-ffi/**'
@@ -40,11 +38,6 @@ jobs:
         with:
           fetch-depth: 0
       
-      - name: Select Xcode 26.3
-        run: |
-          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-          xcodebuild -version
-      
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
@@ -57,6 +50,11 @@ jobs:
           workspaces: |
             .
       
+      - name: Select Xcode 26.3
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+
       - name: Cache XcodeGen
         id: cache-xcodegen
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
