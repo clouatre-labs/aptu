@@ -29,8 +29,9 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 ### Key flags
 
 - `issue triage`: `--since <date>`, `--repo`, `--state`, `--dry-run`, `--no-apply`, `--no-comment`, `--force`
-- `pr review`: `--comment`, `--approve`, `--request-changes`, `--dry-run`, `--force`
-- `scan-security`: `--output sarif|github-annotations|json|text`, `--fail-on <severities>`, `--exclude <prefix>`
+- `issue list` / `issue create`: `--repo`/`-r` (preferred over positional; positional still accepted with deprecation notice)
+- `pr review`: `--comment`, `--approve`, `--request-changes`, `--dry-run`, `--force`; at least one action flag required or a hint is emitted
+- `scan-security`: `--output sarif|github-annotations|json|text`, `--fail-on <severities>`, `--exclude <prefix>`; `sarif`/`github-annotations` formats are only valid for this subcommand
 - Global: `--output json|text`, `--verbose`, `--no-color`
 
 ## MCP Server
