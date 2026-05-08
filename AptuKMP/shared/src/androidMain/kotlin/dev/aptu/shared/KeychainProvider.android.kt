@@ -4,6 +4,8 @@ package dev.aptu.shared
 
 import com.github.nickolay.kvault.KVault
 
+// KVault.init(context) is called in AptuApplication.onCreate() before any
+// AptuKeychain instance is created, so the no-arg constructor is safe here.
 actual class AptuKeychain {
     private val vault = KVault()
 
