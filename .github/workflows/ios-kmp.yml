@@ -46,7 +46,7 @@ jobs:
             build
   ci-result:
     name: CI Result
-    runs-on: ubuntu-24.04
+    runs-on: macos-15
     permissions: {}
     if: always()
     needs: [build]

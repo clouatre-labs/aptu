@@ -21,6 +21,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.aptu.shared.viewmodels.AuthState
@@ -68,6 +71,8 @@ fun AuthScreen(
             }
 
             is AuthState.WaitingForAuth -> {
+                val clipboardManager = LocalClipboardManager.current
+                val uriHandler = LocalUriHandler.current
                 Text(
                     text = "Device Code",
                     style = MaterialTheme.typography.labelMedium,
@@ -85,7 +90,7 @@ fun AuthScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = {
-                        // TODO: Copy to clipboard
+                        clipboardManager.setText(AnnotatedString(currentState.userCode))
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -94,7 +99,7 @@ fun AuthScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = {
-                        // TODO: Open verification URI in browser
+                        uriHandler.openUri(currentState.verificationUri)
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
