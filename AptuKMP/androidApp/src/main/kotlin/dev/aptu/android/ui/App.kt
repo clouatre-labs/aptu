@@ -31,10 +31,12 @@ fun AptuTheme(
     )
 }
 
-// ViewModels are plain KMP classes (not AndroidX ViewModel). They are created once
-// at the NavHost level via remember {} so they survive recomposition. Each NavHost
-// destination receives its ViewModel as a parameter -- no inline instantiation in
-// leaf composables, which would reset state on every recomposition.
+// ViewModels are plain KMP classes (not AndroidX ViewModel) so they live in
+// commonMain and share state logic across platforms. They are created once at the
+// NavHost level via remember {} so they survive recomposition. This is intentional:
+// process death and configuration changes are handled by the screens re-triggering
+// load() on reentry. A DI framework (e.g. Koin Multiplatform) can replace remember {}
+// here when the app grows beyond this scaffold -- the ViewModel interfaces stay the same.
 @Composable
 fun AppNavHost(navController: NavHostController = rememberNavController()) {
     val authViewModel = remember { AuthViewModel() }
