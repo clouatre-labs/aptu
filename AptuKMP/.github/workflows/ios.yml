@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: iOS Build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'AptuKMP/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'AptuKMP/**'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@eab61192916d5375dd3028e0f7ec6agoose
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+
+      - name: Build shared framework
+        working-directory: AptuKMP
+        run: ./gradlew :shared:build
+
+      - name: Build iOS app
+        working-directory: AptuKMP/iosApp
+        run: |
+          xcodebuild \
+            -scheme iosApp \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            build
