@@ -28,7 +28,7 @@ import dev.aptu.shared.viewmodels.AuthViewModel
 
 @Composable
 fun AuthScreen(
-    viewModel: AuthViewModel = AuthViewModel(),
+    viewModel: AuthViewModel,
     onAuthSuccess: () -> Unit,
 ) {
     val state = viewModel.state.collectAsState()

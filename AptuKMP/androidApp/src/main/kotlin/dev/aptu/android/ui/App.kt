@@ -7,10 +7,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import dev.aptu.shared.viewmodels.AuthViewModel
+import dev.aptu.shared.viewmodels.IssueViewModel
+import dev.aptu.shared.viewmodels.RepoViewModel
 
 private val DarkColorScheme = darkColorScheme()
 private val LightColorScheme = lightColorScheme()
@@ -27,14 +31,23 @@ fun AptuTheme(
     )
 }
 
+// ViewModels are plain KMP classes (not AndroidX ViewModel). They are created once
+// at the NavHost level via remember {} so they survive recomposition. Each NavHost
+// destination receives its ViewModel as a parameter -- no inline instantiation in
+// leaf composables, which would reset state on every recomposition.
 @Composable
 fun AppNavHost(navController: NavHostController = rememberNavController()) {
+    val authViewModel = remember { AuthViewModel() }
+    val repoViewModel = remember { RepoViewModel() }
+    val issueViewModel = remember { IssueViewModel() }
+
     NavHost(
         navController = navController,
         startDestination = "auth",
     ) {
         composable("auth") {
             AuthScreen(
+                viewModel = authViewModel,
                 onAuthSuccess = {
                     navController.navigate("repos") {
                         popUpTo("auth") { inclusive = true }
@@ -45,6 +58,7 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
 
         composable("repos") {
             RepoPickerScreen(
+                viewModel = repoViewModel,
                 onRepoSelected = { owner, name ->
                     navController.navigate("issues/$owner/$name")
                 },
@@ -60,6 +74,7 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             IssueListScreen(
                 owner = owner,
                 repo = repo,
+                viewModel = issueViewModel,
                 onIssueSelected = { issueId ->
                     navController.navigate("issue_detail/$issueId")
                 },

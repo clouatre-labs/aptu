@@ -2,6 +2,7 @@
 
 package dev.aptu.shared.viewmodels
 
+import dev.aptu.shared.AptuError
 import dev.aptu.shared.AptuFfi
 import dev.aptu.shared.AptuKeychain
 import dev.aptu.shared.models.Issue
@@ -24,8 +25,12 @@ class IssueViewModel {
         try {
             val issues = AptuFfi.fetchIssues(keychain)
             _state.value = IssueState.Success(issues)
-        } catch (e: Exception) {
-            _state.value = IssueState.Error(e.message ?: "Unknown error")
+        } catch (e: AptuError.AuthError) {
+            _state.value = IssueState.Error("Authentication required")
+        } catch (e: AptuError.NetworkError) {
+            _state.value = IssueState.Error("Network error: ${e.message}")
+        } catch (e: AptuError) {
+            _state.value = IssueState.Error(e.message ?: "Failed to load issues")
         }
     }
 

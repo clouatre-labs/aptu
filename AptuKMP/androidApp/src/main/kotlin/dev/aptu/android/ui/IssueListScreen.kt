@@ -33,7 +33,7 @@ import dev.aptu.shared.viewmodels.IssueViewModel
 fun IssueListScreen(
     owner: String,
     repo: String,
-    viewModel: IssueViewModel = IssueViewModel(),
+    viewModel: IssueViewModel,
     onIssueSelected: (issueId: String) -> Unit,
     onNavigateBack: () -> Unit,
 ) {

@@ -2,6 +2,7 @@
 
 package dev.aptu.shared.viewmodels
 
+import dev.aptu.shared.AptuError
 import dev.aptu.shared.AptuFfi
 import dev.aptu.shared.models.Repo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,8 +26,12 @@ class RepoViewModel {
         try {
             allRepos = AptuFfi.listCuratedRepos()
             _state.value = RepoState.Success(allRepos)
-        } catch (e: Exception) {
-            _state.value = RepoState.Error(e.message ?: "Unknown error")
+        } catch (e: AptuError.NetworkError) {
+            _state.value = RepoState.Error("Network error: ${e.message}")
+        } catch (e: AptuError.AuthError) {
+            _state.value = RepoState.Error("Authentication required")
+        } catch (e: AptuError) {
+            _state.value = RepoState.Error(e.message ?: "Failed to load repositories")
         }
     }
 
