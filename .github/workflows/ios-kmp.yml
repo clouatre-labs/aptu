@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Hugues Clouâtre <hugues@clouatre.dev>
+# SPDX-License-Identifier: Apache-2.0
+name: iOS KMP Build
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'AptuKMP/**'
+      - '.github/workflows/ios-kmp.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'AptuKMP/**'
+      - '.github/workflows/ios-kmp.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: Cache Gradle
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('AptuKMP/**/*.gradle.kts', 'AptuKMP/**/libs.versions.toml') }}
+          restore-keys: gradle-${{ runner.os }}-
+      - name: Set up Java
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build shared framework
+        working-directory: AptuKMP
+        run: ./gradlew :shared:build
+      - name: Build iOS app
+        working-directory: AptuKMP/iosApp
+        run: |
+          xcodebuild \
+            -scheme iosApp \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            build
+  ci-result:
+    name: CI Result
+    runs-on: ubuntu-24.04
+    permissions: {}
+    if: always()
+    needs: [build]
+    steps:
+      - name: Verify all jobs passed or were skipped
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "::error::One or more CI jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "All CI jobs passed or were skipped."

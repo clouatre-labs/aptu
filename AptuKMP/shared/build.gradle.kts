@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.gobley.cargo)
     alias(libs.plugins.gobley.uniffi)
+    kotlin("plugin.serialization")
 }
 
 kotlin {
@@ -42,6 +43,7 @@ kotlin {
             implementation(libs.coroutines.core)
             implementation(libs.kvault)
             implementation(libs.ktor.client.core)
+            implementation(libs.kotlinx.serialization.json)
         }
 
         androidMain.dependencies {

@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.aptu.shared.aptuKeychain
@@ -38,7 +39,7 @@ fun IssueListScreen(
     onNavigateBack: () -> Unit,
 ) {
     val state = viewModel.state.collectAsState()
-    val keychain = aptuKeychain()
+    val keychain = remember { aptuKeychain() }
 
     LaunchedEffect(owner, repo) {
         viewModel.load(keychain)
