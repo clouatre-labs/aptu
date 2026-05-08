@@ -2,10 +2,6 @@
 
 package dev.aptu.shared
 
-expect class AptuKeychain() {
-    fun getToken(service: String, account: String): String?
-    fun setToken(service: String, account: String, token: String)
-    fun deleteToken(service: String, account: String)
-}
+expect class AptuKeychain() : IAptuKeychain
 
 fun aptuKeychain(): AptuKeychain = AptuKeychain()

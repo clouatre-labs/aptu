@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-class FakeAptuKeychain : AptuKeychain() {
+class FakeAptuKeychain : IAptuKeychain {
     private val storage = mutableMapOf<String, String>()
 
     override fun getToken(service: String, account: String): String? {
