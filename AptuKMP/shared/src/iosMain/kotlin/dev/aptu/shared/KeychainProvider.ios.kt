@@ -2,7 +2,7 @@
 
 package dev.aptu.shared
 
-import com.github.nickolay.kvault.KVault
+import com.liftric.kvault.KVault
 
 actual class AptuKeychain {
     private val vault = KVault()

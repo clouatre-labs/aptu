@@ -3,7 +3,7 @@
 package dev.aptu.android
 
 import android.app.Application
-import com.github.nickolay.kvault.KVault
+import com.liftric.kvault.KVault
 
 class AptuApplication : Application() {
     override fun onCreate() {

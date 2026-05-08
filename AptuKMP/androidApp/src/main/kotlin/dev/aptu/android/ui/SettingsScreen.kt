@@ -36,7 +36,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit,
 ) {
-    val keychain = aptuKeychain()
+    val keychain = remember { aptuKeychain() }
     val apiKey = remember { mutableStateOf("") }
 
     Column(
