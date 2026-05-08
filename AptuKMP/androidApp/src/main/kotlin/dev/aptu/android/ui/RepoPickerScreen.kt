@@ -33,7 +33,7 @@ import dev.aptu.shared.viewmodels.RepoViewModel
 
 @Composable
 fun RepoPickerScreen(
-    viewModel: RepoViewModel = RepoViewModel(),
+    viewModel: RepoViewModel,
     onRepoSelected: (owner: String, name: String) -> Unit,
     onNavigateToSettings: () -> Unit,
 ) {
