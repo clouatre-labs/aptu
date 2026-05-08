@@ -2,7 +2,7 @@
 
 package dev.aptu.shared
 
-import com.github.nickolay.kvault.KVault
+import com.liftric.kvault.KVault
 
 // KVault.init(context) is called in AptuApplication.onCreate() before any
 // AptuKeychain instance is created, so the no-arg constructor is safe here.
