@@ -12,6 +12,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import dev.aptu.shared.viewmodels.AuthViewModel
 import dev.aptu.shared.viewmodels.IssueViewModel
 import dev.aptu.shared.viewmodels.RepoViewModel
@@ -62,7 +64,9 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             RepoPickerScreen(
                 viewModel = repoViewModel,
                 onRepoSelected = { owner, name ->
-                    navController.navigate("issues/$owner/$name")
+                    val encodedOwner = URLEncoder.encode(owner, StandardCharsets.UTF_8.name())
+                    val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8.name())
+                    navController.navigate("issues/$encodedOwner/$encodedName")
                 },
                 onNavigateToSettings = {
                     navController.navigate("settings")
