@@ -45,7 +45,8 @@ jobs:
         if: steps.check-dir.outputs.exists == 'true'
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          # Simulator only in CI; device target (aarch64-apple-ios) is not needed here.
+          targets: aarch64-apple-ios-sim
       - name: Cache Rust registry and build artifacts
         if: steps.check-dir.outputs.exists == 'true'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -72,17 +73,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Set SDKROOT for iOS cross-compilation
+      - name: Set SDKROOT for iOS simulator cross-compilation
         if: steps.check-dir.outputs.exists == 'true'
         run: |
-          echo "SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)" >> "$GITHUB_ENV"
-          echo "CARGO_TARGET_AARCH64_APPLE_IOS_LINKER=$(xcrun --find clang)" >> "$GITHUB_ENV"
-          echo "CC_aarch64_apple_ios=$(xcrun --find clang)" >> "$GITHUB_ENV"
-          echo "AR_aarch64_apple_ios=$(xcrun --find ar)" >> "$GITHUB_ENV"
-      - name: Build shared framework
+          echo "SDKROOT=$(xcrun --sdk iphonesimulator --show-sdk-path)" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_APPLE_IOS_SIM_LINKER=$(xcrun --find clang)" >> "$GITHUB_ENV"
+          echo "CC_aarch64_apple_ios_sim=$(xcrun --sdk iphonesimulator --find clang)" >> "$GITHUB_ENV"
+          echo "AR_aarch64_apple_ios_sim=$(xcrun --find ar)" >> "$GITHUB_ENV"
+      - name: Build iOS simulator framework
         if: steps.check-dir.outputs.exists == 'true'
         working-directory: AptuKMP
-        run: ./gradlew :shared:build --parallel --build-cache
+        # Target only the simulator framework; :shared:build includes Android cargo targets
+        # which add ~7 minutes of unnecessary Rust cross-compilation on this macOS runner.
+        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --parallel --build-cache
       - name: Build iOS app
         if: steps.check-dir.outputs.exists == 'true'
         working-directory: AptuKMP/iosApp
@@ -98,7 +101,7 @@ jobs:
 
   ci-result:
     name: CI Result
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
     permissions: {}
     if: always()
     needs: [build]
