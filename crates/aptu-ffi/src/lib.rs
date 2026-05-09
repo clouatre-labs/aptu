@@ -22,6 +22,8 @@ static RUNTIME: std::sync::LazyLock<tokio::runtime::Runtime> = std::sync::LazyLo
     tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime")
 });
 
+uniffi::setup_scaffolding!();
+
 #[uniffi::export]
 pub fn list_curated_repos() -> Result<Vec<FfiCuratedRepo>, AptuFfiError> {
     RUNTIME.block_on(async {
@@ -737,5 +739,3 @@ pub fn list_models(provider_name: String) -> Result<Vec<crate::types::FfiAiModel
         }
     })
 }
-
-uniffi::setup_scaffolding!();
