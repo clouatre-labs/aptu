@@ -78,7 +78,7 @@ cargo {
     // which is faster to compile. To use it locally: set profile = "ci" here and
     // run `cargo build --profile ci -p aptu-ffi` before the Gradle build.
     // We do not switch profiles per Gradle build type to keep the Gobley config simple.
-    package.path = "../../crates/aptu-ffi"
+    packageDirectory = layout.projectDirectory.dir("../../crates/aptu-ffi")
     profile = "release"
     targets = listOf("androidArm64", "androidX86_64", "iosArm64", "iosSimulatorArm64")
 }
