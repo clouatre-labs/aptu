@@ -36,8 +36,11 @@ fun AuthScreen(
 ) {
     val state = viewModel.state.collectAsState()
 
-    LaunchedEffect(state.value) {
-        if (state.value is AuthState.Success) {
+    // Key on AuthState.Success specifically so the effect only fires once on success,
+    // not on every state transition.
+    val isSuccess = state.value is AuthState.Success
+    LaunchedEffect(isSuccess) {
+        if (isSuccess) {
             onAuthSuccess()
         }
     }
@@ -141,7 +144,7 @@ fun AuthScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
-                    onClick = { viewModel.reset() },
+                    onClick = { viewModel.retry() },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Try Again")

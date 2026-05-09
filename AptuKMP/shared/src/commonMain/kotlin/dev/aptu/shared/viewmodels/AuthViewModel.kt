@@ -44,4 +44,10 @@ class AuthViewModel {
     fun reset() {
         _state.value = AuthState.Idle
     }
+
+    // Retry re-initiates the OAuth flow from a terminal error state.
+    fun retry() {
+        _state.value = AuthState.Idle
+        startAuth()
+    }
 }
