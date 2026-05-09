@@ -35,11 +35,11 @@ jobs:
       - name: Check AptuKMP directory
         id: check-dir
         run: |
-          if [ -f "AptuKMP/gradlew" ]; then
+          if [ -f "AptuKMP/gradlew" ] && [ -d "AptuKMP/shared" ] && [ -d "AptuKMP/androidApp" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "AptuKMP not present on this branch - skipping build steps"
+            echo "AptuKMP subprojects not yet present on this branch - skipping build steps"
           fi
       - name: Set up Java
         if: steps.check-dir.outputs.exists == 'true'
