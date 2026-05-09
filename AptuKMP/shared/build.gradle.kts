@@ -43,6 +43,11 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
         }
 
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.coroutines.test)
+        }
+
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.coroutines.android)

@@ -15,7 +15,7 @@ actual class AptuKeychain {
 
     actual fun setToken(service: String, account: String, token: String) {
         val key = "$service/$account"
-        vault.set(stringValue = token, forKey = key)
+        vault.set(key, stringValue = token)
     }
 
     actual fun deleteToken(service: String, account: String) {
