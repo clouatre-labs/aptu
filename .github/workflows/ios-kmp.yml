@@ -47,6 +47,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Set SDKROOT for iOS cross-compilation
+        run: |
+          echo "SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_APPLE_IOS_LINKER=$(xcrun --find clang)" >> "$GITHUB_ENV"
+          echo "CC_aarch64_apple_ios=$(xcrun --find clang)" >> "$GITHUB_ENV"
+          echo "AR_aarch64_apple_ios=$(xcrun --find ar)" >> "$GITHUB_ENV"
       - name: Build shared framework
         working-directory: AptuKMP
         run: ./gradlew :shared:build --parallel --build-cache
