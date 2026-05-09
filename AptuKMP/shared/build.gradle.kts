@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import gobley.gradle.GobleyHost
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.library)
@@ -8,26 +10,26 @@ plugins {
     alias(libs.plugins.gobley.cargo)
     alias(libs.plugins.gobley.uniffi)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.atomicfu)
 }
 
 kotlin {
     androidTarget()
 
-    iosArm64 {
-        binaries.framework {
-            baseName = "shared"
+    // iOS targets are only available when building on macOS (Gobley requirement).
+    if (GobleyHost.Platform.MacOS.isCurrent) {
+        iosArm64 {
+            binaries.framework {
+                baseName = "shared"
+                isStatic = true
+            }
         }
-        compilations.main {
-            useRustUpLinker()
-        }
-    }
 
-    iosSimulatorArm64 {
-        binaries.framework {
-            baseName = "shared"
-        }
-        compilations.main {
-            useRustUpLinker()
+        iosSimulatorArm64 {
+            binaries.framework {
+                baseName = "shared"
+                isStatic = true
+            }
         }
     }
 
@@ -48,8 +50,10 @@ kotlin {
             implementation(libs.ktor.client.android)
         }
 
-        iosMain.dependencies {
-            implementation(libs.ktor.client.darwin)
+        if (GobleyHost.Platform.MacOS.isCurrent) {
+            iosMain.dependencies {
+                implementation(libs.ktor.client.darwin)
+            }
         }
     }
 }
@@ -60,6 +64,9 @@ android {
 
     defaultConfig {
         minSdk = 26
+        ndk {
+            abiFilters.addAll(listOf("arm64-v8a", "x86_64"))
+        }
     }
 
     compileOptions {
@@ -69,18 +76,11 @@ android {
 }
 
 cargo {
-    // "release" is used for all builds including local development. The workspace
-    // Cargo.toml defines a "ci" profile (inherits release, lto=false, codegen-units=16)
-    // which is faster to compile. To use it locally: set profile = "ci" here and
-    // run `cargo build --profile ci -p aptu-ffi` before the Gradle build.
-    // We do not switch profiles per Gradle build type to keep the Gobley config simple.
+    // packageDirectory is relative to this build file (shared/).
+    // aptu-ffi lives two levels up at the workspace root under crates/.
     packageDirectory = layout.projectDirectory.dir("../../crates/aptu-ffi")
-    profile = "release"
-    targets = listOf("aarch64-linux-android", "x86_64-linux-android", "aarch64-apple-ios", "aarch64-apple-ios-sim")
 }
 
 uniffi {
-    generateFromLibrary {
-        name = "aptu_ffi"
-    }
+    generateFromLibrary()
 }

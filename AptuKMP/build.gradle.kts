@@ -9,4 +9,5 @@ plugins {
     alias(libs.plugins.compose.multiplatform) apply false
     alias(libs.plugins.gobley.cargo) apply false
     alias(libs.plugins.gobley.uniffi) apply false
+    alias(libs.plugins.kotlin.atomicfu) apply false
 }
