@@ -1,4 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Aptu Contributors
+
 name: Android KMP Build
+
 on:
   push:
     branches: [main]
@@ -12,30 +16,50 @@ on:
       - 'AptuKMP/**'
       - 'crates/aptu-ffi/**'
       - '.github/workflows/android-kmp.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
+
 env:
   GRADLE_OPTS: -Dorg.gradle.caching=true -Dorg.gradle.parallel=true -Dorg.gradle.daemon=false
+
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Check AptuKMP directory
+        id: check-dir
+        run: |
+          if [ -d "AptuKMP" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "AptuKMP not present on this branch - skipping build steps"
+          fi
       - name: Set up Java
-        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        if: steps.check-dir.outputs.exists == 'true'
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: temurin
           java-version: '21'
       - name: Install Rust
+        if: steps.check-dir.outputs.exists == 'true'
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: aarch64-linux-android,x86_64-linux-android
       - name: Cache Rust registry and build artifacts
-        uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        if: steps.check-dir.outputs.exists == 'true'
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           cache-targets: true
       - name: Cache Gradle dependencies and wrapper
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        if: steps.check-dir.outputs.exists == 'true'
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.gradle/caches
@@ -43,22 +67,27 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('AptuKMP/**/*.gradle.kts', 'AptuKMP/**/libs.versions.toml') }}
           restore-keys: gradle-${{ runner.os }}-
       - name: Cache gobley-uniffi-bindgen
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        if: steps.check-dir.outputs.exists == 'true'
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: AptuKMP/shared/build/gobley-tools-install
           key: gobley-uniffi-bindgen-0.3.7-${{ runner.os }}
       - name: Build shared library
+        if: steps.check-dir.outputs.exists == 'true'
         working-directory: AptuKMP
         run: ./gradlew :shared:build --parallel --build-cache
       - name: Build Android app
+        if: steps.check-dir.outputs.exists == 'true'
         working-directory: AptuKMP
         run: ./gradlew :androidApp:assembleDebug --parallel --build-cache
       - name: Run unit tests
+        if: steps.check-dir.outputs.exists == 'true'
         working-directory: AptuKMP
         run: ./gradlew :shared:testDebugUnitTest :androidApp:testDebugUnitTest --parallel --build-cache
+
   ci-result:
     name: CI Result
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions: {}
     if: always()
     needs: [build]
