@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.gobley.cargo)
     alias(libs.plugins.gobley.uniffi)
-    kotlin("plugin.serialization")
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -18,9 +18,7 @@ kotlin {
             baseName = "shared"
         }
         compilations.main {
-            cinterops {
-                useRustUpLinker()
-            }
+            useRustUpLinker()
         }
     }
 
@@ -29,9 +27,7 @@ kotlin {
             baseName = "shared"
         }
         compilations.main {
-            cinterops {
-                useRustUpLinker()
-            }
+            useRustUpLinker()
         }
     }
 
@@ -80,7 +76,7 @@ cargo {
     // We do not switch profiles per Gradle build type to keep the Gobley config simple.
     packageDirectory = layout.projectDirectory.dir("../../crates/aptu-ffi")
     profile = "release"
-    targets = listOf("androidArm64", "androidX86_64", "iosArm64", "iosSimulatorArm64")
+    targets = listOf("aarch64-linux-android", "x86_64-linux-android", "aarch64-apple-ios", "aarch64-apple-ios-sim")
 }
 
 uniffi {
