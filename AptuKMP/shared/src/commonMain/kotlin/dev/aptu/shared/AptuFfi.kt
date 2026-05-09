@@ -14,33 +14,30 @@ sealed class AptuError(override val message: String) : Exception(message) {
 }
 
 object AptuFfi {
-    suspend fun listCuratedRepos(): List<Repo> = withContext(Dispatchers.IO) {
+    // Dispatchers.Default is used here because Dispatchers.IO is JVM-only and
+    // not available in commonMain when iOS targets are included.  The actual FFI
+    // calls are blocking stubs until Gobley generates the bindings.
+    suspend fun listCuratedRepos(): List<Repo> = withContext(Dispatchers.Default) {
         try {
-            // TODO: Call UniFFI-generated listCuratedRepos() function once Gobley generates bindings
-            // Expected signature from lib.rs: pub fn list_curated_repos() -> Vec<Repo>
-            // For now, return empty list as placeholder
+            // TODO: Call UniFFI-generated listCuratedRepos() once Gobley generates bindings
             emptyList()
         } catch (e: Exception) {
             throw AptuError.IOException("Failed to list curated repos: ${e.message}")
         }
     }
 
-    suspend fun fetchIssues(keychain: AptuKeychain): List<Issue> = withContext(Dispatchers.IO) {
+    suspend fun fetchIssues(keychain: AptuKeychain): List<Issue> = withContext(Dispatchers.Default) {
         try {
-            // TODO: Call UniFFI-generated fetchIssues(keychain) function once Gobley generates bindings
-            // Expected signature from lib.rs: pub fn fetch_issues(keychain: KeychainProvider) -> Vec<Issue>
-            // For now, return empty list as placeholder
+            // TODO: Call UniFFI-generated fetchIssues(keychain) once Gobley generates bindings
             emptyList()
         } catch (e: Exception) {
             throw AptuError.NetworkError("Failed to fetch issues: ${e.message}")
         }
     }
 
-    suspend fun checkAuthStatus(keychain: AptuKeychain): Boolean = withContext(Dispatchers.IO) {
+    suspend fun checkAuthStatus(keychain: AptuKeychain): Boolean = withContext(Dispatchers.Default) {
         try {
-            // TODO: Call UniFFI-generated checkAuthStatus(keychain) function once Gobley generates bindings
-            // Expected signature from lib.rs: pub fn check_auth_status(keychain: KeychainProvider) -> bool
-            // For now, return false as placeholder
+            // TODO: Call UniFFI-generated checkAuthStatus(keychain) once Gobley generates bindings
             false
         } catch (e: Exception) {
             throw AptuError.AuthError("Failed to check auth status: ${e.message}")
