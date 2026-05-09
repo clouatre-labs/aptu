@@ -1,4 +1,3 @@
-# SPDX-FileCopyrightText: 2026 Hugues Clouâtre <hugues@clouatre.dev>
 # SPDX-License-Identifier: Apache-2.0
 
 # Keep UniFFI-generated bindings (Gobley generates these at build time)
