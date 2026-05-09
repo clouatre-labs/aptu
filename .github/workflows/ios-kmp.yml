@@ -1,21 +1,26 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 Aptu Contributors
 
+# iOS KMP build is parked until the Android app is stable.
+# Re-enable by restoring the `on:` triggers below.
+# on:
+#   push:
+#     branches: [main]
+#     paths:
+#       - 'AptuKMP/**'
+#       - 'crates/aptu-ffi/**'
+#       - '.github/workflows/ios-kmp.yml'
+#   pull_request:
+#     branches: [main]
+#     paths:
+#       - 'AptuKMP/**'
+#       - 'crates/aptu-ffi/**'
+#       - '.github/workflows/ios-kmp.yml'
+
 name: iOS KMP Build
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'AptuKMP/**'
-      - 'crates/aptu-ffi/**'
-      - '.github/workflows/ios-kmp.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'AptuKMP/**'
-      - 'crates/aptu-ffi/**'
-      - '.github/workflows/ios-kmp.yml'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,7 +50,6 @@ jobs:
         if: steps.check-dir.outputs.exists == 'true'
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          # Simulator only in CI; device target (aarch64-apple-ios) is not needed here.
           targets: aarch64-apple-ios-sim
       - name: Cache Rust registry and build artifacts
         if: steps.check-dir.outputs.exists == 'true'
@@ -83,8 +87,6 @@ jobs:
       - name: Build iOS simulator framework
         if: steps.check-dir.outputs.exists == 'true'
         working-directory: AptuKMP
-        # Target only the simulator framework; :shared:build includes Android cargo targets
-        # which add ~7 minutes of unnecessary Rust cross-compilation on this macOS runner.
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --parallel --build-cache
       - name: Build iOS app
         if: steps.check-dir.outputs.exists == 'true'
