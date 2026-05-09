@@ -2,33 +2,35 @@
 
 package dev.aptu.shared
 
-import com.liftric.kvault.KVault
+import android.content.Context
+import android.content.SharedPreferences
 
-// KVault.init(context) is called in AptuApplication.onCreate() before any
-// AptuKeychain instance is created, so the no-arg constructor is safe here.
+// AptuKeychain.init(context) must be called in Application.onCreate() before
+// any AptuKeychain instance is created.  SharedPreferences is used for the
+// scaffold; encrypted storage (EncryptedSharedPreferences or KVault) is a
+// follow-up once the OAuth flow is wired in.
 actual class AptuKeychain {
-    private val vault = KVault()
+    companion object {
+        private lateinit var prefs: SharedPreferences
+
+        fun init(context: Context) {
+            prefs = context.applicationContext
+                .getSharedPreferences("aptu_keychain", Context.MODE_PRIVATE)
+        }
+    }
 
     actual fun getToken(service: String, account: String): String? {
         val key = "$service/$account"
-        return try {
-            vault.get(key)
-        } catch (e: Exception) {
-            null
-        }
+        return prefs.getString(key, null)
     }
 
     actual fun setToken(service: String, account: String, token: String) {
         val key = "$service/$account"
-        vault.set(key, token)
+        prefs.edit().putString(key, token).apply()
     }
 
     actual fun deleteToken(service: String, account: String) {
         val key = "$service/$account"
-        try {
-            vault.remove(key)
-        } catch (e: Exception) {
-            // Ignore if key does not exist
-        }
+        prefs.edit().remove(key).apply()
     }
 }

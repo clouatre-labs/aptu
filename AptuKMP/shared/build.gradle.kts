@@ -39,7 +39,6 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(libs.coroutines.core)
-            implementation(libs.kvault)
             implementation(libs.ktor.client.core)
             implementation(libs.kotlinx.serialization.json)
         }
@@ -52,6 +51,7 @@ kotlin {
 
         if (GobleyHost.Platform.MacOS.isCurrent) {
             iosMain.dependencies {
+                implementation(libs.kvault)
                 implementation(libs.ktor.client.darwin)
             }
         }

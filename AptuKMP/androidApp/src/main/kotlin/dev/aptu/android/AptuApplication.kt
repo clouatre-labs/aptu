@@ -3,13 +3,13 @@
 package dev.aptu.android
 
 import android.app.Application
-import com.liftric.kvault.KVault
+import dev.aptu.shared.AptuKeychain
 
 class AptuApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        // KVault requires an Android Context for EncryptedSharedPreferences initialization.
-        // Initialize once here so AptuKeychain can reference the singleton safely from any thread.
-        KVault.init(this)
+        // Initialize the AptuKeychain SharedPreferences backing store before
+        // any AptuKeychain instance is created.
+        AptuKeychain.init(this)
     }
 }
