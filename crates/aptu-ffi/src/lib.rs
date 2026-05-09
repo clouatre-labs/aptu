@@ -190,7 +190,7 @@ pub fn post_pr_review(
             "REQUEST_CHANGES" => aptu_core::ReviewEvent::RequestChanges,
             _ => {
                 return Err(AptuFfiError::InternalError {
-                    message: format!(
+                    msg: format!(
                         "Invalid event type: {}. Expected COMMENT, APPROVE, or REQUEST_CHANGES",
                         event_type
                     ),

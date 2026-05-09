@@ -4,7 +4,7 @@ package dev.aptu.shared
 
 import com.liftric.kvault.KVault
 
-actual class AptuKeychain {
+actual class AptuKeychain : IAptuKeychain {
     private val vault = KVault()
 
     actual fun getToken(service: String, account: String): String? {

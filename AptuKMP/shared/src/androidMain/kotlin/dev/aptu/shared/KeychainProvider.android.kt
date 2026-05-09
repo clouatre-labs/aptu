@@ -6,7 +6,7 @@ import com.liftric.kvault.KVault
 
 // KVault.init(context) is called in AptuApplication.onCreate() before any
 // AptuKeychain instance is created, so the no-arg constructor is safe here.
-actual class AptuKeychain {
+actual class AptuKeychain : IAptuKeychain {
     private val vault = KVault()
 
     actual fun getToken(service: String, account: String): String? {

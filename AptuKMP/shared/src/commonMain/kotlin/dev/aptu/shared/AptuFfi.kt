@@ -7,10 +7,10 @@ import dev.aptu.shared.models.Repo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-sealed class AptuError : Exception() {
-    data class IOException(val message: String) : AptuError()
-    data class AuthError(val message: String) : AptuError()
-    data class NetworkError(val message: String) : AptuError()
+sealed class AptuError(override val message: String) : Exception(message) {
+    data class IOException(val detail: String) : AptuError(detail)
+    data class AuthError(val detail: String) : AptuError(detail)
+    data class NetworkError(val detail: String) : AptuError(detail)
 }
 
 object AptuFfi {
