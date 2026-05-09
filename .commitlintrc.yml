@@ -1,5 +1,5 @@
 # Commitlint configuration
-# Enforced by CI via wagoid/commitlint-github-action
+# Enforced by CI via npx commitlint (ARM64-compatible; wagoid action does not support ARM)
 # See: https://commitlint.js.org/reference/rules.html
 
 extends:

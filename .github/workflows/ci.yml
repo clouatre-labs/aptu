@@ -25,7 +25,7 @@ env:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
     outputs:
@@ -51,22 +51,42 @@ jobs:
 
   commitlint:
     name: Lint Commits
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       pull-requests: read
     if: github.event_name == 'pull_request'
+    timeout-minutes: 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+      - name: Cache npm
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.npm
+          key: commitlint-${{ hashFiles('.commitlintrc.yml', '.github/workflows/ci.yml') }}
+          restore-keys: commitlint-
+      - name: Install commitlint
+        run: |
+          npm install --no-save \
+            @commitlint/cli@20.5.3 \
+            @commitlint/config-conventional@20.5.3
       - name: Validate commit messages
-        uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6
+        run: |
+          npx commitlint \
+            --from ${{ github.event.pull_request.base.sha }} \
+            --to ${{ github.event.pull_request.head.sha }} \
+            --verbose
 
   check-base:
     name: Check Branch Base
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
     if: github.event_name == 'pull_request'
@@ -91,7 +111,7 @@ jobs:
 
   deny:
     name: Audit Dependencies
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
     needs: changes
@@ -101,7 +121,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install cargo-deny
-        uses: taiki-e/install-action@db5fb34fa772531a3ece57ca434f579eb334e0fb # v2
+        uses: taiki-e/install-action@3fa6878dc4ae603f73960271565a082bf196ab96 # v2.77.2
         with:
           tool: cargo-deny
       - name: Run cargo-deny
@@ -110,7 +130,7 @@ jobs:
 
   format:
     name: Check Format
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
     needs: changes
@@ -120,7 +140,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
           components: rustfmt
@@ -129,7 +149,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
     needs: changes
@@ -139,15 +159,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
           components: clippy
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          shared-key: "aptu"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: "aptu-lint"
+          cache-targets: false
       - name: Run Clippy lints
         run: cargo clippy --profile ci -- -D warnings -W clippy::cognitive_complexity
       - name: Build examples
@@ -155,7 +175,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
     needs: changes
@@ -165,43 +185,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@db5fb34fa772531a3ece57ca434f579eb334e0fb # v2
+        uses: taiki-e/install-action@3fa6878dc4ae603f73960271565a082bf196ab96 # v2.77.2
         with:
           tool: cargo-nextest
       - name: Run tests
         # --no-fail-fast: run all tests and report all failures at once
         run: cargo nextest run --workspace --locked --no-fail-fast
 
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-24.04
+  build:
+    name: Build CLI
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
-    needs: [changes, test]
-    timeout-minutes: 20
-    if: |
-      (needs.changes.outputs.code == 'true' || needs.changes.outputs.tests == 'true') &&
-      !(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'skip-integration')) &&
-      (needs.test.result == 'success' || github.event_name != 'pull_request') &&
-      github.actor != 'renovate[bot]'
+    needs: [changes]
+    timeout-minutes: 15
+    if: (needs.changes.outputs.code == 'true' || needs.changes.outputs.tests == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
         with:
           toolchain: stable
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -209,6 +225,36 @@ jobs:
         run: |
           cargo build --profile ci -p aptu-cli
           chmod +x target/ci/aptu
+      - name: Upload CLI binary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aptu-cli
+          path: target/ci/aptu
+          retention-days: 1
+          if-no-files-found: error
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    needs: [changes, test, build]
+    timeout-minutes: 20
+    if: |
+      (needs.changes.outputs.code == 'true' || needs.changes.outputs.tests == 'true') &&
+      !(github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'skip-integration')) &&
+      needs.test.result == 'success' && needs.build.result == 'success' &&
+      github.actor != 'renovate[bot]'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Download CLI binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aptu-cli
+          path: target/ci
+      - name: Mark binary executable
+        run: chmod +x target/ci/aptu
       - name: Setup Bats testing framework
         uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0  # zizmor: ignore[impostor-commit]
         with:
@@ -226,31 +272,28 @@ jobs:
 
   scan-self:
     name: Scan Self
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
-    needs: [changes, test]
-    timeout-minutes: 15
-    if: needs.changes.outputs.code == 'true'
+    needs: [changes, build]
+    timeout-minutes: 5
+    if: needs.changes.outputs.code == 'true' && needs.build.result == 'success' && github.actor != 'renovate[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: Download CLI binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          toolchain: stable
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          shared-key: "aptu"
-      - name: Build binary
-        run: cargo build --profile ci -p aptu-cli
+          name: aptu-cli
+          path: target/ci
+      - name: Mark binary executable
+        run: chmod +x target/ci/aptu
       - name: Run security scan
         run: ./target/ci/aptu scan-security crates/ --fail-on critical,high --exclude crates/aptu-core/src/security --exclude crates/aptu-core/tests --exclude crates/aptu-core/benches --exclude crates/aptu-core/src/facade.rs --output github-annotations
 
   zizmor:
     name: zizmor
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     needs: [changes]
     if: needs.changes.outputs.workflows == 'true' || github.event_name != 'pull_request'
     permissions:
@@ -265,7 +308,7 @@ jobs:
 
   gitleaks:
     name: Scan for secrets
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
     steps:
@@ -279,10 +322,10 @@ jobs:
 
   ci-result:
     name: CI Result
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions: {}
     if: always()
-    needs: [commitlint, check-base, deny, format, lint, test, integration, scan-self, zizmor, gitleaks]
+    needs: [commitlint, check-base, deny, format, lint, test, build, integration, scan-self, zizmor, gitleaks]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
