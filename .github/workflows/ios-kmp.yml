@@ -101,7 +101,7 @@ jobs:
 
   ci-result:
     name: CI Result
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions: {}
     if: always()
     needs: [build]
