@@ -23,3 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "AptuKMP"
+include(":shared")
