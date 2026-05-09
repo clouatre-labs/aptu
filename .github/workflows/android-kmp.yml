@@ -35,7 +35,7 @@ jobs:
       - name: Check AptuKMP directory
         id: check-dir
         run: |
-          if [ -d "AptuKMP" ]; then
+          if [ -f "AptuKMP/gradlew" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
