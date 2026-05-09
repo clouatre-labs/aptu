@@ -1,2 +1,5 @@
 [bindings.swift]
 package_name = "AptuCore"
+
+[bindings.kotlin]
+package_name = "dev.aptu.ffi"

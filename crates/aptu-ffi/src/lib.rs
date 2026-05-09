@@ -22,6 +22,8 @@ static RUNTIME: std::sync::LazyLock<tokio::runtime::Runtime> = std::sync::LazyLo
     tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime")
 });
 
+uniffi::setup_scaffolding!();
+
 #[uniffi::export]
 pub fn list_curated_repos() -> Result<Vec<FfiCuratedRepo>, AptuFfiError> {
     RUNTIME.block_on(async {
@@ -188,7 +190,7 @@ pub fn post_pr_review(
             "REQUEST_CHANGES" => aptu_core::ReviewEvent::RequestChanges,
             _ => {
                 return Err(AptuFfiError::InternalError {
-                    message: format!(
+                    msg: format!(
                         "Invalid event type: {}. Expected COMMENT, APPROVE, or REQUEST_CHANGES",
                         event_type
                     ),
@@ -737,5 +739,3 @@ pub fn list_models(provider_name: String) -> Result<Vec<crate::types::FfiAiModel
         }
     })
 }
-
-uniffi::setup_scaffolding!();

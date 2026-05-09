@@ -2,6 +2,10 @@
 
 use thiserror::Error;
 
+// Field names avoid `message` intentionally: UniFFI 0.29.x generates
+// `val message: String` in Kotlin exception classes, which shadows
+// `Throwable.message` and causes a compile error.  Using `msg` keeps
+// the generated field name distinct from the inherited property.
 #[derive(Error, Debug, uniffi::Error)]
 pub enum AptuFfiError {
     #[error("Not authenticated - run auth first")]
@@ -10,20 +14,20 @@ pub enum AptuFfiError {
     #[error("AI provider '{provider}' is not authenticated - set {env_var} environment variable")]
     AiProviderNotAuthenticated { provider: String, env_var: String },
 
-    #[error("Network error: {message}")]
-    NetworkError { message: String },
+    #[error("Network error: {msg}")]
+    NetworkError { msg: String },
 
-    #[error("API error: {message}")]
-    ApiError { message: String },
+    #[error("API error: {msg}")]
+    ApiError { msg: String },
 
-    #[error("Invalid input: {message}")]
-    InvalidInput { message: String },
+    #[error("Invalid input: {msg}")]
+    InvalidInput { msg: String },
 
-    #[error("Keychain error: {message}")]
-    KeychainError { message: String },
+    #[error("Keychain error: {msg}")]
+    KeychainError { msg: String },
 
-    #[error("Internal error: {message}")]
-    InternalError { message: String },
+    #[error("Internal error: {msg}")]
+    InternalError { msg: String },
 }
 
 pub(crate) fn ffi_error_from_anyhow(e: anyhow::Error) -> AptuFfiError {
@@ -40,24 +44,24 @@ pub(crate) fn ffi_error_from_anyhow(e: anyhow::Error) -> AptuFfiError {
             }
             AptuError::Network(_) => {
                 let msg: String = e.to_string().chars().take(100).collect();
-                AptuFfiError::NetworkError { message: msg }
+                AptuFfiError::NetworkError { msg }
             }
             AptuError::GitHub { message } => {
                 let msg: String = message.chars().take(100).collect();
-                AptuFfiError::ApiError { message: msg }
+                AptuFfiError::ApiError { msg }
             }
             AptuError::AI { message, .. } => {
                 let msg: String = message.chars().take(100).collect();
-                AptuFfiError::ApiError { message: msg }
+                AptuFfiError::ApiError { msg }
             }
             _ => {
                 let msg: String = e.to_string().chars().take(100).collect();
-                AptuFfiError::InternalError { message: msg }
+                AptuFfiError::InternalError { msg }
             }
         }
     } else {
         let msg: String = e.to_string().chars().take(100).collect();
-        AptuFfiError::InternalError { message: msg }
+        AptuFfiError::InternalError { msg }
     }
 }
 
@@ -70,7 +74,7 @@ impl From<anyhow::Error> for AptuFfiError {
 impl From<serde_json::Error> for AptuFfiError {
     fn from(err: serde_json::Error) -> Self {
         AptuFfiError::InternalError {
-            message: format!("JSON error: {}", err),
+            msg: format!("JSON error: {}", err),
         }
     }
 }
@@ -110,8 +114,8 @@ mod tests {
         let long_msg = "x".repeat(200);
         let e = anyhow::anyhow!(long_msg);
         let result = ffi_error_from_anyhow(e);
-        if let AptuFfiError::InternalError { message } = result {
-            assert!(message.len() <= 100);
+        if let AptuFfiError::InternalError { msg } = result {
+            assert!(msg.len() <= 100);
         } else {
             panic!("expected InternalError");
         }
