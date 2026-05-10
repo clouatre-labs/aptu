@@ -12,7 +12,7 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 
 - `aptu-cli` - CLI interface (Clap derive); binary: `aptu`
 - `aptu-core` - Core library: AI providers, GitHub API, security scanner, triage engine, cache, history, retry, bulk processing
-- `aptu-ffi` - Swift/Kotlin bindings (UniFFI)
+- `aptu-ffi` - Kotlin bindings (UniFFI)
 - `aptu-mcp` - MCP server (rmcp); binary: `aptu-mcp`
 
 ## CLI Subcommands
