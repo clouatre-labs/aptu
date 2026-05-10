@@ -61,8 +61,8 @@ fun RepoPickerScreen(
                     viewModel.filter(query)
                 },
                 onSearch = {},
-                active = false,
-                onActiveChange = {},
+                expanded = false,
+                onExpandedChange = {},
                 modifier = Modifier
                     .weight(1f)
                     .height(56.dp),
