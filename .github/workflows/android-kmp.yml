@@ -25,6 +25,8 @@ permissions:
   contents: read
 
 env:
+  # Java 21 is pre-installed on ubuntu-24.04; point Gradle at it directly.
+  JAVA_HOME: ${{ env.JAVA_HOME_21_X64 }}
   GRADLE_OPTS: -Dorg.gradle.caching=true -Dorg.gradle.parallel=true -Dorg.gradle.daemon=false
 
 jobs:
@@ -32,20 +34,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set up Java
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
-        with:
-          distribution: temurin
-          java-version: '21'
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
-        with:
-          packages: platform-tools build-tools;35.0.0 platforms;android-35 ndk;27.0.12077973
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-        with:
-          # arm64-v8a only for CI debug builds; x86_64 doubles compile time with no CI benefit
-          targets: aarch64-linux-android
+      - name: Add Android Rust target
+        # Rust is pre-installed on ubuntu-24.04; just add the cross-compilation target.
+        # arm64-v8a only: x86_64 doubles Rust compile time with no CI benefit.
+        # Note: ubuntu-24.04 runner uses x86_64 NDK host binaries; ARM64 Linux NDK host
+        # support is not yet available (android/ndk#1752). Stay on ubuntu-24.04 (x86_64).
+        run: rustup target add aarch64-linux-android
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
