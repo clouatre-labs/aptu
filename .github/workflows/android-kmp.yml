@@ -81,7 +81,7 @@ jobs:
         if: steps.check-dir.outputs.exists == 'true'
         working-directory: AptuKMP
         # :shared:build includes Release cargo builds for both ABIs; assembleDebug skips them.
-        run: ./gradlew :shared:assembleDebug --parallel --build-cache
+        run: ./gradlew :shared:assembleDebug --parallel --build-cache --stacktrace
       - name: Build Android app
         if: steps.check-dir.outputs.exists == 'true'
         working-directory: AptuKMP
