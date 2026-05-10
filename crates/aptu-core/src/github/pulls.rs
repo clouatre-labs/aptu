@@ -426,8 +426,6 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
     for path in file_paths {
         let scope = if path.starts_with("crates/aptu-cli/") {
             Some("cli")
-        } else if path.starts_with("crates/aptu-ffi/") || path.starts_with("AptuApp/") {
-            Some("ios")
         } else if path.starts_with("docs/") {
             Some("documentation")
         } else {
@@ -720,18 +718,6 @@ mod tests {
                 vec!["crates/aptu-cli/src/main.rs"],
                 vec!["enhancement", "cli"],
                 "cli path should map to cli scope",
-            ),
-            (
-                "feat: ios",
-                vec!["crates/aptu-ffi/src/lib.rs"],
-                vec!["enhancement", "ios"],
-                "ffi path should map to ios scope",
-            ),
-            (
-                "feat: ios",
-                vec!["AptuApp/ContentView.swift"],
-                vec!["enhancement", "ios"],
-                "app path should map to ios scope",
             ),
             (
                 "feat: docs",

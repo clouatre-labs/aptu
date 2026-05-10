@@ -30,17 +30,5 @@ opencode.json
 Thumbs.db
 
 # Project-Specific
-AptuApp/AptuApp/AptuCore/*.h
-AptuApp/AptuApp/AptuCore/*.modulemap
-AptuApp/AptuApp/AptuCore/*.swift
-AptuApp/.build/
-AptuApp/build/
-AptuApp/DerivedData/
-AptuApp/*.xcodeproj/project.xcworkspace/xcuserdata/
-AptuApp/*.xcodeproj/xcuserdata/
-AptuApp/*.xcworkspace/xcuserdata/
 .bats-libs/
 SPEC.md
-AptuApp/AptuApp/Generated/*.swift
-AptuApp/AptuApp/Generated/*.h
-AptuApp/AptuApp/Generated/*.modulemap
