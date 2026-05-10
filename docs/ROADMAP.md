@@ -17,6 +17,9 @@ These items address known gaps and complete features already partially implement
 - **SARIF v2.2 full compliance**: complete SARIF export for security scan results, including rule metadata and suppression entries
 - **MCP resource paging**: `aptu://issues` resource returns paginated results for large repositories
 - **Config validation**: `aptu config validate` reports missing keys and unknown fields on startup
+- **Revert command**: `aptu issue revert <ISSUE>` and `aptu pr revert <PR>` undo all aptu-applied labels and comments on a given issue or PR; builds adopter trust without requiring manual cleanup
+- **API key memory hygiene**: apply `zeroize` on drop to all secret-typed fields in `aptu-core`; prevents secrets from lingering in freed memory after deallocation (single-dependency hardening)
+- **Claude Max/Pro/Team OAuth**: authenticate via an existing Claude subscription (`credentials.json` from the `claude` CLI) as an alternative to a dedicated API key; eliminates the main onboarding friction point for Anthropic users
 
 ## Medium-Term (6-18 months)
 
@@ -27,6 +30,8 @@ These items require significant design work or external dependencies.
 - **Provider health dashboard**: `aptu models list --health` shows real-time availability and latency across configured providers
 - **SQLite-backed persistent cache**: replace file-based TTL cache with a SQLite database for faster lookups and cross-session persistence
 - **History export**: `aptu history export` in JSON and CSV for personal productivity tracking
+- **Multi-forge support**: extend the GitHub API abstractions in `aptu-core` to cover GitLab (cloud + self-managed), Gitea/Forgejo/Codeberg, and Azure DevOps; core triage and review flows work identically across forges
+- **Merge queue advisory view**: `aptu pr queue` lists open PRs ranked by a reviewability score (size, age, conflict status, CI result) and highlights next-to-review candidates; advisory only, no auto-merge
 
 ## Long-Term (18+ months)
 
@@ -44,3 +49,4 @@ The following are explicitly out of scope for the foreseeable future:
 - A hosted SaaS offering; Aptu is a local CLI and library
 - Proprietary model integrations that require closed SDKs
 - Automatic merge or code modification; Aptu is advisory only
+- Daemon, persistent web dashboard, or TUI; Aptu is a CLI and library, not a server
