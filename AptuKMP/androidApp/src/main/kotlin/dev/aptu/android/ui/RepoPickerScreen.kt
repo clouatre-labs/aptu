@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,19 +56,25 @@ fun RepoPickerScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             SearchBar(
-                query = searchQuery.value,
-                onQueryChange = { query ->
-                    searchQuery.value = query
-                    viewModel.filter(query)
+                inputField = {
+                    SearchBarDefaults.InputField(
+                        query = searchQuery.value,
+                        onQueryChange = { query ->
+                            searchQuery.value = query
+                            viewModel.filter(query)
+                        },
+                        onSearch = {},
+                        expanded = false,
+                        onExpandedChange = {},
+                        placeholder = { Text("Search repos") },
+                    )
                 },
-                onSearch = {},
                 expanded = false,
                 onExpandedChange = {},
                 modifier = Modifier
                     .weight(1f)
                     .height(56.dp),
-                placeholder = { Text("Search repos") },
-            )
+            ) {}
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(onClick = onNavigateToSettings) {
                 Icon(Icons.Default.Settings, contentDescription = "Settings")
