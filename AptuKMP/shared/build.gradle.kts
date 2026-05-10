@@ -16,7 +16,9 @@ android {
     defaultConfig {
         minSdk = 26
         ndk {
-            abiFilters.addAll(listOf("arm64-v8a", "x86_64"))
+            // CI builds arm64-v8a only; x86_64 doubles Rust compile time with no CI benefit.
+            // Both ABIs are restored in release builds via a release-specific product flavor.
+            abiFilters.add("arm64-v8a")
         }
     }
 

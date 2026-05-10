@@ -32,38 +32,25 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Check AptuKMP directory
-        id: check-dir
-        run: |
-          if [ -f "AptuKMP/gradlew" ] && [ -d "AptuKMP/shared" ] && [ -d "AptuKMP/androidApp" ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "AptuKMP subprojects not yet present on this branch - skipping build steps"
-          fi
       - name: Set up Java
-        if: steps.check-dir.outputs.exists == 'true'
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: temurin
           java-version: '21'
       - name: Set up Android SDK
-        if: steps.check-dir.outputs.exists == 'true'
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           packages: platform-tools build-tools;35.0.0 platforms;android-35 ndk;27.0.12077973
       - name: Install Rust
-        if: steps.check-dir.outputs.exists == 'true'
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          targets: aarch64-linux-android,x86_64-linux-android
-      - name: Cache Rust registry and build artifacts
-        if: steps.check-dir.outputs.exists == 'true'
+          # arm64-v8a only for CI debug builds; x86_64 doubles compile time with no CI benefit
+          targets: aarch64-linux-android
+      - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           cache-targets: true
-      - name: Cache Gradle dependencies and wrapper
-        if: steps.check-dir.outputs.exists == 'true'
+      - name: Cache Gradle
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
@@ -72,24 +59,13 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('AptuKMP/**/*.gradle.kts', 'AptuKMP/**/libs.versions.toml') }}
           restore-keys: gradle-${{ runner.os }}-
       - name: Cache gobley-uniffi-bindgen
-        if: steps.check-dir.outputs.exists == 'true'
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: AptuKMP/shared/build/gobley-tools-install
           key: gobley-uniffi-bindgen-0.3.7-${{ runner.os }}
-      - name: Build shared library
-        if: steps.check-dir.outputs.exists == 'true'
+      - name: Build and test
         working-directory: AptuKMP
-        # :shared:build includes Release cargo builds for both ABIs; assembleDebug skips them.
-        run: ./gradlew :shared:assembleDebug --parallel --build-cache
-      - name: Build Android app
-        if: steps.check-dir.outputs.exists == 'true'
-        working-directory: AptuKMP
-        run: ./gradlew :androidApp:assembleDebug --parallel --build-cache
-      - name: Run unit tests
-        if: steps.check-dir.outputs.exists == 'true'
-        working-directory: AptuKMP
-        run: ./gradlew :shared:testDebugUnitTest :androidApp:testDebugUnitTest --parallel --build-cache
+        run: ./gradlew :shared:assembleDebug :androidApp:assembleDebug :shared:testDebugUnitTest :androidApp:testDebugUnitTest --parallel --build-cache
 
   ci-result:
     name: CI Result
