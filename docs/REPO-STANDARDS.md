@@ -10,7 +10,6 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 |------|---------|---------|-----------|
 | `.github/workflows/ci.yml` | push/PR (src, tests, workflows) | Build, test, lint, security scan | Fast feedback on every change; path filters skip docs-only pushes |
 | `.github/workflows/release.yml` | push `v*.*.*` tag, workflow_dispatch | Build release binaries, attest provenance, publish to GitHub Releases, Homebrew, Snap | Single pipeline owns the full release lifecycle |
-| `.github/workflows/android-kmp.yml` | push/PR (AptuKMP, crates/aptu-ffi, src) | Build and test KMP Android app and Rust FFI bindings | Catches UniFFI binding regressions before merge |
 | `.github/workflows/build-and-attest.yml` | push/PR | Build release binaries and attest provenance | SLSA Level 3 provenance attestation for every build |
 | `.github/workflows/reuse.yml` | push/PR | REUSE SPDX compliance check | Apache-2.0 license attribution is machine-verifiable |
 | `.github/workflows/scorecard.yml` | schedule weekly, push main | OpenSSF Scorecard security posture analysis | Tracks supply-chain security best practices over time |
