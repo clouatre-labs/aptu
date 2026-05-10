@@ -25,8 +25,6 @@ permissions:
   contents: read
 
 env:
-  # Java 21 is pre-installed on ubuntu-24.04; point Gradle at it directly.
-  JAVA_HOME: ${{ env.JAVA_HOME_21_X64 }}
   GRADLE_OPTS: -Dorg.gradle.caching=true -Dorg.gradle.parallel=true -Dorg.gradle.daemon=false
 
 jobs:
@@ -34,6 +32,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set JAVA_HOME to Java 21
+        run: echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
       - name: Add Android Rust target
         # Rust is pre-installed on ubuntu-24.04; just add the cross-compilation target.
         # arm64-v8a only: x86_64 doubles Rust compile time with no CI benefit.
