@@ -13,6 +13,9 @@ pub mod issues;
 pub mod pulls;
 pub mod ratelimit;
 
+// Re-export client creation function (unconditional)
+pub use auth::create_client;
+
 // Re-export keyring lifecycle functions
 #[cfg(feature = "keyring")]
 pub use auth::{keyring_deinit, keyring_init};

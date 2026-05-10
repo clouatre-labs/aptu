@@ -872,6 +872,27 @@ async fn run_pr_command(
             output::render(&result, &ctx)?;
             Ok(())
         }
+        PrCommand::Queue { repo, limit } => {
+            let repo_context = repo
+                .as_deref()
+                .or(inferred_repo.as_deref())
+                .or(config.user.default_repo.as_deref());
+
+            let repo_str = repo_context.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Could not determine owner/repo; use --repo or set default_repo in config"
+                )
+            })?;
+            let (owner, repo_name) = aptu_core::github::parse_owner_repo(repo_str)?;
+
+            let spinner = maybe_spinner(&ctx, "Fetching open PRs...");
+            let result = pr::run_queue(config, &owner, &repo_name, limit).await?;
+            if let Some(s) = spinner {
+                s.finish_and_clear();
+            }
+            output::render(&result, &ctx)?;
+            Ok(())
+        }
     }
 }
 
