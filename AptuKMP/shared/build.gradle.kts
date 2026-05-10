@@ -1,37 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import gobley.gradle.rust.targets.RustAndroidTarget
-
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.android.library)
     alias(libs.plugins.gobley.cargo)
     alias(libs.plugins.gobley.uniffi)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.atomicfu)
-}
-
-kotlin {
-    androidTarget()
-
-    sourceSets {
-        commonMain.dependencies {
-            implementation(libs.coroutines.core)
-            implementation(libs.ktor.client.core)
-            implementation(libs.kotlinx.serialization.json)
-        }
-
-        commonTest.dependencies {
-            implementation(kotlin("test"))
-            implementation(libs.coroutines.test)
-        }
-
-        androidMain.dependencies {
-            implementation(libs.androidx.activity.compose)
-            implementation(libs.coroutines.android)
-            implementation(libs.ktor.client.android)
-        }
-    }
 }
 
 android {
@@ -51,14 +26,33 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
+    sourceSets {
+        main {
+            dependencies {
+                implementation(libs.coroutines.core)
+                implementation(libs.coroutines.android)
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.android)
+                implementation(libs.kotlinx.serialization.json)
+            }
+        }
+        test {
+            dependencies {
+                implementation(kotlin("test"))
+                implementation(libs.coroutines.test)
+            }
+        }
+    }
+}
+
 cargo {
-    // packageDirectory is relative to this build file (shared/).
-    // aptu-ffi lives two levels up at the workspace root under crates/.
     packageDirectory = layout.projectDirectory.dir("../../crates/aptu-ffi")
 }
 
 uniffi {
-    generateFromLibrary {
-        build.set(RustAndroidTarget.Arm64)
-    }
+    generateFromLibrary()
 }
