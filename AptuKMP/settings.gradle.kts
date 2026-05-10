@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "AptuKMP"
 include(":shared")
+include(":androidApp")
