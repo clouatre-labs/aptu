@@ -310,7 +310,7 @@ pub async fn run_label(
 #[allow(clippy::cast_precision_loss)]
 pub fn compute_score(additions: u64, deletions: u64, age_days: f64, max_size: u64) -> f64 {
     const MIN_MAX_SIZE: u64 = 500;
-    let max = max_size.max(MIN_MAX_SIZE);
+    let max = max_size.max(MIN_MAX_SIZE).max(1);
     let age = age_days.max(0.0);
     let total_changes = additions.saturating_add(deletions);
     let normalized_size = 1.0 - (std::cmp::min(total_changes, max) as f64 / max as f64);
@@ -534,6 +534,46 @@ mod tests {
             "Lower PR number should come first when scores are tied"
         );
         assert_eq!(prs[1].number, 5);
+    }
+
+    #[test]
+    fn test_sort_order_ties_computed_scores() {
+        // Use compute_score with identical inputs to produce equal scores,
+        // then verify the secondary sort (number ASC) is applied correctly.
+        let score = compute_score(100, 50, 90.0, 500);
+        let mut prs = vec![
+            crate::output::pr::QueuedPr {
+                number: 42,
+                title: "PR 42".to_string(),
+                author: "alice".to_string(),
+                age_days: 90.0,
+                additions: 100,
+                deletions: 50,
+                score,
+                draft: false,
+            },
+            crate::output::pr::QueuedPr {
+                number: 7,
+                title: "PR 7".to_string(),
+                author: "bob".to_string(),
+                age_days: 90.0,
+                additions: 100,
+                deletions: 50,
+                score,
+                draft: false,
+            },
+        ];
+        prs.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.number.cmp(&b.number))
+        });
+        assert_eq!(
+            prs[0].number, 7,
+            "lower PR number first on tied computed scores"
+        );
+        assert_eq!(prs[1].number, 42);
     }
 
     #[test]

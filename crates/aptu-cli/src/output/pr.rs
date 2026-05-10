@@ -14,6 +14,9 @@ use crate::commands::types::{
 use crate::output::Renderable;
 use aptu_core::PrCreateResult;
 
+/// Maximum title length in characters for text table output.
+const QUEUE_TITLE_MAX_CHARS: usize = 50;
+
 /// A single PR in the queue result.
 #[derive(Debug, Clone, Serialize)]
 pub struct QueuedPr {
@@ -78,6 +81,7 @@ impl Renderable for PrQueueResult {
             w,
             "{}",
             style(format!(
+                // Column widths: title=QUEUE_TITLE_MAX_CHARS, author=20, age=8, changes=12, score=3
                 "{:>4}  {:<50}  {:<20}  {:<8}  {:<12}  {:>3}",
                 "Rank", "Title", "Author", "Age", "Changes", "Score"
             ))
@@ -87,7 +91,7 @@ impl Renderable for PrQueueResult {
 
         for (idx, pr) in self.prs.iter().enumerate() {
             let rank = idx + 1;
-            let title = aptu_core::utils::truncate(&pr.title, 50);
+            let title = aptu_core::utils::truncate(&pr.title, QUEUE_TITLE_MAX_CHARS);
             let age_str = format_age(pr.age_days);
             let changes = format!("+{}-{}", pr.additions, pr.deletions);
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -128,7 +132,7 @@ impl Renderable for PrQueueResult {
 
         for (idx, pr) in self.prs.iter().enumerate() {
             let rank = idx + 1;
-            let title = aptu_core::utils::truncate(&pr.title, 50);
+            let title = aptu_core::utils::truncate(&pr.title, QUEUE_TITLE_MAX_CHARS);
             let age_str = format_age(pr.age_days);
             let changes = format!("+{}-{}", pr.additions, pr.deletions);
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
