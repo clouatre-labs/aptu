@@ -16,23 +16,6 @@ plugins {
 kotlin {
     androidTarget()
 
-    // iOS targets are only available when building on macOS (Gobley requirement).
-    if (GobleyHost.Platform.MacOS.isCurrent) {
-        iosArm64 {
-            binaries.framework {
-                baseName = "shared"
-                isStatic = true
-            }
-        }
-
-        iosSimulatorArm64 {
-            binaries.framework {
-                baseName = "shared"
-                isStatic = true
-            }
-        }
-    }
-
     sourceSets {
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -52,13 +35,6 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             implementation(libs.coroutines.android)
             implementation(libs.ktor.client.android)
-        }
-
-        if (GobleyHost.Platform.MacOS.isCurrent) {
-            iosMain.dependencies {
-                implementation(libs.kvault)
-                implementation(libs.ktor.client.darwin)
-            }
         }
     }
 }
