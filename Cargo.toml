@@ -38,6 +38,7 @@ walkdir = "2"
 # GitHub
 octocrab = { version = "0.50", default-features = false, features = ["follow-redirect", "retry", "rustls", "timeout", "tracing", "default-client", "rustls-ring", "jwt-aws-lc-rs"] }
 secrecy = "0.10"
+zeroize = { version = "1.8", features = ["derive"] }
 
 # Builder
 bon = "3"

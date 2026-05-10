@@ -44,6 +44,15 @@ pub struct AiClient {
     custom_guidance: Option<String>,
 }
 
+impl Drop for AiClient {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        // Safety: SecretString wraps String, which implements Zeroize.
+        // Calling zeroize() overwrites the backing buffer before deallocation.
+        self.api_key.zeroize();
+    }
+}
+
 impl AiClient {
     /// Creates a new AI client from configuration.
     ///

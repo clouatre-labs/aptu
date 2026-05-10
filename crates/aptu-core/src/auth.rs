@@ -44,6 +44,18 @@ mod tests {
         ai_keys: HashMap<String, SecretString>,
     }
 
+    impl Drop for MockTokenProvider {
+        fn drop(&mut self) {
+            use zeroize::Zeroize;
+            if let Some(ref mut gh_token) = self.github_token {
+                gh_token.zeroize();
+            }
+            for ai_key in self.ai_keys.values_mut() {
+                ai_key.zeroize();
+            }
+        }
+    }
+
     impl TokenProvider for MockTokenProvider {
         fn github_token(&self) -> Option<SecretString> {
             self.github_token.clone()
