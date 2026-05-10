@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import gobley.gradle.GobleyHost
+import gobley.gradle.rust.targets.RustAndroidTarget
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -58,5 +58,7 @@ cargo {
 }
 
 uniffi {
-    generateFromLibrary()
+    generateFromLibrary {
+        build.set(RustAndroidTarget.Arm64)
+    }
 }
