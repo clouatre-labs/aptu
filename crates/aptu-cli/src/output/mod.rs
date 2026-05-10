@@ -106,6 +106,6 @@ mod create;
 mod history;
 mod issues;
 mod models;
-mod pr;
+pub mod pr;
 mod repos;
 mod triage;

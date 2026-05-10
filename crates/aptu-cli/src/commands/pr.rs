@@ -12,7 +12,7 @@ use aptu_core::ai::types::PrReviewComment;
 use aptu_core::{
     PrDetails, PrReviewResponse, render_pr_review_comment_body, render_pr_review_markdown,
 };
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, warn};
 
 use super::types::PrLabelResult;
 use crate::provider::CliTokenProvider;
@@ -292,10 +292,249 @@ pub async fn run_label(
     })
 }
 
+/// Compute reviewability score for a PR.
+///
+/// Formula: 60% size component + 40% age component.
+/// Smaller PRs and older PRs score higher.
+///
+/// # Arguments
+///
+/// * `additions` - Number of lines added
+/// * `deletions` - Number of lines deleted
+/// * `age_days` - Age in days
+/// * `max_size` - Maximum size encountered (floor at 500)
+///
+/// # Returns
+///
+/// Score in [0.0, 1.0]
+#[allow(clippy::cast_precision_loss)]
+pub fn compute_score(additions: u64, deletions: u64, age_days: f64, max_size: u64) -> f64 {
+    const MIN_MAX_SIZE: u64 = 500;
+    let max = max_size.max(MIN_MAX_SIZE);
+    let age = age_days.max(0.0);
+    let total_changes = additions.saturating_add(deletions);
+    let normalized_size = 1.0 - (std::cmp::min(total_changes, max) as f64 / max as f64);
+    let age_norm = (age / 365.0).min(1.0);
+    0.6 * normalized_size + 0.4 * age_norm
+}
+
+/// Fetch and rank open PRs for a repository.
+///
+/// Fetches all open PRs, excludes drafts, computes scores, sorts by score DESC
+/// (then by number ASC for ties), and applies limit.
+///
+/// TODO: In follow-up PR, add CI status and conflict detection.
+/// TODO: In follow-up PR, add caching of results.
+#[instrument(skip_all, fields(repo, limit))]
+pub async fn run_queue(
+    _config: &aptu_core::AppConfig,
+    owner: &str,
+    repo: &str,
+    limit: u32,
+) -> Result<crate::output::pr::PrQueueResult> {
+    info!("Fetching open PRs for {}/{}", owner, repo);
+
+    // Create octocrab client
+    let client = aptu_core::github::create_client()?;
+
+    // Fetch open PRs (paginated). Cap at MAX_QUEUE_PRS to bound memory and
+    // API calls; repos with more open PRs than this cap are uncommon, and
+    // the queue command is an interactive advisory tool, not a bulk processor.
+    const MAX_QUEUE_PRS: usize = 200;
+
+    let prs_page = client
+        .pulls(owner, repo)
+        .list()
+        .per_page(100)
+        .send()
+        .await
+        .context("Failed to fetch PRs")?;
+
+    let mut all_prs = client
+        .all_pages(prs_page)
+        .await
+        .context("Failed to fetch all PR pages")?;
+
+    if all_prs.len() > MAX_QUEUE_PRS {
+        warn!(
+            total = all_prs.len(),
+            cap = MAX_QUEUE_PRS,
+            "Repository has many open PRs; showing top {} by recency",
+            MAX_QUEUE_PRS
+        );
+        all_prs.truncate(MAX_QUEUE_PRS);
+    }
+
+    debug!(total_prs = all_prs.len(), "Fetched open PRs");
+
+    // Map to QueuedPr and track drafts
+    let mut queued_prs: Vec<crate::output::pr::QueuedPr> = Vec::new();
+    let mut draft_count = 0;
+
+    let now = chrono::Utc::now();
+
+    for pr in all_prs {
+        let is_draft = pr.draft.unwrap_or(false);
+        if is_draft {
+            draft_count += 1;
+            continue;
+        }
+
+        let number = pr.number;
+        let title = pr.title.unwrap_or_default();
+        let author = pr
+            .user
+            .as_ref()
+            .map_or_else(|| "unknown".to_string(), |u| u.login.clone());
+
+        #[allow(clippy::cast_precision_loss)]
+        let age_days = pr.created_at.map_or(0.0, |created| {
+            let duration = now.signed_duration_since(created);
+            duration.num_seconds() as f64 / 86400.0
+        });
+
+        let additions = pr.additions.unwrap_or(0);
+        let deletions = pr.deletions.unwrap_or(0);
+
+        queued_prs.push(crate::output::pr::QueuedPr {
+            number,
+            title,
+            author,
+            age_days,
+            additions,
+            deletions,
+            score: 0.0, // Computed below
+            draft: false,
+        });
+    }
+
+    let total_open = queued_prs.len() + draft_count;
+
+    // Compute max_size (floor at 500)
+    let max_size = queued_prs
+        .iter()
+        .map(|pr| pr.additions + pr.deletions)
+        .max()
+        .unwrap_or(0)
+        .max(500);
+
+    // Compute scores and sort
+    for pr in &mut queued_prs {
+        pr.score = compute_score(pr.additions, pr.deletions, pr.age_days, max_size);
+    }
+
+    queued_prs.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.number.cmp(&b.number))
+    });
+
+    // Apply limit
+    if limit > 0 && queued_prs.len() > limit as usize {
+        queued_prs.truncate(limit as usize);
+    }
+
+    info!(
+        prs_in_queue = queued_prs.len(),
+        drafts_excluded = draft_count,
+        "PR queue computed"
+    );
+
+    Ok(crate::output::pr::PrQueueResult {
+        prs: queued_prs,
+        total_open,
+        drafts_excluded: draft_count,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use aptu_core::ai::types::{CommentSeverity, PrReviewComment};
+
+    #[test]
+    fn test_compute_score_small_old_pr() {
+        // Small (100 changes), old (365 days)
+        let score = compute_score(50, 50, 365.0, 500);
+        assert!(score > 0.8, "Old small PR should score high");
+    }
+
+    #[test]
+    fn test_compute_score_zero_lines() {
+        // Edge case: PR with no changes
+        // Score = 0.6 * (1.0 - 0/500) + 0.4 * (100/365).min(1.0)
+        // = 0.6 * 1.0 + 0.4 * 0.2740 = 0.7096
+        let score = compute_score(0, 0, 100.0, 500);
+        assert!(
+            (score - 0.7096).abs() < 0.001,
+            "Zero changes: score = {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_compute_score_brand_new_pr() {
+        // Large PR created today
+        let score = compute_score(250, 250, 0.1, 500);
+        let normalized_size = 1.0 - (500.0 / 500.0); // size score = 0
+        let age_norm = (0.1_f64 / 365.0).min(1.0); // ~0.00027
+        let expected = 0.6 * normalized_size + 0.4 * age_norm;
+        assert!(
+            (score - expected).abs() < 0.001,
+            "Score mismatch for brand new PR"
+        );
+    }
+
+    #[test]
+    fn test_compute_score_age_caps_at_one_year() {
+        // PR created 2+ years ago
+        let score_old = compute_score(100, 100, 730.0, 500);
+        let score_one_year = compute_score(100, 100, 365.0, 500);
+        assert!(
+            (score_old - score_one_year).abs() < 0.001,
+            "Age cap at 1.0 should be respected"
+        );
+    }
+
+    #[test]
+    fn test_sort_order_ties_by_number() {
+        let mut prs = vec![
+            crate::output::pr::QueuedPr {
+                number: 5,
+                title: "PR 5".to_string(),
+                author: "user".to_string(),
+                age_days: 100.0,
+                additions: 100,
+                deletions: 100,
+                score: 0.5,
+                draft: false,
+            },
+            crate::output::pr::QueuedPr {
+                number: 3,
+                title: "PR 3".to_string(),
+                author: "user".to_string(),
+                age_days: 100.0,
+                additions: 100,
+                deletions: 100,
+                score: 0.5,
+                draft: false,
+            },
+        ];
+
+        prs.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.number.cmp(&b.number))
+        });
+
+        assert_eq!(
+            prs[0].number, 3,
+            "Lower PR number should come first when scores are tied"
+        );
+        assert_eq!(prs[1].number, 5);
+    }
 
     #[test]
     fn test_format_comment_header_with_line() {

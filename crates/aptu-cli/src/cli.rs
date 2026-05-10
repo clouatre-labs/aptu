@@ -484,6 +484,23 @@ pub enum PrCommand {
         #[arg(long, short = 'f')]
         force: bool,
     },
+
+    /// List and rank open pull requests by reviewability
+    ///
+    /// Fetches open PRs for a repository and ranks them by a composite score:
+    /// 60% size (smaller = higher priority) + 40% age (older = higher priority).
+    /// Draft PRs are excluded from the ranking (not ready for review).
+    ///
+    /// Default limit is 10; use --limit 0 to show all.
+    Queue {
+        /// Repository in owner/repo format (inferred from git if not provided)
+        #[arg(long, short = 'r')]
+        repo: Option<String>,
+
+        /// Maximum number of PRs to display (0 = no limit)
+        #[arg(long, default_value = "10")]
+        limit: u32,
+    },
 }
 
 /// Sort order for models list
