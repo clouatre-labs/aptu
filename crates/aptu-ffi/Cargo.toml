@@ -6,7 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Swift/Kotlin FFI bindings for aptu-core via UniFFI"
+description = "Kotlin FFI bindings for aptu-core via UniFFI"
 publish = false
 [dependencies]
 aptu-core = { path = "../aptu-core" }

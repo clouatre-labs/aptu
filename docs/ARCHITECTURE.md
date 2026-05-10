@@ -15,7 +15,7 @@ aptu/
 │   ├── github/       # GitHub API integration (Octocrab wrapper)
 │   ├── repos/        # Repository discovery and management
 │   └── ...           # Config, cache, history, triage logic
-├── aptu-ffi          # Swift/Kotlin FFI bindings via UniFFI
+├── aptu-ffi          # Kotlin FFI bindings via UniFFI (KMP)
 └── aptu-mcp          # MCP server for AI-powered triage and review
 ```
 
@@ -43,7 +43,7 @@ Format & Display Output
 ### TokenProvider Trait
 Abstracts credential retrieval across platforms. Implementations:
 - `CliTokenProvider` - CLI (env vars, gh CLI, keyring)
-- `FfiTokenProvider` - iOS keychain via UniFFI
+- `FfiTokenProvider` - mobile keychain via UniFFI (KMP; Android Keystore via KVault)
 - `MockTokenProvider` - Testing
 
 ### AiProvider Trait

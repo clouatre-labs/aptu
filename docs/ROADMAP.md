@@ -22,7 +22,7 @@ These items address known gaps and complete features already partially implement
 
 These items require significant design work or external dependencies.
 
-- **iOS and Android SDK**: expose `aptu-core` to Swift and Kotlin via UniFFI-generated bindings; ship a companion app for mobile triage review
+- **Android SDK (KMP)**: expose `aptu-core` to Kotlin via UniFFI-generated bindings; ship an Android companion app for mobile triage review. iOS app is parked indefinitely.
 - **Web UI**: read-only dashboard backed by the MCP server; no framework dependency, plain HTML and fetch
 - **Provider health dashboard**: `aptu models list --health` shows real-time availability and latency across configured providers
 - **SQLite-backed persistent cache**: replace file-based TTL cache with a SQLite database for faster lookups and cross-session persistence
