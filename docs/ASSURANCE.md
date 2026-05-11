@@ -78,6 +78,7 @@ To further limit prompt injection exposure, Aptu enforces configurable byte limi
 | Security disclosure process | Private reporting via GitHub Security Advisories | Active |
 | Dependency pinning | Actions pinned to SHA; `cargo deny` blocks unmaintained crates | Active |
 | Prompt injection size limits | `[prompt]` config enforces per-field byte caps; CLI exits non-zero, MCP returns `ToolExecutionError` on breach (OWASP LLM01:2025) | Active |
+| Secret field zeroization | `SecretString` prevents accidental logging; explicit `Drop` implementations zeroize `api_key` on `AiClient`, preventing memory disclosure via core dumps, swap files, or process inspection | Active |
 
 ## Residual Risks
 

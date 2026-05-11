@@ -28,6 +28,7 @@ toml = { workspace = true }
 reqwest = { workspace = true }
 octocrab = { workspace = true }
 secrecy = { workspace = true }
+zeroize = { workspace = true }
 backon = { workspace = true }
 
 # Configuration
