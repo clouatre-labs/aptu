@@ -19,7 +19,7 @@ const SIMPLE_DIFF: &str = include_str!("patch_fixtures/simple.diff");
 // ---------------------------------------------------------------------------
 
 /// Initialise a working git repository with a single `hello.txt` commit on `main`.
-/// Returns (working_dir TempDir, bare_origin TempDir).
+/// Returns (`working_dir` `TempDir`, `bare_origin` `TempDir`).
 fn setup_repo() -> (TempDir, TempDir) {
     let work = TempDir::new().expect("create work tmpdir");
     let bare = TempDir::new().expect("create bare tmpdir");
@@ -98,7 +98,7 @@ fn git(cwd: &Path, args: &[&str]) {
         .current_dir(cwd)
         .status()
         .expect("spawn git");
-    assert!(status.success(), "git {args:?} failed in {cwd:?}");
+    assert!(status.success(), "git {args:?} failed in {}", cwd.display());
 }
 
 /// Write the embedded diff fixture to a temporary file and return its path.
@@ -275,7 +275,7 @@ async fn test_apply_patch_dco_signoff() {
 /// This test is `#[ignore]` because it requires a real GPG key in the test
 /// environment. Enable it locally with `cargo test -- --ignored`.
 #[tokio::test]
-#[ignore]
+#[ignore = "requires GPG key in test environment"]
 async fn test_apply_patch_signing_gate() {
     let (work, _bare) = setup_repo();
     let w = work.path();

@@ -20,13 +20,13 @@ use aptu_core::ai::types::{IssueDetails, PrDetails, PrFile};
 struct StubProvider;
 
 impl AiProvider for StubProvider {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "stub"
     }
-    fn api_url(&self) -> &str {
+    fn api_url(&self) -> &'static str {
         "https://stub.example.com"
     }
-    fn api_key_env(&self) -> &str {
+    fn api_key_env(&self) -> &'static str {
         "STUB_API_KEY"
     }
     fn http_client(&self) -> &reqwest::Client {
@@ -35,7 +35,7 @@ impl AiProvider for StubProvider {
     fn api_key(&self) -> &secrecy::SecretString {
         unimplemented!()
     }
-    fn model(&self) -> &str {
+    fn model(&self) -> &'static str {
         "stub-model"
     }
     fn max_tokens(&self) -> u32 {
@@ -191,6 +191,7 @@ fn all_user_prompts_contain_schema() {
         }],
         labels: vec![],
         head_sha: String::new(),
+        review_comments: vec![],
     };
     let pr_review_user = StubProvider::build_pr_review_user_prompt(&pr, "", "");
     assert!(
@@ -235,6 +236,7 @@ mod fetch_file_contents_tests {
             }],
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
         let prompt = StubProvider::build_pr_review_user_prompt(&pr, "", "");
         assert!(
@@ -271,6 +273,7 @@ mod fetch_file_contents_tests {
             }],
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
 
         // Act
@@ -317,6 +320,7 @@ mod fetch_file_contents_tests {
             }],
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
         // Just verify that the prompt builder itself includes call_graph when provided
         let large_call_graph = "<call_graph>".to_string() + &"x".repeat(1000) + "</call_graph>";

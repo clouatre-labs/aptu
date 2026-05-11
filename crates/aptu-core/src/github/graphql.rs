@@ -251,6 +251,8 @@ pub struct RepoMilestonesConnection {
 /// Issue comment from GraphQL response.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IssueCommentNode {
+    /// Comment ID.
+    pub id: u64,
     /// Comment author login.
     pub author: Author,
     /// Comment body.
@@ -260,6 +262,7 @@ pub struct IssueCommentNode {
 impl From<IssueCommentNode> for IssueComment {
     fn from(node: IssueCommentNode) -> Self {
         IssueComment {
+            id: node.id,
             author: node.author.login,
             body: node.body,
         }

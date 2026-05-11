@@ -181,6 +181,7 @@ pub async fn fetch_pr_details(
         files: pr_files,
         url: pr.html_url.map_or_else(String::new, |u| u.to_string()),
         labels,
+        review_comments: Vec::new(),
     };
 
     debug!(
@@ -381,6 +382,40 @@ pub async fn post_pr_review(
     debug!(review_id = response.id, "PR review posted successfully");
 
     Ok(response.id)
+}
+
+/// Deletes a PR review comment.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails. 404 errors (comment not found)
+/// are treated as success (idempotent).
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, comment_id = comment_id))]
+pub async fn delete_pr_review_comment(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    comment_id: u64,
+) -> Result<()> {
+    debug!("Deleting PR review comment");
+
+    let route = format!("/repos/{owner}/{repo}/pulls/comments/{comment_id}");
+
+    // Use generic delete method; needs explicit empty object body type
+    let empty_body = serde_json::json!({});
+    let result: std::result::Result<serde_json::Value, _> = client.delete(&route, Some(&empty_body)).await;
+
+    match result {
+        Ok(_) => {
+            debug!("PR review comment deleted successfully");
+            Ok(())
+        }
+        Err(e) if e.to_string().contains("404") => {
+            debug!("PR review comment already deleted (404); treating as success");
+            Ok(())
+        }
+        Err(e) => Err(e).with_context(|| format!("Failed to delete PR review comment #{comment_id}")),
+    }
 }
 
 /// Extract labels from PR metadata (title and file paths).
@@ -705,7 +740,7 @@ mod tests {
                 );
             }
             if expected_labels.is_empty() {
-                assert!(labels.is_empty(), "{msg}: expected empty, got {labels:?}",);
+                assert!(labels.is_empty(), "{msg}: expected empty, got {labels:?}");
             }
         }
     }

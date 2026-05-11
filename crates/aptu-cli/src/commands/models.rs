@@ -296,8 +296,8 @@ mod tests {
     fn test_filter_by_name_match() {
         // Arrange
         let models = vec![
-            make_model("gemini-pro", Some("Gemini Pro"), Some(128000)),
-            make_model("gpt-4o", Some("GPT-4o"), Some(128000)),
+            make_model("gemini-pro", Some("Gemini Pro"), Some(128_000)),
+            make_model("gpt-4o", Some("GPT-4o"), Some(128_000)),
         ];
         // Act
         let result = filter_by_name(models, Some("gemini"));

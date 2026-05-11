@@ -295,6 +295,8 @@ pub struct IssueDetails {
 /// A comment on an issue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IssueComment {
+    /// Comment ID.
+    pub id: u64,
     /// Comment author username.
     pub author: String,
     /// Comment body.
@@ -341,6 +343,9 @@ pub struct PrDetails {
     /// Head commit SHA (used as `commit_id` when posting inline review comments).
     #[serde(default)]
     pub head_sha: String,
+    /// Review comments on the PR.
+    #[serde(default)]
+    pub review_comments: Vec<PrReviewCommentDetails>,
 }
 
 /// A file changed in a pull request.
@@ -359,6 +364,17 @@ pub struct PrFile {
     /// Full file content fetched from GitHub Contents API (truncated at `max_chars_per_file`).
     #[serde(default)]
     pub full_content: Option<String>,
+}
+
+/// Details about a review comment on a PR.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrReviewCommentDetails {
+    /// Comment ID.
+    pub id: u64,
+    /// Comment author username.
+    pub author: String,
+    /// Comment body.
+    pub body: String,
 }
 
 /// Severity level for PR review comments.

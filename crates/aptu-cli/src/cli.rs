@@ -361,6 +361,21 @@ pub enum IssueCommand {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Revert all comments and labels posted by aptu on an issue
+    Revert {
+        /// Issue reference (URL, owner/repo#number, or number)
+        #[arg(value_name = "ISSUE")]
+        issue: String,
+
+        /// Repository for bare issue numbers (e.g., "block/goose")
+        #[arg(long, short = 'r')]
+        repo: Option<String>,
+
+        /// Preview revert without making deletions
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 /// Completion subcommands
@@ -501,6 +516,21 @@ pub enum PrCommand {
         #[arg(long, default_value = "10")]
         limit: u32,
     },
+
+    /// Revert all comments and labels posted by aptu on a PR
+    Revert {
+        /// PR reference (URL, owner/repo#number, or number)
+        #[arg(value_name = "PR")]
+        pr: String,
+
+        /// Repository for bare PR numbers (e.g., "block/goose")
+        #[arg(long, short = 'r')]
+        repo: Option<String>,
+
+        /// Preview revert without making deletions
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 /// Sort order for models list
@@ -542,7 +572,7 @@ mod clap_conflict_tests {
 
     #[test]
     fn test_issue_list_with_repo_flag() {
-        let result = Cli::try_parse_from(&["prog", "issue", "list", "--repo", "owner/repo"]);
+        let result = Cli::try_parse_from(["prog", "issue", "list", "--repo", "owner/repo"]);
         match result {
             Ok(cli) => {
                 if let Commands::Issue(IssueCommand::List { repo, .. }) = cli.command {
@@ -550,14 +580,14 @@ mod clap_conflict_tests {
                 }
             }
             Err(e) => {
-                panic!("Failed to parse issue list with --repo flag: {}", e);
+                panic!("Failed to parse issue list with --repo flag: {e}");
             }
         }
     }
 
     #[test]
     fn test_issue_create_with_repo_flag() {
-        let result = Cli::try_parse_from(&["prog", "issue", "create", "--repo", "owner/repo"]);
+        let result = Cli::try_parse_from(["prog", "issue", "create", "--repo", "owner/repo"]);
         match result {
             Ok(cli) => {
                 if let Commands::Issue(IssueCommand::Create { repo, .. }) = cli.command {
@@ -565,7 +595,7 @@ mod clap_conflict_tests {
                 }
             }
             Err(e) => {
-                panic!("Failed to parse issue create with --repo flag: {}", e);
+                panic!("Failed to parse issue create with --repo flag: {e}");
             }
         }
     }

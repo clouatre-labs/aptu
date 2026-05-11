@@ -299,11 +299,10 @@ mod tests {
                 // Timeout = server started and ran = allow_unauthenticated=true worked
             }
             Ok(Err(e)) => {
-                let err_msg = format!("{:?}", e);
+                let err_msg = format!("{e:?}");
                 assert!(
                     !err_msg.contains("MCP_BEARER_TOKEN required"),
-                    "allow_unauthenticated=true should skip the token check; got: {}",
-                    err_msg
+                    "allow_unauthenticated=true should skip the token check; got: {err_msg}"
                 );
             }
             Ok(Ok(())) => {

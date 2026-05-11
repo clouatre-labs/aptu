@@ -30,12 +30,12 @@ fn create_test_diff(content: &str, filename: &str) -> String {
         let _ = writeln!(diff_content, "+{line}");
     }
     format!(
-        r#"diff --git a/{filename} b/{filename}
+        r"diff --git a/{filename} b/{filename}
 index 0000000..1111111 100644
 --- a/{filename}
 +++ b/{filename}
 @@ -0,0 +1,{line_count} @@
-{diff_content}"#,
+{diff_content}",
         line_count = content.lines().count(),
     )
 }
@@ -138,7 +138,7 @@ fn test_safe_patterns_no_findings() {
 
 /// Test documenting a known limitation: multi-line SQL injection detection.
 ///
-/// The SecurityScanner currently detects SQL injection patterns when the source
+/// The `SecurityScanner` currently detects SQL injection patterns when the source
 /// and sink are on the same line (e.g., `query("SELECT * FROM users WHERE id = " + id)`).
 /// However, it does not detect multi-line patterns where the source and sink are
 /// separated across multiple lines, as the scanner operates on a line-by-line basis.

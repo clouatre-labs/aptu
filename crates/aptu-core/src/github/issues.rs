@@ -154,6 +154,7 @@ pub async fn fetch_issue_with_comments(
         .items
         .iter()
         .map(|c| IssueComment {
+            id: c.id.0,
             author: c.user.login.clone(),
             body: c.body.clone().unwrap_or_default(),
         })
@@ -327,6 +328,77 @@ pub async fn post_comment(
     debug!(url = %comment_url, "Comment posted successfully");
 
     Ok(comment_url)
+}
+
+/// Deletes a comment from a GitHub issue.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails. 404 errors (comment not found)
+/// are treated as success (idempotent).
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, comment_id = comment_id))]
+pub async fn delete_issue_comment(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    comment_id: u64,
+) -> Result<()> {
+    debug!("Deleting issue comment");
+
+    let route = format!("/repos/{owner}/{repo}/issues/comments/{comment_id}");
+
+    // Use generic delete method; needs explicit empty object body type
+    let empty_body = serde_json::json!({});
+    let result: std::result::Result<serde_json::Value, _> = client.delete(&route, Some(&empty_body)).await;
+
+    match result {
+        Ok(_) => {
+            debug!("Comment deleted successfully");
+            Ok(())
+        }
+        Err(e) if e.to_string().contains("404") => {
+            debug!("Comment already deleted (404); treating as success");
+            Ok(())
+        }
+        Err(e) => Err(e).with_context(|| format!("Failed to delete comment #{comment_id}")),
+    }
+}
+
+/// Removes a label from a GitHub issue.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails. 404 errors (label not found)
+/// are treated as success (idempotent).
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number, label = label))]
+pub async fn remove_issue_label(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    label: &str,
+) -> Result<()> {
+    debug!("Removing label from issue");
+
+    // URL-encode label name using percent-encoding (handle spaces, special chars)
+    let encoded_label = percent_encoding::percent_encode(label.as_bytes(), percent_encoding::NON_ALPHANUMERIC).to_string();
+    let route = format!("/repos/{owner}/{repo}/issues/{number}/labels/{encoded_label}");
+
+    // Use generic delete method; needs explicit empty object body type
+    let empty_body = serde_json::json!({});
+    let result: std::result::Result<serde_json::Value, _> = client.delete(&route, Some(&empty_body)).await;
+
+    match result {
+        Ok(_) => {
+            debug!("Label removed successfully");
+            Ok(())
+        }
+        Err(e) if e.to_string().contains("404") => {
+            debug!("Label not found (404); treating as success");
+            Ok(())
+        }
+        Err(e) => Err(e).with_context(|| format!("Failed to remove label '{label}' from issue #{number}")),
+    }
 }
 
 /// Creates a new GitHub issue.

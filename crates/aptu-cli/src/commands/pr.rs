@@ -468,8 +468,7 @@ mod tests {
         let score = compute_score(0, 0, 100.0, 500);
         assert!(
             (score - 0.7096).abs() < 0.001,
-            "Zero changes: score = {}",
-            score
+            "Zero changes: score = {score}"
         );
     }
 
@@ -499,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_sort_order_ties_by_number() {
-        let mut prs = vec![
+        let mut prs = [
             crate::output::pr::QueuedPr {
                 number: 5,
                 title: "PR 5".to_string(),
@@ -520,7 +519,7 @@ mod tests {
                 score: 0.5,
                 draft: false,
             },
-        ];
+        ].to_vec();
 
         prs.sort_by(|a, b| {
             b.score
@@ -541,7 +540,7 @@ mod tests {
         // Use compute_score with identical inputs to produce equal scores,
         // then verify the secondary sort (number ASC) is applied correctly.
         let score = compute_score(100, 50, 90.0, 500);
-        let mut prs = vec![
+        let mut prs = [
             crate::output::pr::QueuedPr {
                 number: 42,
                 title: "PR 42".to_string(),
@@ -562,7 +561,7 @@ mod tests {
                 score,
                 draft: false,
             },
-        ];
+        ].to_vec();
         prs.sort_by(|a, b| {
             b.score
                 .partial_cmp(&a.score)

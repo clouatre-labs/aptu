@@ -1169,8 +1169,8 @@ pub trait AiProvider: Send + Sync {
 mod tests {
     use super::*;
 
-    /// Shared struct for parse_ai_json error-path tests.
-    /// The field is only used via serde deserialization; `_message` silences dead_code.
+    /// Shared struct for `parse_ai_json` error-path tests.
+    /// The field is only used via serde deserialization; `_message` silences `dead_code`.
     #[derive(Debug, serde::Deserialize)]
     struct ErrorTestResponse {
         _message: String,
@@ -1345,6 +1345,7 @@ mod tests {
             files,
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1392,6 +1393,7 @@ mod tests {
             files,
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1428,6 +1430,7 @@ mod tests {
             files,
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1482,6 +1485,7 @@ mod tests {
             }],
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1718,6 +1722,7 @@ mod tests {
             }],
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
 
         // Act: call build_pr_review_user_prompt with empty call_graph (dropped by review_pr)
@@ -1761,6 +1766,7 @@ mod tests {
             }],
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
 
         // Act: call build_pr_review_user_prompt with both empty (dropped by review_pr)
@@ -1826,6 +1832,7 @@ mod tests {
             ],
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
 
         // Act: simulate review_pr dropping largest patches first
@@ -1887,6 +1894,7 @@ mod tests {
             ],
             labels: vec![],
             head_sha: String::new(),
+            review_comments: vec![],
         };
 
         // Act: simulate review_pr dropping all full_content

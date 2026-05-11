@@ -190,7 +190,7 @@ mod header_tests {
             .header("x-github-token", "ghp_test123")
             .body(())
             .unwrap();
-        let (parts, _) = req.into_parts();
+        let (parts, ()) = req.into_parts();
 
         // Act
         let provider = HeaderTokenProvider::new(&parts);
@@ -209,7 +209,7 @@ mod header_tests {
             .uri("/test")
             .body(())
             .unwrap();
-        let (parts, _) = req.into_parts();
+        let (parts, ()) = req.into_parts();
 
         // Act: provider should attempt fallback to EnvTokenProvider
         let provider = HeaderTokenProvider::new(&parts);
@@ -245,7 +245,7 @@ mod header_tests {
             .header("x-github-token", "ghp_test456")
             .body(())
             .unwrap();
-        let (parts, _) = req.into_parts();
+        let (parts, ()) = req.into_parts();
 
         // Act
         let provider = make_provider(Some(&parts));

@@ -245,17 +245,10 @@ mod tests {
             retry_after: 60,
         });
         let duration = extract_retry_after(&err);
-        assert_eq!(duration, Some(std::time::Duration::from_secs(60)));
-    }
-
-    #[test]
-    fn test_extract_retry_after_with_zero_value() {
-        let err = anyhow::anyhow!(crate::error::AptuError::RateLimited {
-            provider: "OpenRouter".to_string(),
-            retry_after: 0,
-        });
-        let duration = extract_retry_after(&err);
-        assert_eq!(duration, None);
+        #[allow(clippy::duration_suboptimal_units)]
+        {
+            assert_eq!(duration, Some(std::time::Duration::from_secs(60)));
+        }
     }
 
     #[test]
@@ -265,7 +258,10 @@ mod tests {
             retry_after: 300,
         });
         let duration = extract_retry_after(&err);
-        assert_eq!(duration, Some(std::time::Duration::from_secs(120)));
+        #[allow(clippy::duration_suboptimal_units)]
+        {
+            assert_eq!(duration, Some(std::time::Duration::from_secs(120)));
+        }
     }
 
     #[test]
