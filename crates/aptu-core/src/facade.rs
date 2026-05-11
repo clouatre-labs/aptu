@@ -1714,7 +1714,9 @@ pub async fn revert_issue(
     number: u64,
     dry_run: bool,
 ) -> crate::Result<RevertOutcome> {
-    use crate::github::issues::{delete_issue_comment, remove_issue_label, fetch_issue_with_comments};
+    use crate::github::issues::{
+        delete_issue_comment, fetch_issue_with_comments, remove_issue_label,
+    };
 
     debug!("Reverting issue comments and labels");
 
@@ -1850,7 +1852,10 @@ pub async fn revert_pr(
     for comment in &pr_details.review_comments {
         if comment.author == auth_login {
             comment_ids_to_delete.push(comment.id);
-            debug!(comment_id = comment.id, "Found aptu-authored review comment");
+            debug!(
+                comment_id = comment.id,
+                "Found aptu-authored review comment"
+            );
         }
     }
 
@@ -1878,7 +1883,10 @@ pub async fn revert_pr(
             });
         }
     }
-    debug!(count = comment_ids_to_delete.len(), "PR review comments deleted");
+    debug!(
+        count = comment_ids_to_delete.len(),
+        "PR review comments deleted"
+    );
 
     // Remove labels
     for label in &labels_to_remove {

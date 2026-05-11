@@ -381,20 +381,17 @@ pub async fn run_queue(
         }
 
         let number = pr.number;
-        let title = pr.title.unwrap_or_default();
-        let author = pr
-            .user
-            .as_ref()
-            .map_or_else(|| "unknown".to_string(), |u| u.login.clone());
+        let title = pr.title.clone();
+        let author = pr.user.login.clone();
 
         #[allow(clippy::cast_precision_loss)]
-        let age_days = pr.created_at.map_or(0.0, |created| {
-            let duration = now.signed_duration_since(created);
+        let age_days = {
+            let duration = now.signed_duration_since(pr.created_at);
             duration.num_seconds() as f64 / 86400.0
-        });
+        };
 
-        let additions = pr.additions.unwrap_or(0);
-        let deletions = pr.deletions.unwrap_or(0);
+        let additions = pr.additions;
+        let deletions = pr.deletions;
 
         queued_prs.push(crate::output::pr::QueuedPr {
             number,
@@ -519,7 +516,8 @@ mod tests {
                 score: 0.5,
                 draft: false,
             },
-        ].to_vec();
+        ]
+        .to_vec();
 
         prs.sort_by(|a, b| {
             b.score
@@ -561,7 +559,8 @@ mod tests {
                 score,
                 draft: false,
             },
-        ].to_vec();
+        ]
+        .to_vec();
         prs.sort_by(|a, b| {
             b.score
                 .partial_cmp(&a.score)

@@ -5,8 +5,8 @@
 //! Validates that pattern matching completes in <10ms for typical code samples.
 
 use aptu_core::security::SecurityScanner;
-use std::hint::black_box;
 use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 
 /// Generate a realistic code sample with ~500 lines.
 fn generate_test_code() -> String {

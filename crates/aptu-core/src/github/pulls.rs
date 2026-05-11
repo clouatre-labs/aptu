@@ -163,23 +163,19 @@ pub async fn fetch_pr_details(
         })
         .collect();
 
-    let labels: Vec<String> = pr
-        .labels
-        .iter()
-        .flat_map(|labels_vec| labels_vec.iter().map(|l| l.name.clone()))
-        .collect();
+    let labels: Vec<String> = pr.labels.iter().map(|l| l.name.clone()).collect();
 
     let details = PrDetails {
         owner: owner.to_string(),
         repo: repo.to_string(),
         number,
-        title: pr.title.unwrap_or_default(),
-        body: pr.body.unwrap_or_default(),
+        title: pr.title.clone(),
+        body: pr.body.clone().unwrap_or_default(),
         base_branch: pr.base.ref_field,
         head_branch: pr.head.ref_field,
         head_sha: pr.head.sha,
         files: pr_files,
-        url: pr.html_url.map_or_else(String::new, |u| u.to_string()),
+        url: pr.html_url.to_string(),
         labels,
         review_comments: Vec::new(),
     };
@@ -403,19 +399,24 @@ pub async fn delete_pr_review_comment(
 
     // Use generic delete method; needs explicit empty object body type
     let empty_body = serde_json::json!({});
-    let result: std::result::Result<serde_json::Value, _> = client.delete(&route, Some(&empty_body)).await;
+    let result: std::result::Result<serde_json::Value, _> =
+        client.delete(&route, Some(&empty_body)).await;
 
     match result {
         Ok(_) => {
             debug!("PR review comment deleted successfully");
             Ok(())
         }
-        Err(e) if let octocrab::Error::GitHub { source, .. } = &e
-            && source.status_code.as_u16() == 404 => {
+        Err(e)
+            if let octocrab::Error::GitHub { source, .. } = &e
+                && source.status_code.as_u16() == 404 =>
+        {
             debug!("PR review comment already deleted (404); treating as success");
             Ok(())
         }
-        Err(e) => Err(e).with_context(|| format!("Failed to delete PR review comment #{comment_id}")),
+        Err(e) => {
+            Err(e).with_context(|| format!("Failed to delete PR review comment #{comment_id}"))
+        }
     }
 }
 
@@ -522,14 +523,14 @@ pub async fn create_pull_request(
 
     let result = PrCreateResult {
         pr_number: pr.number,
-        url: pr.html_url.map_or_else(String::new, |u| u.to_string()),
+        url: pr.html_url.to_string(),
         branch: pr.head.ref_field,
         base: pr.base.ref_field,
-        title: pr.title.unwrap_or_default(),
+        title: pr.title.clone(),
         draft: pr.draft.unwrap_or(false),
-        files_changed: u32::try_from(pr.changed_files.unwrap_or_default()).unwrap_or(u32::MAX),
-        additions: pr.additions.unwrap_or_default(),
-        deletions: pr.deletions.unwrap_or_default(),
+        files_changed: u32::try_from(pr.changed_files).unwrap_or(u32::MAX),
+        additions: pr.additions,
+        deletions: pr.deletions,
     };
 
     debug!(

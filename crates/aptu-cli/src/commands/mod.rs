@@ -973,11 +973,7 @@ async fn run_pr_command(
             output::render(&result, &ctx)?;
             Ok(())
         }
-        PrCommand::Revert {
-            pr,
-            repo,
-            dry_run,
-        } => {
+        PrCommand::Revert { pr, repo, dry_run } => {
             let spinner = maybe_spinner(&ctx, "Reverting PR...");
 
             // Determine repo context: --repo flag > inferred_repo > default_repo config
@@ -996,15 +992,10 @@ async fn run_pr_command(
                 .context("Failed to create GitHub client")?;
 
             // Call revert_pr facade function
-            let outcome = aptu_core::facade::revert_pr(
-                &gh_client,
-                &owner,
-                &repo_name,
-                pr_number,
-                dry_run,
-            )
-            .await
-            .context("Failed to revert PR")?;
+            let outcome =
+                aptu_core::facade::revert_pr(&gh_client, &owner, &repo_name, pr_number, dry_run)
+                    .await
+                    .context("Failed to revert PR")?;
 
             if let Some(s) = spinner {
                 s.finish_and_clear();

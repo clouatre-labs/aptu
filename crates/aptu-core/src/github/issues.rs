@@ -349,15 +349,18 @@ pub async fn delete_issue_comment(
 
     // Use generic delete method; needs explicit empty object body type
     let empty_body = serde_json::json!({});
-    let result: std::result::Result<serde_json::Value, _> = client.delete(&route, Some(&empty_body)).await;
+    let result: std::result::Result<serde_json::Value, _> =
+        client.delete(&route, Some(&empty_body)).await;
 
     match result {
         Ok(_) => {
             debug!("Comment deleted successfully");
             Ok(())
         }
-        Err(e) if let octocrab::Error::GitHub { source, .. } = &e
-            && source.status_code.as_u16() == 404 => {
+        Err(e)
+            if let octocrab::Error::GitHub { source, .. } = &e
+                && source.status_code.as_u16() == 404 =>
+        {
             debug!("Comment already deleted (404); treating as success");
             Ok(())
         }
@@ -382,24 +385,31 @@ pub async fn remove_issue_label(
     debug!("Removing label from issue");
 
     // URL-encode label name using percent-encoding (handle spaces, special chars)
-    let encoded_label = percent_encoding::percent_encode(label.as_bytes(), percent_encoding::NON_ALPHANUMERIC).to_string();
+    let encoded_label =
+        percent_encoding::percent_encode(label.as_bytes(), percent_encoding::NON_ALPHANUMERIC)
+            .to_string();
     let route = format!("/repos/{owner}/{repo}/issues/{number}/labels/{encoded_label}");
 
     // Use generic delete method; needs explicit empty object body type
     let empty_body = serde_json::json!({});
-    let result: std::result::Result<serde_json::Value, _> = client.delete(&route, Some(&empty_body)).await;
+    let result: std::result::Result<serde_json::Value, _> =
+        client.delete(&route, Some(&empty_body)).await;
 
     match result {
         Ok(_) => {
             debug!("Label removed successfully");
             Ok(())
         }
-        Err(e) if let octocrab::Error::GitHub { source, .. } = &e
-            && source.status_code.as_u16() == 404 => {
+        Err(e)
+            if let octocrab::Error::GitHub { source, .. } = &e
+                && source.status_code.as_u16() == 404 =>
+        {
             debug!("Label not found (404); treating as success");
             Ok(())
         }
-        Err(e) => Err(e).with_context(|| format!("Failed to remove label '{label}' from issue #{number}")),
+        Err(e) => {
+            Err(e).with_context(|| format!("Failed to remove label '{label}' from issue #{number}"))
+        }
     }
 }
 
