@@ -570,7 +570,9 @@ mod tests {
         clear_token_cache();
 
         // Act: Read the cache after clearing
-        let guard = TOKEN_CACHE.read().unwrap_or_else(|e| e.into_inner());
+        let guard = TOKEN_CACHE
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         // Assert: Cache should be None
         assert!(guard.is_none());

@@ -234,7 +234,7 @@ mod tests {
         assert_eq!(config.ai.model, super::super::ai::DEFAULT_OPENROUTER_MODEL);
         assert_eq!(config.ai.timeout_seconds, 30);
         assert_eq!(config.ai.max_tokens, 4096);
-        assert_eq!(config.ai.allow_paid_models, true);
+        assert!(config.ai.allow_paid_models);
         #[allow(clippy::float_cmp)]
         {
             assert_eq!(config.ai.temperature, 0.3);
@@ -418,17 +418,17 @@ model = "gemini-3.1-flash-lite-preview"
         let (provider, model) = ai_config.resolve_for_task(super::super::ai::TaskType::Triage);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, super::super::ai::DEFAULT_OPENROUTER_MODEL);
-        assert_eq!(ai_config.allow_paid_models, true);
+        assert!(ai_config.allow_paid_models);
 
         let (provider, model) = ai_config.resolve_for_task(super::super::ai::TaskType::Review);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, super::super::ai::DEFAULT_OPENROUTER_MODEL);
-        assert_eq!(ai_config.allow_paid_models, true);
+        assert!(ai_config.allow_paid_models);
 
         let (provider, model) = ai_config.resolve_for_task(super::super::ai::TaskType::Create);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, "mistralai/mistral-small-2603");
-        assert_eq!(ai_config.allow_paid_models, true);
+        assert!(ai_config.allow_paid_models);
     }
 
     #[test]

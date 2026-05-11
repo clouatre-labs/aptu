@@ -630,7 +630,7 @@ mod tests {
                 {
                     "id": "openai/gpt-4o",
                     "name": "GPT-4o",
-                    "context_length": 128000,
+                    "context_length": 128_000,
                     "pricing": {
                         "prompt": "0.000005",
                         "completion": "0.000015"

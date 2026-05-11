@@ -259,9 +259,9 @@ mod tests {
         let engine = PatternEngine::global();
 
         // Test bare variable call
-        let code_bare = r#"
+        let code_bare = r"
             let response = reqwest::get(user_url).await;
-        "#;
+        ";
         let findings_bare = engine.scan(code_bare, "app.rs");
         assert!(
             findings_bare
@@ -286,9 +286,9 @@ mod tests {
     #[test]
     fn test_open_redirect_detection() {
         let engine = PatternEngine::global();
-        let code = r#"
+        let code = r"
             location.href = req.query.url;
-        "#;
+        ";
 
         let findings = engine.scan(code, "app.js");
         assert!(

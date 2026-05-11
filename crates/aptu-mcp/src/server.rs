@@ -1047,8 +1047,7 @@ mod tests {
             triage_issue
                 .description
                 .as_ref()
-                .map(|d| d.contains("Returns analysis only"))
-                .unwrap_or(false),
+                .is_some_and(|d| d.contains("Returns analysis only")),
             "triage_issue description should indicate read-only nature"
         );
     }
@@ -1065,8 +1064,7 @@ mod tests {
             review_pr
                 .description
                 .as_ref()
-                .map(|d| d.contains("Returns analysis only"))
-                .unwrap_or(false),
+                .is_some_and(|d| d.contains("Returns analysis only")),
             "review_pr description should indicate read-only nature"
         );
     }
@@ -1083,8 +1081,7 @@ mod tests {
             post_triage
                 .description
                 .as_ref()
-                .map(|d| d.contains("cannot be undone"))
-                .unwrap_or(false),
+                .is_some_and(|d| d.contains("cannot be undone")),
             "post_triage description should warn that the action cannot be undone"
         );
     }
@@ -1101,8 +1098,7 @@ mod tests {
             post_review
                 .description
                 .as_ref()
-                .map(|d| d.contains("cannot be undone"))
-                .unwrap_or(false),
+                .is_some_and(|d| d.contains("cannot be undone")),
             "post_review description should warn that the action cannot be undone"
         );
     }
@@ -1259,6 +1255,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
+    #[allow(clippy::map_unwrap_or, clippy::redundant_closure_for_method_calls)]
     fn prompt_triage_guide_has_one_argument() {
         let router = AptuServer::prompt_router();
         let prompts = router.list_all();
@@ -1267,6 +1264,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::map_unwrap_or, clippy::redundant_closure_for_method_calls)]
     fn prompt_review_checklist_has_one_argument() {
         let router = AptuServer::prompt_router();
         let prompts = router.list_all();

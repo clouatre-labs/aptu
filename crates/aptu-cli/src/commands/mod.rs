@@ -29,7 +29,7 @@ use crate::cli::{
 };
 use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewOutcome};
 use crate::output;
-use aptu_core::{AppConfig, State, check_already_triaged};
+use aptu_core::{AppConfig, State, check_already_triaged, history::ContributionStatus};
 
 /// Options for PR review behavior.
 #[allow(clippy::struct_excessive_bools)]
@@ -693,6 +693,86 @@ async fn run_issue_command(
             output::render(&result, &ctx)?;
             Ok(())
         }
+        IssueCommand::Revert {
+            issue,
+            repo,
+            dry_run,
+        } => {
+            let spinner = maybe_spinner(&ctx, "Reverting issue...");
+
+            // Determine repo context: --repo flag > inferred_repo > default_repo config
+            let repo_context = repo
+                .as_deref()
+                .or(inferred_repo.as_deref())
+                .or(config.user.default_repo.as_deref());
+
+            // Parse issue reference
+            let (owner, repo_name, issue_number) =
+                aptu_core::github::issues::parse_issue_reference(&issue, repo_context)
+                    .context("Failed to parse issue reference")?;
+
+            // Create GitHub client
+            let gh_client = aptu_core::github::auth::create_client()
+                .context("Failed to create GitHub client")?;
+
+            // Call revert_issue facade function
+            let outcome = aptu_core::facade::revert_issue(
+                &gh_client,
+                &owner,
+                &repo_name,
+                issue_number,
+                dry_run,
+            )
+            .await
+            .context("Failed to revert issue")?;
+
+            if let Some(s) = spinner {
+                s.finish_and_clear();
+            }
+
+            // Record history entry
+            let action_name = if dry_run {
+                "revert-dry-run".to_string()
+            } else {
+                "revert".to_string()
+            };
+            aptu_core::history::add_contribution(aptu_core::history::Contribution {
+                id: uuid::Uuid::new_v4(),
+                repo: format!("{owner}/{repo_name}"),
+                issue: issue_number,
+                action: action_name,
+                timestamp: chrono::Utc::now(),
+                comment_url: String::new(),
+                status: ContributionStatus::default(),
+                ai_stats: None,
+            })
+            .ok();
+
+            // Format result
+            let comments_count = outcome.comment_ids.len();
+            let result = types::RevertResult {
+                dry_run,
+                labels_removed: outcome.labels_removed.clone(),
+                comments_removed: comments_count,
+                comment_ids: outcome.comment_ids,
+                summary: if dry_run {
+                    format!(
+                        "Would remove {} comments and {} labels from issue #{issue_number}",
+                        comments_count,
+                        outcome.labels_removed.len()
+                    )
+                } else {
+                    format!(
+                        "Removed {} comments and {} labels from issue #{issue_number}",
+                        comments_count,
+                        outcome.labels_removed.len()
+                    )
+                },
+            };
+
+            output::render(&result, &ctx)?;
+            Ok(())
+        }
     }
 }
 
@@ -893,6 +973,77 @@ async fn run_pr_command(
             output::render(&result, &ctx)?;
             Ok(())
         }
+        PrCommand::Revert { pr, repo, dry_run } => {
+            let spinner = maybe_spinner(&ctx, "Reverting PR...");
+
+            // Determine repo context: --repo flag > inferred_repo > default_repo config
+            let repo_context = repo
+                .as_deref()
+                .or(inferred_repo.as_deref())
+                .or(config.user.default_repo.as_deref());
+
+            // Parse PR reference
+            let (owner, repo_name, pr_number) =
+                aptu_core::github::pulls::parse_pr_reference(&pr, repo_context)
+                    .context("Failed to parse PR reference")?;
+
+            // Create GitHub client
+            let gh_client = aptu_core::github::auth::create_client()
+                .context("Failed to create GitHub client")?;
+
+            // Call revert_pr facade function
+            let outcome =
+                aptu_core::facade::revert_pr(&gh_client, &owner, &repo_name, pr_number, dry_run)
+                    .await
+                    .context("Failed to revert PR")?;
+
+            if let Some(s) = spinner {
+                s.finish_and_clear();
+            }
+
+            // Record history entry
+            let action_name = if dry_run {
+                "revert-dry-run".to_string()
+            } else {
+                "revert".to_string()
+            };
+            aptu_core::history::add_contribution(aptu_core::history::Contribution {
+                id: uuid::Uuid::new_v4(),
+                repo: format!("{owner}/{repo_name}"),
+                issue: pr_number,
+                action: action_name,
+                timestamp: chrono::Utc::now(),
+                comment_url: String::new(),
+                status: ContributionStatus::default(),
+                ai_stats: None,
+            })
+            .ok();
+
+            // Format result
+            let comments_count = outcome.comment_ids.len();
+            let result = types::RevertResult {
+                dry_run,
+                labels_removed: outcome.labels_removed.clone(),
+                comments_removed: comments_count,
+                comment_ids: outcome.comment_ids,
+                summary: if dry_run {
+                    format!(
+                        "Would remove {} comments and {} labels from PR #{pr_number}",
+                        comments_count,
+                        outcome.labels_removed.len()
+                    )
+                } else {
+                    format!(
+                        "Removed {} comments and {} labels from PR #{pr_number}",
+                        comments_count,
+                        outcome.labels_removed.len()
+                    )
+                },
+            };
+
+            output::render(&result, &ctx)?;
+            Ok(())
+        }
     }
 }
 
@@ -982,13 +1133,14 @@ pub async fn run(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::cli::{OutputContext, OutputFormat};
     use crate::commands::types::{AuthActionResult, RepoMutateResult};
 
     // UX-006/007: AuthActionResult renders correct text
     #[test]
     fn test_auth_action_result_render_text() {
+        use crate::output::Renderable;
+
         // Arrange
         let result = AuthActionResult {
             action: "login".to_string(),
@@ -998,7 +1150,6 @@ mod tests {
         let mut buf = Vec::new();
 
         // Act
-        use crate::output::Renderable;
         result.render_text(&mut buf, &ctx).unwrap();
 
         // Assert
@@ -1026,6 +1177,8 @@ mod tests {
     // UX-006/007: RepoMutateResult renders correct text (happy path)
     #[test]
     fn test_repo_mutate_result_render_text() {
+        use crate::output::Renderable;
+
         // Arrange
         let result = RepoMutateResult {
             action: "add".to_string(),
@@ -1036,7 +1189,6 @@ mod tests {
         let mut buf = Vec::new();
 
         // Act
-        use crate::output::Renderable;
         result.render_text(&mut buf, &ctx).unwrap();
 
         // Assert

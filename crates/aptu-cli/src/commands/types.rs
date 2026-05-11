@@ -273,3 +273,18 @@ pub struct RepoMutateResult {
     /// Human-readable message describing the outcome.
     pub message: String,
 }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RevertResult {
+    /// Whether this was a dry-run (no actual deletions).
+    pub dry_run: bool,
+    /// Labels that were removed (or would be removed in dry-run).
+    pub labels_removed: Vec<String>,
+    /// Number of comments that were removed.
+    pub comments_removed: usize,
+    /// IDs of removed comments.
+    pub comment_ids: Vec<u64>,
+    /// Summary message describing what was removed.
+    pub summary: String,
+}
