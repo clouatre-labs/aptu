@@ -356,7 +356,8 @@ pub async fn delete_issue_comment(
             debug!("Comment deleted successfully");
             Ok(())
         }
-        Err(e) if e.to_string().contains("404") => {
+        Err(e) if let octocrab::Error::GitHub { source, .. } = &e
+            && source.status_code.as_u16() == 404 => {
             debug!("Comment already deleted (404); treating as success");
             Ok(())
         }
@@ -393,7 +394,8 @@ pub async fn remove_issue_label(
             debug!("Label removed successfully");
             Ok(())
         }
-        Err(e) if e.to_string().contains("404") => {
+        Err(e) if let octocrab::Error::GitHub { source, .. } = &e
+            && source.status_code.as_u16() == 404 => {
             debug!("Label not found (404); treating as success");
             Ok(())
         }

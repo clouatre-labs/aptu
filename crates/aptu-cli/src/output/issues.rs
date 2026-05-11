@@ -235,4 +235,7 @@ impl Renderable for RevertResult {
 
         Ok(())
     }
+    // Note: JSON output is handled by the generic Renderable impl via serde serialization.
+    // RevertResult derives Serialize, so serde_json::to_string_pretty is used automatically
+    // in the render function (crates/aptu-cli/src/output/mod.rs:30).
 }

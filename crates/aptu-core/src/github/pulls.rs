@@ -410,7 +410,8 @@ pub async fn delete_pr_review_comment(
             debug!("PR review comment deleted successfully");
             Ok(())
         }
-        Err(e) if e.to_string().contains("404") => {
+        Err(e) if let octocrab::Error::GitHub { source, .. } = &e
+            && source.status_code.as_u16() == 404 => {
             debug!("PR review comment already deleted (404); treating as success");
             Ok(())
         }
