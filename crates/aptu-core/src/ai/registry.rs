@@ -51,6 +51,12 @@ pub struct ProviderConfig {
 // Provider Registry
 // ============================================================================
 
+/// Provider name constant for Anthropic.
+///
+/// Used by [`crate::ai::provider::AiProvider::is_anthropic`] to avoid
+/// hardcoding the string literal in multiple places.
+pub const PROVIDER_ANTHROPIC: &str = "anthropic";
+
 /// Static registry of all supported AI providers
 pub static PROVIDERS: &[ProviderConfig] = &[
     ProviderConfig {
@@ -90,7 +96,7 @@ pub static PROVIDERS: &[ProviderConfig] = &[
         api_key_env: "ZAI_API_KEY",
     },
     ProviderConfig {
-        name: "anthropic",
+        name: PROVIDER_ANTHROPIC,
         display_name: "Anthropic",
         api_url: "https://api.anthropic.com/v1/chat/completions",
         api_key_env: "ANTHROPIC_API_KEY",

@@ -15,6 +15,7 @@ use std::sync::LazyLock;
 use tracing::{debug, instrument};
 
 use super::AiResponse;
+use super::registry::PROVIDER_ANTHROPIC;
 use super::types::{
     ChatCompletionRequest, ChatCompletionResponse, ChatMessage, IssueDetails, ResponseFormat,
     TriageResponse,
@@ -178,7 +179,7 @@ pub trait AiProvider: Send + Sync {
     /// that route through a different name but support Anthropic prompt caching
     /// can override this method.
     fn is_anthropic(&self) -> bool {
-        self.name() == "anthropic"
+        self.name() == PROVIDER_ANTHROPIC
     }
 
     /// Returns the maximum retry attempts for rate-limited requests.
