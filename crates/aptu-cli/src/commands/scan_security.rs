@@ -36,6 +36,7 @@ pub async fn run_scan_security_command(
         let content = if diff_path == Path::new("-") {
             let mut buf = String::new();
             std::io::stdin()
+                .take((DIFF_SIZE_LIMIT + 1) as u64)
                 .read_to_string(&mut buf)
                 .map_err(|e| anyhow::anyhow!("Failed to read stdin: {e}"))?;
             buf
