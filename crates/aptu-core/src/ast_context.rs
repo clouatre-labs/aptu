@@ -258,6 +258,7 @@ mod tests {
             additions: 0,
             deletions: 0,
             patch: None,
+            patch_truncated: false,
             full_content: None,
         }
     }

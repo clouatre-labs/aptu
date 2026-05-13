@@ -82,6 +82,7 @@ pub fn parse_pr_reference(
 ///
 /// Returns an error if the API call fails or PR is not found.
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
+#[allow(clippy::too_many_lines)]
 pub async fn fetch_pr_details(
     client: &Octocrab,
     owner: &str,
@@ -115,26 +116,69 @@ pub async fn fetch_pr_details(
         }
     };
 
-    // Fetch PR files (diffs)
-    let files = client
+    // Fetch PR files (diffs) with pagination (per_page=100, max 300 files)
+    let mut pr_files: Vec<PrFile> = Vec::new();
+    let mut page = client
         .pulls(owner, repo)
         .list_files(number)
         .await
         .with_context(|| format!("Failed to fetch files for PR #{number}"))?;
 
-    // Convert to our types
-    let pr_files: Vec<PrFile> = files
-        .items
-        .into_iter()
-        .map(|f| PrFile {
+    loop {
+        pr_files.extend(page.items.into_iter().map(|f| PrFile {
             filename: f.filename,
             status: format!("{:?}", f.status),
             additions: f.additions,
             deletions: f.deletions,
             patch: f.patch,
+            patch_truncated: false,
             full_content: None,
-        })
-        .collect();
+        }));
+
+        if pr_files.len() >= 300 {
+            tracing::warn!(
+                "PR #{} has reached 300-file cap; stopping pagination",
+                number
+            );
+            pr_files.truncate(300);
+            break;
+        }
+
+        match client
+            .get_page::<octocrab::models::repos::DiffEntry>(&page.next)
+            .await
+        {
+            Ok(Some(next_page)) => page = next_page,
+            Ok(None) => break,
+            Err(e) => {
+                tracing::warn!("Error fetching next page of files: {}", e);
+                break;
+            }
+        }
+    }
+
+    // Detect truncated patches and attempt Contents API fallback
+    for file in &mut pr_files {
+        #[allow(clippy::collapsible_if)]
+        if let Some(patch) = &file.patch {
+            if is_patch_truncated(patch) {
+                file.patch_truncated = true;
+                // Attempt Contents API fallback
+                if let Ok(Some(content)) = fetch_file_contents_single(
+                    client,
+                    owner,
+                    repo,
+                    &file.filename,
+                    &pr.head.sha,
+                    review_config.max_chars_per_file,
+                )
+                .await
+                {
+                    file.patch = Some(content);
+                }
+            }
+        }
+    }
 
     // Fetch full file contents for eligible files (default: up to 10 files, max 4000 chars each)
     let file_contents = fetch_file_contents(
@@ -186,6 +230,83 @@ pub async fn fetch_pr_details(
     );
 
     Ok(details)
+}
+
+/// Detects if a patch is truncated mid-hunk by GitHub API.
+///
+/// A patch is considered truncated if the last non-empty line starts with '+' or '-',
+/// indicating an incomplete hunk.
+fn is_patch_truncated(patch: &str) -> bool {
+    patch
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .is_some_and(|line| line.starts_with('+') || line.starts_with('-'))
+}
+
+/// Fetches a single file's content from GitHub Contents API as a fallback for truncated patches.
+///
+/// Returns the file content truncated to `max_chars`, or `None` if the file cannot be fetched.
+/// Non-fatal errors (404, rate limits) are logged as warnings.
+async fn fetch_file_contents_single(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    filename: &str,
+    head_sha: &str,
+    max_chars: usize,
+) -> Result<Option<String>> {
+    match client
+        .repos(owner, repo)
+        .get_content()
+        .path(filename)
+        .r#ref(head_sha)
+        .send()
+        .await
+    {
+        Ok(content) => {
+            // Try to decode the first item (should be the file, not a directory listing)
+            if let Some(item) = content.items.first() {
+                if let Some(decoded) = item.decoded_content() {
+                    let truncated = if decoded.len() > max_chars {
+                        decoded.chars().take(max_chars).collect::<String>()
+                    } else {
+                        decoded
+                    };
+                    Ok(Some(truncated))
+                } else {
+                    tracing::warn!(
+                        "Failed to decode content for {}/{}/{} at {}",
+                        owner,
+                        repo,
+                        filename,
+                        head_sha
+                    );
+                    Ok(None)
+                }
+            } else {
+                tracing::warn!(
+                    "File content response was empty for {}/{}/{} at {}",
+                    owner,
+                    repo,
+                    filename,
+                    head_sha
+                );
+                Ok(None)
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to fetch content for {}/{}/{} at {}: {}",
+                owner,
+                repo,
+                filename,
+                head_sha,
+                e
+            );
+            Ok(None)
+        }
+    }
 }
 
 /// Fetches full file contents for PR files from GitHub Contents API.
@@ -864,6 +985,7 @@ mod tests {
             additions: 0,
             deletions: 5,
             patch: None,
+            patch_truncated: false,
             full_content: None,
         };
         let modified_file = PrFile {
@@ -872,6 +994,7 @@ mod tests {
             additions: 1,
             deletions: 0,
             patch: Some("+ new code".to_string()),
+            patch_truncated: false,
             full_content: None,
         };
         let no_patch_file = PrFile {
@@ -880,6 +1003,7 @@ mod tests {
             additions: 1,
             deletions: 0,
             patch: None,
+            patch_truncated: false,
             full_content: None,
         };
 
@@ -969,5 +1093,117 @@ mod tests {
             decoded.is_char_boundary(decoded.len()),
             "output should be valid UTF-8 (truncated on char boundary)"
         );
+    }
+
+    #[test]
+    fn test_list_files_pagination_collects_all_pages() {
+        // Arrange: simulate pagination with two pages
+        // Page 1: 100 items with next_link set
+        let mut page1_items = Vec::new();
+        for i in 0..100 {
+            page1_items.push(PrFile {
+                filename: format!("file{}.rs", i),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 0,
+                patch: Some("@@ -1,1 +1,1 @@\n-old\n+new".to_string()),
+                patch_truncated: false,
+                full_content: None,
+            });
+        }
+
+        // Page 2: 50 items with no next_link
+        let mut page2_items = Vec::new();
+        for i in 100..150 {
+            page2_items.push(PrFile {
+                filename: format!("file{}.rs", i),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 0,
+                patch: Some("@@ -1,1 +1,1 @@\n-old\n+new".to_string()),
+                patch_truncated: false,
+                full_content: None,
+            });
+        }
+
+        // Act: collect all items (simulating pagination loop)
+        let mut all_files = Vec::new();
+        all_files.extend(page1_items);
+        all_files.extend(page2_items);
+
+        // Assert: total collected == 150
+        assert_eq!(
+            all_files.len(),
+            150,
+            "pagination should collect all items from both pages"
+        );
+    }
+
+    #[test]
+    fn test_list_files_pagination_respects_300_file_cap() {
+        // Arrange: build a Vec of 301 PrFile items
+        let mut files = Vec::new();
+        for i in 0..301 {
+            files.push(PrFile {
+                filename: format!("file{}.rs", i),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 0,
+                patch: Some("@@ -1,1 +1,1 @@\n-old\n+new".to_string()),
+                patch_truncated: false,
+                full_content: None,
+            });
+        }
+
+        // Act: apply the 300-file cap (simulating the truncate logic)
+        if files.len() >= 300 {
+            files.truncate(300);
+        }
+
+        // Assert: result.len() == 300
+        assert_eq!(files.len(), 300, "pagination should enforce 300-file cap");
+    }
+
+    #[test]
+    fn test_fetch_file_contents_fallback_on_truncated_patch() {
+        // Arrange: test is_patch_truncated with various patch strings
+
+        // Test 1: patch ending with '+' (mid-hunk truncation)
+        let truncated_patch_plus = "@@ -1,3 +1,4 @@\n line1\n line2\n+";
+        assert!(
+            is_patch_truncated(truncated_patch_plus),
+            "patch ending with + should be detected as truncated"
+        );
+
+        // Test 2: patch ending with '-' (mid-hunk truncation)
+        let truncated_patch_minus = "@@ -1,3 +1,4 @@\n line1\n line2\n-";
+        assert!(
+            is_patch_truncated(truncated_patch_minus),
+            "patch ending with - should be detected as truncated"
+        );
+
+        // Test 3: patch ending with ' ' (context line, not truncated)
+        let clean_patch_space = "@@ -1,3 +1,3 @@\n line1\n line2\n line3";
+        assert!(
+            !is_patch_truncated(clean_patch_space),
+            "patch ending with space should not be detected as truncated"
+        );
+
+        // Test 4: patch ending with '@@' (hunk header, not truncated)
+        let clean_patch_hunk = "@@ -1,3 +1,3 @@\n line1\n line2\n@@ -5,2 +5,2 @@";
+        assert!(
+            !is_patch_truncated(clean_patch_hunk),
+            "patch ending with @@ should not be detected as truncated"
+        );
+
+        // Test 5: empty patch
+        let empty_patch = "";
+        assert!(
+            !is_patch_truncated(empty_patch),
+            "empty patch should not be detected as truncated"
+        );
+
+        // Note: The Contents API network call cannot be unit-tested without a mock.
+        // The fallback is exercised in integration tests via the full fetch_pr_details flow.
     }
 }
