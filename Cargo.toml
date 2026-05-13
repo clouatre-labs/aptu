@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/aptu-cli", "crates/aptu-core", "crates/aptu-mcp"]
+members = ["crates/aptu-cli", "crates/aptu-core"]
 resolver = "3"
 
 [workspace.package]
@@ -15,8 +15,6 @@ repository = "https://github.com/clouatre-labs/aptu"
 toml = "1.0"
 fastrand = "2"
 percent-encoding = "2"
-axum = "0.8"
-tower = "0.5"
 serial_test = "3.4.0"
 tempfile = "3.27.0"
 # Core
@@ -66,8 +64,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # FFI
 uniffi = { version = "0.31.0" }
 
-# MCP
-rmcp = { version = "1.6", features = ["server", "transport-io"] }
+# Schemas
 schemars = { version = "1.0" }
 
 # Dev dependencies

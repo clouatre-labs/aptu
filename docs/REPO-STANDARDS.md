@@ -100,17 +100,6 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 
 ---
 
-## MCP Server Policy
-
-The `aptu-mcp` binary ships with a `--read-only` flag. When enabled:
-
-- Write tools (`post_triage`, `post_review`) are disabled and return an error.
-- All read tools (`triage_issue`, `review_pr`, `scan_security`, `health`) remain available.
-
-The server defaults to write-enabled. Pass `--read-only` to restrict it to read-only mode, disabling write operations in third-party integrations (e.g., Goose MCP extension) where unintended writes are a concern.
-
----
-
 ## Applying to a New Repository
 
 1. Copy `.github/workflows/` and `.github/renovate.json`.

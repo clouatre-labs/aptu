@@ -12,7 +12,6 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 
 - `aptu-cli` - CLI interface (Clap derive); binary: `aptu`
 - `aptu-core` - Core library: AI providers, GitHub API, security scanner, triage engine, cache, history, retry, bulk processing
-- `aptu-mcp` - MCP server (rmcp); binary: `aptu-mcp`
 
 ## CLI Subcommands
 
@@ -32,14 +31,6 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 - `pr review`: `--comment`, `--approve`, `--request-changes`, `--dry-run`, `--force`; at least one action flag required or a hint is emitted
 - `scan-security`: `--output sarif|github-annotations|json|text`, `--fail-on <severities>`, `--exclude <prefix>`; `sarif`/`github-annotations` formats are only valid for this subcommand
 - Global: `--output json|text`, `--verbose`, `--no-color`
-
-## MCP Server
-
-Tools: `triage_issue`, `review_pr`, `scan_security`, `post_triage`, `post_review`, `health`
-Resources: `aptu://repos`, `aptu://issues`, `aptu://config`
-Prompts: `triage_guide`, `review_checklist`
-Write tools (`post_triage`, `post_review`) are disabled in `--read-only` mode.
-Bearer token auth for the HTTP endpoint: set `MCP_BEARER_TOKEN` env var; the server refuses to start if the token is absent or empty unless `--allow-unauthenticated` is explicitly passed (a warning is logged in that case). Note: Ensure this is used over HTTPS as the token is sent in plain text.
 
 ## Config & Data Paths (XDG)
 
@@ -62,7 +53,6 @@ cargo clippy -- -D warnings
 cargo fmt --check
 cargo deny check advisories licenses
 cargo install --path crates/aptu-cli --profile release   # aptu binary
-cargo install --path crates/aptu-mcp --profile release   # aptu-mcp binary
 ```
 
 Both binaries install to `~/.cargo/bin/`. Do not install via Homebrew; build from source.
@@ -81,14 +71,13 @@ Cargo profiles defined in workspace `Cargo.toml`: `release` (size-optimized, LTO
 - `aptu scan-security <path>` walks a directory with local pattern matching; no AI call; each `PatternDefinition` carries `remediation` text and `authority_url` (CWE or OWASP reference)
 - SARIF output (`--output sarif`) populates `tool.driver.rules[]` with CWE `helpUri`; upload via `scan.yml` workflow; see `docs/SECURITY_SCANNING.md`
 - CI self-audit gate: `scan-self` job in `ci.yml` runs `--fail-on critical,high --output github-annotations` on every push/PR
-- Prompt-injection input limits in `[prompt]` (`PromptConfig`: `max_issue_body_bytes=32768`, `max_diff_bytes=131072`, `max_commit_message_bytes=4096`); CLI exits non-zero on breach, MCP returns `ToolExecutionError`
+- Prompt-injection input limits in `[prompt]` (`PromptConfig`: `max_issue_body_bytes=32768`, `max_diff_bytes=131072`, `max_commit_message_bytes=4096`); CLI exits non-zero on breach
 
 ### GitHub Integration
 - Inline PR review comments posted via GitHub REST API (`aptu-core::github::pulls::post_pr_review`)
 - PR review injects AST + call-graph context from GitHub Contents API; multi-language (Rust, Go, Python, TS, JS, C/C++, C#, Java)
 - Review context budgets in `[review]` (`ReviewConfig`: `max_prompt_chars`, `max_full_content_files`, `max_chars_per_file`)
 - GitHub OAuth device flow; credentials stored in OS keyring
-- Least-privilege: MCP server ships with `--read-only` flag; write operations require explicit opt-in
 
 ### Prompts & Schemas
 - All prompt text in `crates/aptu-core/src/ai/prompts/` as `.md`/`.json`; edit there, not in Rust source
@@ -100,4 +89,3 @@ Cargo profiles defined in workspace `Cargo.toml`: `release` (size-optimized, LTO
 - cargo-deny for dependency audits (`advisories` + `licenses`)
 - Contribution history tracking with progress metrics (`aptu-core::history`)
 - PR merge: `gh pr merge --squash` (no merge queue)
-- See SPEC.md for full specification
