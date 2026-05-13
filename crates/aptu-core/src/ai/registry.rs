@@ -19,7 +19,7 @@
 //!
 //! // Get all providers
 //! let providers = all_providers();
-//! assert_eq!(providers.len(), 6);
+//! assert_eq!(providers.len(), 7);
 //! ```
 
 use async_trait::async_trait;
@@ -89,6 +89,12 @@ pub static PROVIDERS: &[ProviderConfig] = &[
         api_url: "https://api.z.ai/api/paas/v4/chat/completions",
         api_key_env: "ZAI_API_KEY",
     },
+    ProviderConfig {
+        name: "anthropic",
+        display_name: "Anthropic",
+        api_url: "https://api.anthropic.com/v1/chat/completions",
+        api_key_env: "ANTHROPIC_API_KEY",
+    },
 ];
 
 /// Retrieves a provider configuration by name.
@@ -127,7 +133,7 @@ pub fn get_provider(name: &str) -> Option<&'static ProviderConfig> {
 /// use aptu_core::ai::registry::all_providers;
 ///
 /// let providers = all_providers();
-/// assert_eq!(providers.len(), 6);
+/// assert_eq!(providers.len(), 7);
 /// ```
 #[must_use]
 pub fn all_providers() -> &'static [ProviderConfig] {
@@ -564,7 +570,7 @@ mod tests {
     #[test]
     fn test_all_providers_count() {
         let providers = all_providers();
-        assert_eq!(providers.len(), 6, "Should have exactly 6 providers");
+        assert_eq!(providers.len(), 7, "Should have exactly 7 providers");
     }
 
     #[test]

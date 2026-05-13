@@ -455,6 +455,13 @@ pub trait AiProvider: Send + Sync {
             "AI request completed"
         );
 
+        // Log cache hit/miss details
+        debug!(
+            cache_read_tokens = %cache_read_tokens,
+            cache_write_tokens = %cache_write_tokens,
+            "Cache token usage"
+        );
+
         Ok((parsed, ai_stats))
     }
 
@@ -484,20 +491,29 @@ pub trait AiProvider: Send + Sync {
             Self::build_system_prompt(self.custom_guidance())
         };
 
+        let mut messages = vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: Some(system_content),
+                reasoning: None,
+                cache_control: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some(Self::build_user_prompt(issue)),
+                reasoning: None,
+                cache_control: None,
+            },
+        ];
+
+        // Inject cache control on system message for Anthropic
+        if self.name() == "anthropic" && let Some(msg) = messages.first_mut() {
+            msg.cache_control = Some(super::types::CacheControl::ephemeral());
+        }
+
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
-            messages: vec![
-                ChatMessage {
-                    role: "system".to_string(),
-                    content: Some(system_content),
-                    reasoning: None,
-                },
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: Some(Self::build_user_prompt(issue)),
-                    reasoning: None,
-                },
-            ],
+            messages,
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
                 json_schema: None,
@@ -557,20 +573,29 @@ pub trait AiProvider: Send + Sync {
             Self::build_create_system_prompt(self.custom_guidance())
         };
 
+        let mut messages = vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: Some(system_content),
+                reasoning: None,
+                cache_control: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some(Self::build_create_user_prompt(title, body, repo)),
+                reasoning: None,
+                cache_control: None,
+            },
+        ];
+
+        // Inject cache control on system message for Anthropic
+        if self.name() == "anthropic" && let Some(msg) = messages.first_mut() {
+            msg.cache_control = Some(super::types::CacheControl::ephemeral());
+        }
+
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
-            messages: vec![
-                ChatMessage {
-                    role: "system".to_string(),
-                    content: Some(system_content),
-                    reasoning: None,
-                },
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: Some(Self::build_create_user_prompt(title, body, repo)),
-                    reasoning: None,
-                },
-            ],
+            messages,
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
                 json_schema: None,
@@ -888,20 +913,29 @@ pub trait AiProvider: Send + Sync {
             "Actual assembled prompt size vs. estimate"
         );
 
+        let mut messages = vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: Some(system_content),
+                reasoning: None,
+                cache_control: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some(assembled_prompt),
+                reasoning: None,
+                cache_control: None,
+            },
+        ];
+
+        // Inject cache control on system message for Anthropic
+        if self.name() == "anthropic" && let Some(msg) = messages.first_mut() {
+            msg.cache_control = Some(super::types::CacheControl::ephemeral());
+        }
+
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
-            messages: vec![
-                ChatMessage {
-                    role: "system".to_string(),
-                    content: Some(system_content),
-                    reasoning: None,
-                },
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: Some(assembled_prompt),
-                    reasoning: None,
-                },
-            ],
+            messages,
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
                 json_schema: None,
@@ -962,20 +996,29 @@ pub trait AiProvider: Send + Sync {
             Self::build_pr_label_system_prompt(self.custom_guidance())
         };
 
+        let mut messages = vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: Some(system_content),
+                reasoning: None,
+                cache_control: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some(Self::build_pr_label_user_prompt(title, body, file_paths)),
+                reasoning: None,
+                cache_control: None,
+            },
+        ];
+
+        // Inject cache control on system message for Anthropic
+        if self.name() == "anthropic" && let Some(msg) = messages.first_mut() {
+            msg.cache_control = Some(super::types::CacheControl::ephemeral());
+        }
+
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
-            messages: vec![
-                ChatMessage {
-                    role: "system".to_string(),
-                    content: Some(system_content),
-                    reasoning: None,
-                },
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: Some(Self::build_pr_label_user_prompt(title, body, file_paths)),
-                    reasoning: None,
-                },
-            ],
+            messages,
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
                 json_schema: None,

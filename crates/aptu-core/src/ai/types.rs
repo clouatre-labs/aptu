@@ -23,6 +23,28 @@ impl CreditsStatus {
     }
 }
 
+/// Cache control directive for prompt caching (Anthropic).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CacheControl {
+    /// Cache type: "ephemeral" for Anthropic prompt caching.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// Optional TTL for cache entries (not used for ephemeral caching).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl: Option<String>,
+}
+
+impl CacheControl {
+    /// Creates an ephemeral cache control directive.
+    #[must_use]
+    pub fn ephemeral() -> Self {
+        Self {
+            kind: "ephemeral".to_string(),
+            ttl: None,
+        }
+    }
+}
+
 /// A chat message for the `OpenRouter` API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -35,6 +57,9 @@ pub struct ChatMessage {
     /// Reasoning output from reasoning models. Present when `content` is `null`.
     #[serde(default)]
     pub reasoning: Option<String>,
+    /// Cache control directive for prompt caching (Anthropic only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
 }
 
 /// Request body for `OpenRouter` chat completions API.
@@ -510,5 +535,36 @@ mod tests {
         let json = r#"{"summary":"Test","suggested_labels":[],"clarifying_questions":[],"potential_duplicates":[],"related_issues":[]}"#;
         let tr: TriageResponse = serde_json::from_str(json).unwrap();
         assert!(tr.complexity.is_none());
+    }
+
+    #[test]
+    fn test_cache_control_serialization() {
+        let cache_control = CacheControl::ephemeral();
+        let json = serde_json::to_string(&cache_control).unwrap();
+        assert_eq!(json, r#"{"type":"ephemeral"}"#);
+    }
+
+    #[test]
+    fn test_chat_message_cache_control_included() {
+        let msg = ChatMessage {
+            role: "system".to_string(),
+            content: Some("test".to_string()),
+            reasoning: None,
+            cache_control: Some(CacheControl::ephemeral()),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"ephemeral""#));
+    }
+
+    #[test]
+    fn test_chat_message_cache_control_omitted() {
+        let msg = ChatMessage {
+            role: "user".to_string(),
+            content: Some("test".to_string()),
+            reasoning: None,
+            cache_control: None,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(!json.contains("cache_control"));
     }
 }
