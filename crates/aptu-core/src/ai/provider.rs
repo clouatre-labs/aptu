@@ -171,6 +171,16 @@ pub trait AiProvider: Send + Sync {
     /// Returns the temperature for API requests.
     fn temperature(&self) -> f32;
 
+    /// Returns whether this provider is Anthropic-compatible and supports
+    /// `cache_control` on message blocks.
+    ///
+    /// Default implementation checks `self.name() == "anthropic"`. Providers
+    /// that route through a different name but support Anthropic prompt caching
+    /// can override this method.
+    fn is_anthropic(&self) -> bool {
+        self.name() == "anthropic"
+    }
+
     /// Returns the maximum retry attempts for rate-limited requests.
     ///
     /// Default implementation returns 3. Providers can override
@@ -507,7 +517,7 @@ pub trait AiProvider: Send + Sync {
         ];
 
         // Inject cache control on system message for Anthropic
-        if self.name() == "anthropic" && let Some(msg) = messages.first_mut() {
+        if self.is_anthropic() && let Some(msg) = messages.first_mut() {
             msg.cache_control = Some(super::types::CacheControl::ephemeral());
         }
 
@@ -589,7 +599,7 @@ pub trait AiProvider: Send + Sync {
         ];
 
         // Inject cache control on system message for Anthropic
-        if self.name() == "anthropic" && let Some(msg) = messages.first_mut() {
+        if self.is_anthropic() && let Some(msg) = messages.first_mut() {
             msg.cache_control = Some(super::types::CacheControl::ephemeral());
         }
 
@@ -929,7 +939,7 @@ pub trait AiProvider: Send + Sync {
         ];
 
         // Inject cache control on system message for Anthropic
-        if self.name() == "anthropic" && let Some(msg) = messages.first_mut() {
+        if self.is_anthropic() && let Some(msg) = messages.first_mut() {
             msg.cache_control = Some(super::types::CacheControl::ephemeral());
         }
 
@@ -1012,7 +1022,7 @@ pub trait AiProvider: Send + Sync {
         ];
 
         // Inject cache control on system message for Anthropic
-        if self.name() == "anthropic" && let Some(msg) = messages.first_mut() {
+        if self.is_anthropic() && let Some(msg) = messages.first_mut() {
             msg.cache_control = Some(super::types::CacheControl::ephemeral());
         }
 
