@@ -352,6 +352,9 @@ pub struct PrDetails {
     /// Review comments on the PR.
     #[serde(default)]
     pub review_comments: Vec<PrReviewCommentDetails>,
+    /// Repository instructions (AGENTS.md or .github/instructions/pr-review.md) for context.
+    #[serde(default)]
+    pub instructions: Option<String>,
 }
 
 /// A file changed in a pull request.

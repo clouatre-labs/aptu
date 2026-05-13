@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 ///   latency and rate limit usage.
 /// - `max_chars_per_file`: 4,000 chars per file keeps individual file snippets readable
 ///   without dominating the prompt budget.
+/// - `max_instructions_chars`: 1,500 chars caps repository instructions to prevent prompt bloat.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct ReviewConfig {
@@ -23,6 +24,16 @@ pub struct ReviewConfig {
     pub max_full_content_files: usize,
     /// Maximum characters per file's full content (default: `4_000`).
     pub max_chars_per_file: usize,
+    /// Maximum characters for repository instructions (default: `1_500`).
+    #[serde(default = "default_max_instructions_chars")]
+    pub max_instructions_chars: usize,
+    /// Optional path to repository instructions file (overrides default AGENTS.md and .github/instructions/pr-review.md).
+    #[serde(default)]
+    pub instructions_file: Option<String>,
+}
+
+fn default_max_instructions_chars() -> usize {
+    1_500
 }
 
 impl Default for ReviewConfig {
@@ -31,6 +42,8 @@ impl Default for ReviewConfig {
             max_prompt_chars: 120_000, // Conservative budget for LLM context windows with overhead
             max_full_content_files: 10, // Cap GitHub Contents API calls to limit latency and rate limits
             max_chars_per_file: 4_000, // Keep individual file snippets readable without overwhelming prompt
+            max_instructions_chars: 1_500, // Cap repository instructions to prevent prompt bloat
+            instructions_file: None,
         }
     }
 }

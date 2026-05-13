@@ -453,6 +453,10 @@ pub enum PrCommand {
         /// Enable cross-file call graph context (requires --repo-path).
         #[arg(long, default_value_t = false)]
         deep: bool,
+
+        /// Path to repository instructions file (overrides default AGENTS.md and .github/instructions/pr-review.md).
+        #[arg(long, value_name = "PATH")]
+        instructions_file: Option<std::path::PathBuf>,
     },
     /// Auto-label a pull request based on conventional commit prefix and file paths
     Label {

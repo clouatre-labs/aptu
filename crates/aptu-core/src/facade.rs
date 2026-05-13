@@ -659,11 +659,24 @@ pub async fn fetch_pr_for_review(
     let app_config = load_config().unwrap_or_default();
 
     // Fetch PR details
-    fetch_pr_details(&client, &owner, &repo, number, &app_config.review)
+    let mut pr = fetch_pr_details(&client, &owner, &repo, number, &app_config.review)
         .await
         .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
-        })
+        })?;
+
+    // Fetch repository instructions for PR review context
+    pr.instructions = crate::github::instructions::fetch_repo_instructions(
+        &client,
+        &owner,
+        &repo,
+        &pr.head_sha,
+        app_config.review.instructions_file.as_deref(),
+        app_config.review.max_instructions_chars,
+    )
+    .await;
+
+    Ok(pr)
 }
 
 /// Reconstructs a unified diff string from PR file patches for security scanning.
@@ -1416,6 +1429,7 @@ mod tests {
             labels: vec![],
             head_sha: "abc123".to_string(),
             review_comments: vec![],
+        instructions: None,
         };
 
         let ai_config = AiConfig {

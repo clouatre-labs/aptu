@@ -807,6 +807,7 @@ async fn run_pr_command(
             force,
             repo_path,
             deep,
+            instructions_file,
         } => {
             validate_pr_review_args(deep, repo_path.as_ref())?;
             let repo_path_str = repo_path.map(|p| p.to_string_lossy().to_string());
@@ -839,8 +840,14 @@ async fn run_pr_command(
             let ctx_for_processor = ctx.clone();
             let ctx_for_progress = ctx.clone();
             let repo_context_owned = repo_context.map(std::string::ToString::to_string);
-            let config_clone = config.clone();
+            let mut config_clone = config.clone();
             let repo_path_str_owned = repo_path_str.clone();
+            let instructions_file_str = instructions_file.map(|p| p.to_string_lossy().to_string());
+
+            // Override instructions_file in config if provided via CLI
+            if let Some(ref path) = instructions_file_str {
+                config_clone.review.instructions_file = Some(path.clone());
+            }
 
             let core_result = aptu_core::process_bulk(
                 items,
