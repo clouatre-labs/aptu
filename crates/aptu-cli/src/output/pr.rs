@@ -640,6 +640,8 @@ mod tests {
                 cost_usd: None,
                 fallback_provider: None,
                 prompt_chars: 0,
+                cache_read_tokens: 0,
+                cache_write_tokens: 0,
             },
             security_findings,
             dry_run: false,

@@ -91,6 +91,12 @@ pub struct UsageInfo {
     /// Cost in USD (from `OpenRouter` API).
     #[serde(default)]
     pub cost: Option<f64>,
+    /// Number of cache read tokens (from Anthropic API).
+    #[serde(default)]
+    pub cache_read_tokens: u64,
+    /// Number of cache write tokens (from Anthropic API).
+    #[serde(default)]
+    pub cache_write_tokens: u64,
 }
 
 /// A single choice in the chat completion response.

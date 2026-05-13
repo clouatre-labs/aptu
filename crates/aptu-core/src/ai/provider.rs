@@ -415,13 +415,20 @@ pub trait AiProvider: Send + Sync {
         let duration_ms = start.elapsed().as_millis() as u64;
 
         // Build AI stats from usage info (trust API's cost field)
-        let (input_tokens, output_tokens, cost_usd) = if let Some(usage) = completion.usage {
-            (usage.prompt_tokens, usage.completion_tokens, usage.cost)
-        } else {
-            // If no usage info, default to 0
-            debug!("No usage information in API response");
-            (0, 0, None)
-        };
+        let (input_tokens, output_tokens, cost_usd, cache_read_tokens, cache_write_tokens) =
+            if let Some(usage) = completion.usage {
+                (
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                    usage.cost,
+                    usage.cache_read_tokens,
+                    usage.cache_write_tokens,
+                )
+            } else {
+                // If no usage info, default to 0
+                debug!("No usage information in API response");
+                (0, 0, None, 0, 0)
+            };
 
         let ai_stats = AiStats {
             provider: self.name().to_string(),
@@ -432,6 +439,8 @@ pub trait AiProvider: Send + Sync {
             cost_usd,
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens,
+            cache_write_tokens,
         };
 
         // Emit structured metrics
@@ -439,6 +448,8 @@ pub trait AiProvider: Send + Sync {
             duration_ms,
             input_tokens,
             output_tokens,
+            cache_read_tokens,
+            cache_write_tokens,
             cost_usd = ?cost_usd,
             model = %self.model(),
             "AI request completed"
