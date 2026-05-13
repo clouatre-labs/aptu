@@ -237,11 +237,56 @@ pub async fn fetch_pr_details(
 /// A patch is considered truncated if the last non-empty line starts with '+' or '-',
 /// indicating an incomplete hunk.
 fn is_patch_truncated(patch: &str) -> bool {
-    patch
-        .lines()
-        .rev()
-        .find(|line| !line.trim().is_empty())
-        .is_some_and(|line| line.starts_with('+') || line.starts_with('-'))
+    let lines: Vec<&str> = patch.lines().collect();
+
+    // Rule 1: Check if last non-empty line starts with '+' or '-' (mid-hunk cutoff)
+    if let Some(last_line) = lines.iter().rev().find(|line| !line.trim().is_empty())
+        && (last_line.starts_with('+') || last_line.starts_with('-'))
+    {
+        return true;
+    }
+
+    // Rule 2: Check if declared hunk size matches actual lines delivered
+    // Parse the last @@ -a,b +c,d @@ header and verify line count
+    if let Some(last_hunk_header) = lines.iter().rev().find(|line| line.contains("@@")) {
+        // Extract the +c,d part from the hunk header
+        if let Some(plus_part) = last_hunk_header.split('+').nth(1) {
+            // Extract the number after '+' and before the next space or @@
+            if let Some(size_str) = plus_part.split_whitespace().next() {
+                // Parse "c,d" format
+                if let Some(count_str) = size_str.split(',').nth(1)
+                    && let Ok(declared_count) = count_str.parse::<usize>()
+                {
+                    // Count actual lines after this hunk header (context + added lines)
+                    // Find the index of this hunk header
+                    if let Some(hunk_idx) = lines.iter().position(|&line| line == *last_hunk_header)
+                    {
+                        let lines_after_hunk = &lines[hunk_idx + 1..];
+                        // Count lines that are context (' '), additions ('+'), or deletions ('-')
+                        // Stop counting if we hit another hunk header
+                        let mut actual_count = 0;
+                        for line in lines_after_hunk {
+                            if line.starts_with("@@") {
+                                break;
+                            }
+                            if line.starts_with(' ')
+                                || line.starts_with('+')
+                                || line.starts_with('-')
+                            {
+                                actual_count += 1;
+                            }
+                        }
+                        // If actual count is less than declared, the hunk is truncated
+                        if actual_count < declared_count {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Fetches a single file's content from GitHub Contents API as a fallback for truncated patches.
@@ -1165,45 +1210,90 @@ mod tests {
     }
 
     #[test]
-    fn test_fetch_file_contents_fallback_on_truncated_patch() {
-        // Arrange: test is_patch_truncated with various patch strings
-
-        // Test 1: patch ending with '+' (mid-hunk truncation)
-        let truncated_patch_plus = "@@ -1,3 +1,4 @@\n line1\n line2\n+";
+    fn test_is_patch_truncated_detects_mid_hunk_plus() {
+        // Test: patch ending with '+' (mid-hunk truncation)
+        let truncated_patch = "@@ -1,3 +1,4 @@\n line1\n line2\n+";
         assert!(
-            is_patch_truncated(truncated_patch_plus),
+            is_patch_truncated(truncated_patch),
             "patch ending with + should be detected as truncated"
         );
+    }
 
-        // Test 2: patch ending with '-' (mid-hunk truncation)
-        let truncated_patch_minus = "@@ -1,3 +1,4 @@\n line1\n line2\n-";
+    #[test]
+    fn test_is_patch_truncated_detects_mid_hunk_minus() {
+        // Test: patch ending with '-' (mid-hunk truncation)
+        let truncated_patch = "@@ -1,3 +1,4 @@\n line1\n line2\n-";
         assert!(
-            is_patch_truncated(truncated_patch_minus),
+            is_patch_truncated(truncated_patch),
             "patch ending with - should be detected as truncated"
         );
+    }
 
-        // Test 3: patch ending with ' ' (context line, not truncated)
-        let clean_patch_space = "@@ -1,3 +1,3 @@\n line1\n line2\n line3";
+    #[test]
+    fn test_is_patch_truncated_clean_patch_context_line() {
+        // Test: patch ending with ' ' (context line, not truncated)
+        let clean_patch = "@@ -1,3 +1,3 @@\n line1\n line2\n line3";
         assert!(
-            !is_patch_truncated(clean_patch_space),
-            "patch ending with space should not be detected as truncated"
+            !is_patch_truncated(clean_patch),
+            "patch ending with context line should not be detected as truncated"
         );
+    }
 
-        // Test 4: patch ending with '@@' (hunk header, not truncated)
-        let clean_patch_hunk = "@@ -1,3 +1,3 @@\n line1\n line2\n@@ -5,2 +5,2 @@";
+    #[test]
+    fn test_is_patch_truncated_correct_hunk_line_count() {
+        // Test: patch with correct hunk line count (declared 3, actual 3)
+        let clean_patch = "@@ -1,3 +1,3 @@\n line1\n line2\n line3";
         assert!(
-            !is_patch_truncated(clean_patch_hunk),
-            "patch ending with @@ should not be detected as truncated"
+            !is_patch_truncated(clean_patch),
+            "patch with correct hunk line count should not be detected as truncated"
         );
+    }
 
-        // Test 5: empty patch
+    #[test]
+    fn test_is_patch_truncated_declared_hunk_size_larger_than_delivered() {
+        // Test: patch with declared hunk size larger than delivered lines
+        // Declared: +1,4 (4 lines in new file), Actual: only 2 lines delivered
+        let truncated_patch = "@@ -1,3 +1,4 @@\n line1\n line2";
+        assert!(
+            is_patch_truncated(truncated_patch),
+            "patch with declared hunk size larger than delivered should be detected as truncated"
+        );
+    }
+
+    #[test]
+    fn test_is_patch_truncated_no_hunk_header_but_last_line_plus() {
+        // Test: patch with no @@ header but last line is '+'
+        let truncated_patch = "line1\nline2\n+";
+        assert!(
+            is_patch_truncated(truncated_patch),
+            "patch with no @@ header but ending with + should be detected as truncated"
+        );
+    }
+
+    #[test]
+    fn test_is_patch_truncated_empty_patch() {
+        // Test: empty patch
         let empty_patch = "";
         assert!(
             !is_patch_truncated(empty_patch),
             "empty patch should not be detected as truncated"
         );
+    }
 
+    #[test]
+    fn test_is_patch_truncated_multiple_hunks_last_hunk_truncated() {
+        // Test: multiple hunks where the last hunk is truncated
+        let truncated_patch = "@@ -1,2 +1,2 @@\n line1\n line2\n@@ -5,3 +5,4 @@\n line5\n line6";
+        assert!(
+            is_patch_truncated(truncated_patch),
+            "patch with last hunk truncated should be detected as truncated"
+        );
+    }
+
+    #[test]
+    fn test_fetch_file_contents_fallback_on_truncated_patch() {
         // Note: The Contents API network call cannot be unit-tested without a mock.
         // The fallback is exercised in integration tests via the full fetch_pr_details flow.
+        // Unit tests for is_patch_truncated are above.
     }
 }
