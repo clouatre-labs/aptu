@@ -317,12 +317,12 @@ mod tests {
     #[test]
     fn test_openrouter_rejects_paid_model() {
         let mut config = test_config();
-        config.model = "anthropic/claude-3".to_string();
+        config.model = "anthropic/claude-sonnet-4-6".to_string();
         config.allow_paid_models = false;
         let result = AiClient::with_api_key(
             "openrouter",
             SecretString::from("key"),
-            "anthropic/claude-3",
+            "anthropic/claude-sonnet-4-6",
             &config,
         );
         assert!(result.is_err());

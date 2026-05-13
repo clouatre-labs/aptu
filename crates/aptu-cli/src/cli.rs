@@ -179,7 +179,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub provider: Option<String>,
 
-    /// Override configured AI model (e.g., gpt-4, claude-3-opus)
+    /// Override configured AI model (e.g., gpt-4, claude-sonnet-4-6)
     #[arg(long, global = true)]
     pub model: Option<String>,
 

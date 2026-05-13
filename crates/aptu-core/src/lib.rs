@@ -141,6 +141,7 @@ pub mod facade;
 pub mod git;
 pub mod github;
 pub mod history;
+pub mod metrics;
 pub mod repos;
 pub mod retry;
 pub mod sanitize;

@@ -185,7 +185,7 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
 
     // Phase 1c: Analyze with AI
     let spinner = maybe_spinner(cfg.ctx, "Analyzing with AI...");
-    let ai_response = triage::analyze(&issue_details, &cfg.config.ai).await?;
+    let analyze_result = triage::analyze(&issue_details, &cfg.config.ai).await?;
     if let Some(s) = spinner {
         s.finish_and_clear();
     }
@@ -194,11 +194,14 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
     crate::output::common::show_timing(
         cfg.ctx,
         fetch_elapsed.as_millis(),
-        &ai_response.stats.model,
-        ai_response.stats.duration_ms,
-        ai_response.stats.input_tokens,
-        ai_response.stats.output_tokens,
+        &analyze_result.ai_stats.model,
+        analyze_result.ai_stats.duration_ms,
+        analyze_result.ai_stats.input_tokens,
+        analyze_result.ai_stats.output_tokens,
     );
+
+    // Log metrics (fire-and-forget)
+    aptu_core::metrics::append_jsonl(&analyze_result.ai_stats);
 
     // Build result for rendering (before posting decision)
     let is_maintainer = issue_details
@@ -209,8 +212,8 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
     let mut result = types::TriageResult {
         issue_title: issue_details.title.clone(),
         issue_number: issue_details.number,
-        triage: ai_response.triage.clone(),
-        ai_stats: ai_response.stats.clone(),
+        triage: analyze_result.triage.clone(),
+        ai_stats: analyze_result.ai_stats.clone(),
         comment_url: None,
         dry_run: cfg.dry_run,
         user_declined: false,
@@ -235,10 +238,6 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
     // Phase 2: Post the comment (if not skipped)
     let comment_url = if should_post_comment {
         let spinner = maybe_spinner(cfg.ctx, "Posting comment...");
-        let analyze_result = triage::AnalyzeResult {
-            issue_details: issue_details.clone(),
-            triage: ai_response.triage.clone(),
-        };
         let url = triage::post(&analyze_result).await?;
         if let Some(s) = spinner {
             s.finish_and_clear();
@@ -256,7 +255,7 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
     // Phase 3: Apply labels and milestone if requested (independent of comment posting)
     if !cfg.no_apply {
         let spinner = maybe_spinner(cfg.ctx, "Applying labels and milestone...");
-        let apply_result = triage::apply(&issue_details, &ai_response.triage).await?;
+        let apply_result = triage::apply(&issue_details, &analyze_result.triage).await?;
         if let Some(s) = spinner {
             s.finish_and_clear();
         }
@@ -280,7 +279,7 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
             timestamp: chrono::Utc::now(),
             comment_url: url.clone(),
             status: aptu_core::history::ContributionStatus::Pending,
-            ai_stats: Some(ai_response.stats),
+            ai_stats: Some(analyze_result.ai_stats),
         };
         aptu_core::history::add_contribution(contribution)?;
         debug!("Contribution recorded to history");
@@ -319,6 +318,9 @@ async fn review_single_pr(
     if let Some(s) = spinner {
         s.finish_and_clear();
     }
+
+    // Log metrics (fire-and-forget)
+    aptu_core::metrics::append_jsonl(&ai_stats);
 
     // Security scanning (if PR has code changes)
     let security_findings = {
@@ -359,6 +361,7 @@ async fn review_single_pr(
     let analyze_result = pr::AnalyzeResult {
         pr_details: pr_details.clone(),
         review: review.clone(),
+        ai_stats: ai_stats.clone(),
     };
 
     // Handle posting if review type specified and --no-comment not set
@@ -922,10 +925,12 @@ async fn run_pr_command(
                 .or(config.user.default_repo.as_deref());
 
             let spinner = maybe_spinner(&ctx, "Fetching PR and extracting labels...");
-            let result = pr::run_label(&reference, repo_context, dry_run, &config.ai).await?;
+            let (result, ai_stats) =
+                pr::run_label(&reference, repo_context, dry_run, &config.ai).await?;
             if let Some(s) = spinner {
                 s.finish_and_clear();
             }
+            aptu_core::metrics::append_jsonl(&ai_stats);
             output::render(&result, &ctx)?;
             Ok(())
         }

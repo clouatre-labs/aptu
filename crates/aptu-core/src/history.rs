@@ -520,7 +520,7 @@ mod tests {
     fn test_ai_stats_cache_tokens_roundtrip() {
         let stats = AiStats {
             provider: "anthropic".to_string(),
-            model: "claude-3-sonnet".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
             input_tokens: 1000,
             output_tokens: 500,
             duration_ms: 1500,

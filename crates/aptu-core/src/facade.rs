@@ -523,7 +523,7 @@ pub async fn analyze_issue(
     provider: &dyn TokenProvider,
     issue: &IssueDetails,
     ai_config: &AiConfig,
-) -> crate::Result<AiResponse> {
+) -> crate::Result<(AiResponse, crate::history::AiStats)> {
     // Load config for prompt injection defence settings
     let app_config = load_config().unwrap_or_default();
 
@@ -593,11 +593,15 @@ pub async fn analyze_issue(
     let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Triage);
 
     // Use fallback chain if configured
-    try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
-        let issue = issue_mut.clone();
-        async move { client.analyze_issue(&issue).await }
-    })
-    .await
+    let ai_response =
+        try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
+            let issue = issue_mut.clone();
+            async move { client.analyze_issue(&issue).await }
+        })
+        .await?;
+
+    let stats = ai_response.stats.clone();
+    Ok((ai_response, stats))
 }
 
 /// Reviews a pull request and generates AI feedback.
@@ -920,7 +924,7 @@ pub async fn label_pr(
     repo_context: Option<&str>,
     dry_run: bool,
     ai_config: &AiConfig,
-) -> crate::Result<(u64, String, String, Vec<String>)> {
+) -> crate::Result<(u64, String, String, Vec<String>, crate::history::AiStats)> {
     use crate::github::issues::apply_labels_to_number;
     use crate::github::pulls::{fetch_pr_details, labels_from_pr_metadata, parse_pr_reference};
 
@@ -959,6 +963,7 @@ pub async fn label_pr(
         .map(|f| f.filename.clone())
         .collect();
     let mut labels = labels_from_pr_metadata(&pr_details.title, &file_paths);
+    let mut ai_stats: Option<crate::history::AiStats> = None;
 
     // If no labels found, try AI fallback
     if labels.is_empty() {
@@ -975,8 +980,9 @@ pub async fn label_pr(
                     .suggest_pr_labels(&pr_details.title, &pr_details.body, &file_paths)
                     .await
                 {
-                    Ok((ai_labels, _stats)) => {
+                    Ok((ai_labels, stats)) => {
                         labels = ai_labels;
+                        ai_stats = Some(stats);
                         debug!("AI fallback provided {} labels", labels.len());
                     }
                     Err(e) => {
@@ -988,6 +994,20 @@ pub async fn label_pr(
         }
     }
 
+    // If no AI stats were captured, create a default one
+    let stats = ai_stats.unwrap_or_else(|| crate::history::AiStats {
+        provider: "unknown".to_string(),
+        model: "unknown".to_string(),
+        input_tokens: 0,
+        output_tokens: 0,
+        duration_ms: 0,
+        cost_usd: None,
+        fallback_provider: None,
+        prompt_chars: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+    });
+
     // Apply labels if not dry-run
     if !dry_run && !labels.is_empty() {
         apply_labels_to_number(&client, &owner, &repo, number, &labels)
@@ -997,7 +1017,7 @@ pub async fn label_pr(
             })?;
     }
 
-    Ok((number, pr_details.title, pr_details.url, labels))
+    Ok((number, pr_details.title, pr_details.url, labels, stats))
 }
 
 /// Fetches an issue for triage analysis.

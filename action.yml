@@ -103,6 +103,20 @@ inputs:
     required: false
     default: ''
 
+outputs:
+  input-tokens:
+    description: Total input tokens consumed across all AI calls in this run
+    value: ${{ steps.metrics-aggregate.outputs.input_tokens }}
+  output-tokens:
+    description: Total output tokens consumed across all AI calls in this run
+    value: ${{ steps.metrics-aggregate.outputs.output_tokens }}
+  duration-ms:
+    description: Total AI call duration in milliseconds
+    value: ${{ steps.metrics-aggregate.outputs.duration_ms }}
+  cost-usd:
+    description: Estimated total cost in USD (provider-dependent, may be empty)
+    value: ${{ steps.metrics-aggregate.outputs.cost_usd }}
+
 runs:
   using: composite
   steps:
@@ -227,6 +241,7 @@ runs:
         DRY_RUN: ${{ inputs.dry-run }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         NO_COMMENT: ${{ inputs.no-comment }}
+        APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
         
@@ -300,6 +315,7 @@ runs:
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         DRY_RUN: ${{ inputs.dry-run }}
+        APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
         
@@ -335,6 +351,7 @@ runs:
         DRY_RUN: ${{ inputs.dry-run }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         NO_COMMENT: ${{ inputs.no-comment }}
+        APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
         
@@ -365,4 +382,46 @@ runs:
         
         echo "Running: aptu pr review $ARGS $PR_REF"
         aptu pr review $ARGS "$PR_REF"
+
+    - name: Aggregate metrics outputs
+      id: metrics-aggregate
+      if: always()
+      shell: bash
+      run: |
+        if [ -f "$RUNNER_TEMP/aptu-token-usage.jsonl" ]; then
+          input_tokens=$(jq -s '[.[].input_tokens] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl")
+          output_tokens=$(jq -s '[.[].output_tokens] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl")
+          duration_ms=$(jq -s '[.[].duration_ms] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl")
+          cost_usd=$(jq -s '[.[].cost_usd | select(. != null)] | if length > 0 then add else empty end' "$RUNNER_TEMP/aptu-token-usage.jsonl" 2>/dev/null || echo "")
+          echo "input_tokens=$input_tokens" >> "$GITHUB_OUTPUT"
+          echo "output_tokens=$output_tokens" >> "$GITHUB_OUTPUT"
+          echo "duration_ms=$duration_ms" >> "$GITHUB_OUTPUT"
+          echo "cost_usd=$cost_usd" >> "$GITHUB_OUTPUT"
+        else
+          echo "input_tokens=0" >> "$GITHUB_OUTPUT"
+          echo "output_tokens=0" >> "$GITHUB_OUTPUT"
+          echo "duration_ms=0" >> "$GITHUB_OUTPUT"
+          echo "cost_usd=" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Write token usage summary
+      if: always()
+      shell: bash
+      run: |
+        if [ -f "$RUNNER_TEMP/aptu-token-usage.jsonl" ]; then
+          echo "### Aptu token usage" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Model | Input | Output | Cache read | Cache write | Duration | Cost |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '. | "| \(.model) | \(.input_tokens) | \(.output_tokens) | \(.cache_read_tokens // 0) | \(.cache_write_tokens // 0) | \(.duration_ms)ms | \(if .cost_usd then "$\(.cost_usd)" else "n/a" end) |"' \
+            "$RUNNER_TEMP/aptu-token-usage.jsonl" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Upload token usage artifact
+      if: always()
+      uses: actions/upload-artifact@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        name: aptu-token-usage-${{ github.run_id }}
+        path: ${{ runner.temp }}/aptu-token-usage.jsonl
+        retention-days: 90
+        if-no-files-found: ignore
 
