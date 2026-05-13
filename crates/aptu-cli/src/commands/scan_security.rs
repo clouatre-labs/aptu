@@ -2,7 +2,8 @@
 
 //! `scan-security` subcommand: scan a local file or directory for security issues.
 
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use aptu_core::{AppConfig, Finding, PatternEngine, SarifReport, SecurityScanner};
@@ -10,14 +11,18 @@ use walkdir::WalkDir;
 
 use crate::cli::OutputFormat;
 
+/// Maximum allowed size for a diff input (5 MiB).
+const DIFF_SIZE_LIMIT: usize = 5_242_880;
+
 /// Run the `scan-security` subcommand.
 ///
-/// Walks `path` (file or directory), applies the embedded pattern engine to each file,
-/// collects findings, emits output in the requested format, and exits with code 1 if any
-/// finding severity is listed in `fail_on`.
+/// When `diff` is provided, reads a unified diff from a file path or stdin (`-`),
+/// enforces a 5 MiB size limit, and calls `scanner.scan_diff()`.
+/// When `path` is provided, walks the file or directory and calls `scanner.scan_file()`.
 #[allow(clippy::unused_async)]
 pub async fn run_scan_security_command(
-    path: PathBuf,
+    path: Option<PathBuf>,
+    diff: Option<PathBuf>,
     fail_on: Vec<String>,
     exclude: Vec<String>,
     output_format: OutputFormat,
@@ -26,33 +31,68 @@ pub async fn run_scan_security_command(
     let scanner = SecurityScanner::default();
     let mut findings: Vec<Finding> = Vec::new();
 
-    for entry in WalkDir::new(&path)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(std::result::Result::ok)
-    {
-        if entry.file_type().is_dir() {
-            continue;
-        }
-
-        let file_path = entry.path();
-        let file_path_str = file_path.to_string_lossy();
-
-        // Apply --exclude prefix filter
-        if exclude
-            .iter()
-            .any(|prefix| file_path_str.starts_with(prefix.as_str()))
-        {
-            continue;
-        }
-
-        // Read file content; skip files that cannot be read (binary, permission denied, etc.)
-        let Ok(content) = std::fs::read_to_string(file_path) else {
-            continue;
+    if let Some(diff_path) = diff {
+        // Diff mode: read from file or stdin
+        let content = if diff_path == Path::new("-") {
+            let mut buf = String::new();
+            std::io::stdin()
+                .read_to_string(&mut buf)
+                .map_err(|e| anyhow::anyhow!("Failed to read stdin: {e}"))?;
+            buf
+        } else {
+            let meta = std::fs::metadata(&diff_path)
+                .map_err(|e| anyhow::anyhow!("Cannot stat '{}': {e}", diff_path.display()))?;
+            if meta.len() > DIFF_SIZE_LIMIT as u64 {
+                return Err(anyhow::anyhow!(
+                    "Diff file '{}' exceeds the 5 MiB limit ({} bytes)",
+                    diff_path.display(),
+                    meta.len()
+                ));
+            }
+            std::fs::read_to_string(&diff_path)
+                .map_err(|e| anyhow::anyhow!("Failed to read '{}': {e}", diff_path.display()))?
         };
 
-        let file_findings = scanner.scan_file(&content, &file_path_str);
-        findings.extend(file_findings);
+        if content.len() > DIFF_SIZE_LIMIT {
+            return Err(anyhow::anyhow!(
+                "Diff input exceeds the 5 MiB limit ({} bytes)",
+                content.len()
+            ));
+        }
+
+        findings.extend(scanner.scan_diff(&content));
+    } else {
+        // Walk mode: path is guaranteed present by Clap (required_unless_present = "diff")
+        let scan_path = path.expect("path required when --diff is not provided");
+
+        for entry in WalkDir::new(&scan_path)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(std::result::Result::ok)
+        {
+            if entry.file_type().is_dir() {
+                continue;
+            }
+
+            let file_path = entry.path();
+            let file_path_str = file_path.to_string_lossy();
+
+            // Apply --exclude prefix filter
+            if exclude
+                .iter()
+                .any(|prefix| file_path_str.starts_with(prefix.as_str()))
+            {
+                continue;
+            }
+
+            // Read file content; skip files that cannot be read (binary, permission denied, etc.)
+            let Ok(content) = std::fs::read_to_string(file_path) else {
+                continue;
+            };
+
+            let file_findings = scanner.scan_file(&content, &file_path_str);
+            findings.extend(file_findings);
+        }
     }
 
     emit_output(output_format, &findings)?;

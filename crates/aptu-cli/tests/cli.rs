@@ -413,3 +413,124 @@ fn test_history_json_output_structure() {
         "history JSON output should be an array or object"
     );
 }
+
+// --- scan-security --diff integration tests ---
+
+#[test]
+fn scan_security_diff_file_json() {
+    // Arrange: write a temp file with a unified diff containing a hardcoded API key pattern
+    let diff_content = concat!(
+        "diff --git a/config.py b/config.py\n",
+        "--- a/config.py\n",
+        "+++ b/config.py\n",
+        "@@ -1,2 +1,3 @@\n",
+        " # config\n",
+        "+api_key = \"abcdefghij1234567890xyz\"\n",
+        " pass\n"
+    );
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    use std::io::Write;
+    write!(tmp, "{diff_content}").unwrap();
+
+    // Act
+    let output = cargo_bin_cmd!("aptu")
+        .arg("scan-security")
+        .arg("--diff")
+        .arg(tmp.path())
+        .arg("--output")
+        .arg("json")
+        .output()
+        .unwrap();
+
+    // Assert: exit 0 (no --fail-on) and findings array is non-empty
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert!(parsed.is_array(), "expected JSON array of findings");
+    assert!(
+        !parsed.as_array().unwrap().is_empty(),
+        "expected at least one finding for hardcoded API key"
+    );
+}
+
+#[test]
+fn scan_security_diff_stdin() {
+    // Arrange: same diff piped via stdin using sentinel -
+    let diff_content = concat!(
+        "diff --git a/config.py b/config.py\n",
+        "--- a/config.py\n",
+        "+++ b/config.py\n",
+        "@@ -1,2 +1,3 @@\n",
+        " # config\n",
+        "+api_key = \"abcdefghij1234567890xyz\"\n",
+        " pass\n"
+    );
+
+    // Act
+    let output = cargo_bin_cmd!("aptu")
+        .arg("scan-security")
+        .arg("--diff")
+        .arg("-")
+        .arg("--output")
+        .arg("json")
+        .write_stdin(diff_content)
+        .output()
+        .unwrap();
+
+    // Assert: exit 0 and non-empty findings
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert!(parsed.is_array(), "expected JSON array of findings");
+    assert!(
+        !parsed.as_array().unwrap().is_empty(),
+        "expected at least one finding for hardcoded API key via stdin"
+    );
+}
+
+#[test]
+fn scan_security_diff_oversize_error() {
+    // Arrange: write a file larger than 5 MiB
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    use std::io::Write;
+    let chunk = b"x".repeat(1024);
+    for _ in 0..(5 * 1024 + 1) {
+        tmp.write_all(&chunk).unwrap();
+    }
+    tmp.flush().unwrap();
+
+    // Act
+    let output = cargo_bin_cmd!("aptu")
+        .arg("scan-security")
+        .arg("--diff")
+        .arg(tmp.path())
+        .output()
+        .unwrap();
+
+    // Assert: non-zero exit due to size limit
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit for oversized diff"
+    );
+}
+
+#[test]
+fn scan_security_conflicts_path_and_diff() {
+    // Arrange: create a temp file for --diff
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+
+    // Act: pass both a path and --diff; Clap should reject
+    let output = cargo_bin_cmd!("aptu")
+        .arg("scan-security")
+        .arg(".")
+        .arg("--diff")
+        .arg(tmp.path())
+        .output()
+        .unwrap();
+
+    // Assert: non-zero exit (Clap argument conflict error)
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit when both path and --diff are provided"
+    );
+}

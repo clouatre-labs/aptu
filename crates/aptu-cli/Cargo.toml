@@ -60,6 +60,7 @@ rayon = { workspace = true }
 tokio-test = { workspace = true }
 assert_cmd = { workspace = true }
 predicates = "=3.1.4"
+tempfile = { workspace = true }
 
 [package.metadata.deb]
 maintainer = "Hugues Clouâtre <hugues@linux.com>"
