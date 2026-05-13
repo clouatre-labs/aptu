@@ -9,6 +9,7 @@
 
 use anyhow::{Context, Result};
 use aptu_core::ai::types::PrReviewComment;
+use aptu_core::history::AiStats;
 use aptu_core::{
     PrDetails, PrReviewResponse, render_pr_review_comment_body, render_pr_review_markdown,
 };
@@ -23,6 +24,9 @@ pub struct AnalyzeResult {
     pub pr_details: PrDetails,
     /// AI review analysis.
     pub review: PrReviewResponse,
+    /// AI usage statistics.
+    #[allow(dead_code)]
+    pub ai_stats: AiStats,
 }
 
 /// Fetch a pull request from GitHub.
@@ -275,21 +279,24 @@ pub async fn run_label(
     repo_context: Option<&str>,
     dry_run: bool,
     ai_config: &aptu_core::AiConfig,
-) -> Result<PrLabelResult> {
+) -> Result<(PrLabelResult, AiStats)> {
     // Create CLI token provider
     let provider = crate::provider::CliTokenProvider;
 
     // Call facade for PR label
-    let (pr_number, pr_title, pr_url, labels) =
+    let (pr_number, pr_title, pr_url, labels, ai_stats) =
         aptu_core::label_pr(&provider, reference, repo_context, dry_run, ai_config).await?;
 
-    Ok(PrLabelResult {
-        pr_number,
-        pr_title,
-        pr_url,
-        labels,
-        dry_run,
-    })
+    Ok((
+        PrLabelResult {
+            pr_number,
+            pr_title,
+            pr_url,
+            labels,
+            dry_run,
+        },
+        ai_stats,
+    ))
 }
 
 /// Compute reviewability score for a PR.

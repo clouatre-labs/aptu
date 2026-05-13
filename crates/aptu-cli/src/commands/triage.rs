@@ -7,7 +7,7 @@
 //! confirmation flow (render issue before asking).
 
 use anyhow::Result;
-use aptu_core::ai::AiResponse;
+use aptu_core::history::AiStats;
 use aptu_core::{IssueDetails, TriageResponse};
 use tracing::{debug, info, instrument};
 
@@ -19,6 +19,8 @@ pub struct AnalyzeResult {
     pub issue_details: IssueDetails,
     /// AI triage analysis.
     pub triage: TriageResponse,
+    /// AI usage statistics.
+    pub ai_stats: AiStats,
 }
 
 /// Fetch an issue from GitHub.
@@ -60,15 +62,20 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<IssueD
 pub async fn analyze(
     issue_details: &IssueDetails,
     ai_config: &aptu_core::AiConfig,
-) -> Result<AiResponse> {
+) -> Result<AnalyzeResult> {
     // Create CLI token provider
     let provider = CliTokenProvider;
 
     // Call facade for analysis
-    let ai_response = aptu_core::analyze_issue(&provider, issue_details, ai_config).await?;
+    let (ai_response, ai_stats) =
+        aptu_core::analyze_issue(&provider, issue_details, ai_config).await?;
 
     debug!("Issue analyzed successfully");
-    Ok(ai_response)
+    Ok(AnalyzeResult {
+        issue_details: issue_details.clone(),
+        triage: ai_response.triage,
+        ai_stats,
+    })
 }
 
 /// Post a triage comment to GitHub.
