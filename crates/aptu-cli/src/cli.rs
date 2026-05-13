@@ -225,7 +225,11 @@ pub enum Commands {
     /// Scan a file or directory for security issues
     ScanSecurity {
         /// Path to scan (file or directory)
-        path: std::path::PathBuf,
+        #[arg(required_unless_present = "diff")]
+        path: Option<std::path::PathBuf>,
+        /// Read unified diff from FILE or - for stdin
+        #[arg(long, conflicts_with = "path", value_name = "FILE")]
+        diff: Option<std::path::PathBuf>,
         /// Fail with exit code 1 if findings match these severities (comma-separated: critical,high,medium,low)
         #[arg(long, value_delimiter = ',')]
         fail_on: Vec<String>,

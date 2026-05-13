@@ -1122,11 +1122,14 @@ pub async fn run(
         Commands::Completion(completion_cmd) => run_completion_command(&completion_cmd, ctx),
         Commands::ScanSecurity {
             path,
+            diff,
             fail_on,
             exclude,
         } => {
-            scan_security::run_scan_security_command(path, fail_on, exclude, ctx.format, config)
-                .await
+            scan_security::run_scan_security_command(
+                path, diff, fail_on, exclude, ctx.format, config,
+            )
+            .await
         }
     }
 }
