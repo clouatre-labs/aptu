@@ -77,11 +77,13 @@ impl SecurityValidator {
                     role: "system".to_string(),
                     content: Some(Self::build_system_prompt()),
                     reasoning: None,
+                    cache_control: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
                     content: Some(prompt),
                     reasoning: None,
+                    cache_control: None,
                 },
             ],
             response_format: Some(ResponseFormat {
