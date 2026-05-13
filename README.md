@@ -54,7 +54,7 @@ cargo binstall aptu-cli
 cargo install aptu-cli
 ```
 
-**MCP Server (read-only):** Install locally or self-host via Docker.
+
 
 ## Quick Start
 
@@ -98,12 +98,6 @@ Auto-triage new issues with AI using any supported provider.
 Options: `apply-labels`, `no-comment`, `skip-labeled`, `dry-run`, `model`, `provider`.
 
 See [docs/GITHUB_ACTION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_ACTION.md) for setup and examples.
-
-## MCP Server
-
-Integrate aptu with AI tools via the Model Context Protocol (MCP). Supports stdio (goose, Claude Desktop) and HTTP (remote/containerized).
-
-See [docs/MCP_SERVER.md](https://github.com/clouatre-labs/aptu/blob/main/docs/MCP_SERVER.md) for client configuration and Docker deployment.
 
 ## Configuration
 

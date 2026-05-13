@@ -9,13 +9,12 @@ Aptu is a Rust CLI application for AI-assisted GitHub issue triage and PR review
 ```
 aptu/
 ├── aptu-cli          # CLI entry point, command routing, user I/O
-├── aptu-core         # Domain logic, GitHub API, AI providers
-│   ├── ai/           # AI provider abstraction and routing
-│   ├── git/          # Patch application, branch management, git utilities
-│   ├── github/       # GitHub API integration (Octocrab wrapper)
-│   ├── repos/        # Repository discovery and management
-│   └── ...           # Config, cache, history, triage logic
-└── aptu-mcp          # MCP server for AI-powered triage and review
+└── aptu-core         # Domain logic, GitHub API, AI providers
+    ├── ai/           # AI provider abstraction and routing
+    ├── git/          # Patch application, branch management, git utilities
+    ├── github/       # GitHub API integration (Octocrab wrapper)
+    ├── repos/        # Repository discovery and management
+    └── ...           # Config, cache, history, triage logic
 ```
 
 ## Data Flow

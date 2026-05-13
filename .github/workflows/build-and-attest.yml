@@ -80,19 +80,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           checksum: sha256
           archive: aptu-cli-${{ inputs.version }}-$target
-      - name: Build and upload aptu-mcp
-        if: ${{ !inputs.dry_run }}
-        id: upload-mcp
-        uses: taiki-e/upload-rust-binary-action@f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6 # v1
-        with:
-          bin: aptu-mcp
-          target: ${{ inputs.target }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checksum: sha256
-          archive: aptu-mcp-${{ inputs.version }}-$target
       - name: Build binary (dry-run)
         if: ${{ inputs.dry_run }}
-        run: cargo build --release --target ${{ inputs.target }} -p aptu-cli -p aptu-mcp  # zizmor: ignore[template-injection]
+        run: cargo build --release --target ${{ inputs.target }} -p aptu-cli  # zizmor: ignore[template-injection]
       - name: Sign tarball with cosign
         if: ${{ !inputs.dry_run }}
         run: | # zizmor: ignore[template-injection]
@@ -108,21 +98,6 @@ jobs:
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
         with:
           subject-path: ${{ steps.upload-cli.outputs.tar }}
-      - name: Sign aptu-mcp tarball with cosign
-        if: ${{ !inputs.dry_run }}
-        run: | # zizmor: ignore[template-injection]
-          cosign sign-blob --yes --bundle "${{ steps.upload-mcp.outputs.tar }}.bundle" "${{ steps.upload-mcp.outputs.tar }}"
-      - name: Upload aptu-mcp tarball .bundle to release
-        if: ${{ !inputs.dry_run }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: | # zizmor: ignore[template-injection]
-          gh release upload ${{ github.ref_name }} "${{ steps.upload-mcp.outputs.tar }}.bundle" --clobber
-      - name: Attest build provenance (aptu-mcp tarball)
-        if: ${{ !inputs.dry_run }}
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
-        with:
-          subject-path: ${{ steps.upload-mcp.outputs.tar }}
       - name: Generate aptu .deb package
         if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
         run: cargo deb --target ${{ inputs.target }} --no-build --package aptu-cli  # zizmor: ignore[template-injection]
@@ -156,36 +131,3 @@ jobs:
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
         with:
           subject-path: target/${{ inputs.target }}/debian/aptu-cli_*.deb
-      - name: Generate aptu-mcp .deb package
-        if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
-        run: cargo deb --target ${{ inputs.target }} --no-build --package aptu-mcp  # zizmor: ignore[template-injection]
-      - name: Upload aptu-mcp .deb to release
-        if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: | # zizmor: ignore[template-injection]
-          DEB_FILE=$(find target/${{ inputs.target }}/debian -name "aptu-mcp_*.deb" -type f)
-          if [ -n "$DEB_FILE" ]; then
-            gh release upload ${{ github.ref_name }} "$DEB_FILE" --clobber
-          fi
-      - name: Sign aptu-mcp .deb with cosign
-        if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
-        run: | # zizmor: ignore[template-injection]
-          DEB_FILE=$(find target/${{ inputs.target }}/debian -name "aptu-mcp_*.deb" -type f)
-          if [ -n "$DEB_FILE" ]; then
-            cosign sign-blob --yes --bundle "$DEB_FILE.bundle" "$DEB_FILE"
-          fi
-      - name: Upload aptu-mcp .deb .bundle to release
-        if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: | # zizmor: ignore[template-injection]
-          DEB_FILE=$(find target/${{ inputs.target }}/debian -name "aptu-mcp_*.deb" -type f)
-          if [ -n "$DEB_FILE" ]; then
-            gh release upload ${{ github.ref_name }} "$DEB_FILE.bundle" --clobber
-          fi
-      - name: Attest build provenance (aptu-mcp .deb)
-        if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
-        with:
-          subject-path: target/${{ inputs.target }}/debian/aptu-mcp_*.deb
