@@ -517,7 +517,9 @@ pub trait AiProvider: Send + Sync {
         ];
 
         // Inject cache control on system message for Anthropic
-        if self.is_anthropic() && let Some(msg) = messages.first_mut() {
+        if self.is_anthropic()
+            && let Some(msg) = messages.first_mut()
+        {
             msg.cache_control = Some(super::types::CacheControl::ephemeral());
         }
 
@@ -599,7 +601,9 @@ pub trait AiProvider: Send + Sync {
         ];
 
         // Inject cache control on system message for Anthropic
-        if self.is_anthropic() && let Some(msg) = messages.first_mut() {
+        if self.is_anthropic()
+            && let Some(msg) = messages.first_mut()
+        {
             msg.cache_control = Some(super::types::CacheControl::ephemeral());
         }
 
@@ -939,7 +943,9 @@ pub trait AiProvider: Send + Sync {
         ];
 
         // Inject cache control on system message for Anthropic
-        if self.is_anthropic() && let Some(msg) = messages.first_mut() {
+        if self.is_anthropic()
+            && let Some(msg) = messages.first_mut()
+        {
             msg.cache_control = Some(super::types::CacheControl::ephemeral());
         }
 
@@ -1022,7 +1028,9 @@ pub trait AiProvider: Send + Sync {
         ];
 
         // Inject cache control on system message for Anthropic
-        if self.is_anthropic() && let Some(msg) = messages.first_mut() {
+        if self.is_anthropic()
+            && let Some(msg) = messages.first_mut()
+        {
             msg.cache_control = Some(super::types::CacheControl::ephemeral());
         }
 
