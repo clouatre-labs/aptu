@@ -361,6 +361,9 @@ pub struct PrFile {
     pub deletions: u64,
     /// Unified diff patch (may be truncated for large files).
     pub patch: Option<String>,
+    /// True if patch was truncated mid-hunk by GitHub API (detected by mid-hunk line ending).
+    #[serde(default)]
+    pub patch_truncated: bool,
     /// Full file content fetched from GitHub Contents API (truncated at `max_chars_per_file`).
     #[serde(default)]
     pub full_content: Option<String>,

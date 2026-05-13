@@ -8,6 +8,10 @@
 
 Focus: Correctness, Security, Performance, Maintainability, Testing. Skip platform version flagging.
 
+## Content Truncation
+
+Some PR content (patches, file content, description) may be truncated due to size limits. When you encounter a truncation annotation (marked with `[APTU: ...]`), you MUST acknowledge the truncation in your response and MUST NOT speculate about missing content. If truncation prevents you from making a confident assessment, note this in your concerns or disclaimer.
+
 ## Examples
 
 ### Example 1 (happy path)

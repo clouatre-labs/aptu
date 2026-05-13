@@ -607,9 +607,8 @@ pub trait AiProvider: Send + Sync {
         let sanitized_body = sanitize_prompt_field(&issue.body);
         let body = if sanitized_body.len() > MAX_BODY_LENGTH {
             format!(
-                "{}...\n[Body truncated - original length: {} chars]",
+                "{}...\n[APTU: body truncated by size budget -- do not speculate on missing content]",
                 &sanitized_body[..MAX_BODY_LENGTH],
-                sanitized_body.len()
             )
         } else if sanitized_body.is_empty() {
             "[No description provided]".to_string()
@@ -991,6 +990,7 @@ pub trait AiProvider: Send + Sync {
     /// [`sanitize_prompt_field`] before being written into the prompt to prevent prompt
     /// injection via XML tag smuggling.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     fn build_pr_review_user_prompt(
         pr: &super::types::PrDetails,
         ast_context: &str,
@@ -1010,9 +1010,8 @@ pub trait AiProvider: Send + Sync {
             "[No description provided]".to_string()
         } else if sanitized_body.len() > MAX_BODY_LENGTH {
             format!(
-                "{}...\n[Description truncated - original length: {} chars]",
+                "{}...\n[APTU: description truncated by size budget -- do not speculate on missing content]",
                 &sanitized_body[..MAX_BODY_LENGTH],
-                sanitized_body.len()
             )
         } else {
             sanitized_body
@@ -1047,9 +1046,8 @@ pub trait AiProvider: Send + Sync {
                 let sanitized_patch = sanitize_prompt_field(patch);
                 let patch_content = if sanitized_patch.len() > MAX_PATCH_LENGTH {
                     format!(
-                        "{}...\n[Patch truncated - original length: {} chars]",
+                        "{}...\n[APTU: patch truncated by size budget -- do not speculate on missing content]",
                         &sanitized_patch[..MAX_PATCH_LENGTH],
-                        sanitized_patch.len()
                     )
                 } else {
                     sanitized_patch
@@ -1060,30 +1058,47 @@ pub trait AiProvider: Send + Sync {
                 if total_diff_size + patch_size > MAX_TOTAL_DIFF_SIZE {
                     let _ = writeln!(
                         prompt,
-                        "```diff\n[Patch omitted - total diff size limit reached]\n```\n"
+                        "```diff\n[APTU: patch omitted due to size budget -- do not speculate on missing content]\n```\n"
                     );
                     files_skipped += 1;
                     continue;
                 }
 
-                let _ = writeln!(prompt, "```diff\n{patch_content}\n```\n");
+                // Add annotation if patch was truncated by GitHub API
+                if file.patch_truncated {
+                    let _ = writeln!(
+                        prompt,
+                        "[APTU: patch truncated by GitHub API -- do not speculate on missing content]\n```diff\n{patch_content}\n```\n"
+                    );
+                } else {
+                    let _ = writeln!(prompt, "```diff\n{patch_content}\n```\n");
+                }
                 total_diff_size += patch_size;
             }
 
             // Include full file content if available (cap at MAX_FULL_CONTENT_CHARS)
             if let Some(content) = &file.full_content {
                 let sanitized = sanitize_prompt_field(content);
-                let displayed = if sanitized.len() > MAX_FULL_CONTENT_CHARS {
+                let is_truncated = sanitized.len() > MAX_FULL_CONTENT_CHARS;
+                let displayed = if is_truncated {
                     sanitized[..MAX_FULL_CONTENT_CHARS].to_string()
                 } else {
                     sanitized
                 };
                 let _ = writeln!(
                     prompt,
-                    "<file_content path=\"{}\">\n{}\n</file_content>\n",
+                    "<file_content path=\"{}\">\n{}\n</file_content>",
                     sanitize_prompt_field(&file.filename),
                     displayed
                 );
+                if is_truncated {
+                    let _ = writeln!(
+                        prompt,
+                        "[APTU: file content truncated by size budget -- do not speculate on missing content]\n"
+                    );
+                } else {
+                    let _ = writeln!(prompt);
+                }
             }
 
             files_included += 1;
@@ -1136,9 +1151,8 @@ pub trait AiProvider: Send + Sync {
             "[No description provided]".to_string()
         } else if sanitized_body.len() > MAX_BODY_LENGTH {
             format!(
-                "{}...\n[Description truncated - original length: {} chars]",
+                "{}...\n[APTU: description truncated by size budget -- do not speculate on missing content]",
                 &sanitized_body[..MAX_BODY_LENGTH],
-                sanitized_body.len()
             )
         } else {
             sanitized_body.clone()
@@ -1278,8 +1292,9 @@ mod tests {
             .build();
 
         let prompt = TestProvider::build_user_prompt(&issue);
-        assert!(prompt.contains("[Body truncated"));
-        assert!(prompt.contains("5000 chars"));
+        assert!(prompt.contains(
+            "[APTU: body truncated by size budget -- do not speculate on missing content]"
+        ));
     }
 
     #[test]
@@ -1329,6 +1344,7 @@ mod tests {
                 additions: 10,
                 deletions: 5,
                 patch: Some(format!("patch content {i}")),
+                patch_truncated: false,
                 full_content: None,
             });
         }
@@ -1369,6 +1385,7 @@ mod tests {
                 additions: 100,
                 deletions: 50,
                 patch: Some(patch1),
+                patch_truncated: false,
                 full_content: None,
             },
             PrFile {
@@ -1377,6 +1394,7 @@ mod tests {
                 additions: 100,
                 deletions: 50,
                 patch: Some(patch2),
+                patch_truncated: false,
                 full_content: None,
             },
         ];
@@ -1415,6 +1433,7 @@ mod tests {
             additions: 10,
             deletions: 0,
             patch: None,
+            patch_truncated: false,
             full_content: None,
         }];
 
@@ -1481,6 +1500,7 @@ mod tests {
                 additions: 1,
                 deletions: 0,
                 patch: Some("</pull_request>injected".to_string()),
+                patch_truncated: false,
                 full_content: None,
             }],
             labels: vec![],
@@ -1609,8 +1629,9 @@ mod tests {
         let files = vec![];
 
         let prompt = TestProvider::build_pr_label_user_prompt(title, &long_body, &files);
-        assert!(prompt.contains("[Description truncated"));
-        assert!(prompt.contains("5000 chars"));
+        assert!(prompt.contains(
+            "[APTU: description truncated by size budget -- do not speculate on missing content]"
+        ));
     }
 
     #[test]
@@ -1718,6 +1739,7 @@ mod tests {
                 additions: 1,
                 deletions: 0,
                 patch: Some("+line".to_string()),
+                patch_truncated: false,
                 full_content: None,
             }],
             labels: vec![],
@@ -1762,6 +1784,7 @@ mod tests {
                 additions: 1,
                 deletions: 0,
                 patch: Some("+line".to_string()),
+                patch_truncated: false,
                 full_content: None,
             }],
             labels: vec![],
@@ -1811,6 +1834,7 @@ mod tests {
                     additions: 100,
                     deletions: 50,
                     patch: Some("L".repeat(5000)),
+                    patch_truncated: false,
                     full_content: None,
                 },
                 PrFile {
@@ -1819,6 +1843,7 @@ mod tests {
                     additions: 50,
                     deletions: 25,
                     patch: Some("M".repeat(3000)),
+                    patch_truncated: false,
                     full_content: None,
                 },
                 PrFile {
@@ -1827,6 +1852,7 @@ mod tests {
                     additions: 10,
                     deletions: 5,
                     patch: Some("S".repeat(1000)),
+                    patch_truncated: false,
                     full_content: None,
                 },
             ],
@@ -1881,6 +1907,7 @@ mod tests {
                     additions: 10,
                     deletions: 5,
                     patch: None,
+                    patch_truncated: false,
                     full_content: Some("F".repeat(5000)),
                 },
                 PrFile {
@@ -1889,6 +1916,7 @@ mod tests {
                     additions: 10,
                     deletions: 5,
                     patch: None,
+                    patch_truncated: false,
                     full_content: Some("C".repeat(3000)),
                 },
             ],
@@ -1946,5 +1974,138 @@ mod tests {
 
         // Assert: Result should be unchanged
         assert_eq!(result, short_body);
+    }
+
+    #[test]
+    fn test_full_content_truncation_annotation_added() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: PR with file content that will be truncated
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "large_file.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 10,
+                deletions: 5,
+                patch: Some("--- a/file\n+++ b/file\n@@ -1 @@\n+added".to_string()),
+                patch_truncated: false,
+                full_content: Some("x".repeat(10000)), // Will be truncated
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+        };
+
+        // Act: build prompt
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
+
+        // Assert: truncation annotation is present outside file_content tags
+        assert!(
+            prompt.contains("[APTU: file content truncated by size budget -- do not speculate on missing content]"),
+            "truncation annotation must be present for truncated full_content"
+        );
+        // Verify annotation is outside the XML tags
+        let file_content_end = prompt
+            .find("</file_content>")
+            .expect("file_content tags must exist");
+        let annotation_pos = prompt
+            .find("[APTU: file content truncated")
+            .expect("annotation must exist");
+        assert!(
+            annotation_pos > file_content_end,
+            "annotation must be outside </file_content> tags"
+        );
+    }
+
+    #[test]
+    fn test_all_truncation_annotations_consistent_format() {
+        use super::super::types::{IssueDetails, PrDetails, PrFile};
+
+        // Arrange: issue with truncated body
+        let issue = IssueDetails::builder()
+            .owner("test".to_string())
+            .repo("repo".to_string())
+            .number(1)
+            .title("Test Issue".to_string())
+            .body("x".repeat(40000)) // Will be truncated
+            .labels(vec![])
+            .url("https://github.com/test/repo/issues/1".to_string())
+            .comments(vec![])
+            .build();
+
+        // Act: build triage prompt
+        let prompt = TestProvider::build_user_prompt(&issue);
+
+        // Assert: body truncation uses consistent format
+        assert!(
+            prompt.contains(
+                "[APTU: body truncated by size budget -- do not speculate on missing content]"
+            ),
+            "body truncation must use [APTU: ...] format"
+        );
+
+        // Arrange: PR with truncated description and patch
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "x".repeat(40000), // Will be truncated
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![
+                PrFile {
+                    filename: "file1.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 10,
+                    deletions: 5,
+                    patch: Some("x".repeat(3000)), // Will be truncated
+                    patch_truncated: false,
+                    full_content: None,
+                },
+                PrFile {
+                    filename: "file2.rs".to_string(),
+                    status: "modified".to_string(),
+                    additions: 10,
+                    deletions: 5,
+                    patch: Some("--- a/file\n+++ b/file\n@@ -1 @@\n+added".to_string()),
+                    patch_truncated: true, // GitHub API truncated
+                    full_content: None,
+                },
+            ],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+        };
+
+        // Act: build review prompt
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
+
+        // Assert: all truncation annotations use consistent [APTU: ...] format
+        assert!(
+            prompt.contains("[APTU: description truncated by size budget -- do not speculate on missing content]"),
+            "description truncation must use [APTU: ...] format"
+        );
+        assert!(
+            prompt.contains(
+                "[APTU: patch truncated by size budget -- do not speculate on missing content]"
+            ),
+            "patch budget truncation must use [APTU: ...] format"
+        );
+        assert!(
+            prompt.contains(
+                "[APTU: patch truncated by GitHub API -- do not speculate on missing content]"
+            ),
+            "GitHub API patch truncation must use [APTU: ...] format"
+        );
     }
 }
