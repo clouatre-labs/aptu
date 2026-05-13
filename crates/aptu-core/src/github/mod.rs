@@ -9,6 +9,7 @@ use tracing::debug;
 
 pub mod auth;
 pub mod graphql;
+pub mod instructions;
 pub mod issues;
 pub mod pulls;
 pub mod ratelimit;

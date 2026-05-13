@@ -222,6 +222,7 @@ pub async fn fetch_pr_details(
         url: pr.html_url.to_string(),
         labels,
         review_comments: Vec::new(),
+        instructions: None,
     };
 
     debug!(

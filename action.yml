@@ -89,6 +89,12 @@ inputs:
       Has no effect if repo-path is not provided.
     required: false
     default: 'false'
+  instructions-file:
+    description: >
+      Path to repository instructions file for PR review context.
+      When set, overrides the default AGENTS.md and .github/instructions/pr-review.md files.
+      Leave empty to use default file discovery.
+    required: false
   since:
     description: >
       For scheduled batch triage: triage all issues without labels created since this date
@@ -316,6 +322,7 @@ runs:
         REPO: ${{ github.repository }}
         REPO_PATH: ${{ inputs.repo-path }}
         DEEP: ${{ inputs.deep }}
+        INSTRUCTIONS_FILE: ${{ inputs.instructions-file }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
@@ -351,6 +358,9 @@ runs:
         fi
         if [[ "$DEEP" == "true" && -n "$REPO_PATH" ]]; then
           ARGS="$ARGS --deep"
+        fi
+        if [[ -n "$INSTRUCTIONS_FILE" ]]; then
+          ARGS="$ARGS --instructions-file $INSTRUCTIONS_FILE"
         fi
         
         echo "Running: aptu pr review $ARGS $PR_REF"

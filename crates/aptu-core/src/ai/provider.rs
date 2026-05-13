@@ -856,13 +856,25 @@ pub trait AiProvider: Send + Sync {
         );
 
         // Build request
-        let system_content = if let Some(override_prompt) =
+        let mut system_content = if let Some(override_prompt) =
             super::context::load_system_prompt_override("pr_review_system").await
         {
             override_prompt
         } else {
             Self::build_pr_review_system_prompt(self.custom_guidance())
         };
+
+        // Prepend repository instructions if available
+        if let Some(ref instructions) = pr.instructions {
+            // Escape XML delimiters to prevent tag injection
+            let escaped_instructions = instructions
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;");
+            system_content = format!(
+                "<repo_instructions>\n{escaped_instructions}\n</repo_instructions>\n\n{system_content}"
+            );
+        }
 
         // Assemble full prompt to measure actual size
         let assembled_prompt =
@@ -1373,6 +1385,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1423,6 +1436,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1461,6 +1475,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1517,6 +1532,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1756,6 +1772,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         // Act: call build_pr_review_user_prompt with empty call_graph (dropped by review_pr)
@@ -1801,6 +1818,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         // Act: call build_pr_review_user_prompt with both empty (dropped by review_pr)
@@ -1870,6 +1888,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         // Act: simulate review_pr dropping largest patches first
@@ -1934,6 +1953,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         // Act: simulate review_pr dropping all full_content
@@ -2013,6 +2033,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         // Act: build prompt
@@ -2096,6 +2117,7 @@ mod tests {
             labels: vec![],
             head_sha: String::new(),
             review_comments: vec![],
+            instructions: None,
         };
 
         // Act: build review prompt
