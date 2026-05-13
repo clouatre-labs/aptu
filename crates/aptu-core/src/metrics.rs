@@ -139,7 +139,7 @@ mod tests {
 
         let stats = AiStats {
             provider: "anthropic".to_string(),
-            model: "claude-3-sonnet".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
             input_tokens: 200,
             output_tokens: 75,
             duration_ms: 2000,

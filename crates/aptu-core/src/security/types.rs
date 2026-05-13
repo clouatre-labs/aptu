@@ -109,7 +109,7 @@ pub struct ValidatedFinding {
     /// LLM's reasoning for the validation decision.
     #[serde(default)]
     pub reasoning: String,
-    /// Model version used for validation (e.g., "anthropic/claude-3.5-sonnet").
+    /// Model version used for validation (e.g., "anthropic/claude-sonnet-4-6").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_version: Option<String>,
 }
