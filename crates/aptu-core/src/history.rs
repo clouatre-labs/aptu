@@ -37,6 +37,12 @@ pub struct AiStats {
     /// Prompt size in characters.
     #[serde(default)]
     pub prompt_chars: usize,
+    /// Number of cache read tokens (from Anthropic API).
+    #[serde(default)]
+    pub cache_read_tokens: u64,
+    /// Number of cache write tokens (from Anthropic API).
+    #[serde(default)]
+    pub cache_write_tokens: u64,
 }
 
 /// Status of a contribution.
@@ -281,6 +287,8 @@ mod tests {
             cost_usd: Some(0.0),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         };
 
         let json = serde_json::to_string(&stats).expect("serialize");
@@ -301,6 +309,8 @@ mod tests {
             cost_usd: Some(0.0),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         let json = serde_json::to_string(&contribution).expect("serialize");
@@ -343,6 +353,8 @@ mod tests {
             cost_usd: Some(0.01),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         let mut c2 = test_contribution();
@@ -355,6 +367,8 @@ mod tests {
             cost_usd: Some(0.02),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         data.contributions.push(c1);
@@ -378,6 +392,8 @@ mod tests {
             cost_usd: Some(0.01),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         let mut c2 = test_contribution();
@@ -390,6 +406,8 @@ mod tests {
             cost_usd: Some(0.02),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         data.contributions.push(c1);
@@ -412,6 +430,8 @@ mod tests {
             cost_usd: Some(0.01),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         let mut c2 = test_contribution();
@@ -424,6 +444,8 @@ mod tests {
             cost_usd: Some(0.02),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         data.contributions.push(c1);
@@ -452,6 +474,8 @@ mod tests {
             cost_usd: Some(0.01),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         let mut c2 = test_contribution();
@@ -464,6 +488,8 @@ mod tests {
             cost_usd: Some(0.02),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         let mut c3 = test_contribution();
@@ -476,6 +502,8 @@ mod tests {
             cost_usd: Some(0.015),
             fallback_provider: None,
             prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
         });
 
         data.contributions.push(c1);
@@ -486,5 +514,47 @@ mod tests {
         assert_eq!(costs.len(), 2);
         assert!((costs.get("model1").unwrap() - 0.03).abs() < f64::EPSILON);
         assert!((costs.get("model2").unwrap() - 0.015).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_ai_stats_cache_tokens_roundtrip() {
+        let stats = AiStats {
+            provider: "anthropic".to_string(),
+            model: "claude-3-sonnet".to_string(),
+            input_tokens: 1000,
+            output_tokens: 500,
+            duration_ms: 1500,
+            cost_usd: Some(0.05),
+            fallback_provider: None,
+            prompt_chars: 5000,
+            cache_read_tokens: 100,
+            cache_write_tokens: 50,
+        };
+
+        let json = serde_json::to_string(&stats).expect("serialize");
+        let parsed: AiStats = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(stats, parsed);
+        assert_eq!(parsed.cache_read_tokens, 100);
+        assert_eq!(parsed.cache_write_tokens, 50);
+    }
+
+    #[test]
+    fn test_ai_stats_cache_tokens_default() {
+        let json = r#"{
+            "provider": "openrouter",
+            "model": "mistralai/mistral-small-2603",
+            "input_tokens": 1000,
+            "output_tokens": 500,
+            "duration_ms": 1500,
+            "cost_usd": 0.0,
+            "fallback_provider": null,
+            "prompt_chars": 0
+        }"#;
+
+        let parsed: AiStats = serde_json::from_str(json).expect("deserialize");
+
+        assert_eq!(parsed.cache_read_tokens, 0);
+        assert_eq!(parsed.cache_write_tokens, 0);
     }
 }
