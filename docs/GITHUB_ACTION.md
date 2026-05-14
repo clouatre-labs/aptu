@@ -1,6 +1,6 @@
 # Aptu GitHub Action
 
-AI-powered automation for GitHub issues, pull requests, and releases.
+AI-powered automation for GitHub issues and pull requests.
 
 ## Quick Start
 
@@ -15,111 +15,150 @@ on:
 
 jobs:
   aptu:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
       issues: write
       pull-requests: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
-      - name: Run Aptu
-        uses: clouatre-labs/aptu@v0
+      - uses: clouatre-labs/aptu@v0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
-Add your AI provider API key as a repository secret (e.g., `GEMINI_API_KEY`).
+Add your AI provider API key as a repository secret. No `provider` or `model` input is needed -- the action detects the provider from whichever API key is set, and uses a sensible default model for that provider.
 
-## Features
+## What the Action Does
 
-The action auto-detects the event type and runs the appropriate command:
+The action auto-detects the event type and runs the appropriate commands:
 
-| Event | Command | Description |
-|-------|---------|-------------|
+| Event | Commands | Description |
+|-------|----------|-------------|
 | `issues` | `aptu issue triage` | Analyze issue, suggest labels and milestone, post comment |
-| `pull_request` | `aptu pr label` | Classify PR type and apply conventional label |
+| `pull_request` | `aptu pr label` then `aptu pr review` | Classify PR type, apply label, post advisory review comment |
+| `schedule` | `aptu issue triage` (batch) | Triage all unlabeled issues since a given date |
+| Any (if `scan-path` or `scan-security-diff` set) | `aptu scan-security` | Scan for security issues, output SARIF |
+| Any (if `pr-queue: true`) | `aptu pr queue` | Output ranked reviewability list of open PRs |
 
-### Feature-Specific Workflows
-
-For granular control, create separate workflow files:
-
-**Issue triage only** (`.github/workflows/issue-triage.yml`):
-```yaml
-on:
-  issues:
-    types: [opened]
-permissions:
-  issues: write
-  contents: read
-```
-
-**PR labeling only** (`.github/workflows/pr-label.yml`):
-```yaml
-on:
-  pull_request:
-    types: [opened, synchronize]
-permissions:
-  pull-requests: write
-  contents: read
-```
+PR review is non-blocking (`continue-on-error: true`); a failure does not fail the workflow.
 
 ## AI Providers
 
-Provide **one** API key. The action auto-detects the provider:
+Provide **one** API key. The action detects the provider automatically.
 
 | Provider | Input | Default Model |
 |----------|-------|---------------|
-| OpenRouter | `openrouter-api-key` | `mistralai/mistral-small-2603` |
+| Anthropic | `anthropic-api-key` | (set via `model`) |
+| Cerebras | `cerebras-api-key` | (set via `model`) |
 | Google Gemini | `gemini-api-key` | `gemini-3.1-flash-lite-preview` |
-| Groq | `groq-api-key` | `llama-3.3-70b-versatile` |
-| Cerebras | `cerebras-api-key` | `qwen-3-32b` |
-| Z.AI | `zai-api-key` | `glm-4.5-air` |
-| ZenMux | `zenmux-api-key` | `x-ai/grok-code-fast-1` |
+| Groq | `groq-api-key` | (set via `model`) |
+| OpenRouter | `openrouter-api-key` | `mistralai/mistral-small-2603` |
+| Z.AI | `zai-api-key` | (set via `model`) |
+| ZenMux | `zenmux-api-key` | (set via `model`) |
 
-Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.md) for details.
+When no API key is provided the action falls back to `openrouter` / `inception/mercury-2` via the built-in fallback chain. Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.md) for details.
 
 ## Inputs
+
+### Auth
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `github-token` | Yes | - | GitHub token for API access |
-| `gemini-api-key` | No | - | Google Gemini API key |
-| `openrouter-api-key` | No | - | OpenRouter API key |
-| `fallback-provider` | No | `openrouter` | AI provider for the fallback chain (used when primary provider fails) |
-| `fallback-model` | No | `inception/mercury-2` | Model for the fallback provider (e.g. inception/mercury-2) |
-| `groq-api-key` | No | - | Groq API key |
+
+### AI Provider API Keys
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `anthropic-api-key` | No | - | Anthropic API key |
 | `cerebras-api-key` | No | - | Cerebras API key |
+| `gemini-api-key` | No | - | Google Gemini API key |
+| `groq-api-key` | No | - | Groq API key |
+| `openrouter-api-key` | No | - | OpenRouter API key |
 | `zai-api-key` | No | - | Z.AI API key |
 | `zenmux-api-key` | No | - | ZenMux API key |
-| `model` | No | Provider default | Model to use |
-| `provider` | No | Auto-detect | Force specific provider |
-| `dry-run` | No | `false` | Preview without changes |
-| `skip-labeled` | No | `false` | Skip issues with existing labels |
-| `apply-labels` | No | `true` | Apply suggested labels (issues) |
-| `no-comment` | No | `false` | Skip posting comment (issues) |
-| `repo-path` | No | `''` | Local repository root for AST context injection into PR review prompts. When set, changed source files (Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran) are analysed and function signatures with call-graph context are appended to the prompt. Leave empty to skip AST context. |
-| `deep` | No | `false` | Enable cross-file call-graph context for richer AI analysis. Requires `repo-path` to be set. |
-| `since` | No | `''` | Only triage issues created on or after this date (ISO 8601, e.g. `2024-01-01`). Useful for scheduled batch triage. |
-| `command` | No | `issue` | Top-level command to run (`issue` or `pr`). Normally auto-detected from event type. |
-| `subcommand` | No | `triage` | Subcommand to run (`triage` for issues; `label` or `review` for PRs). |
-| `reference` | No | `''` | Issue or PR number/URL to process. If empty, the action processes the event target. |
+
+### AI Model Selection
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `provider` | No | `openrouter` | AI provider to use (`anthropic`, `cerebras`, `gemini`, `groq`, `openrouter`, `zai`, `zenmux`) |
+| `model` | No | Provider default | Model identifier for the selected provider |
+| `fallback-provider` | No | `openrouter` | Provider to try when the primary fails; set to `''` to disable |
+| `fallback-model` | No | `inception/mercury-2` | Model for the fallback provider |
+
+### Behavior Flags
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `apply-labels` | No | `true` | Apply AI-suggested labels and milestone |
+| `dry-run` | No | `false` | Run without making changes |
+| `no-comment` | No | `false` | Skip posting comment to GitHub |
+| `skip-labeled` | No | `true` | Skip triage if the issue already has both a `type:` and a `p[0-9]` label |
+
+### Issue Triage
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `reference` | No | `''` | Issue or PR number/URL to process; if empty, uses the event target |
+| `since` | No | `''` | Batch triage: only triage issues created on or after this date (ISO 8601) |
+| `issue-state` | No | `open` | Batch triage: filter issues by state (`open`, `closed`, `all`) |
+
+### PR Review
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `instructions-file` | No | `''` | Path to instructions file; overrides default `AGENTS.md` / `.github/instructions/pr-review.md` discovery |
+| `repo-path` | No | `''` | Local repository root for AST context injection (Rust, Python, Go, Java, TypeScript, TSX, JS, C, C++, C#, Fortran); leave empty to skip |
+| `deep` | No | `false` | Enable cross-file call-graph context (requires `repo-path`) |
+
+### Security Scan
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `scan-path` | No | `''` | Directory to scan; leave empty to skip |
+| `scan-security-diff` | No | `''` | Path to a unified diff file to scan (overrides `scan-path` when set) |
+
+### PR Queue
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `pr-queue` | No | `false` | Output a ranked reviewability list of open PRs |
+
+### Routing (advanced)
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `command` | No | `issue` | Top-level command (`issue` or `pr`); normally auto-detected from event |
+| `subcommand` | No | `triage` | Subcommand (`triage`, `label`, or `review`); normally auto-detected |
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `input-tokens` | Total input tokens consumed across all AI calls |
+| `output-tokens` | Total output tokens consumed across all AI calls |
+| `duration-ms` | Total AI call duration in milliseconds |
+| `cost-usd` | Estimated cost in USD (provider-dependent; may be empty) |
+
+Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploaded as a workflow artifact (`aptu-token-usage-<run-id>`), and summarized in `$GITHUB_STEP_SUMMARY`.
 
 ## Permissions
 
 | Permission | Required For |
 |------------|--------------|
 | `issues: write` | Issue triage (comments, labels) |
-| `pull-requests: write` | PR labeling (comments, labels) |
+| `pull-requests: write` | PR labeling and review (comments, labels) |
 | `contents: read` | Repository context (all features) |
 
 ## Scheduled Batch Triage
 
-To triage all new issues on a schedule, combine the `on: schedule` trigger with the `since` input:
+Triage all unlabeled issues on a schedule:
 
 ```yaml
+name: Aptu scheduled triage
+
 on:
   schedule:
     - cron: '0 8 * * 1'   # every Monday at 08:00 UTC
@@ -127,18 +166,59 @@ on:
 jobs:
   triage:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
     steps:
+      - name: Get last week's date
+        id: date
+        run: echo "since=$(date -d '7 days ago' +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
       - uses: clouatre-labs/aptu@v0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          repo: owner/repo
-          since: ${{ steps.date.outputs.date }}   # set via a prior step
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          since: ${{ steps.date.outputs.since }}
+          issue-state: open
 ```
 
-The `since` input filters issues to those created after the given date, preventing the action from re-triaging already-processed issues on repeat runs.
+## PR Review with AST Context
+
+Pass the checked-out repository path to inject function signatures and call-graph context into the review prompt:
+
+```yaml
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: clouatre-labs/aptu@v0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          repo-path: ${{ github.workspace }}
+          deep: 'true'
+```
 
 ## Security Scanning
 
-The composite action handles issue triage and PR review. For standalone security scanning, create a separate workflow using the `aptu scan-security` subcommand.
+Run `aptu scan-security` on push or PR by setting `scan-path`:
 
-See [docs/SECURITY_SCANNING.md](SECURITY_SCANNING.md) for the canonical `scan.yml` workflow, CI self-audit gate pattern, and full flag reference.
+```yaml
+      - uses: clouatre-labs/aptu@v0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          scan-path: ${{ github.workspace }}
+```
+
+To scan only changed files, pass a diff file via `scan-security-diff` instead:
+
+```yaml
+      - name: Generate diff
+        run: git diff origin/main...HEAD > /tmp/changes.diff
+
+      - uses: clouatre-labs/aptu@v0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          scan-security-diff: /tmp/changes.diff
+```
+
+The scan step outputs SARIF and is non-blocking. See [docs/SECURITY_SCANNING.md](SECURITY_SCANNING.md) for the canonical `scan.yml` workflow and CI self-audit gate pattern.
