@@ -201,6 +201,22 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 **Free Tier:** x-ai/grok-code-fast-1 with 256K context window
 
+### Anthropic
+
+1. Get an API key from [Anthropic Console](https://console.anthropic.com/keys)
+2. Set the environment variable:
+   ```bash
+   export ANTHROPIC_API_KEY="your-api-key-here"
+   ```
+3. Configure in `~/.config/aptu/config.toml`:
+   ```toml
+   [ai]
+   provider = "anthropic"
+   model = "claude-haiku-4-5"
+   ```
+
+**Prompt Caching:** Anthropic models support prompt caching via cache control tokens on system messages. Aptu automatically enables caching for all Anthropic requests; no additional configuration is required.
+
 ## PR Review Limits
 
 Control how much context `aptu pr review` fetches and injects into the AI prompt:

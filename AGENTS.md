@@ -17,8 +17,8 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 
 - `auth` (login/logout/status)
 - `repo` (list/discover/add/remove)
-- `issue` (list/triage/create)
-- `pr` (review/label/create)
+- `issue` (list/triage/create/revert)
+- `pr` (review/label/create/queue/revert)
 - `scan-security` (local pattern scan; no AI)
 - `models` (list)
 - `completion` (generate/install)
