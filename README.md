@@ -36,7 +36,7 @@ See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BE
 - **PR Analysis** - AI-powered pull request review and feedback; `aptu pr create --diff <file>` applies a patch, commits, and opens a PR
 - **Prompt Customization** - Override built-in system prompts per operation or append custom guidance via config
 - **GitHub Action** - Auto-triage incoming issues with labels and comments
-- **Multiple Providers** - OpenRouter (default), Gemini, Groq, Cerebras, Z.AI, and ZenMux
+- **Multiple Providers** - Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux
 - **Local History** - Track your contributions offline
 - **Multiple Outputs** - Text, JSON, YAML, Markdown, and SARIF
 

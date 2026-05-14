@@ -105,21 +105,21 @@ Flags can be used independently (`--model` alone uses configured provider). CLI 
 
 Aptu supports multiple AI providers. Choose the one that works best for you:
 
-### Google AI Studio (Gemini)
+### Anthropic
 
-1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
+1. Get an API key from [Anthropic Console](https://console.anthropic.com/keys)
 2. Set the environment variable:
    ```bash
-   export GEMINI_API_KEY="your-api-key-here"
+   export ANTHROPIC_API_KEY="your-api-key-here"
    ```
 3. Configure in `~/.config/aptu/config.toml`:
    ```toml
    [ai]
-   provider = "gemini"
-   model = "gemini-3.1-flash-lite-preview"
+   provider = "anthropic"
+   model = "claude-haiku-4-5"
    ```
 
-**Free Tier:** 15 requests/minute, 1M+ tokens/day, 1M token context window
+**Prompt Caching:** Anthropic models support prompt caching via cache control tokens on system messages. Aptu automatically enables caching for all Anthropic requests; no additional configuration is required.
 
 ### Cerebras
 
@@ -136,6 +136,22 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```
 
 **Free Tier:** Available with Cerebras API account
+
+### Google AI Studio (Gemini)
+
+1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
+2. Set the environment variable:
+   ```bash
+   export GEMINI_API_KEY="your-api-key-here"
+   ```
+3. Configure in `~/.config/aptu/config.toml`:
+   ```toml
+   [ai]
+   provider = "gemini"
+   model = "gemini-3.1-flash-lite-preview"
+   ```
+
+**Free Tier:** 15 requests/minute, 1M+ tokens/day, 1M token context window
 
 ### Groq
 
@@ -200,22 +216,6 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```
 
 **Free Tier:** x-ai/grok-code-fast-1 with 256K context window
-
-### Anthropic
-
-1. Get an API key from [Anthropic Console](https://console.anthropic.com/keys)
-2. Set the environment variable:
-   ```bash
-   export ANTHROPIC_API_KEY="your-api-key-here"
-   ```
-3. Configure in `~/.config/aptu/config.toml`:
-   ```toml
-   [ai]
-   provider = "anthropic"
-   model = "claude-haiku-4-5"
-   ```
-
-**Prompt Caching:** Anthropic models support prompt caching via cache control tokens on system messages. Aptu automatically enables caching for all Anthropic requests; no additional configuration is required.
 
 ## PR Review Limits
 
