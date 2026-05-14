@@ -49,13 +49,13 @@ Provide **one** API key. The action detects the provider automatically.
 
 | Provider | Input | Default Model |
 |----------|-------|---------------|
-| OpenRouter | `openrouter-api-key` | `mistralai/mistral-small-2603` |
 | Anthropic | `anthropic-api-key` | (set via `model`) |
+| Cerebras | `cerebras-api-key` | (set via `model`) |
 | Google Gemini | `gemini-api-key` | `gemini-3.1-flash-lite-preview` |
-| Groq | `groq-api-key` | `llama-3.3-70b-versatile` |
-| Cerebras | `cerebras-api-key` | `qwen-3-32b` |
-| Z.AI | `zai-api-key` | `glm-4.5-air` |
-| ZenMux | `zenmux-api-key` | `x-ai/grok-code-fast-1` |
+| Groq | `groq-api-key` | (set via `model`) |
+| OpenRouter | `openrouter-api-key` | `mistralai/mistral-small-2603` |
+| Z.AI | `zai-api-key` | (set via `model`) |
+| ZenMux | `zenmux-api-key` | (set via `model`) |
 
 When no API key is provided the action falls back to `openrouter` / `inception/mercury-2` via the built-in fallback chain. Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.md) for details.
 
