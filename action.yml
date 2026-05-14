@@ -28,12 +28,15 @@ inputs:
   zenmux-api-key:
     description: ZenMux API key (from https://zenmux.ai)
     required: false
+  anthropic-api-key:
+    description: Anthropic API key (from https://console.anthropic.com/settings/keys)
+    required: false
   model:
     description: Model to use for analysis (provider-specific, see docs/CONFIGURATION.md)
     required: false
     default: ''
   provider:
-    description: AI provider to use (gemini, openrouter, groq, cerebras, zai, zenmux)
+    description: AI provider to use (gemini, openrouter, groq, cerebras, zai, zenmux, anthropic)
     required: false
     default: ''
   skip-labeled:
@@ -102,6 +105,30 @@ inputs:
       Only used when the workflow is triggered by a schedule event.
     required: false
     default: ''
+  issue-state:
+    description: >
+      For scheduled batch triage: filter issues by state (open, closed, all).
+      Only used when the workflow is triggered by a schedule event.
+    required: false
+    default: 'open'
+  scan-path:
+    description: >
+      Path to scan for security issues with aptu scan-security.
+      Leave empty to skip the security scan step.
+    required: false
+    default: ''
+  scan-security-diff:
+    description: >
+      Path to a unified diff file to scan for security issues (overrides scan-path when set).
+      Leave empty to use scan-path directory scan.
+    required: false
+    default: ''
+  pr-queue:
+    description: >
+      Run aptu pr queue to output a ranked reviewability list of open PRs.
+      Useful for workflow_dispatch or scheduled summary workflows.
+    required: false
+    default: 'false'
 
 outputs:
   input-tokens:
@@ -236,6 +263,7 @@ runs:
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         DRY_RUN: ${{ inputs.dry-run }}
@@ -244,22 +272,22 @@ runs:
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
-        
+
         ISSUE_REF="${REPO}#${ISSUE_NUMBER}"
         ARGS=""
-        
+
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"
         fi
-        
+
         if [[ "$APPLY_LABELS" == "false" ]]; then
           ARGS="$ARGS --no-apply"
         fi
-        
+
         if [[ "$NO_COMMENT" == "true" ]]; then
           ARGS="$ARGS --no-comment"
         fi
-        
+
         echo "Running: aptu issue triage $ARGS $ISSUE_REF"
         aptu issue triage $ARGS "$ISSUE_REF"
 
@@ -269,6 +297,7 @@ runs:
       env:
         REPO: ${{ github.repository }}
         SINCE: ${{ inputs.since }}
+        ISSUE_STATE: ${{ inputs.issue-state }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
@@ -276,16 +305,21 @@ runs:
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         DRY_RUN: ${{ inputs.dry-run }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         NO_COMMENT: ${{ inputs.no-comment }}
+        APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
         ARGS="--repo $REPO"
         if [[ -n "$SINCE" ]]; then
           ARGS="$ARGS --since $SINCE"
+        fi
+        if [[ -n "$ISSUE_STATE" && "$ISSUE_STATE" != "open" ]]; then
+          ARGS="$ARGS --state $ISSUE_STATE"
         fi
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"
@@ -312,20 +346,21 @@ runs:
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         DRY_RUN: ${{ inputs.dry-run }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
-        
+
         PR_REF="${REPO}#${PR_NUMBER}"
         ARGS=""
-        
+
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"
         fi
-        
+
         echo "Running: aptu pr label $ARGS $PR_REF"
         aptu pr label $ARGS "$PR_REF"
 
@@ -346,6 +381,7 @@ runs:
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         DRY_RUN: ${{ inputs.dry-run }}
@@ -354,22 +390,22 @@ runs:
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
-        
+
         PR_REF="${REPO}#${PR_NUMBER}"
         ARGS="--comment --force"
-        
+
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS="$ARGS --dry-run"
         fi
-        
+
         if [[ "$APPLY_LABELS" == "false" ]]; then
           ARGS="$ARGS --no-apply"
         fi
-        
+
         if [[ "$NO_COMMENT" == "true" ]]; then
           ARGS="$ARGS --no-comment"
         fi
-        
+
         if [[ -n "$REPO_PATH" ]]; then
           ARGS="$ARGS --repo-path $REPO_PATH"
         fi
@@ -379,9 +415,57 @@ runs:
         if [[ -n "$INSTRUCTIONS_FILE" ]]; then
           ARGS="$ARGS --instructions-file $INSTRUCTIONS_FILE"
         fi
-        
+
         echo "Running: aptu pr review $ARGS $PR_REF"
         aptu pr review $ARGS "$PR_REF"
+
+    - name: Run aptu scan-security
+      if: inputs.scan-path != '' || inputs.scan-security-diff != ''
+      continue-on-error: true
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        SCAN_PATH: ${{ inputs.scan-path }}
+        SCAN_DIFF: ${{ inputs.scan-security-diff }}
+        GH_TOKEN: ${{ inputs.github-token || github.token }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        ZAI_API_KEY: ${{ inputs.zai-api-key }}
+        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -e
+        if [[ -n "$SCAN_DIFF" ]]; then
+          echo "Running: aptu scan-security --diff $SCAN_DIFF --output sarif"
+          aptu scan-security --diff "$SCAN_DIFF" --output sarif
+        else
+          echo "Running: aptu scan-security $SCAN_PATH --output sarif"
+          aptu scan-security "$SCAN_PATH" --output sarif
+        fi
+
+    - name: Run aptu pr queue
+      if: inputs.pr-queue == 'true'
+      continue-on-error: true
+      shell: bash
+      env:
+        REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ inputs.github-token || github.token }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        ZAI_API_KEY: ${{ inputs.zai-api-key }}
+        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__PROVIDER: ${{ inputs.provider }}
+      run: |
+        set -e
+        echo "Running: aptu pr queue --repo $REPO"
+        aptu pr queue --repo "$REPO"
 
     - name: Aggregate metrics outputs
       id: metrics-aggregate
@@ -424,4 +508,3 @@ runs:
         path: ${{ runner.temp }}/aptu-token-usage.jsonl
         retention-days: 90
         if-no-files-found: ignore
-
