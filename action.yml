@@ -243,7 +243,8 @@ runs:
 
         case "$(uname -m)" in
           aarch64 | arm64) ARCH="aarch64" ;;
-          *)               ARCH="x86_64"  ;;
+          x86_64)          ARCH="x86_64"  ;;
+          *) echo "::error::Unsupported architecture $(uname -m)" >&2; exit 1 ;;
         esac
         ARCHIVE="aptu-cli-${APTU_VERSION}-${ARCH}-unknown-linux-musl.tar.gz"
         TEMP_DIR=$(mktemp -d)
