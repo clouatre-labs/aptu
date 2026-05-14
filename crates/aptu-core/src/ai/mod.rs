@@ -38,6 +38,32 @@ pub fn is_free_model(model: &str) -> bool {
     model.ends_with(":free")
 }
 
+/// Resolves Anthropic credentials with OAuth fallback.
+///
+/// For the Anthropic provider, attempts to use Claude OAuth credentials in this order:
+/// 1. Existing token in OS keyring
+/// 2. ~/.claude/credentials.json file
+/// 3. Environment variable (fallback)
+///
+/// Returns `Some(client)` if credentials were found via OAuth or env var,
+/// `None` if no credentials were available.
+pub(crate) fn resolve_anthropic_credential(
+    ai_config: &crate::config::AiConfig,
+) -> Option<AiClient> {
+    // Try keyring first
+    if let Ok(Some(client)) = AiClient::from_keyring_oauth(ai_config) {
+        return Some(client);
+    }
+
+    // Try credentials file
+    if let Ok(Some(client)) = AiClient::from_claude_credentials(ai_config) {
+        return Some(client);
+    }
+
+    // Fall back to environment variable
+    AiClient::new("anthropic", ai_config).ok()
+}
+
 /// Sets up the primary AI client with credential resolution.
 ///
 /// For the Anthropic provider, attempts to use Claude OAuth credentials in this order:
@@ -51,20 +77,14 @@ pub fn is_free_model(model: &str) -> bool {
 ///
 /// Returns an error if client creation fails.
 pub fn setup_primary_client(config: &crate::config::AppConfig) -> anyhow::Result<AiClient> {
-    // For Anthropic, try OAuth paths first
-    if config.ai.provider == "anthropic" {
-        // Try keyring first
-        if let Ok(Some(client)) = AiClient::from_keyring_oauth(&config.ai) {
-            return Ok(client);
-        }
-
-        // Try credentials file
-        if let Ok(Some(client)) = AiClient::from_claude_credentials(&config.ai) {
-            return Ok(client);
-        }
+    // For Anthropic, delegate to centralized credential resolution
+    if config.ai.provider == "anthropic"
+        && let Some(client) = resolve_anthropic_credential(&config.ai)
+    {
+        return Ok(client);
     }
 
-    // Fall back to environment variable
+    // Fall back to environment variable for non-Anthropic providers
     AiClient::new(&config.ai.provider, &config.ai)
 }
 

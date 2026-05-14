@@ -325,20 +325,17 @@ fn try_setup_primary_client(
     model_name: &str,
     ai_config: &AiConfig,
 ) -> crate::Result<AiClient> {
-    // For Anthropic, try OAuth paths first
-    if primary_provider == "anthropic" {
-        // Try keyring first
-        if let Ok(Some(client)) = AiClient::from_keyring_oauth(ai_config) {
-            return Ok(client);
+    // For Anthropic, delegate to centralized credential resolution
+    if primary_provider == "anthropic"
+        && let Some(client) = crate::ai::resolve_anthropic_credential(ai_config)
+    {
+        if ai_config.validation_enabled {
+            validate_provider_model(primary_provider, model_name)?;
         }
-
-        // Try credentials file
-        if let Ok(Some(client)) = AiClient::from_claude_credentials(ai_config) {
-            return Ok(client);
-        }
+        return Ok(client);
     }
 
-    // Fall back to environment variable
+    // Fall back to environment variable for non-Anthropic or missing Anthropic credentials
     let api_key = provider.ai_api_key(primary_provider).ok_or_else(|| {
         let env_var = get_provider(primary_provider).map_or("API_KEY", |p| p.api_key_env);
         AptuError::AiProviderNotAuthenticated {
