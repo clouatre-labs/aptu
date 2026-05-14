@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   label:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       pull-requests: write
       issues: write
@@ -24,6 +24,7 @@ jobs:
         continue-on-error: true  # Non-blocking - AI review is advisory
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
           provider: gemini
@@ -31,4 +32,5 @@ jobs:
           skip-labeled: 'false'
           fallback-provider: 'openrouter'
           fallback-model: 'inception/mercury-2'
+          instructions-file: .github/instructions/pr-review.md
           repo-path: ${{ github.workspace }}
