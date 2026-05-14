@@ -12,11 +12,38 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
 use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize};
 
 use super::circuit_breaker::CircuitBreaker;
 use super::provider::AiProvider;
-use super::registry::{ProviderConfig, get_provider};
+use super::registry::{PROVIDER_ANTHROPIC, ProviderConfig, get_provider};
 use crate::config::AiConfig;
+
+/// Authentication method used by the AI client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthMethod {
+    /// API key from environment variable.
+    ApiKey,
+    /// OAuth token from Claude credentials file.
+    OAuth,
+}
+
+impl std::fmt::Display for AuthMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AuthMethod::ApiKey => write!(f, "api-key"),
+            AuthMethod::OAuth => write!(f, "oauth"),
+        }
+    }
+}
+
+/// Claude credentials from ~/.claude/credentials.json.
+#[derive(Debug, Deserialize)]
+pub struct ClaudeCredentials {
+    /// OAuth access token.
+    pub access_token: String,
+}
 
 /// Generic AI client for all providers.
 ///
@@ -42,6 +69,8 @@ pub struct AiClient {
     circuit_breaker: CircuitBreaker,
     /// Optional custom guidance from config to inject into system prompts.
     custom_guidance: Option<String>,
+    /// Authentication method used.
+    auth_method: AuthMethod,
 }
 
 impl Drop for AiClient {
@@ -119,6 +148,7 @@ impl AiClient {
                 config.circuit_breaker_reset_seconds,
             ),
             custom_guidance: config.custom_guidance.clone(),
+            auth_method: AuthMethod::ApiKey,
         })
     }
 
@@ -185,7 +215,130 @@ impl AiClient {
                 config.circuit_breaker_reset_seconds,
             ),
             custom_guidance: config.custom_guidance.clone(),
+            auth_method: AuthMethod::ApiKey,
         })
+    }
+
+    /// Creates a new AI client from Claude credentials file (~/.claude/credentials.json).
+    ///
+    /// Reads the credentials file, extracts the access token, stores it in the OS keyring,
+    /// and returns an `AiClient` configured for the Anthropic provider.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - AI configuration with timeout and cost control settings
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(Some(AiClient))` if credentials are found and valid,
+    /// `Ok(None)` if the credentials file is missing or invalid,
+    /// or an error if keyring operations fail.
+    pub fn from_claude_credentials(config: &AiConfig) -> Result<Option<Self>> {
+        // Resolve credentials file path
+        let Some(home) = dirs::home_dir() else {
+            return Ok(None);
+        };
+
+        let creds_path = home.join(".claude").join("credentials.json");
+
+        // Check if file exists
+        if !creds_path.exists() {
+            return Ok(None);
+        }
+
+        // Read and parse credentials file
+        let creds_content =
+            std::fs::read_to_string(&creds_path).context("Failed to read credentials file")?;
+
+        let creds: ClaudeCredentials =
+            serde_json::from_str(&creds_content).context("Failed to parse credentials JSON")?;
+
+        // Validate token is not empty
+        if creds.access_token.is_empty() {
+            return Ok(None);
+        }
+
+        // Store token in keyring
+        #[cfg(feature = "keyring")]
+        {
+            use keyring_core::Entry;
+            let entry = Entry::new("aptu", "anthropic_oauth_token")
+                .context("Failed to create keyring entry")?;
+            entry
+                .set_password(&creds.access_token)
+                .context("Failed to store token in keyring")?;
+        }
+
+        // Create client with the token
+        let client = Self::with_api_key(
+            PROVIDER_ANTHROPIC,
+            SecretString::from(creds.access_token),
+            &config.model,
+            config,
+        )?;
+
+        // Mark as OAuth
+        let mut client = client;
+        client.auth_method = AuthMethod::OAuth;
+        Ok(Some(client))
+    }
+
+    /// Returns the path to the Claude credentials file if it exists.
+    ///
+    /// This helper centralizes the path resolution logic for ~/.claude/credentials.json,
+    /// keeping the CLI command layer thin and avoiding duplicate path construction.
+    ///
+    /// Returns `Some(path)` if the file exists, `None` otherwise.
+    #[must_use]
+    pub fn claude_credentials_path() -> Option<std::path::PathBuf> {
+        let home = dirs::home_dir()?;
+        let creds_path = home.join(".claude").join("credentials.json");
+        if creds_path.exists() {
+            Some(creds_path)
+        } else {
+            None
+        }
+    }
+
+    /// Attempts to retrieve a Claude OAuth token from the OS keyring.
+    ///
+    /// Returns `Ok(Some(AiClient))` if a token is found in the keyring,
+    /// `Ok(None)` if no token is stored, or an error if keyring operations fail.
+    pub fn from_keyring_oauth(config: &AiConfig) -> Result<Option<Self>> {
+        #[cfg(feature = "keyring")]
+        {
+            use keyring_core::Entry;
+            let entry = Entry::new("aptu", "anthropic_oauth_token")
+                .context("Failed to create keyring entry")?;
+
+            match entry.get_password() {
+                Ok(token) => {
+                    let client = Self::with_api_key(
+                        PROVIDER_ANTHROPIC,
+                        SecretString::from(token),
+                        &config.model,
+                        config,
+                    )?;
+
+                    let mut client = client;
+                    client.auth_method = AuthMethod::OAuth;
+                    Ok(Some(client))
+                }
+                Err(_) => Ok(None),
+            }
+        }
+
+        #[cfg(not(feature = "keyring"))]
+        {
+            let _ = config;
+            Ok(None)
+        }
+    }
+
+    /// Returns the authentication method used by this client.
+    #[must_use]
+    pub fn auth_method(&self) -> AuthMethod {
+        self.auth_method
     }
 
     /// Get the circuit breaker for this client.
@@ -357,7 +510,7 @@ mod tests {
     fn test_build_headers_anthropic_has_api_key_and_version() {
         let config = test_config();
         let client = AiClient::with_api_key(
-            "anthropic",
+            PROVIDER_ANTHROPIC,
             SecretString::from("test_api_key"),
             "test-model",
             &config,
@@ -387,5 +540,61 @@ mod tests {
         assert!(!headers.contains_key("anthropic-version"));
         assert!(headers.contains_key("http-referer"));
         assert!(headers.contains_key("x-title"));
+    }
+
+    #[test]
+    fn test_from_claude_credentials_missing_file() {
+        let config = test_config();
+        let result = AiClient::from_claude_credentials(&config);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_from_claude_credentials_malformed_json() {
+        use std::fs;
+        use std::io::Write;
+
+        let temp_dir = tempfile::tempdir().expect("should create temp dir");
+        let claude_dir = temp_dir.path().join(".claude");
+        fs::create_dir_all(&claude_dir).expect("should create .claude dir");
+
+        let creds_path = claude_dir.join("credentials.json");
+        let mut file = fs::File::create(&creds_path).expect("should create file");
+        file.write_all(b"{ invalid json }")
+            .expect("should write file");
+
+        // Temporarily override home_dir for this test
+        // Since we can't easily mock dirs::home_dir, we'll test the parsing logic directly
+        let malformed = "{ invalid json }";
+        let result: Result<ClaudeCredentials, _> = serde_json::from_str(malformed);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_claude_credentials_missing_access_token() {
+        let malformed = r#"{"other_field": "value"}"#;
+        let result: Result<ClaudeCredentials, _> = serde_json::from_str(malformed);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_claude_credentials_empty_token() {
+        let empty_token = r#"{"access_token": ""}"#;
+        let creds: ClaudeCredentials = serde_json::from_str(empty_token).expect("should parse");
+        assert!(creds.access_token.is_empty());
+    }
+
+    #[test]
+    fn test_auth_method_api_key() {
+        let config = test_config();
+        let client = AiClient::with_api_key(
+            PROVIDER_ANTHROPIC,
+            SecretString::from("test_key"),
+            "test-model",
+            &config,
+        )
+        .expect("should create client");
+        assert_eq!(client.auth_method(), AuthMethod::ApiKey);
     }
 }

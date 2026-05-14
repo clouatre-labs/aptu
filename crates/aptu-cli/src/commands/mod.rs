@@ -404,7 +404,11 @@ async fn review_single_pr(
 /// Dispatch to the appropriate command handler.
 #[allow(clippy::too_many_lines)]
 /// Run the auth command.
-async fn run_auth_command(auth_cmd: AuthCommand, ctx: &OutputContext) -> Result<()> {
+async fn run_auth_command(
+    auth_cmd: AuthCommand,
+    ctx: &OutputContext,
+    config: &AppConfig,
+) -> Result<()> {
     match auth_cmd {
         AuthCommand::Login => {
             let result = auth::run_login().await?;
@@ -417,7 +421,7 @@ async fn run_auth_command(auth_cmd: AuthCommand, ctx: &OutputContext) -> Result<
             Ok(())
         }
         AuthCommand::Status => {
-            let result = auth::run_status().await?;
+            let result = auth::run_status(config).await?;
             output::render(&result, ctx)?;
             Ok(())
         }
@@ -1119,7 +1123,7 @@ pub async fn run(
     }
 
     match command {
-        Commands::Auth(auth_cmd) => run_auth_command(auth_cmd, &ctx).await,
+        Commands::Auth(auth_cmd) => run_auth_command(auth_cmd, &ctx, config).await,
         Commands::Repo(repo_cmd) => run_repo_command(repo_cmd, ctx).await,
         Commands::Issue(issue_cmd) => {
             run_issue_command(issue_cmd, ctx, config, inferred_repo).await

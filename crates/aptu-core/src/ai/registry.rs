@@ -53,8 +53,8 @@ pub struct ProviderConfig {
 
 /// Provider name constant for Anthropic.
 ///
-/// Used by [`crate::ai::provider::AiProvider::is_anthropic`] to avoid
-/// hardcoding the string literal in multiple places.
+/// Used throughout the codebase to avoid hardcoding the string literal
+/// in multiple places. Replaces all direct "anthropic" comparisons.
 pub const PROVIDER_ANTHROPIC: &str = "anthropic";
 
 /// Static registry of all supported AI providers

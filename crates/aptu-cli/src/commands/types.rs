@@ -23,6 +23,10 @@ pub struct AuthStatusResult {
     pub method: Option<TokenSource>,
     /// GitHub username (if authenticated and available).
     pub username: Option<String>,
+    /// AI provider authentication method (if configured).
+    pub ai_provider: Option<String>,
+    /// AI provider auth method: "api-key" or "oauth".
+    pub ai_auth_method: Option<String>,
 }
 
 /// Result from the repos command.
