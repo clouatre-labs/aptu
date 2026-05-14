@@ -10,22 +10,19 @@ use tracing::info;
 
 use crate::commands::types::AuthActionResult;
 
-/// Resolve the AI auth method by checking OAuth keyring, Claude credentials file, and API key env var.
+/// Resolve the AI auth method using centralized credential resolution from aptu-core.
 fn resolve_ai_auth_method(config: &AppConfig) -> Option<(String, String)> {
     let provider_name = &config.ai.provider;
 
-    // Try keyring OAuth token first
-    if let Ok(Some(_client)) = aptu_core::ai::AiClient::from_keyring_oauth(&config.ai) {
-        return Some((provider_name.clone(), "oauth".to_string()));
-    }
-
-    // Try Claude credentials file
-    if let Ok(Some(_client)) = aptu_core::ai::AiClient::from_claude_credentials(&config.ai) {
-        return Some((provider_name.clone(), "oauth".to_string()));
-    }
-
-    // Check if API key is available
-    if std::env::var(format!("{}_API_KEY", provider_name.to_uppercase())).is_ok() {
+    // Use centralized credential resolution to avoid duplication
+    if let Some(_client) = aptu_core::ai::resolve_anthropic_credential(&config.ai) {
+        // Determine auth source: check keyring first, then credentials file, then env var
+        if aptu_core::ai::AiClient::from_keyring_oauth(&config.ai).is_ok() {
+            return Some((provider_name.clone(), "oauth".to_string()));
+        }
+        if aptu_core::ai::AiClient::from_claude_credentials(&config.ai).is_ok() {
+            return Some((provider_name.clone(), "oauth".to_string()));
+        }
         return Some((provider_name.clone(), "api-key".to_string()));
     }
 

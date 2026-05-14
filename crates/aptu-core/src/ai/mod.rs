@@ -47,9 +47,8 @@ pub fn is_free_model(model: &str) -> bool {
 ///
 /// Returns `Some(client)` if credentials were found via OAuth or env var,
 /// `None` if no credentials were available.
-pub(crate) fn resolve_anthropic_credential(
-    ai_config: &crate::config::AiConfig,
-) -> Option<AiClient> {
+#[must_use]
+pub fn resolve_anthropic_credential(ai_config: &crate::config::AiConfig) -> Option<AiClient> {
     // Try keyring first
     if let Ok(Some(client)) = AiClient::from_keyring_oauth(ai_config) {
         return Some(client);
