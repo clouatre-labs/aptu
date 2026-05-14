@@ -242,11 +242,13 @@ pub trait AiProvider: Send + Sync {
 
         let mut req = self.http_client().post(self.api_url());
 
-        // Add Authorization header
-        req = req.header(
-            "Authorization",
-            format!("Bearer {}", self.api_key().expose_secret()),
-        );
+        // Add Authorization header (skip for Anthropic, which uses x-api-key)
+        if !self.is_anthropic() {
+            req = req.header(
+                "Authorization",
+                format!("Bearer {}", self.api_key().expose_secret()),
+            );
+        }
 
         // Add custom headers from provider
         for (key, value) in &self.build_headers() {

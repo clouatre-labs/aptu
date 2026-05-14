@@ -11,7 +11,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 
 use super::circuit_breaker::CircuitBreaker;
 use super::provider::AiProvider;
@@ -247,6 +247,17 @@ impl AiProvider for AiClient {
             headers.insert("Content-Type", val);
         }
 
+        // Anthropic-specific headers
+        if self.provider.name == super::registry::PROVIDER_ANTHROPIC {
+            if let Ok(val) = self.api_key().expose_secret().parse() {
+                headers.insert("x-api-key", val);
+            }
+            if let Ok(val) = "2023-06-01".parse() {
+                headers.insert("anthropic-version", val);
+            }
+            return headers;
+        }
+
         // OpenRouter-specific headers
         if self.provider.name == "openrouter" {
             if let Ok(val) = "https://github.com/clouatre-labs/aptu".parse() {
@@ -340,5 +351,41 @@ mod tests {
         )
         .expect("should create client");
         assert_eq!(client.max_attempts(), 5);
+    }
+
+    #[test]
+    fn test_build_headers_anthropic_has_api_key_and_version() {
+        let config = test_config();
+        let client = AiClient::with_api_key(
+            "anthropic",
+            SecretString::from("test_api_key"),
+            "test-model",
+            &config,
+        )
+        .expect("should create anthropic client");
+
+        let headers = client.build_headers();
+
+        let header_str = |k| headers.get(k).and_then(|v| v.to_str().ok());
+        assert_eq!(header_str("x-api-key"), Some("test_api_key"));
+        assert_eq!(header_str("anthropic-version"), Some("2023-06-01"));
+    }
+
+    #[test]
+    fn test_build_headers_non_anthropic_unaffected() {
+        let config = test_config();
+        let client = AiClient::with_api_key(
+            "openrouter",
+            SecretString::from("test_key"),
+            "test-model:free",
+            &config,
+        )
+        .expect("should create openrouter client");
+
+        let headers = client.build_headers();
+
+        assert!(!headers.contains_key("anthropic-version"));
+        assert!(headers.contains_key("http-referer"));
+        assert!(headers.contains_key("x-title"));
     }
 }
