@@ -7,20 +7,26 @@ branding:
   color: blue
 
 inputs:
+  # --- Auth ---
   github-token:
     description: GitHub token for API access
     required: true
+
+  # --- AI provider API keys (alphabetical) ---
+  anthropic-api-key:
+    description: Anthropic API key (from https://console.anthropic.com/settings/keys)
+    required: false
+  cerebras-api-key:
+    description: Cerebras API key (from https://console.cerebras.ai/keys)
+    required: false
   gemini-api-key:
     description: Google Gemini API key (from https://aistudio.google.com/apikey)
-    required: false
-  openrouter-api-key:
-    description: OpenRouter API key (from https://openrouter.ai/keys)
     required: false
   groq-api-key:
     description: Groq API key (from https://console.groq.com/keys)
     required: false
-  cerebras-api-key:
-    description: Cerebras API key (from https://console.cerebras.ai/keys)
+  openrouter-api-key:
+    description: OpenRouter API key (from https://openrouter.ai/keys)
     required: false
   zai-api-key:
     description: Z.AI API key (from https://z.ai)
@@ -28,46 +34,14 @@ inputs:
   zenmux-api-key:
     description: ZenMux API key (from https://zenmux.ai)
     required: false
-  anthropic-api-key:
-    description: Anthropic API key (from https://console.anthropic.com/settings/keys)
+
+  # --- AI model selection ---
+  provider:
+    description: AI provider to use (anthropic, cerebras, gemini, groq, openrouter, zai, zenmux)
     required: false
+    default: ''
   model:
     description: Model to use for analysis (provider-specific, see docs/CONFIGURATION.md)
-    required: false
-    default: ''
-  provider:
-    description: AI provider to use (gemini, openrouter, groq, cerebras, zai, zenmux, anthropic)
-    required: false
-    default: ''
-  skip-labeled:
-    description: >
-      Skip triage if the issue already has both a label with the `type:` prefix
-      and a label matching `p[0-9]` (e.g. `p0`, `p1`, `p2`, `p3`).
-      Only meaningful for issue events; set to `false` for PR events.
-    required: false
-    default: 'true'
-  dry-run:
-    description: Run without making changes
-    required: false
-    default: 'false'
-  apply-labels:
-    description: Apply AI-suggested labels and milestone (issue triage and PR review)
-    required: false
-    default: 'true'
-  no-comment:
-    description: Skip posting comment to GitHub (issue triage and PR review)
-    required: false
-    default: 'false'
-  command:
-    description: Command to run (issue or pr)
-    required: false
-    default: 'issue'
-  subcommand:
-    description: Subcommand to run (triage for issue, label or review for pr)
-    required: false
-    default: 'triage'
-  reference:
-    description: Reference for the command (issue/PR number or URL)
     required: false
     default: ''
   fallback-provider:
@@ -78,6 +52,54 @@ inputs:
     description: Model for the fallback provider (e.g. inception/mercury-2)
     required: false
     default: 'inception/mercury-2'
+
+  # --- Behavior flags (alphabetical) ---
+  apply-labels:
+    description: Apply AI-suggested labels and milestone (issue triage and PR review)
+    required: false
+    default: 'true'
+  dry-run:
+    description: Run without making changes
+    required: false
+    default: 'false'
+  no-comment:
+    description: Skip posting comment to GitHub (issue triage and PR review)
+    required: false
+    default: 'false'
+  skip-labeled:
+    description: >
+      Skip triage if the issue already has both a label with the `type:` prefix
+      and a label matching `p[0-9]` (e.g. `p0`, `p1`, `p2`, `p3`).
+      Only meaningful for issue events; set to `false` for PR events.
+    required: false
+    default: 'true'
+
+  # --- Issue triage ---
+  reference:
+    description: Reference for the command (issue/PR number or URL)
+    required: false
+    default: ''
+  since:
+    description: >
+      For scheduled batch triage: triage all issues without labels created since this date
+      (YYYY-MM-DD or RFC3339). If empty, all unlabeled issues in the repository are triaged.
+      Only used when the workflow is triggered by a schedule event.
+    required: false
+    default: ''
+  issue-state:
+    description: >
+      For scheduled batch triage: filter issues by state (open, closed, all).
+      Only used when the workflow is triggered by a schedule event.
+    required: false
+    default: 'open'
+
+  # --- PR review ---
+  instructions-file:
+    description: >
+      Path to repository instructions file for PR review context.
+      When set, overrides the default AGENTS.md and .github/instructions/pr-review.md files.
+      Leave empty to use default file discovery.
+    required: false
   repo-path:
     description: >
       Path to the local repository root for AST context injection into PR review prompts.
@@ -92,25 +114,8 @@ inputs:
       Has no effect if repo-path is not provided.
     required: false
     default: 'false'
-  instructions-file:
-    description: >
-      Path to repository instructions file for PR review context.
-      When set, overrides the default AGENTS.md and .github/instructions/pr-review.md files.
-      Leave empty to use default file discovery.
-    required: false
-  since:
-    description: >
-      For scheduled batch triage: triage all issues without labels created since this date
-      (YYYY-MM-DD or RFC3339). If empty, all unlabeled issues in the repository are triaged.
-      Only used when the workflow is triggered by a schedule event.
-    required: false
-    default: ''
-  issue-state:
-    description: >
-      For scheduled batch triage: filter issues by state (open, closed, all).
-      Only used when the workflow is triggered by a schedule event.
-    required: false
-    default: 'open'
+
+  # --- Scan security ---
   scan-path:
     description: >
       Path to scan for security issues with aptu scan-security.
@@ -123,12 +128,24 @@ inputs:
       Leave empty to use scan-path directory scan.
     required: false
     default: ''
+
+  # --- PR queue ---
   pr-queue:
     description: >
       Run aptu pr queue to output a ranked reviewability list of open PRs.
       Useful for workflow_dispatch or scheduled summary workflows.
     required: false
     default: 'false'
+
+  # --- Routing (legacy) ---
+  command:
+    description: Command to run (issue or pr)
+    required: false
+    default: 'issue'
+  subcommand:
+    description: Subcommand to run (triage for issue, label or review for pr)
+    required: false
+    default: 'triage'
 
 outputs:
   input-tokens:
@@ -257,17 +274,17 @@ runs:
         ISSUE_NUMBER: ${{ github.event.issue.number }}
         REPO: ${{ github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
-        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
-        DRY_RUN: ${{ inputs.dry-run }}
+        APTU_AI__MODEL: ${{ inputs.model }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
+        DRY_RUN: ${{ inputs.dry-run }}
         NO_COMMENT: ${{ inputs.no-comment }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
@@ -296,21 +313,21 @@ runs:
       shell: bash
       env:
         REPO: ${{ github.repository }}
-        SINCE: ${{ inputs.since }}
-        ISSUE_STATE: ${{ inputs.issue-state }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
-        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
-        DRY_RUN: ${{ inputs.dry-run }}
+        APTU_AI__MODEL: ${{ inputs.model }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        ISSUE_STATE: ${{ inputs.issue-state }}
         NO_COMMENT: ${{ inputs.no-comment }}
+        SINCE: ${{ inputs.since }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
@@ -340,15 +357,15 @@ runs:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO: ${{ github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
-        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
+        APTU_AI__MODEL: ${{ inputs.model }}
         DRY_RUN: ${{ inputs.dry-run }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
@@ -371,22 +388,22 @@ runs:
       env:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO: ${{ github.repository }}
-        REPO_PATH: ${{ inputs.repo-path }}
-        DEEP: ${{ inputs.deep }}
-        INSTRUCTIONS_FILE: ${{ inputs.instructions-file }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
-        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
-        DRY_RUN: ${{ inputs.dry-run }}
+        APTU_AI__MODEL: ${{ inputs.model }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
+        DEEP: ${{ inputs.deep }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        INSTRUCTIONS_FILE: ${{ inputs.instructions-file }}
         NO_COMMENT: ${{ inputs.no-comment }}
+        REPO_PATH: ${{ inputs.repo-path }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
@@ -425,17 +442,17 @@ runs:
       shell: bash
       env:
         REPO: ${{ github.repository }}
-        SCAN_PATH: ${{ inputs.scan-path }}
-        SCAN_DIFF: ${{ inputs.scan-security-diff }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
-        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         DRY_RUN: ${{ inputs.dry-run }}
+        SCAN_DIFF: ${{ inputs.scan-security-diff }}
+        SCAN_PATH: ${{ inputs.scan-path }}
       run: |
         set -e
         if [[ -n "$SCAN_DIFF" ]]; then
@@ -453,15 +470,15 @@ runs:
       env:
         REPO: ${{ github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
-        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
+        APTU_AI__MODEL: ${{ inputs.model }}
       run: |
         set -e
         echo "Running: aptu pr queue --repo $REPO"
