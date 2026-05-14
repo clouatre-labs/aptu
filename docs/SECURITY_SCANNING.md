@@ -24,6 +24,9 @@ aptu scan-security crates/ --fail-on critical,high
 
 # Suppress findings under test fixtures
 aptu scan-security . --fail-on critical,high --exclude tests/fixtures
+
+# Scan only changed lines in a diff (useful for incremental CI)
+git diff HEAD~1 | aptu scan-security --diff -
 ```
 
 ### Flags
@@ -33,6 +36,7 @@ aptu scan-security . --fail-on critical,high --exclude tests/fixtures
 | `--output sarif\|github-annotations\|json\|text` | Output format (default: `text`) |
 | `--fail-on <severities>` | Exit non-zero when any finding matches; comma-separated list: `critical`, `high`, `medium`, `low` |
 | `--exclude <prefix>` | Suppress findings under paths matching this prefix; repeatable |
+| `--diff <path>` | Read a unified diff from stdin (use `-`) or a file path and scan only the changed lines; useful for incremental CI scans |
 
 ## GitHub Code Scanning integration
 

@@ -15,7 +15,6 @@ These items address known gaps and complete features already partially implement
 
 - **Bulk triage improvements**: better progress reporting, per-repo rate limit awareness, and configurable concurrency
 - **SARIF v2.2 full compliance**: complete SARIF export for security scan results, including rule metadata and suppression entries
-- **MCP resource paging**: `aptu://issues` resource returns paginated results for large repositories
 - **Config validation**: `aptu config validate` reports missing keys and unknown fields on startup
 - **Revert command**: `aptu issue revert <ISSUE>` and `aptu pr revert <PR>` undo all aptu-applied labels and comments on a given issue or PR; builds adopter trust without requiring manual cleanup
 - **API key memory hygiene**: apply `zeroize` on drop to all secret-typed fields in `aptu-core`; prevents secrets from lingering in freed memory after deallocation (single-dependency hardening)
@@ -26,7 +25,6 @@ These items address known gaps and complete features already partially implement
 These items require significant design work or external dependencies.
 
 - **Android SDK (KMP)**: expose `aptu-core` to Kotlin via UniFFI-generated bindings; ship an Android companion app for mobile triage review. iOS app is parked indefinitely.
-- **Web UI**: read-only dashboard backed by the MCP server; no framework dependency, plain HTML and fetch
 - **Provider health dashboard**: `aptu models list --health` shows real-time availability and latency across configured providers
 - **SQLite-backed persistent cache**: replace file-based TTL cache with a SQLite database for faster lookups and cross-session persistence
 - **History export**: `aptu history export` in JSON and CSV for personal productivity tracking
