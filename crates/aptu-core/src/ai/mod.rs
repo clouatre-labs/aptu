@@ -17,7 +17,7 @@ pub use circuit_breaker::CircuitBreaker;
 pub use client::{AiClient, AuthMethod};
 pub use models::{AiModel, ModelProvider};
 pub use provider::AiProvider;
-pub use registry::{ProviderConfig, all_providers, get_provider};
+pub use registry::{PROVIDER_ANTHROPIC, ProviderConfig, all_providers, get_provider};
 pub use types::{CreateIssueResponse, CreditsStatus, TriageResponse};
 
 use crate::history::AiStats;
@@ -60,7 +60,7 @@ pub fn resolve_anthropic_credential(ai_config: &crate::config::AiConfig) -> Opti
     }
 
     // Fall back to environment variable
-    AiClient::new("anthropic", ai_config).ok()
+    AiClient::new(PROVIDER_ANTHROPIC, ai_config).ok()
 }
 
 /// Sets up the primary AI client with credential resolution.
@@ -77,7 +77,7 @@ pub fn resolve_anthropic_credential(ai_config: &crate::config::AiConfig) -> Opti
 /// Returns an error if client creation fails.
 pub fn setup_primary_client(config: &crate::config::AppConfig) -> anyhow::Result<AiClient> {
     // For Anthropic, delegate to centralized credential resolution
-    if config.ai.provider == "anthropic"
+    if config.ai.provider == PROVIDER_ANTHROPIC
         && let Some(client) = resolve_anthropic_credential(&config.ai)
     {
         return Ok(client);

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use super::circuit_breaker::CircuitBreaker;
 use super::provider::AiProvider;
-use super::registry::{ProviderConfig, get_provider};
+use super::registry::{PROVIDER_ANTHROPIC, ProviderConfig, get_provider};
 use crate::config::AiConfig;
 
 /// Authentication method used by the AI client.
@@ -271,7 +271,7 @@ impl AiClient {
 
         // Create client with the token
         let client = Self::with_api_key(
-            "anthropic",
+            PROVIDER_ANTHROPIC,
             SecretString::from(creds.access_token),
             &config.model,
             config,
@@ -281,6 +281,23 @@ impl AiClient {
         let mut client = client;
         client.auth_method = AuthMethod::OAuth;
         Ok(Some(client))
+    }
+
+    /// Returns the path to the Claude credentials file if it exists.
+    ///
+    /// This helper centralizes the path resolution logic for ~/.claude/credentials.json,
+    /// keeping the CLI command layer thin and avoiding duplicate path construction.
+    ///
+    /// Returns `Some(path)` if the file exists, `None` otherwise.
+    #[must_use]
+    pub fn claude_credentials_path() -> Option<std::path::PathBuf> {
+        let home = dirs::home_dir()?;
+        let creds_path = home.join(".claude").join("credentials.json");
+        if creds_path.exists() {
+            Some(creds_path)
+        } else {
+            None
+        }
     }
 
     /// Attempts to retrieve a Claude OAuth token from the OS keyring.
@@ -297,7 +314,7 @@ impl AiClient {
             match entry.get_password() {
                 Ok(token) => {
                     let client = Self::with_api_key(
-                        "anthropic",
+                        PROVIDER_ANTHROPIC,
                         SecretString::from(token),
                         &config.model,
                         config,
@@ -493,7 +510,7 @@ mod tests {
     fn test_build_headers_anthropic_has_api_key_and_version() {
         let config = test_config();
         let client = AiClient::with_api_key(
-            "anthropic",
+            PROVIDER_ANTHROPIC,
             SecretString::from("test_api_key"),
             "test-model",
             &config,
@@ -572,7 +589,7 @@ mod tests {
     fn test_auth_method_api_key() {
         let config = test_config();
         let client = AiClient::with_api_key(
-            "anthropic",
+            PROVIDER_ANTHROPIC,
             SecretString::from("test_key"),
             "test-model",
             &config,
