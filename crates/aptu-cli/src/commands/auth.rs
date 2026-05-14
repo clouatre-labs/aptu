@@ -10,6 +10,28 @@ use tracing::info;
 
 use crate::commands::types::AuthActionResult;
 
+/// Resolve the AI auth method by checking OAuth keyring, Claude credentials file, and API key env var.
+fn resolve_ai_auth_method(config: &AppConfig) -> Option<(String, String)> {
+    let provider_name = &config.ai.provider;
+
+    // Try keyring OAuth token first
+    if let Ok(Some(_client)) = aptu_core::ai::AiClient::from_keyring_oauth(&config.ai) {
+        return Some((provider_name.clone(), "oauth".to_string()));
+    }
+
+    // Try Claude credentials file
+    if let Ok(Some(_client)) = aptu_core::ai::AiClient::from_claude_credentials(&config.ai) {
+        return Some((provider_name.clone(), "oauth".to_string()));
+    }
+
+    // Check if API key is available
+    if std::env::var(format!("{}_API_KEY", provider_name.to_uppercase())).is_ok() {
+        return Some((provider_name.clone(), "api-key".to_string()));
+    }
+
+    None
+}
+
 /// Run the login command - authenticate with GitHub.
 pub async fn run_login() -> Result<AuthActionResult> {
     // Check if already authenticated via any source
@@ -80,32 +102,9 @@ pub async fn run_status(config: &AppConfig) -> Result<crate::commands::types::Au
     };
 
     // Get AI provider auth status
-    let (ai_provider, ai_auth_method) = {
-        let provider_name = &config.ai.provider;
-        let auth_method = match aptu_core::ai::AiClient::from_keyring_oauth(&config.ai) {
-            Ok(Some(_client)) => Some((provider_name.clone(), "oauth".to_string())),
-            Ok(None) => {
-                match aptu_core::ai::AiClient::from_claude_credentials(&config.ai) {
-                    Ok(Some(_client)) => Some((provider_name.clone(), "oauth".to_string())),
-                    Ok(None) => {
-                        // Check if API key is available
-                        if std::env::var(format!("{}_API_KEY", provider_name.to_uppercase()))
-                            .is_ok()
-                        {
-                            Some((provider_name.clone(), "api-key".to_string()))
-                        } else {
-                            None
-                        }
-                    }
-                    Err(_) => None,
-                }
-            }
-            Err(_) => None,
-        };
-        match auth_method {
-            Some((provider, method)) => (Some(provider), Some(method)),
-            None => (None, None),
-        }
+    let (ai_provider, ai_auth_method) = match resolve_ai_auth_method(config) {
+        Some((provider, method)) => (Some(provider), Some(method)),
+        None => (None, None),
     };
 
     Ok(crate::commands::types::AuthStatusResult {
