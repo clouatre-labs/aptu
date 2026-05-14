@@ -14,7 +14,7 @@ pub mod registry;
 pub mod types;
 
 pub use circuit_breaker::CircuitBreaker;
-pub use client::AiClient;
+pub use client::{AiClient, AuthMethod};
 pub use models::{AiModel, ModelProvider};
 pub use provider::AiProvider;
 pub use registry::{ProviderConfig, all_providers, get_provider};
@@ -36,6 +36,36 @@ pub struct AiResponse {
 #[must_use]
 pub fn is_free_model(model: &str) -> bool {
     model.ends_with(":free")
+}
+
+/// Sets up the primary AI client with credential resolution.
+///
+/// For the Anthropic provider, attempts to use Claude OAuth credentials in this order:
+/// 1. Existing token in OS keyring
+/// 2. ~/.claude/credentials.json file
+/// 3. Environment variable (fallback)
+///
+/// For other providers, uses the standard environment variable path.
+///
+/// # Errors
+///
+/// Returns an error if client creation fails.
+pub fn setup_primary_client(config: &crate::config::AppConfig) -> anyhow::Result<AiClient> {
+    // For Anthropic, try OAuth paths first
+    if config.ai.provider == "anthropic" {
+        // Try keyring first
+        if let Ok(Some(client)) = AiClient::from_keyring_oauth(&config.ai) {
+            return Ok(client);
+        }
+
+        // Try credentials file
+        if let Ok(Some(client)) = AiClient::from_claude_credentials(&config.ai) {
+            return Ok(client);
+        }
+    }
+
+    // Fall back to environment variable
+    AiClient::new(&config.ai.provider, &config.ai)
 }
 
 /// Creates a formatted GitHub issue using AI assistance.
@@ -60,6 +90,6 @@ pub async fn create_issue(
     let config = crate::config::load_config()?;
 
     // Create generic client for the configured provider
-    let client = AiClient::new(&config.ai.provider, &config.ai)?;
+    let client = setup_primary_client(&config)?;
     client.create_issue(title, body, repo).await
 }

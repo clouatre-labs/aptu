@@ -3,6 +3,7 @@
 //! GitHub OAuth authentication command.
 
 use anyhow::Result;
+use aptu_core::AppConfig;
 use aptu_core::github::{OAUTH_CLIENT_ID, auth};
 use secrecy::SecretString;
 use tracing::info;
@@ -19,6 +20,18 @@ pub async fn run_login() -> Result<AuthActionResult> {
                 "Already authenticated with GitHub (via {source}). Run `aptu auth logout` to remove keyring token and re-authenticate."
             ),
         });
+    }
+
+    // Check for Claude credentials file
+    let has_claude_creds = if let Some(home) = dirs::home_dir() {
+        home.join(".claude").join("credentials.json").exists()
+    } else {
+        false
+    };
+
+    if has_claude_creds {
+        println!("Found Claude credentials at ~/.claude/credentials.json");
+        println!("You can use your existing Claude subscription for AI features.");
     }
 
     let client_id = SecretString::from(OAUTH_CLIENT_ID);
@@ -50,8 +63,9 @@ pub fn run_logout() -> Result<AuthActionResult> {
 }
 
 /// Run the status command - show current authentication state.
-pub async fn run_status() -> Result<crate::commands::types::AuthStatusResult> {
-    match auth::resolve_token() {
+pub async fn run_status(config: &AppConfig) -> Result<crate::commands::types::AuthStatusResult> {
+    // Get GitHub auth status
+    let (authenticated, method, username) = match auth::resolve_token() {
         Some((token, source)) => {
             let username = match auth::create_client_with_token(&token) {
                 Ok(client) => match client.current().user().await {
@@ -60,17 +74,45 @@ pub async fn run_status() -> Result<crate::commands::types::AuthStatusResult> {
                 },
                 Err(_) => None,
             };
-
-            Ok(crate::commands::types::AuthStatusResult {
-                authenticated: true,
-                method: Some(source),
-                username,
-            })
+            (true, Some(source), username)
         }
-        None => Ok(crate::commands::types::AuthStatusResult {
-            authenticated: false,
-            method: None,
-            username: None,
-        }),
-    }
+        None => (false, None, None),
+    };
+
+    // Get AI provider auth status
+    let (ai_provider, ai_auth_method) = {
+        let provider_name = &config.ai.provider;
+        let auth_method = match aptu_core::ai::AiClient::from_keyring_oauth(&config.ai) {
+            Ok(Some(_client)) => Some((provider_name.clone(), "oauth".to_string())),
+            Ok(None) => {
+                match aptu_core::ai::AiClient::from_claude_credentials(&config.ai) {
+                    Ok(Some(_client)) => Some((provider_name.clone(), "oauth".to_string())),
+                    Ok(None) => {
+                        // Check if API key is available
+                        if std::env::var(format!("{}_API_KEY", provider_name.to_uppercase()))
+                            .is_ok()
+                        {
+                            Some((provider_name.clone(), "api-key".to_string()))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None,
+                }
+            }
+            Err(_) => None,
+        };
+        match auth_method {
+            Some((provider, method)) => (Some(provider), Some(method)),
+            None => (None, None),
+        }
+    };
+
+    Ok(crate::commands::types::AuthStatusResult {
+        authenticated,
+        method,
+        username,
+        ai_provider,
+        ai_auth_method,
+    })
 }
