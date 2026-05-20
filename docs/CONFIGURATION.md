@@ -119,6 +119,8 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    model = "claude-haiku-4-5"
    ```
 
+**Claude OAuth:** Aptu also reads `~/.claude/credentials.json` (written by the Claude desktop app or `claude` CLI) as an alternative to setting `ANTHROPIC_API_KEY`. If that file exists and contains a valid OAuth token, it is used automatically; no config change is needed.
+
 **Prompt Caching:** Anthropic models support prompt caching via cache control tokens on system messages. Aptu automatically enables caching for all Anthropic requests; no additional configuration is required.
 
 ### Cerebras
@@ -225,7 +227,11 @@ Control how much context `aptu pr review` fetches and injects into the AI prompt
 [review]
 max_prompt_chars = 120000      # Total prompt character budget (default: 120 000)
 max_full_content_files = 10    # Max files fetched in full via GitHub Contents API (default: 10)
-max_chars_per_file = 4000      # Max characters per full-content file snippet (default: 4 000)
+max_chars_per_file = 16000     # raised from 4 000 in v0.7.0; reduce if you hit prompt size limits
+max_instructions_chars = 1500  # Max bytes of instructions file content included in review prompt (default: 1 500)
+min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
+max_dep_packages = 3           # Max number of dependency bump packages for which upstream release notes are fetched (default: 3)
+max_dep_release_chars = 2000   # Max chars of upstream release notes included per dependency package (default: 2 000)
 ```
 
 When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest files first), diff hunks (largest first). The system prompt and PR metadata are never dropped.
@@ -342,3 +348,10 @@ cp $(cargo locate-project --workspace --message-format plain | xargs dirname)/cr
 ### Developer note
 
 Built-in prompt fragments live in `crates/aptu-core/src/ai/prompts/` (guidelines as `.md`, response schemas as `.json`) and are embedded at compile time via `include_str!`. The builder functions (`build_triage_system_prompt`, etc.) in `prompts/mod.rs` are shared between production code and `tests/prompt_lint.rs` to guarantee tests exercise real construction logic.
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `APTU_CONTEXT_FILE` | Path to write a JSONL file containing per-review context records for explainability and debugging. Each line is a JSON object with fields: `pr_url`, `repo`, `total_chars`, `budget_drops` (list of enrichment steps skipped due to budget), and `prompt_chars_final`. If unset, no file is written. |
+| `APTU_METRICS_FILE` | Path to write a JSONL file containing per-review token usage metrics. Used by the GitHub Action to capture `aptu-token-usage.jsonl` as an artifact. |

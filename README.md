@@ -35,6 +35,9 @@ See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BE
 - **Multiple Providers** - Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux
 - **Local History** - Track your contributions offline
 - **Multiple Outputs** - Text, JSON, YAML, Markdown, and SARIF
+- **Claude OAuth** - Authenticate with Anthropic via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required
+- **Dependency Enrichment** - Automatically fetches upstream release notes for dependency bump PRs (Renovate / Dependabot)
+- **Observability** - Per-review context JSONL (`APTU_CONTEXT_FILE`) and token usage metrics (`APTU_METRICS_FILE`) for explainability and budget debugging (see [Observability](docs/GITHUB_ACTION.md#observability) and [Environment Variables](docs/CONFIGURATION.md#environment-variables))
 
 ## Installation
 

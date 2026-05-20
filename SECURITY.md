@@ -19,11 +19,17 @@ Do not open public issues for sensitive matters.
 
 Aptu stores tokens in your system keychain (macOS Keychain, Linux Secret Service, Windows Credential Manager). Tokens are never stored in plaintext.
 
+Claude OAuth tokens are read from `~/.claude/credentials.json` if present. Aptu reads this file but never modifies or deletes it.
+
 ## Best Practices
 
 - Review AI-generated content before posting
 - Use `--dry-run` to preview without posting
 - Keep Aptu updated
+
+## Observability Output Security
+
+The `APTU_CONTEXT_FILE` output contains code snippets from the reviewed PR diff and AST context. It does not include prompt text, AI responses, credentials, or personal data. Treat it with the same access controls as the PR diff itself.
 
 ## Supply Chain Security
 
