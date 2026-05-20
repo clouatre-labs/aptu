@@ -266,7 +266,9 @@ Configure a GPG key for signing commits and tags:
    updating existing ones via PATCH):
    ```bash
    # Replace vX.Y with the new minor version (e.g. v0.9).
-   # <commit-sha> is the SHA of the signed version-bump commit; get it with: git rev-parse HEAD
+   # Only run this for the first release of a new minor; the tag must not exist yet.
+   # If it already exists the POST will return a 422 -- verify first:
+   #   gh api repos/clouatre-labs/aptu/git/ref/tags/vX.Y && echo "tag already exists -- skip this step"
    gh api repos/clouatre-labs/aptu/git/refs \
      -X POST \
      -f ref="refs/tags/vX.Y" \
