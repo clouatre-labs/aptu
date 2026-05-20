@@ -110,8 +110,10 @@ When no API key is provided the action falls back to `openrouter` / `inception/m
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `instructions-file` | No | `''` | Path to instructions file; overrides default `AGENTS.md` / `.github/instructions/pr-review.md` discovery |
-| `repo-path` | No | `''` | Local repository root for AST context injection (Rust, Python, Go, Java, TypeScript, TSX, JS, C, C++, C#, Fortran); leave empty to skip |
-| `deep` | No | `false` | Enable cross-file call-graph context (requires `repo-path`) |
+| `repo-path` | No | `''` | Local repository root for AST context injection (Rust, Python, Go, Java, TypeScript, TSX, JS, C, C++, C#, Fortran); leave empty to skip. If omitted, aptu infers the repository root from the current working directory. Explicit values override inference. |
+| `deep` | No | `false` | Enable cross-file call-graph context (requires `repo-path`). When `repo-path` is available (explicit or inferred from CWD), call graph enrichment is also auto-enabled for reviews where the remaining prompt budget exceeds `min_budget_for_call_graph` (default: 20 000 chars). Setting `deep: true` forces inclusion regardless of budget. |
+
+**Dependency Enrichment:** For PRs that bump dependencies (Renovate, Dependabot, or manual version bumps), aptu automatically fetches upstream GitHub Release notes and includes them in the review context. Controlled by `max_dep_packages` and `max_dep_release_chars` in `[review]` config.
 
 ### Security Scan
 
@@ -151,6 +153,17 @@ Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploade
 | `issues: write` | Issue triage (comments, labels) |
 | `pull-requests: write` | PR labeling and review (comments, labels) |
 | `contents: read` | Repository context (all features) |
+
+## Observability
+
+Two environment variables control optional output files written during PR review:
+
+| Variable | Description |
+|----------|-------------|
+| `APTU_CONTEXT_FILE` | Path to write a per-review context JSONL. Each record contains `pr_url`, `repo`, `total_chars`, `budget_drops`, and `prompt_chars_final`. Useful for debugging which enrichments were dropped. |
+| `APTU_METRICS_FILE` | Path to write per-review token usage JSONL. |
+
+When running via the GitHub Action, both files are set automatically and uploaded as workflow artifacts (`aptu-review-context.jsonl` and `aptu-token-usage.jsonl`).
 
 ## Scheduled Batch Triage
 

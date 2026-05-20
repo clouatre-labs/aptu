@@ -110,15 +110,18 @@ inputs:
   repo-path:
     description: >
       Path to the local repository root for AST context injection into PR review prompts.
-      When set, `aptu pr review` will analyse changed source files (Rust, Python, Go, Java,
-      TypeScript, TSX, JavaScript, C, C++, C#, Fortran) and append function signatures and
-      call-graph context to the prompt. Leave empty to skip AST context.
+      When set (or inferred from the current working directory when omitted), `aptu pr review`
+      will analyse changed source files (Rust, Python, Go, Java, TypeScript, TSX, JavaScript,
+      C, C++, C#, Fortran) and append function signatures and call-graph context to the prompt.
+      Set to an explicit path to override CWD inference.
     required: false
     default: ''
   deep:
     description: >
-      Enable cross-file call graph context in PR review (requires repo-path to be set).
-      Has no effect if repo-path is not provided.
+      Force cross-file call graph context in PR review unconditionally. When omitted, call
+      graph is still auto-enabled when the remaining prompt budget exceeds the
+      min_budget_for_call_graph threshold (default 20 000 chars). Set to 'true' to always
+      include call graph regardless of available budget.
     required: false
     default: 'false'
 
