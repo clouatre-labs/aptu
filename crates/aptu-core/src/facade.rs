@@ -728,154 +728,6 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
 /// Builds AST context for changed files when the `ast-context` feature is enabled
 /// and a `repo_path` is provided. Returns an empty string otherwise.
 #[allow(clippy::unused_async)] // async required for the ast-context feature path
-async fn build_ctx_ast(repo_path: Option<&str>, files: &[crate::ai::types::PrFile]) -> String {
-    let Some(path) = repo_path else {
-        return String::new();
-    };
-    #[cfg(feature = "ast-context")]
-    {
-        return crate::ast_context::build_ast_context(path, files).await;
-    }
-    #[cfg(not(feature = "ast-context"))]
-    {
-        let _ = (path, files);
-        String::new()
-    }
-}
-
-/// Builds call-graph context for changed files when the `ast-context` feature is enabled,
-/// a `repo_path` is provided, and `deep` analysis is requested. Returns an empty string
-/// otherwise.
-#[allow(clippy::unused_async)] // async required for the ast-context feature path
-async fn build_ctx_call_graph(
-    repo_path: Option<&str>,
-    files: &[crate::ai::types::PrFile],
-    deep: bool,
-) -> String {
-    if !deep {
-        return String::new();
-    }
-    let Some(path) = repo_path else {
-        return String::new();
-    };
-    #[cfg(feature = "ast-context")]
-    {
-        return crate::ast_context::build_call_graph_context(path, files).await;
-    }
-    #[cfg(not(feature = "ast-context"))]
-    {
-        let _ = (path, files);
-        String::new()
-    }
-}
-
-/// Infers the repository path from the current working directory.
-///
-/// Attempts to find the git root and extract the repository owner/repo from the origin remote.
-/// Returns `Some(git_root)` if the origin matches the provided PR owner/repo (case-insensitive),
-/// otherwise returns `None` (silent fallback).
-///
-/// # Arguments
-///
-/// * `pr_owner` - PR owner from GitHub (e.g., "owner")
-/// * `pr_repo` - PR repo from GitHub (e.g., "repo")
-///
-/// # Returns
-///
-/// `Some(PathBuf)` if git root is found and origin matches PR owner/repo, `None` otherwise.
-/// Parse origin URL to extract owner and repo as lowercase strings.
-///
-/// Handles both SSH and HTTPS forms:
-/// - SSH:   `git@github.com:owner/repo.git`  -> `Some(("owner","repo"))`
-/// - HTTPS: `<https://github.com/owner/repo.git>` -> `Some(("owner","repo"))`
-///
-/// Returns None for any other form or parsing error.
-fn parse_origin_owner_repo(url: &str) -> Option<(String, String)> {
-    use crate::utils::parse_git_remote_url;
-
-    let Ok(parsed) = parse_git_remote_url(url) else {
-        return None;
-    };
-
-    let parts: Vec<&str> = parsed.split('/').collect();
-    if parts.len() != 2 {
-        return None;
-    }
-
-    let owner = parts[0].to_lowercase();
-    let repo = parts[1].to_lowercase();
-    Some((owner, repo))
-}
-
-/// Get git repository root directory.
-fn get_git_root() -> Option<String> {
-    use std::process::Command;
-
-    Command::new("git")
-        .arg("rev-parse")
-        .arg("--show-toplevel")
-        .output()
-        .ok()
-        .and_then(|output| {
-            if output.status.success() {
-                String::from_utf8(output.stdout).ok()
-            } else {
-                None
-            }
-        })
-        .map(|s| s.trim().to_string())
-}
-
-/// Get git origin URL.
-fn get_git_origin_url() -> Option<String> {
-    use std::process::Command;
-
-    Command::new("git")
-        .arg("remote")
-        .arg("get-url")
-        .arg("origin")
-        .output()
-        .ok()
-        .and_then(|output| {
-            if output.status.success() {
-                String::from_utf8(output.stdout).ok()
-            } else {
-                None
-            }
-        })
-        .map(|s| s.trim().to_string())
-}
-
-fn infer_repo_path_from_cwd(pr_owner: &str, pr_repo: &str) -> Option<String> {
-    let git_root = get_git_root()?;
-    let origin_url = get_git_origin_url()?;
-
-    let Some((origin_owner, origin_repo)) = parse_origin_owner_repo(&origin_url) else {
-        debug!(
-            "infer_repo_path_from_cwd: parse_origin_owner_repo failed for {}",
-            origin_url
-        );
-        return None;
-    };
-
-    let pr_owner_lower = pr_owner.to_lowercase();
-    let pr_repo_lower = pr_repo.to_lowercase();
-
-    if origin_owner == pr_owner_lower && origin_repo == pr_repo_lower {
-        debug!(
-            "infer_repo_path_from_cwd: matched origin {}/{} with PR {}/{}",
-            origin_owner, origin_repo, pr_owner_lower, pr_repo_lower
-        );
-        Some(git_root)
-    } else {
-        debug!(
-            "infer_repo_path_from_cwd: origin {}/{} does not match PR {}/{}",
-            origin_owner, origin_repo, pr_owner_lower, pr_repo_lower
-        );
-        None
-    }
-}
-
 /// Analyzes PR details with AI to generate a review.
 ///
 /// This function takes pre-fetched PR details and performs AI analysis.
@@ -917,36 +769,24 @@ pub async fn analyze_pr(
         .collect();
     let _ = sanitise_user_field("pr_diff", &all_patches, app_config.prompt.max_diff_bytes)?;
 
-    // Attempt to infer repo_path from CWD if not provided
-    let repo_path = if repo_path.is_none() {
-        if let Some(inferred_path) = infer_repo_path_from_cwd(&pr_details.owner, &pr_details.repo) {
-            debug!(
-                "infer_repo_path_from_cwd: inferred path for {}/{}: {}",
-                pr_details.owner, pr_details.repo, inferred_path
-            );
-            Some(inferred_path)
-        } else {
-            debug!(
-                "infer_repo_path_from_cwd: could not infer path for {}/{}",
-                pr_details.owner, pr_details.repo
-            );
-            None
+    // Build review context with all enrichment decisions centralized
+    let ctx = crate::ai::review_context::build_review_context(
+        pr_details.clone(),
+        repo_path,
+        deep,
+        &review_config,
+    )
+    .await?;
+
+    // Emit --verbose pre-flight summary before AI call
+    if let Ok(verbose) = std::env::var("APTU_VERBOSE")
+        && (verbose == "1" || verbose.to_lowercase() == "true")
+    {
+        let summary = ctx.verbose_summary();
+        if !summary.is_empty() {
+            eprintln!("{summary}");
         }
-    } else {
-        repo_path
-    };
-
-    if repo_path.is_none() && deep {
-        debug!(
-            "--deep requested but repo path unavailable after CWD inference; call graph will rely on budget auto-enable only"
-        );
     }
-
-    let repo_path_ref = repo_path.as_deref();
-    let (ast_ctx, call_graph_ctx) = tokio::join!(
-        build_ctx_ast(repo_path_ref, &pr_details.files),
-        build_ctx_call_graph(repo_path_ref, &pr_details.files, deep)
-    );
 
     // Resolve task-specific provider and model
     let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Review);
@@ -974,10 +814,12 @@ pub async fn analyze_pr(
     // Use fallback chain if configured
     try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
         let pr = pr_details.clone();
-        let ast = ast_ctx.clone();
-        let call_graph = call_graph_ctx.clone();
         let review_cfg = review_config.clone();
-        async move { client.review_pr(&pr, ast, call_graph, &review_cfg).await }
+        async move {
+            client
+                .review_pr(&pr, String::new(), String::new(), &review_cfg)
+                .await
+        }
     })
     .await
 }

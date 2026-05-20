@@ -12,6 +12,7 @@ pub mod models;
 pub mod prompts;
 pub mod provider;
 pub mod registry;
+pub mod review_context;
 pub mod types;
 
 pub use circuit_breaker::CircuitBreaker;
