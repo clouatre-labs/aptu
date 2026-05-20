@@ -7,6 +7,7 @@
 pub mod circuit_breaker;
 pub mod client;
 pub mod context;
+pub mod dep_enrichment;
 pub mod models;
 pub mod prompts;
 pub mod provider;
@@ -15,10 +16,11 @@ pub mod types;
 
 pub use circuit_breaker::CircuitBreaker;
 pub use client::{AiClient, AuthMethod};
+pub use dep_enrichment::enrich_dep_releases;
 pub use models::{AiModel, ModelProvider};
 pub use provider::AiProvider;
 pub use registry::{PROVIDER_ANTHROPIC, ProviderConfig, all_providers, get_provider};
-pub use types::{CreateIssueResponse, CreditsStatus, TriageResponse};
+pub use types::{CreateIssueResponse, CreditsStatus, DepReleaseNote, TriageResponse};
 
 use crate::history::AiStats;
 

@@ -33,6 +33,12 @@ pub struct ReviewConfig {
     /// Minimum remaining prompt budget to auto-enable call graph (default: `20_000`).
     #[serde(default = "default_min_budget_for_call_graph")]
     pub min_budget_for_call_graph: usize,
+    /// Maximum characters for dependency release notes (default: `2_000`).
+    #[serde(default = "default_max_dep_release_chars")]
+    pub max_dep_release_chars: usize,
+    /// Maximum number of dependency packages to enrich (default: 3).
+    #[serde(default = "default_max_dep_packages")]
+    pub max_dep_packages: usize,
 }
 
 fn default_max_instructions_chars() -> usize {
@@ -41,6 +47,14 @@ fn default_max_instructions_chars() -> usize {
 
 fn default_min_budget_for_call_graph() -> usize {
     20_000
+}
+
+fn default_max_dep_release_chars() -> usize {
+    2_000
+}
+
+fn default_max_dep_packages() -> usize {
+    3
 }
 
 impl Default for ReviewConfig {
@@ -52,6 +66,8 @@ impl Default for ReviewConfig {
             max_instructions_chars: 1_500, // Cap repository instructions to prevent prompt bloat
             instructions_file: None,
             min_budget_for_call_graph: 20_000, // Auto-enable call graph if remaining budget exceeds this
+            max_dep_release_chars: 2_000, // Cap dependency release notes to prevent prompt bloat
+            max_dep_packages: 3,          // Limit enriched packages to avoid excessive API calls
         }
     }
 }
