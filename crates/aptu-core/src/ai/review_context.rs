@@ -353,8 +353,18 @@ fn apply_budget_drops(
         }
     }
 
-    drop_patches_by_size(&mut pr.files, &mut estimated_size, max_prompt_chars, budget_drops);
-    drop_full_content_by_size(&mut pr.files, &mut estimated_size, max_prompt_chars, budget_drops);
+    drop_patches_by_size(
+        &mut pr.files,
+        &mut estimated_size,
+        max_prompt_chars,
+        budget_drops,
+    );
+    drop_full_content_by_size(
+        &mut pr.files,
+        &mut estimated_size,
+        max_prompt_chars,
+        budget_drops,
+    );
 }
 
 /// Drops file patches in descending size order until under budget.

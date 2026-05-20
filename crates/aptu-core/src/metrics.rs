@@ -93,13 +93,27 @@ pub struct ReviewContextRecord {
 ///
 /// On any error (file I/O, serialization), logs a warning and returns normally.
 /// This function never fails the caller's operation.
+///
+/// `APTU_CONTEXT_FILE` is validated to be non-empty when first encountered; an
+/// empty value is rejected with a warning so misconfiguration is visible rather
+/// than silently dropped.  Open/write errors are also warned and discarded so
+/// that a bad path never aborts the caller.
 pub fn write_context_jsonl(record: &ReviewContextRecord) {
     let Ok(path) = std::env::var("APTU_CONTEXT_FILE") else {
         return; // Env var not set; no-op
     };
 
+    if path.is_empty() {
+        tracing::warn!("metrics: APTU_CONTEXT_FILE is set but empty; skipping context write");
+        return;
+    }
+
     if let Err(e) = write_context_jsonl_impl(&path, record) {
-        tracing::warn!("metrics: failed to write context JSONL record: {}", e);
+        tracing::warn!(
+            path = %path,
+            error = %e,
+            "metrics: failed to write context JSONL record"
+        );
     }
 }
 
