@@ -265,11 +265,12 @@ Configure a GPG key for signing commits and tags:
    ruleset blocks `GITHUB_TOKEN` from creating new `refs/tags/v*` refs via POST, but allows
    updating existing ones via PATCH):
    ```bash
-   # Replace vX.Y and <commit-sha> with the actual values
+   # Replace vX.Y with the new minor version (e.g. v0.9).
+   # <commit-sha> is the SHA of the signed version-bump commit; get it with: git rev-parse HEAD
    gh api repos/clouatre-labs/aptu/git/refs \
      -X POST \
      -f ref="refs/tags/vX.Y" \
-     -f sha="<commit-sha>"
+     -f sha="$(git rev-parse HEAD)"
    ```
 5. Push: `git push origin main --tags`
    - For any `vX.Y.Z` release, the workflow automatically moves the `vX.Y` floating tag
