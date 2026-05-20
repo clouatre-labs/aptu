@@ -1041,26 +1041,39 @@ pub trait AiProvider: Send + Sync {
         let mut files_included = 0;
         let mut files_skipped = 0;
 
-        for file in &ctx.pr.files {
+        for i in 0..ctx.pr.files.len() {
             // Check file count limit
             if files_included >= MAX_FILES {
                 files_skipped += 1;
                 continue;
             }
 
+            let (filename, status, additions, deletions, patch, patch_truncated, full_content) = {
+                let file = &ctx.pr.files[i];
+                (
+                    file.filename.clone(),
+                    file.status.clone(),
+                    file.additions,
+                    file.deletions,
+                    file.patch.clone(),
+                    file.patch_truncated,
+                    file.full_content.clone(),
+                )
+            };
+
             let _ = writeln!(
                 prompt,
                 "- {} ({}) +{} -{}\n",
-                sanitize_prompt_field(&file.filename),
-                sanitize_prompt_field(&file.status),
-                file.additions,
-                file.deletions
+                sanitize_prompt_field(&filename),
+                sanitize_prompt_field(&status),
+                additions,
+                deletions
             );
 
             // Include patch if available (sanitize then truncate large patches)
-            if let Some(patch) = &file.patch {
+            if let Some(patch) = patch {
                 const MAX_PATCH_LENGTH: usize = 2000;
-                let sanitized_patch = sanitize_prompt_field(patch);
+                let sanitized_patch = sanitize_prompt_field(&patch);
                 let patch_content = if sanitized_patch.len() > MAX_PATCH_LENGTH {
                     format!(
                         "{}...\n[APTU: patch truncated by size budget -- do not speculate on missing content]",
@@ -1082,7 +1095,7 @@ pub trait AiProvider: Send + Sync {
                 }
 
                 // Add annotation if patch was truncated by GitHub API
-                if file.patch_truncated {
+                if patch_truncated {
                     let _ = writeln!(
                         prompt,
                         "[APTU: patch truncated by GitHub API -- do not speculate on missing content]\n```diff\n{patch_content}\n```\n"
@@ -1094,21 +1107,15 @@ pub trait AiProvider: Send + Sync {
             }
 
             // Include full file content if available (cap at ctx.max_chars_per_file)
-            if let Some(content) = &file.full_content {
-                let sanitized = sanitize_prompt_field(content);
+            if let Some(content) = full_content {
+                let sanitized = sanitize_prompt_field(&content);
                 let original_len = sanitized.len();
-                let is_truncated = original_len > ctx.max_chars_per_file;
+                let max_chars = ctx.max_chars_per_file;
+                let is_truncated = original_len > max_chars;
                 let displayed = if is_truncated {
-                    let truncated = sanitized[..ctx.max_chars_per_file].to_string();
+                    let truncated = sanitized[..max_chars].to_string();
                     let truncated_len = truncated.len();
-                    debug!(
-                        filename = %file.filename,
-                        original_len,
-                        truncated_len,
-                        "file content truncated at prompt assembly"
-                    );
-                    ctx.files_truncated += 1;
-                    ctx.truncated_chars_dropped += original_len - ctx.max_chars_per_file;
+                    ctx.record_truncation(&filename, original_len, truncated_len);
                     truncated
                 } else {
                     sanitized
@@ -1116,7 +1123,7 @@ pub trait AiProvider: Send + Sync {
                 let _ = writeln!(
                     prompt,
                     "<file_content path=\"{}\">\n{}\n</file_content>",
-                    sanitize_prompt_field(&file.filename),
+                    sanitize_prompt_field(&filename),
                     displayed
                 );
                 if is_truncated {

@@ -89,6 +89,50 @@ impl ReviewContext {
 
         summary
     }
+
+    /// Records a file truncation event.
+    ///
+    /// Updates truncation counters and emits a debug log.
+    pub fn record_truncation(&mut self, filename: &str, original_len: usize, truncated_len: usize) {
+        self.files_truncated += 1;
+        self.truncated_chars_dropped += original_len - truncated_len;
+        tracing::debug!(
+            filename = %filename,
+            original_len,
+            truncated_len,
+            "file content truncated at prompt assembly"
+        );
+    }
+}
+
+impl Default for ReviewContext {
+    fn default() -> Self {
+        Self {
+            pr: crate::ai::types::PrDetails {
+                owner: String::new(),
+                repo: String::new(),
+                number: 0,
+                title: String::new(),
+                body: String::new(),
+                base_branch: String::new(),
+                head_branch: String::new(),
+                files: Vec::new(),
+                url: String::new(),
+                labels: Vec::new(),
+                head_sha: String::new(),
+                review_comments: Vec::new(),
+                instructions: None,
+                dep_enrichments: Vec::new(),
+            },
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            max_chars_per_file: crate::config::ReviewConfig::default().max_chars_per_file,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
+        }
+    }
 }
 
 /// Builds a `ReviewContext` by centralizing all enrichment decisions.
