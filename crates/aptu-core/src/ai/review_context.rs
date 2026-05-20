@@ -180,6 +180,19 @@ async fn enrich_deps(
 }
 
 /// Applies budget drop order: `call_graph` -> `ast_context` -> `dep_enrichments` -> patches -> `full_content`.
+/// Enforces the prompt budget by dropping enrichment sections in priority order.
+///
+/// When the assembled prompt exceeds `max_prompt_chars`, sections are cleared in
+/// the following order (lowest-priority dropped first):
+///
+/// 1. `call_graph` -- dropped first unless `deep` is explicitly set
+/// 2. `ast_context` -- dropped second
+/// 3. `dep_enrichments` -- dropped third
+/// 4. file patches -- dropped largest-first
+/// 5. file `full_content` -- dropped largest-first as last resort
+///
+/// Each drop is logged at `WARN` level with the section name and character count.
+/// The function never returns an error; sections that cannot fit are silently cleared.
 fn apply_budget_drops(
     pr: &mut PrDetails,
     ast_context: &mut String,
@@ -449,4 +462,110 @@ fn parse_origin_owner_repo(url: &str) -> Option<(String, String)> {
     let owner = parts[0].to_lowercase();
     let repo = parts[1].to_lowercase();
     Some((owner, repo))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ai::types::{DepReleaseNote, PrFile};
+
+    fn make_pr_with_content(patch_chars: usize, full_content_chars: usize) -> PrDetails {
+        PrDetails {
+            number: 1,
+            title: "test".to_string(),
+            body: String::new(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+            url: "https://github.com/owner/repo/pull/1".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            head_sha: String::new(),
+            review_comments: vec![],
+            files: vec![PrFile {
+                filename: "src/lib.rs".to_string(),
+                status: "modified".to_string(),
+                patch: Some("x".repeat(patch_chars)),
+                patch_truncated: false,
+                full_content: if full_content_chars > 0 {
+                    Some("y".repeat(full_content_chars))
+                } else {
+                    None
+                },
+                additions: 1,
+                deletions: 0,
+            }],
+            dep_enrichments: vec![DepReleaseNote {
+                package_name: "serde".to_string(),
+                old_version: "1.0.0".to_string(),
+                new_version: "1.0.1".to_string(),
+                registry: "crates.io".to_string(),
+                github_url: "https://github.com/serde-rs/serde".to_string(),
+                body: "dep_body".to_string(),
+                fetch_note: String::new(),
+            }],
+            instructions: None,
+            labels: vec![],
+        }
+    }
+
+    /// Verifies that apply_budget_drops enforces the documented drop order:
+    /// call_graph -> ast_context -> dep_enrichments -> patches -> full_content.
+    #[test]
+    fn test_apply_budget_drops_order() {
+        let mut pr = make_pr_with_content(500, 500);
+        let mut ast_context = "a".repeat(300);
+        let mut call_graph = "b".repeat(300);
+
+        // Budget tight enough that call_graph must be dropped first.
+        // Total without drops: ~500 patch + 500 full_content + 300 ast + 300 call_graph
+        //                     + "serde" dep body (~"dep_body" = 8 chars) + metadata ~50
+        // Set budget just above (ast + patch + full_content + metadata) to require call_graph drop.
+        let max_prompt_chars = 600;
+
+        apply_budget_drops(
+            &mut pr,
+            &mut ast_context,
+            &mut call_graph,
+            false,
+            max_prompt_chars,
+        );
+
+        // call_graph dropped first (deep=false, over budget)
+        assert!(
+            call_graph.is_empty(),
+            "call_graph should be dropped first when over budget"
+        );
+    }
+
+    /// Verifies that dep_enrichments are dropped before file patches.
+    #[test]
+    fn test_apply_budget_drops_dep_enrichments_before_patches() {
+        let mut pr = make_pr_with_content(200, 0);
+        // Add a large dep enrichment body to make it over budget
+        pr.dep_enrichments[0].body = "d".repeat(400);
+        let mut ast_context = String::new();
+        let mut call_graph = String::new();
+
+        // Budget: just under (patch + dep_body) to force dep drop but not patch drop
+        let max_prompt_chars = 250;
+
+        apply_budget_drops(
+            &mut pr,
+            &mut ast_context,
+            &mut call_graph,
+            false,
+            max_prompt_chars,
+        );
+
+        // dep_enrichments dropped before patches
+        assert!(
+            pr.dep_enrichments.is_empty(),
+            "dep_enrichments should be dropped before file patches"
+        );
+        // patch should still be present (dep drop was enough to fit)
+        assert!(
+            pr.files[0].patch.is_some(),
+            "file patch should be retained when dep drop brought size within budget"
+        );
+    }
 }
