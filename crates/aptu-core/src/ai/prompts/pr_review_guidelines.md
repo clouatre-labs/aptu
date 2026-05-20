@@ -8,6 +8,10 @@
 
 Focus: Correctness, Security, Performance, Maintainability, Testing. Skip platform version flagging.
 
+## Dependency Release Notes
+
+When a PR updates dependency versions (in Cargo.toml, package.json, or pyproject.toml), release notes from the upstream GitHub repository are included in a `<dependency_release_notes>` block. Use this information to comment on breaking changes, security fixes, and migration notes. If release notes are unavailable (404, timeout, or non-GitHub upstream), a note field explains the reason. Always acknowledge dependency updates in your review, especially if they introduce breaking changes or security patches.
+
 ## Content Truncation
 
 Some PR content (patches, file content, description) may be truncated due to size limits. When you encounter a truncation annotation (marked with `[APTU: ...]`), you MUST acknowledge the truncation in your response and MUST NOT speculate about missing content. If truncation prevents you from making a confident assessment, note this in your concerns or disclaimer.

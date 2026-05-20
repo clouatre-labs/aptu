@@ -194,6 +194,7 @@ fn all_user_prompts_contain_schema() {
         head_sha: String::new(),
         review_comments: vec![],
         instructions: None,
+        dep_enrichments: vec![],
     };
     let pr_review_user = StubProvider::build_pr_review_user_prompt(&pr, "", "");
     assert!(
@@ -241,6 +242,7 @@ mod fetch_file_contents_tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
         let prompt = StubProvider::build_pr_review_user_prompt(&pr, "", "");
         assert!(
@@ -280,6 +282,7 @@ mod fetch_file_contents_tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         // Act
@@ -329,6 +332,7 @@ mod fetch_file_contents_tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
         // Just verify that the prompt builder itself includes call_graph when provided
         let large_call_graph = "<call_graph>".to_string() + &"x".repeat(1000) + "</call_graph>";

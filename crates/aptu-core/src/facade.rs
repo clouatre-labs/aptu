@@ -1594,6 +1594,7 @@ mod tests {
             head_sha: "abc123".to_string(),
             review_comments: vec![],
         instructions: None,
+        dep_enrichments: vec![],
         };
 
         let ai_config = AiConfig {

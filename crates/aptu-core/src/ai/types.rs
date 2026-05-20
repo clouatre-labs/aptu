@@ -347,6 +347,25 @@ pub struct CreateIssueResponse {
     pub suggested_labels: Vec<String>,
 }
 
+/// Dependency release note enriched from registry APIs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepReleaseNote {
+    /// Package name (e.g., "tokio", "react", "django").
+    pub package_name: String,
+    /// Old version (e.g., "1.0.0").
+    pub old_version: String,
+    /// New version (e.g., "2.0.0").
+    pub new_version: String,
+    /// Registry type: "crates.io", "npm", or "pypi".
+    pub registry: String,
+    /// GitHub repository URL (e.g., <https://github.com/tokio-rs/tokio>).
+    pub github_url: String,
+    /// Release notes body (capped at `max_dep_release_chars`).
+    pub body: String,
+    /// Error message if release notes fetch failed (e.g., "404 Not Found", "timeout").
+    pub fetch_note: String,
+}
+
 /// Details about a pull request for AI review.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrDetails {
@@ -380,6 +399,9 @@ pub struct PrDetails {
     /// Repository instructions (AGENTS.md or .github/instructions/pr-review.md) for context.
     #[serde(default)]
     pub instructions: Option<String>,
+    /// Dependency release notes enriched from registry APIs.
+    #[serde(default)]
+    pub dep_enrichments: Vec<DepReleaseNote>,
 }
 
 /// A file changed in a pull request.

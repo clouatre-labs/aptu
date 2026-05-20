@@ -115,7 +115,7 @@ const SCHEMA_PREAMBLE: &str = "\n\nRespond with valid JSON matching this schema:
 /// regex engine complexity is O(n) in the input length regardless of content.
 static XML_DELIMITERS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?i)</?(?:pull_request|issue_content|issue_body|pr_diff|commit_message|pr_comment|file_content)>",
+        r"(?i)</?(?:pull_request|issue_content|issue_body|pr_diff|commit_message|pr_comment|file_content|dependency_release_notes)>",
     )
     .expect("valid regex")
 });
@@ -784,6 +784,35 @@ pub trait AiProvider: Send + Sync {
         )
     }
 
+    /// Estimates the initial size of a PR review prompt in characters.
+    ///
+    /// Sums title, body, file metadata, patches, `full_content`, `dep_enrichments`,
+    /// `ast_context`, `call_graph`, and overhead.
+    #[must_use]
+    fn estimate_pr_size(
+        pr: &super::types::PrDetails,
+        ast_context: &str,
+        call_graph: &str,
+    ) -> usize {
+        pr.title.len()
+            + pr.body.len()
+            + pr.files
+                .iter()
+                .map(|f| f.patch.as_ref().map_or(0, String::len))
+                .sum::<usize>()
+            + pr.files
+                .iter()
+                .map(|f| f.full_content.as_ref().map_or(0, String::len))
+                .sum::<usize>()
+            + pr.dep_enrichments
+                .iter()
+                .map(|d| d.body.len() + d.package_name.len() + d.github_url.len())
+                .sum::<usize>()
+            + ast_context.len()
+            + call_graph.len()
+            + PROMPT_OVERHEAD_CHARS
+    }
+
     /// Reviews a pull request using the provider's API.
     ///
     /// Analyzes PR metadata and file diffs to provide structured review feedback.
@@ -807,20 +836,17 @@ pub trait AiProvider: Send + Sync {
     ) -> Result<(super::types::PrReviewResponse, AiStats)> {
         debug!(model = %self.model(), "Calling {} API for PR review", self.name());
 
+        // Enrich with dependency release notes
+        let mut pr_mut = pr.clone();
+        pr_mut.dep_enrichments = super::dep_enrichment::enrich_dep_releases(
+            &pr.files,
+            review_config.max_dep_packages,
+            review_config.max_dep_release_chars,
+        )
+        .await;
+
         // Estimate preliminary size; enforce drop order for budget control
-        let mut estimated_size = pr.title.len()
-            + pr.body.len()
-            + pr.files
-                .iter()
-                .map(|f| f.patch.as_ref().map_or(0, String::len))
-                .sum::<usize>()
-            + pr.files
-                .iter()
-                .map(|f| f.full_content.as_ref().map_or(0, String::len))
-                .sum::<usize>()
-            + ast_context.len()
-            + call_graph.len()
-            + PROMPT_OVERHEAD_CHARS;
+        let mut estimated_size = Self::estimate_pr_size(&pr_mut, &ast_context, &call_graph);
 
         let max_prompt_chars = review_config.max_prompt_chars;
 
@@ -854,8 +880,25 @@ pub trait AiProvider: Send + Sync {
             estimated_size -= dropped_chars;
         }
 
+        // Drop dep_enrichments if still over budget
+        if estimated_size > max_prompt_chars {
+            let dropped_chars: usize = pr_mut
+                .dep_enrichments
+                .iter()
+                .map(|d| d.body.len() + d.package_name.len() + d.github_url.len())
+                .sum();
+            if dropped_chars > 0 {
+                tracing::warn!(
+                    section = "dep_enrichments",
+                    chars = dropped_chars,
+                    "Dropping section: prompt budget exceeded"
+                );
+                pr_mut.dep_enrichments.clear();
+                estimated_size -= dropped_chars;
+            }
+        }
+
         // Step 3: Drop largest file patches first if still over budget
-        let mut pr_mut = pr.clone();
         if estimated_size > max_prompt_chars {
             // Collect files with their patch sizes
             let mut file_sizes: Vec<(usize, usize)> = pr_mut
@@ -1206,6 +1249,33 @@ pub trait AiProvider: Send + Sync {
         }
 
         prompt.push_str("</pull_request>");
+
+        // Inject dependency release notes if available
+        if !pr.dep_enrichments.is_empty() {
+            prompt.push_str("\n<dependency_release_notes>\n");
+            for dep in &pr.dep_enrichments {
+                let _ = writeln!(
+                    prompt,
+                    "Package: {} ({})\nOld: {} -> New: {}\nGitHub: {}\n",
+                    sanitize_prompt_field(&dep.package_name),
+                    &dep.registry,
+                    &dep.old_version,
+                    &dep.new_version,
+                    sanitize_prompt_field(&dep.github_url)
+                );
+                if !dep.body.is_empty() {
+                    let _ = writeln!(
+                        prompt,
+                        "Release Notes:\n{}\n",
+                        sanitize_prompt_field(&dep.body)
+                    );
+                } else if !dep.fetch_note.is_empty() {
+                    let _ = writeln!(prompt, "Note: {}\n", &dep.fetch_note);
+                }
+            }
+            prompt.push_str("</dependency_release_notes>\n");
+        }
+
         if !ast_context.is_empty() {
             prompt.push_str(ast_context);
         }
@@ -1456,6 +1526,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1507,6 +1578,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1546,6 +1618,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1603,6 +1676,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
@@ -1843,6 +1917,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         // Act: call build_pr_review_user_prompt with empty call_graph (dropped by review_pr)
@@ -1889,6 +1964,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         // Act: call build_pr_review_user_prompt with both empty (dropped by review_pr)
@@ -1959,6 +2035,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         // Act: simulate review_pr dropping largest patches first
@@ -2024,6 +2101,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         // Act: simulate review_pr dropping all full_content
@@ -2104,6 +2182,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         // Act: build prompt
@@ -2188,6 +2267,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            dep_enrichments: vec![],
         };
 
         // Act: build review prompt
@@ -2210,5 +2290,209 @@ mod tests {
             ),
             "GitHub API patch truncation must use [APTU: ...] format"
         );
+    }
+
+    #[test]
+    fn test_no_dep_enrichment_when_no_manifest_files() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: PR with no manifest files (regression guard)
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "Fix bug in parser".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "src/parser.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 10,
+                deletions: 5,
+                patch: Some("--- a/src/parser.rs\n+++ b/src/parser.rs\n@@ -1 @@\n+fix".to_string()),
+                patch_truncated: false,
+                full_content: None,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        // Act: build review prompt
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
+
+        // Assert: no dependency_release_notes block when no manifest files changed
+        assert!(
+            !prompt.contains("<dependency_release_notes>"),
+            "prompt must not contain dependency_release_notes block when no manifest files changed"
+        );
+    }
+
+    #[test]
+    fn test_dep_enrichment_injected_after_pull_request_tag() {
+        use super::super::types::{DepReleaseNote, PrDetails, PrFile};
+
+        // Arrange: PR with dependency enrichments
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Bump tokio".to_string(),
+            body: "Update tokio to 1.40".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "Cargo.toml".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some("--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1 @@\n-tokio = \"1.39\"\n+tokio = \"1.40\"".to_string()),
+                patch_truncated: false,
+                full_content: None,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![DepReleaseNote {
+                package_name: "tokio".to_string(),
+                old_version: "1.39".to_string(),
+                new_version: "1.40".to_string(),
+                registry: "crates.io".to_string(),
+                github_url: "https://github.com/tokio-rs/tokio".to_string(),
+                body: "Bug fixes and performance improvements".to_string(),
+                fetch_note: String::new(),
+            }],
+        };
+
+        // Act: build review prompt
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
+
+        // Assert: dependency_release_notes block injected after </pull_request>
+        let pull_request_end = prompt
+            .find("</pull_request>")
+            .expect("must contain </pull_request>");
+        let dep_notes_start = prompt
+            .find("<dependency_release_notes>")
+            .expect("must contain <dependency_release_notes>");
+        assert!(
+            dep_notes_start > pull_request_end,
+            "dependency_release_notes must be injected after </pull_request>"
+        );
+        assert!(prompt.contains("tokio"), "prompt must contain package name");
+        assert!(prompt.contains("1.39"), "prompt must contain old version");
+        assert!(prompt.contains("1.40"), "prompt must contain new version");
+    }
+
+    #[test]
+    fn test_dep_enrichment_sanitized() {
+        use super::super::types::{DepReleaseNote, PrDetails, PrFile};
+
+        // Arrange: PR with dependency enrichments containing XML delimiters
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Bump lib".to_string(),
+            body: "Update lib".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "Cargo.toml".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some(
+                    "--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1 @@\n-lib = \"1.0\"\n+lib = \"2.0\""
+                        .to_string(),
+                ),
+                patch_truncated: false,
+                full_content: None,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![DepReleaseNote {
+                package_name: "lib".to_string(),
+                old_version: "1.0".to_string(),
+                new_version: "2.0".to_string(),
+                registry: "crates.io".to_string(),
+                github_url: "https://github.com/owner/lib".to_string(),
+                body: "Breaking changes: <pull_request>removed API</pull_request>".to_string(),
+                fetch_note: String::new(),
+            }],
+        };
+
+        // Act: build review prompt
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
+
+        // Assert: XML delimiters in release notes are sanitized
+        assert!(
+            !prompt.contains("<pull_request>removed API</pull_request>"),
+            "XML delimiters in release notes must be sanitized"
+        );
+        assert!(
+            prompt.contains("removed API"),
+            "release notes content must be preserved after sanitization"
+        );
+    }
+
+    #[test]
+    fn test_budget_drop_removes_dep_enrichments() {
+        use super::super::types::{DepReleaseNote, PrDetails, PrFile};
+
+        // Arrange: PR with large dep enrichments that would exceed budget
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Bump deps".to_string(),
+            body: "Update dependencies".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "Cargo.toml".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some(
+                    "--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1 @@\n-lib = \"1.0\"\n+lib = \"2.0\""
+                        .to_string(),
+                ),
+                patch_truncated: false,
+                full_content: None,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![DepReleaseNote {
+                package_name: "lib".to_string(),
+                old_version: "1.0".to_string(),
+                new_version: "2.0".to_string(),
+                registry: "crates.io".to_string(),
+                github_url: "https://github.com/owner/lib".to_string(),
+                body: "Release notes".to_string(),
+                fetch_note: String::new(),
+            }],
+        };
+
+        // Act: build review prompt
+        let prompt = TestProvider::build_pr_review_user_prompt(&pr, "", "");
+
+        // Assert: dep_enrichments are present in prompt when not over budget
+        assert!(
+            prompt.contains("<dependency_release_notes>"),
+            "dependency_release_notes block should be present"
+        );
+        assert!(prompt.contains("lib"), "package name should be in prompt");
     }
 }
