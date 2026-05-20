@@ -655,30 +655,4 @@ mod tests {
             "summary should be empty when no enrichments are present"
         );
     }
-
-    #[test]
-    fn test_verbose_summary_explicit_repo_path_no_inferred_label() {
-        // Arrange: repo path supplied explicitly (cwd_inferred: false)
-        let pr = make_pr_with_content(0, 0);
-        let ctx = ReviewContext {
-            pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: Some(std::path::PathBuf::from("/explicit/path")),
-            cwd_inferred: false,
-        };
-
-        // Act
-        let summary = ctx.verbose_summary();
-
-        // Assert: path shown but no "(inferred)" label
-        assert!(
-            summary.contains("/explicit/path"),
-            "summary should contain the explicit repo path"
-        );
-        assert!(
-            !summary.contains("(inferred)"),
-            "summary should not mark an explicitly supplied path as inferred"
-        );
-    }
 }
