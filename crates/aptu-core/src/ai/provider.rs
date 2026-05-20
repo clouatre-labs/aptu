@@ -816,6 +816,12 @@ pub trait AiProvider: Send + Sync {
     ///
     /// * `pr` - Pull request details including files and diffs
     ///
+    /// # Concurrency
+    ///
+    /// `ctx` is owned by each call; truncation counter mutations inside
+    /// `build_pr_review_user_prompt` are local to that invocation and are never
+    /// shared across concurrent calls.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
