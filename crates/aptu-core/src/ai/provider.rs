@@ -868,6 +868,7 @@ pub trait AiProvider: Send + Sync {
         // Assemble full prompt to measure actual size
         let assembled_prompt = Self::build_pr_review_user_prompt(&mut ctx);
         let actual_prompt_chars = assembled_prompt.len();
+        ctx.prompt_chars_final = actual_prompt_chars;
 
         tracing::info!(
             actual_prompt_chars,

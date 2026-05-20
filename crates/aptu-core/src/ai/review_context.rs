@@ -205,13 +205,14 @@ pub async fn build_review_context(
 
     // Step 6: Apply budget drop order
     let mut ast_context = ast_context;
-    let budget_drops = Vec::new();
+    let mut budget_drops = Vec::new();
     apply_budget_drops(
         &mut pr,
         &mut ast_context,
         &mut call_graph,
         deep,
         max_prompt_chars,
+        &mut budget_drops,
     );
 
     // Collect tracking metrics
@@ -300,6 +301,7 @@ fn apply_budget_drops(
     call_graph: &mut String,
     deep: bool,
     max_prompt_chars: usize,
+    budget_drops: &mut Vec<String>,
 ) {
     let mut estimated_size = estimate_pr_size(pr, ast_context);
     if !call_graph.is_empty() {
@@ -316,6 +318,7 @@ fn apply_budget_drops(
         let dropped_chars = call_graph.len();
         call_graph.clear();
         estimated_size -= dropped_chars;
+        budget_drops.push("call_graph".to_string());
     }
 
     // Drop ast_context if still over budget
@@ -328,6 +331,7 @@ fn apply_budget_drops(
         let dropped_chars = ast_context.len();
         ast_context.clear();
         estimated_size -= dropped_chars;
+        budget_drops.push("ast_context".to_string());
     }
 
     // Drop dep_enrichments if still over budget
@@ -345,11 +349,12 @@ fn apply_budget_drops(
             );
             pr.dep_enrichments.clear();
             estimated_size -= dropped_chars;
+            budget_drops.push("dep_enrichments".to_string());
         }
     }
 
-    drop_patches_by_size(&mut pr.files, &mut estimated_size, max_prompt_chars);
-    drop_full_content_by_size(&mut pr.files, &mut estimated_size, max_prompt_chars);
+    drop_patches_by_size(&mut pr.files, &mut estimated_size, max_prompt_chars, budget_drops);
+    drop_full_content_by_size(&mut pr.files, &mut estimated_size, max_prompt_chars, budget_drops);
 }
 
 /// Drops file patches in descending size order until under budget.
@@ -357,6 +362,7 @@ fn drop_patches_by_size(
     files: &mut [crate::ai::types::PrFile],
     estimated_size: &mut usize,
     max_prompt_chars: usize,
+    budget_drops: &mut Vec<String>,
 ) {
     if *estimated_size <= max_prompt_chars {
         return;
@@ -379,8 +385,10 @@ fn drop_patches_by_size(
                 patch_chars = patch_size,
                 "Dropping patch: prompt budget exceeded"
             );
+            let filename = files[file_idx].filename.clone();
             files[file_idx].patch = None;
             *estimated_size -= patch_size;
+            budget_drops.push(format!("file_content:{filename}"));
         }
     }
 }
@@ -390,6 +398,7 @@ fn drop_full_content_by_size(
     files: &mut [crate::ai::types::PrFile],
     estimated_size: &mut usize,
     max_prompt_chars: usize,
+    budget_drops: &mut Vec<String>,
 ) {
     if *estimated_size <= max_prompt_chars {
         return;
@@ -412,8 +421,10 @@ fn drop_full_content_by_size(
                 content_chars = content_size,
                 "Dropping full_content: prompt budget exceeded"
             );
+            let filename = files[file_idx].filename.clone();
             files[file_idx].full_content = None;
             *estimated_size -= content_size;
+            budget_drops.push(format!("file_content:{filename}"));
         }
     }
 }
@@ -640,12 +651,14 @@ mod tests {
         // Set budget just above (ast + patch + full_content + metadata) to require call_graph drop.
         let max_prompt_chars = 600;
 
+        let mut drops = Vec::new();
         apply_budget_drops(
             &mut pr,
             &mut ast_context,
             &mut call_graph,
             false,
             max_prompt_chars,
+            &mut drops,
         );
 
         // call_graph dropped first (deep=false, over budget)
@@ -667,12 +680,14 @@ mod tests {
         // Budget: just under (patch + dep_body) to force dep drop but not patch drop
         let max_prompt_chars = 250;
 
+        let mut drops = Vec::new();
         apply_budget_drops(
             &mut pr,
             &mut ast_context,
             &mut call_graph,
             false,
             max_prompt_chars,
+            &mut drops,
         );
 
         // dep_enrichments dropped before patches

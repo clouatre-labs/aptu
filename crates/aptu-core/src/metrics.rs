@@ -111,6 +111,9 @@ fn write_context_jsonl_impl(path: &str, record: &ReviewContextRecord) -> std::io
 
     file.write_all(json_line.as_bytes())?;
     file.write_all(b"\n")?;
+    if let Err(e) = file.flush() {
+        tracing::warn!("aptu: failed to flush context file: {}", e);
+    }
 
     Ok(())
 }
