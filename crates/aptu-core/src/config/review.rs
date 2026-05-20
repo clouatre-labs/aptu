@@ -30,10 +30,17 @@ pub struct ReviewConfig {
     /// Optional path to repository instructions file (overrides default AGENTS.md and .github/instructions/pr-review.md).
     #[serde(default)]
     pub instructions_file: Option<String>,
+    /// Minimum remaining prompt budget to auto-enable call graph (default: `20_000`).
+    #[serde(default = "default_min_budget_for_call_graph")]
+    pub min_budget_for_call_graph: usize,
 }
 
 fn default_max_instructions_chars() -> usize {
     1_500
+}
+
+fn default_min_budget_for_call_graph() -> usize {
+    20_000
 }
 
 impl Default for ReviewConfig {
@@ -44,6 +51,7 @@ impl Default for ReviewConfig {
             max_chars_per_file: 4_000, // Keep individual file snippets readable without overwhelming prompt
             max_instructions_chars: 1_500, // Cap repository instructions to prevent prompt bloat
             instructions_file: None,
+            min_budget_for_call_graph: 20_000, // Auto-enable call graph if remaining budget exceeds this
         }
     }
 }

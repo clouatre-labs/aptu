@@ -446,11 +446,11 @@ pub enum PrCommand {
         #[arg(short, long)]
         force: bool,
 
-        /// Path to the local repository root for AST context injection.
+        /// Path to the local repository root for AST context injection. Optional when running from within the repo.
         #[arg(long, value_name = "PATH")]
         repo_path: Option<std::path::PathBuf>,
 
-        /// Enable cross-file call graph context (requires --repo-path).
+        /// Enable cross-file call graph context. Auto-enabled if remaining prompt budget exceeds 20k chars.
         #[arg(long, default_value_t = false)]
         deep: bool,
 
