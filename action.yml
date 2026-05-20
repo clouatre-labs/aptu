@@ -417,6 +417,7 @@ runs:
         NO_COMMENT: ${{ inputs.no-comment }}
         REPO_PATH: ${{ inputs.repo-path }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
+        APTU_CONTEXT_FILE: ${{ runner.temp }}/aptu-review-context.jsonl
       run: |
         set -e
 
@@ -535,5 +536,14 @@ runs:
       with:
         name: aptu-token-usage-${{ github.run_id }}
         path: ${{ runner.temp }}/aptu-token-usage.jsonl
+        retention-days: 90
+        if-no-files-found: ignore
+
+    - name: Upload review context artifact
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: aptu-review-context-${{ github.run_id }}
+        path: ${{ runner.temp }}/aptu-review-context.jsonl
         retention-days: 90
         if-no-files-found: ignore

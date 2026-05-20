@@ -314,13 +314,15 @@ async fn review_single_pr(
 
     // Analyze with AI
     let spinner = maybe_spinner(ctx, "Analyzing with AI...");
-    let (review, ai_stats) = pr::analyze(&pr_details, &config.ai, repo_path, deep).await?;
+    let (review, ai_stats, context_record) =
+        pr::analyze(&pr_details, &config.ai, repo_path, deep).await?;
     if let Some(s) = spinner {
         s.finish_and_clear();
     }
 
     // Log metrics (fire-and-forget)
     aptu_core::metrics::append_jsonl(&ai_stats);
+    aptu_core::metrics::write_context_jsonl(&context_record);
 
     // Security scanning (if PR has code changes)
     let security_findings = {
