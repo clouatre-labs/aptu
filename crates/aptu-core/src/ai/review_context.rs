@@ -14,7 +14,7 @@ use crate::config::ReviewConfig;
 ///
 /// This struct centralizes enrichment decisions and is passed to `build_pr_review_user_prompt()`
 /// to avoid scattered conditional logic throughout the codebase.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ReviewContext {
     /// Pull request details.
     pub pr: PrDetails,
