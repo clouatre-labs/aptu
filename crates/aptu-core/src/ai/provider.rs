@@ -826,125 +826,13 @@ pub trait AiProvider: Send + Sync {
     /// Returns an error if:
     /// - API request fails (network, timeout, rate limit)
     /// - Response cannot be parsed as valid JSON
-    #[instrument(skip(self, pr, ast_context, call_graph), fields(pr_number = pr.number, repo = %format!("{}/{}", pr.owner, pr.repo)))]
+    #[instrument(skip(self, ctx), fields(pr_number = ctx.pr.number, repo = %format!("{}/{}", ctx.pr.owner, ctx.pr.repo)))]
     async fn review_pr(
         &self,
-        pr: &super::types::PrDetails,
-        mut ast_context: String,
-        mut call_graph: String,
+        ctx: crate::ai::review_context::ReviewContext,
         review_config: &crate::config::ReviewConfig,
     ) -> Result<(super::types::PrReviewResponse, AiStats)> {
         debug!(model = %self.model(), "Calling {} API for PR review", self.name());
-
-        // Enrich with dependency release notes
-        let mut pr_mut = pr.clone();
-        pr_mut.dep_enrichments = super::dep_enrichment::enrich_dep_releases(
-            &pr.files,
-            review_config.max_dep_packages,
-            review_config.max_dep_release_chars,
-        )
-        .await;
-
-        // Estimate preliminary size; enforce drop order for budget control
-        let mut estimated_size = Self::estimate_pr_size(&pr_mut, &ast_context, &call_graph);
-
-        let max_prompt_chars = review_config.max_prompt_chars;
-
-        // Auto-enable call graph if remaining budget is sufficient
-        let size_without_call_graph = estimated_size.saturating_sub(call_graph.len());
-        let remaining_budget = max_prompt_chars.saturating_sub(size_without_call_graph);
-        let should_auto_enable_call_graph =
-            remaining_budget > review_config.min_budget_for_call_graph;
-
-        // Drop call_graph if over budget (unless auto-enabled)
-        if estimated_size > max_prompt_chars && !should_auto_enable_call_graph {
-            tracing::warn!(
-                section = "call_graph",
-                chars = call_graph.len(),
-                "Dropping section: prompt budget exceeded"
-            );
-            let dropped_chars = call_graph.len();
-            call_graph.clear();
-            estimated_size -= dropped_chars;
-        }
-
-        // Drop ast_context if still over budget
-        if estimated_size > max_prompt_chars {
-            tracing::warn!(
-                section = "ast_context",
-                chars = ast_context.len(),
-                "Dropping section: prompt budget exceeded"
-            );
-            let dropped_chars = ast_context.len();
-            ast_context.clear();
-            estimated_size -= dropped_chars;
-        }
-
-        // Drop dep_enrichments if still over budget
-        if estimated_size > max_prompt_chars {
-            let dropped_chars: usize = pr_mut
-                .dep_enrichments
-                .iter()
-                .map(|d| d.body.len() + d.package_name.len() + d.github_url.len())
-                .sum();
-            if dropped_chars > 0 {
-                tracing::warn!(
-                    section = "dep_enrichments",
-                    chars = dropped_chars,
-                    "Dropping section: prompt budget exceeded"
-                );
-                pr_mut.dep_enrichments.clear();
-                estimated_size -= dropped_chars;
-            }
-        }
-
-        // Step 3: Drop largest file patches first if still over budget
-        if estimated_size > max_prompt_chars {
-            // Collect files with their patch sizes
-            let mut file_sizes: Vec<(usize, usize)> = pr_mut
-                .files
-                .iter()
-                .enumerate()
-                .map(|(idx, f)| (idx, f.patch.as_ref().map_or(0, String::len)))
-                .collect();
-            // Sort by patch size descending
-            file_sizes.sort_by_key(|x| std::cmp::Reverse(x.1));
-
-            for (file_idx, patch_size) in file_sizes {
-                if estimated_size <= max_prompt_chars {
-                    break;
-                }
-                if patch_size > 0 {
-                    tracing::warn!(
-                        file = %pr_mut.files[file_idx].filename,
-                        patch_chars = patch_size,
-                        "Dropping file patch: prompt budget exceeded"
-                    );
-                    pr_mut.files[file_idx].patch = None;
-                    estimated_size -= patch_size;
-                }
-            }
-        }
-
-        // Step 4: drop full_content on all files
-        if estimated_size > max_prompt_chars {
-            for file in &mut pr_mut.files {
-                if let Some(fc) = file.full_content.take() {
-                    estimated_size = estimated_size.saturating_sub(fc.len());
-                    tracing::warn!(
-                        bytes = fc.len(),
-                        filename = %file.filename,
-                        "prompt budget: dropping full_content"
-                    );
-                }
-            }
-        }
-
-        tracing::info!(
-            prompt_chars = estimated_size,
-            max_chars = max_prompt_chars,
-            "PR review prompt assembled"
-        );
 
         // Build request
         let mut system_content = if let Some(override_prompt) =
@@ -956,7 +844,7 @@ pub trait AiProvider: Send + Sync {
         };
 
         // Prepend repository instructions if available
-        if let Some(ref instructions) = pr.instructions {
+        if let Some(ref instructions) = ctx.pr.instructions {
             // Escape XML delimiters to prevent tag injection
             let escaped_instructions = instructions
                 .replace('&', "&amp;")
@@ -968,21 +856,13 @@ pub trait AiProvider: Send + Sync {
         }
 
         // Assemble full prompt to measure actual size
-        let ctx = crate::ai::review_context::ReviewContext {
-            pr: pr_mut.clone(),
-            ast_context: ast_context.clone(),
-            call_graph: call_graph.clone(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-        };
         let assembled_prompt = Self::build_pr_review_user_prompt(&ctx);
         let actual_prompt_chars = assembled_prompt.len();
 
         tracing::info!(
             actual_prompt_chars,
-            estimated_prompt_chars = estimated_size,
-            max_chars = max_prompt_chars,
-            "Actual assembled prompt size vs. estimate"
+            max_chars = review_config.max_prompt_chars,
+            "PR review prompt assembled"
         );
 
         let mut messages = vec![

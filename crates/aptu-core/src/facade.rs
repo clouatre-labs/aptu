@@ -813,13 +813,9 @@ pub async fn analyze_pr(
 
     // Use fallback chain if configured
     try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
-        let pr = pr_details.clone();
+        let review_ctx = ctx.clone();
         let review_cfg = review_config.clone();
-        async move {
-            client
-                .review_pr(&pr, String::new(), String::new(), &review_cfg)
-                .await
-        }
+        async move { client.review_pr(review_ctx, &review_cfg).await }
     })
     .await
 }
