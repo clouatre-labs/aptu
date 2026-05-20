@@ -95,24 +95,14 @@ impl ReviewContext {
 /// # Returns
 ///
 /// A `ReviewContext` with all enrichment fields populated according to budget constraints.
-#[allow(clippy::too_many_lines)]
 pub async fn build_review_context(
     mut pr: PrDetails,
     repo_path: Option<String>,
     deep: bool,
     review_config: &ReviewConfig,
 ) -> crate::Result<ReviewContext> {
-    // Step 1: Infer repo_path from CWD if not provided
-    let (inferred_repo_path, cwd_inferred) = if repo_path.is_none() {
-        if let Some(inferred_path) = infer_repo_path_from_cwd(&pr.owner, &pr.repo) {
-            (Some(PathBuf::from(&inferred_path)), true)
-        } else {
-            (None, false)
-        }
-    } else {
-        (repo_path.map(PathBuf::from), false)
-    };
-
+    // Step 1: Resolve repo_path (explicit or inferred from CWD)
+    let (inferred_repo_path, cwd_inferred) = resolve_repo_path(&pr, repo_path);
     let repo_path_ref = inferred_repo_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
@@ -121,37 +111,89 @@ pub async fn build_review_context(
     let ast_context = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
 
     // Step 3: Enrich with dependency release notes
-    pr.dep_enrichments = crate::ai::dep_enrichment::enrich_dep_releases(
-        &pr.files,
-        review_config.max_dep_packages,
-        review_config.max_dep_release_chars,
-    )
-    .await;
+    pr.dep_enrichments = enrich_deps(&pr.files, review_config).await;
 
     // Step 4: Estimate total chars and decide call_graph budget
-    let mut estimated_size = estimate_pr_size(&pr, &ast_context);
+    let estimated_size = estimate_pr_size(&pr, &ast_context);
     let max_prompt_chars = review_config.max_prompt_chars;
-
-    // Auto-enable call graph if remaining budget is sufficient
-    let size_without_call_graph = estimated_size.saturating_sub(0); // placeholder for call_graph size
-    let remaining_budget = max_prompt_chars.saturating_sub(size_without_call_graph);
-    let should_auto_enable_call_graph = remaining_budget > review_config.min_budget_for_call_graph;
+    let budget_remaining = max_prompt_chars.saturating_sub(estimated_size);
 
     // Step 5: Build call_graph if decided
-    let mut call_graph = if deep || should_auto_enable_call_graph {
+    let should_enable_cg = should_enable_call_graph(deep, budget_remaining, review_config);
+    let mut call_graph = if should_enable_cg {
         build_ctx_call_graph(repo_path_ref.as_deref(), &pr.files, true).await
     } else {
         String::new()
     };
 
-    // Step 6: Apply budget drop order (call_graph -> ast_context -> dep_enrichments -> patches)
-    estimated_size = estimate_pr_size(&pr, &ast_context);
+    // Step 6: Apply budget drop order
+    let mut ast_context = ast_context;
+    apply_budget_drops(
+        &mut pr,
+        &mut ast_context,
+        &mut call_graph,
+        deep,
+        max_prompt_chars,
+    );
+
+    Ok(ReviewContext {
+        pr,
+        ast_context,
+        call_graph,
+        inferred_repo_path,
+        cwd_inferred,
+    })
+}
+
+/// Resolves the repository path from explicit argument or CWD inference.
+///
+/// Returns a tuple of `(inferred_repo_path, cwd_inferred)`.
+fn resolve_repo_path(
+    pr: &PrDetails,
+    explicit_repo_path: Option<String>,
+) -> (Option<PathBuf>, bool) {
+    if explicit_repo_path.is_some() {
+        (explicit_repo_path.map(PathBuf::from), false)
+    } else if let Some(inferred_path) = infer_repo_path_from_cwd(&pr.owner, &pr.repo) {
+        (Some(PathBuf::from(&inferred_path)), true)
+    } else {
+        (None, false)
+    }
+}
+
+/// Determines whether to enable call graph context based on budget and flags.
+fn should_enable_call_graph(deep: bool, budget_remaining: usize, config: &ReviewConfig) -> bool {
+    deep || budget_remaining > config.min_budget_for_call_graph
+}
+
+/// Enriches PR with dependency release notes if manifest files are detected.
+async fn enrich_deps(
+    files: &[crate::ai::types::PrFile],
+    config: &ReviewConfig,
+) -> Vec<crate::ai::types::DepReleaseNote> {
+    crate::ai::dep_enrichment::enrich_dep_releases(
+        files,
+        config.max_dep_packages,
+        config.max_dep_release_chars,
+    )
+    .await
+}
+
+/// Applies budget drop order: `call_graph` -> `ast_context` -> `dep_enrichments` -> patches -> `full_content`.
+fn apply_budget_drops(
+    pr: &mut PrDetails,
+    ast_context: &mut String,
+    call_graph: &mut String,
+    deep: bool,
+    max_prompt_chars: usize,
+) {
+    let mut estimated_size = estimate_pr_size(pr, ast_context);
     if !call_graph.is_empty() {
         estimated_size += call_graph.len();
     }
 
-    // Drop call_graph if over budget (unless auto-enabled)
-    if estimated_size > max_prompt_chars && !should_auto_enable_call_graph {
+    // Drop call_graph if over budget (unless explicitly enabled)
+    if estimated_size > max_prompt_chars && !deep {
         tracing::warn!(
             section = "call_graph",
             chars = call_graph.len(),
@@ -163,7 +205,6 @@ pub async fn build_review_context(
     }
 
     // Drop ast_context if still over budget
-    let mut ast_context = ast_context;
     if estimated_size > max_prompt_chars {
         tracing::warn!(
             section = "ast_context",
@@ -244,14 +285,6 @@ pub async fn build_review_context(
             }
         }
     }
-
-    Ok(ReviewContext {
-        pr,
-        ast_context,
-        call_graph,
-        inferred_repo_path,
-        cwd_inferred,
-    })
 }
 
 /// Estimates the total character size of a PR review prompt.
@@ -284,6 +317,7 @@ fn estimate_pr_size(pr: &PrDetails, ast_context: &str) -> usize {
 }
 
 /// Builds AST context for changed files.
+#[allow(clippy::unused_async)]
 async fn build_ctx_ast(repo_path: Option<&str>, files: &[crate::ai::types::PrFile]) -> String {
     let Some(path) = repo_path else {
         return String::new();
@@ -300,6 +334,7 @@ async fn build_ctx_ast(repo_path: Option<&str>, files: &[crate::ai::types::PrFil
 }
 
 /// Builds call-graph context for changed files.
+#[allow(clippy::unused_async)]
 async fn build_ctx_call_graph(
     repo_path: Option<&str>,
     files: &[crate::ai::types::PrFile],
