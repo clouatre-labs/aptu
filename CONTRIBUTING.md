@@ -267,8 +267,11 @@ Configure a GPG key for signing commits and tags:
    ```bash
    # Replace vX.Y with the new minor version (e.g. v0.9).
    # Only run this for the first release of a new minor; the tag must not exist yet.
-   # If it already exists the POST will return a 422 -- verify first:
-   #   gh api repos/clouatre-labs/aptu/git/ref/tags/vX.Y && echo "tag already exists -- skip this step"
+   # Verify first (exits non-zero if the tag is absent; pipe to /dev/null to suppress output):
+   #   gh api repos/clouatre-labs/aptu/git/ref/tags/vX.Y > /dev/null 2>&1 && echo "tag exists" || echo "tag absent -- safe to POST"
+   # If the tag already exists, confirm it points to the correct commit before proceeding.
+   # If it points to a wrong commit, move it via PATCH instead:
+   #   gh api repos/clouatre-labs/aptu/git/refs/tags/vX.Y -X PATCH -f sha="$(git rev-parse HEAD)" -F force=true
    gh api repos/clouatre-labs/aptu/git/refs \
      -X POST \
      -f ref="refs/tags/vX.Y" \
