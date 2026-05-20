@@ -827,7 +827,8 @@ pub trait AiProvider: Send + Sync {
         // Auto-enable call graph if remaining budget is sufficient
         let size_without_call_graph = estimated_size.saturating_sub(call_graph.len());
         let remaining_budget = max_prompt_chars.saturating_sub(size_without_call_graph);
-        let should_auto_enable_call_graph = remaining_budget > review_config.min_budget_for_call_graph;
+        let should_auto_enable_call_graph =
+            remaining_budget > review_config.min_budget_for_call_graph;
 
         // Drop call_graph if over budget (unless auto-enabled)
         if estimated_size > max_prompt_chars && !should_auto_enable_call_graph {
