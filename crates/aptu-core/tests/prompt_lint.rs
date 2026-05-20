@@ -196,7 +196,14 @@ fn all_user_prompts_contain_schema() {
         instructions: None,
         dep_enrichments: vec![],
     };
-    let pr_review_user = StubProvider::build_pr_review_user_prompt(&pr, "", "");
+    let ctx = aptu_core::ai::review_context::ReviewContext {
+        pr,
+        ast_context: String::new(),
+        call_graph: String::new(),
+        inferred_repo_path: None,
+        cwd_inferred: false,
+    };
+    let pr_review_user = StubProvider::build_pr_review_user_prompt(&ctx);
     assert!(
         pr_review_user.contains("verdict") && pr_review_user.contains("summary"),
         "pr_review user prompt missing schema fields"
@@ -244,7 +251,14 @@ mod fetch_file_contents_tests {
             instructions: None,
             dep_enrichments: vec![],
         };
-        let prompt = StubProvider::build_pr_review_user_prompt(&pr, "", "");
+        let ctx = aptu_core::ai::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+        };
+        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
         assert!(
             prompt.contains("<file_content path=\"src/lib.rs\">"),
             "Prompt should contain file_content block"
@@ -286,7 +300,14 @@ mod fetch_file_contents_tests {
         };
 
         // Act
-        let prompt = StubProvider::build_pr_review_user_prompt(&pr, "", "");
+        let ctx = aptu_core::ai::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+        };
+        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
 
         // Assert: block present but content capped at MAX_FULL_CONTENT_CHARS
         assert!(
@@ -336,11 +357,255 @@ mod fetch_file_contents_tests {
         };
         // Just verify that the prompt builder itself includes call_graph when provided
         let large_call_graph = "<call_graph>".to_string() + &"x".repeat(1000) + "</call_graph>";
-        let prompt = StubProvider::build_pr_review_user_prompt(&pr, "", &large_call_graph);
+        let ctx = aptu_core::ai::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: large_call_graph.clone(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+        };
+        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
         // The prompt builder includes call_graph as-is; budget enforcement is done in review_pr
         assert!(
             prompt.contains(&large_call_graph),
             "Call graph should be in prompt at builder level"
+        );
+    }
+
+    #[test]
+    fn test_review_context_no_enrichments() {
+        // Arrange: construct a ReviewContext with minimal PrDetails (only .rs files, no manifest files)
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "PR body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "src/lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 5,
+                deletions: 2,
+                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
+                full_content: None,
+                patch_truncated: false,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+        let ctx = aptu_core::ai::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+        };
+
+        // Act: inspect the ReviewContext fields
+        // Assert: all enrichment fields are empty
+        assert!(ctx.ast_context.is_empty(), "ast_context should be empty");
+        assert!(ctx.call_graph.is_empty(), "call_graph should be empty");
+        assert!(
+            ctx.pr.dep_enrichments.is_empty(),
+            "dep_enrichments should be empty"
+        );
+    }
+
+    #[test]
+    fn test_review_context_prompt_unchanged_without_enrichment() {
+        // Arrange: same minimal ReviewContext as above
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "PR body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "src/lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 5,
+                deletions: 2,
+                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
+                full_content: None,
+                patch_truncated: false,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+        let ctx = aptu_core::ai::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+        };
+
+        // Act: call build_pr_review_user_prompt with minimal ReviewContext
+        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
+
+        // Assert: prompt contains PR title but NOT enrichment sections
+        assert!(prompt.contains("Test PR"), "prompt should contain PR title");
+        assert!(
+            !prompt.contains("<dependency_release_notes>"),
+            "prompt should NOT contain dependency_release_notes section when empty"
+        );
+        assert!(
+            !prompt.contains("<ast_context>"),
+            "prompt should NOT contain ast_context section when empty"
+        );
+        assert!(
+            !prompt.contains("<call_graph>"),
+            "prompt should NOT contain call_graph section when empty"
+        );
+    }
+
+    #[test]
+    fn test_review_context_injection_order() {
+        // Arrange: construct ReviewContext with all enrichments populated
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "PR body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "src/lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 5,
+                deletions: 2,
+                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
+                full_content: None,
+                patch_truncated: false,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![aptu_core::ai::types::DepReleaseNote {
+                package_name: "serde".to_string(),
+                registry: "crates.io".to_string(),
+                old_version: "1.0.0".to_string(),
+                new_version: "1.0.200".to_string(),
+                body: "v1.0.200 notes".to_string(),
+                github_url: "https://github.com/serde-rs/serde".to_string(),
+                fetch_note: String::new(),
+            }],
+        };
+        let ctx = aptu_core::ai::review_context::ReviewContext {
+            pr,
+            ast_context: "fn foo() {}".to_string(),
+            call_graph: "foo -> bar".to_string(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+        };
+
+        // Act: call build_pr_review_user_prompt
+        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
+
+        // Assert: sections appear in correct order
+        let pull_request_end = prompt
+            .find("</pull_request>")
+            .expect("should contain </pull_request>");
+        let dep_notes_start = prompt
+            .find("<dependency_release_notes>")
+            .expect("should contain <dependency_release_notes>");
+        let dep_notes_end = prompt
+            .find("</dependency_release_notes>")
+            .expect("should contain </dependency_release_notes>");
+        let ast_start = prompt
+            .find("fn foo() {}")
+            .expect("should contain ast_context content");
+        let call_graph_start = prompt
+            .find("foo -> bar")
+            .expect("should contain call_graph content");
+
+        assert!(
+            pull_request_end < dep_notes_start,
+            "pull_request section should end before dep_enrichments starts"
+        );
+        assert!(
+            dep_notes_end < ast_start,
+            "dep_enrichments section should end before ast_context starts"
+        );
+        assert!(
+            ast_start < call_graph_start,
+            "ast_context content should appear before call_graph content"
+        );
+    }
+
+    #[test]
+    fn test_verbose_summary_format() {
+        // Arrange: construct ReviewContext with enrichments and inferred repo path
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "PR body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![PrFile {
+                filename: "src/lib.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 5,
+                deletions: 2,
+                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
+                full_content: None,
+                patch_truncated: false,
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![aptu_core::ai::types::DepReleaseNote {
+                package_name: "tokio".to_string(),
+                registry: "crates.io".to_string(),
+                old_version: "1.37".to_string(),
+                new_version: "1.38".to_string(),
+                body: "v1.38 notes".to_string(),
+                github_url: "https://github.com/tokio-rs/tokio".to_string(),
+                fetch_note: String::new(),
+            }],
+        };
+        let ctx = aptu_core::ai::review_context::ReviewContext {
+            pr,
+            ast_context: "fn bar() {}".to_string(),
+            call_graph: String::new(),
+            inferred_repo_path: Some(std::path::PathBuf::from("/tmp/repo")),
+            cwd_inferred: true,
+        };
+
+        // Act: call verbose_summary()
+        let summary = ctx.verbose_summary();
+
+        // Assert: summary contains expected content
+        assert!(
+            summary.contains("tokio"),
+            "summary should contain package name"
+        );
+        assert!(
+            summary.contains("AST"),
+            "summary should mention ast context"
+        );
+        assert!(
+            summary.contains("inferred"),
+            "summary should mention that path was inferred"
         );
     }
 }
