@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 ///   window limits (e.g., 128k token models), accounting for system prompt and response overhead.
 /// - `max_full_content_files`: 10 files caps GitHub Contents API calls per review to limit
 ///   latency and rate limit usage.
-/// - `max_chars_per_file`: 4,000 chars per file keeps individual file snippets readable
-///   without dominating the prompt budget.
+/// - `max_chars_per_file`: 16,000 chars per file gives adequate context for most files
+///   without dominating the prompt budget; budget drop logic trims below 120k if needed.
 /// - `max_instructions_chars`: 1,500 chars caps repository instructions to prevent prompt bloat.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
@@ -22,7 +22,7 @@ pub struct ReviewConfig {
     pub max_prompt_chars: usize,
     /// Maximum number of files to fetch full content for (default: 10).
     pub max_full_content_files: usize,
-    /// Maximum characters per file's full content (default: `4_000`).
+    /// Maximum characters per file's full content (default: `16_000`).
     pub max_chars_per_file: usize,
     /// Maximum characters for repository instructions (default: `1_500`).
     #[serde(default = "default_max_instructions_chars")]
@@ -62,7 +62,7 @@ impl Default for ReviewConfig {
         Self {
             max_prompt_chars: 120_000, // Conservative budget for LLM context windows with overhead
             max_full_content_files: 10, // Cap GitHub Contents API calls to limit latency and rate limits
-            max_chars_per_file: 4_000, // Keep individual file snippets readable without overwhelming prompt
+            max_chars_per_file: 16_000, // Adequate context per file; budget drop logic trims total below 120k
             max_instructions_chars: 1_500, // Cap repository instructions to prevent prompt bloat
             instructions_file: None,
             min_budget_for_call_graph: 20_000, // Auto-enable call graph if remaining budget exceeds this
