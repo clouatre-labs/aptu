@@ -26,6 +26,12 @@ pub struct ReviewContext {
     pub inferred_repo_path: Option<PathBuf>,
     /// Whether the repository path was inferred from CWD.
     pub cwd_inferred: bool,
+    /// Maximum characters per file's full content in the prompt (from `ReviewConfig`).
+    pub max_chars_per_file: usize,
+    /// Number of files whose full content was truncated at prompt assembly.
+    pub files_truncated: usize,
+    /// Total characters dropped across all truncated files.
+    pub truncated_chars_dropped: usize,
 }
 
 impl ReviewContext {
@@ -72,7 +78,60 @@ impl ReviewContext {
             let _ = writeln!(summary, "Context: {}", context_sizes.join(", "));
         }
 
+        // Truncation summary
+        if self.files_truncated > 0 {
+            let _ = writeln!(
+                summary,
+                "Files truncated: {} ({} chars dropped)",
+                self.files_truncated, self.truncated_chars_dropped
+            );
+        }
+
         summary
+    }
+
+    /// Records a file truncation event.
+    ///
+    /// Updates truncation counters and emits a debug log.
+    pub fn record_truncation(&mut self, filename: &str, original_len: usize, truncated_len: usize) {
+        self.files_truncated += 1;
+        self.truncated_chars_dropped += original_len - truncated_len;
+        tracing::debug!(
+            filename = %filename,
+            original_len,
+            truncated_len,
+            "file content truncated at prompt assembly"
+        );
+    }
+}
+
+impl Default for ReviewContext {
+    fn default() -> Self {
+        Self {
+            pr: crate::ai::types::PrDetails {
+                owner: String::new(),
+                repo: String::new(),
+                number: 0,
+                title: String::new(),
+                body: String::new(),
+                base_branch: String::new(),
+                head_branch: String::new(),
+                files: Vec::new(),
+                url: String::new(),
+                labels: Vec::new(),
+                head_sha: String::new(),
+                review_comments: Vec::new(),
+                instructions: None,
+                dep_enrichments: Vec::new(),
+            },
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            max_chars_per_file: crate::config::ReviewConfig::default().max_chars_per_file,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
+        }
     }
 }
 
@@ -142,6 +201,9 @@ pub async fn build_review_context(
         call_graph,
         inferred_repo_path,
         cwd_inferred,
+        max_chars_per_file: review_config.max_chars_per_file,
+        files_truncated: 0,
+        truncated_chars_dropped: 0,
     })
 }
 
@@ -616,6 +678,9 @@ mod tests {
             call_graph: "foo -> bar".to_string(),
             inferred_repo_path: Some(std::path::PathBuf::from("/tmp/repo")),
             cwd_inferred: true,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
 
         // Act
@@ -661,6 +726,9 @@ mod tests {
             call_graph: String::new(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
 
         // Act
@@ -671,5 +739,210 @@ mod tests {
             summary.is_empty(),
             "summary should be empty when no enrichments are present"
         );
+    }
+
+    #[test]
+    fn test_verbose_summary_truncation_section_present_and_absent() {
+        // Arrange
+        let mut pr = make_pr_with_content(0, 0);
+        pr.dep_enrichments.clear();
+
+        // Case 1: files_truncated > 0 -- section must be present
+        let ctx_with = ReviewContext {
+            pr: pr.clone(),
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            max_chars_per_file: 4_000,
+            files_truncated: 3,
+            truncated_chars_dropped: 900,
+        };
+        let summary = ctx_with.verbose_summary();
+        assert!(
+            summary.contains("Files truncated: 3 (900 chars dropped)"),
+            "verbose_summary must include truncation line when files_truncated > 0"
+        );
+
+        // Case 2: files_truncated == 0 -- section must be absent
+        let ctx_without = ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            max_chars_per_file: 4_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
+        };
+        let summary_clean = ctx_without.verbose_summary();
+        assert!(
+            !summary_clean.contains("Files truncated"),
+            "verbose_summary must omit truncation line when files_truncated == 0"
+        );
+    }
+
+    #[test]
+    fn test_truncation_tracking_incremented() {
+        use crate::ai::provider::AiProvider;
+
+        struct TrackingProvider;
+        impl AiProvider for TrackingProvider {
+            fn name(&self) -> &'static str {
+                "tracking"
+            }
+            fn api_url(&self) -> &'static str {
+                "https://example.com"
+            }
+            fn api_key_env(&self) -> &'static str {
+                "TRACKING_API_KEY"
+            }
+            fn http_client(&self) -> &reqwest::Client {
+                unimplemented!()
+            }
+            fn api_key(&self) -> &secrecy::SecretString {
+                unimplemented!()
+            }
+            fn model(&self) -> &'static str {
+                "model"
+            }
+            fn max_tokens(&self) -> u32 {
+                2048
+            }
+            fn temperature(&self) -> f32 {
+                0.3
+            }
+        }
+
+        // Arrange: file content that exceeds cap
+        let cap = 4_000_usize;
+        let content = "z".repeat(cap + 500);
+        let original_len = content.len();
+        let pr = crate::ai::types::PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Tracking test".to_string(),
+            body: String::new(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![crate::ai::types::PrFile {
+                filename: "big.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 0,
+                patch: None,
+                patch_truncated: false,
+                full_content: Some(content),
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+        let mut ctx = ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            max_chars_per_file: cap,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
+        };
+
+        // Act
+        let _ = TrackingProvider::build_pr_review_user_prompt(&mut ctx);
+
+        // Assert
+        assert_eq!(
+            ctx.files_truncated, 1,
+            "files_truncated must be 1 after one truncation"
+        );
+        assert_eq!(
+            ctx.truncated_chars_dropped,
+            original_len - cap,
+            "truncated_chars_dropped must equal chars removed"
+        );
+    }
+
+    #[test]
+    fn test_no_double_truncation_at_new_cap() {
+        use crate::ai::provider::AiProvider;
+
+        struct NoDblProvider;
+        impl AiProvider for NoDblProvider {
+            fn name(&self) -> &'static str {
+                "nodbl"
+            }
+            fn api_url(&self) -> &'static str {
+                "https://example.com"
+            }
+            fn api_key_env(&self) -> &'static str {
+                "NODBL_API_KEY"
+            }
+            fn http_client(&self) -> &reqwest::Client {
+                unimplemented!()
+            }
+            fn api_key(&self) -> &secrecy::SecretString {
+                unimplemented!()
+            }
+            fn model(&self) -> &'static str {
+                "model"
+            }
+            fn max_tokens(&self) -> u32 {
+                2048
+            }
+            fn temperature(&self) -> f32 {
+                0.3
+            }
+        }
+
+        // Arrange: file content at cap + 1 char
+        let cap = 16_000_usize;
+        let content = "a".repeat(cap + 1);
+        let pr = crate::ai::types::PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "NoDbl test".to_string(),
+            body: String::new(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![crate::ai::types::PrFile {
+                filename: "cap.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 0,
+                patch: None,
+                patch_truncated: false,
+                full_content: Some(content),
+            }],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+        let mut ctx = ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            max_chars_per_file: cap,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
+        };
+
+        // Act
+        let _ = NoDblProvider::build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: exactly one truncation of exactly 1 char
+        assert_eq!(ctx.files_truncated, 1, "exactly one file must be truncated");
+        assert_eq!(ctx.truncated_chars_dropped, 1, "exactly 1 char dropped");
     }
 }

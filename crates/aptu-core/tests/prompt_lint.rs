@@ -10,7 +10,7 @@ use aptu_core::ai::prompts::{
     TOOLING_CONTEXT, build_create_system_prompt, build_pr_label_system_prompt,
     build_pr_review_system_prompt, build_triage_system_prompt,
 };
-use aptu_core::ai::provider::{AiProvider, MAX_FULL_CONTENT_CHARS};
+use aptu_core::ai::provider::AiProvider;
 use aptu_core::ai::types::{IssueDetails, PrDetails, PrFile};
 
 // ---------------------------------------------------------------------------
@@ -196,14 +196,17 @@ fn all_user_prompts_contain_schema() {
         instructions: None,
         dep_enrichments: vec![],
     };
-    let ctx = aptu_core::ai::review_context::ReviewContext {
+    let mut ctx = aptu_core::ai::review_context::ReviewContext {
         pr,
         ast_context: String::new(),
         call_graph: String::new(),
         inferred_repo_path: None,
         cwd_inferred: false,
+        max_chars_per_file: 16_000,
+        files_truncated: 0,
+        truncated_chars_dropped: 0,
     };
-    let pr_review_user = StubProvider::build_pr_review_user_prompt(&ctx);
+    let pr_review_user = StubProvider::build_pr_review_user_prompt(&mut ctx);
     assert!(
         pr_review_user.contains("verdict") && pr_review_user.contains("summary"),
         "pr_review user prompt missing schema fields"
@@ -251,14 +254,17 @@ mod fetch_file_contents_tests {
             instructions: None,
             dep_enrichments: vec![],
         };
-        let ctx = aptu_core::ai::review_context::ReviewContext {
+        let mut ctx = aptu_core::ai::review_context::ReviewContext {
             pr,
             ast_context: String::new(),
             call_graph: String::new(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
-        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
+        let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
         assert!(
             prompt.contains("<file_content path=\"src/lib.rs\">"),
             "Prompt should contain file_content block"
@@ -271,9 +277,10 @@ mod fetch_file_contents_tests {
 
     #[test]
     fn test_file_content_truncated_at_prompt_assembly() {
-        // Arrange: full_content longer than MAX_FULL_CONTENT_CHARS
-        let long_content = "x".repeat(MAX_FULL_CONTENT_CHARS + 1000);
-        assert!(long_content.len() > MAX_FULL_CONTENT_CHARS);
+        // Arrange: full_content longer than the configured cap (4000 chars for this test)
+        const CAP: usize = 4_000;
+        let long_content = "x".repeat(CAP + 1000);
+        assert!(long_content.len() > CAP);
         let pr = PrDetails {
             owner: "test".to_string(),
             repo: "repo".to_string(),
@@ -299,17 +306,20 @@ mod fetch_file_contents_tests {
             dep_enrichments: vec![],
         };
 
-        // Act
-        let ctx = aptu_core::ai::review_context::ReviewContext {
+        // Act: use explicit cap of 4000 to validate truncation at a specific boundary
+        let mut ctx = aptu_core::ai::review_context::ReviewContext {
             pr,
             ast_context: String::new(),
             call_graph: String::new(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: CAP,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
-        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
+        let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
 
-        // Assert: block present but content capped at MAX_FULL_CONTENT_CHARS
+        // Assert: block present but content capped at CAP
         assert!(
             prompt.contains("<file_content path=\"huge.rs\">"),
             "Prompt should contain file_content block"
@@ -324,8 +334,8 @@ mod fetch_file_contents_tests {
         let included_content = &prompt[content_start..content_start + content_end];
         assert_eq!(
             included_content.len(),
-            MAX_FULL_CONTENT_CHARS,
-            "file_content in prompt must be capped at MAX_FULL_CONTENT_CHARS"
+            CAP,
+            "file_content in prompt must be capped at max_chars_per_file"
         );
     }
 
@@ -357,14 +367,17 @@ mod fetch_file_contents_tests {
         };
         // Just verify that the prompt builder itself includes call_graph when provided
         let large_call_graph = "<call_graph>".to_string() + &"x".repeat(1000) + "</call_graph>";
-        let ctx = aptu_core::ai::review_context::ReviewContext {
+        let mut ctx = aptu_core::ai::review_context::ReviewContext {
             pr,
             ast_context: String::new(),
             call_graph: large_call_graph.clone(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
-        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
+        let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
         // The prompt builder includes call_graph as-is; budget enforcement is done in review_pr
         assert!(
             prompt.contains(&large_call_graph),
@@ -405,6 +418,9 @@ mod fetch_file_contents_tests {
             call_graph: String::new(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
 
         // Act: inspect the ReviewContext fields
@@ -444,16 +460,19 @@ mod fetch_file_contents_tests {
             instructions: None,
             dep_enrichments: vec![],
         };
-        let ctx = aptu_core::ai::review_context::ReviewContext {
+        let mut ctx = aptu_core::ai::review_context::ReviewContext {
             pr,
             ast_context: String::new(),
             call_graph: String::new(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
 
         // Act: call build_pr_review_user_prompt with minimal ReviewContext
-        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
+        let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
 
         // Assert: prompt contains PR title but NOT enrichment sections
         assert!(prompt.contains("Test PR"), "prompt should contain PR title");
@@ -506,16 +525,19 @@ mod fetch_file_contents_tests {
                 fetch_note: String::new(),
             }],
         };
-        let ctx = aptu_core::ai::review_context::ReviewContext {
+        let mut ctx = aptu_core::ai::review_context::ReviewContext {
             pr,
             ast_context: "fn foo() {}".to_string(),
             call_graph: "foo -> bar".to_string(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
 
         // Act: call build_pr_review_user_prompt
-        let prompt = StubProvider::build_pr_review_user_prompt(&ctx);
+        let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
 
         // Assert: sections appear in correct order
         let pull_request_end = prompt
@@ -589,6 +611,9 @@ mod fetch_file_contents_tests {
             call_graph: String::new(),
             inferred_repo_path: Some(std::path::PathBuf::from("/tmp/repo")),
             cwd_inferred: true,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
 
         // Act: call verbose_summary()

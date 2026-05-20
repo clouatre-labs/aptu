@@ -93,11 +93,6 @@ pub const MAX_LABELS: usize = 30;
 /// Maximum number of milestones to include in the prompt.
 pub const MAX_MILESTONES: usize = 10;
 
-/// Maximum characters per file's full content included in the PR review prompt.
-/// Content pre-truncated by `fetch_file_contents` may already be within this limit,
-/// but the prompt builder applies it as a second safety cap.
-pub const MAX_FULL_CONTENT_CHARS: usize = 4_000;
-
 /// Estimated overhead for XML tags, section headers, and schema preamble added by
 /// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
 /// non-content characters when estimating total prompt size.
@@ -821,6 +816,12 @@ pub trait AiProvider: Send + Sync {
     ///
     /// * `pr` - Pull request details including files and diffs
     ///
+    /// # Concurrency
+    ///
+    /// `ctx` is owned by each call; truncation counter mutations inside
+    /// `build_pr_review_user_prompt` are local to that invocation and are never
+    /// shared across concurrent calls.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -829,7 +830,7 @@ pub trait AiProvider: Send + Sync {
     #[instrument(skip(self, ctx), fields(pr_number = ctx.pr.number, repo = %format!("{}/{}", ctx.pr.owner, ctx.pr.repo)))]
     async fn review_pr(
         &self,
-        ctx: crate::ai::review_context::ReviewContext,
+        mut ctx: crate::ai::review_context::ReviewContext,
         review_config: &crate::config::ReviewConfig,
     ) -> Result<(super::types::PrReviewResponse, AiStats)> {
         debug!(model = %self.model(), "Calling {} API for PR review", self.name());
@@ -856,7 +857,7 @@ pub trait AiProvider: Send + Sync {
         }
 
         // Assemble full prompt to measure actual size
-        let assembled_prompt = Self::build_pr_review_user_prompt(&ctx);
+        let assembled_prompt = Self::build_pr_review_user_prompt(&mut ctx);
         let actual_prompt_chars = assembled_prompt.len();
 
         tracing::info!(
@@ -1013,7 +1014,7 @@ pub trait AiProvider: Send + Sync {
     /// injection via XML tag smuggling.
     #[must_use]
     #[allow(clippy::too_many_lines)]
-    fn build_pr_review_user_prompt(ctx: &crate::ai::review_context::ReviewContext) -> String {
+    fn build_pr_review_user_prompt(ctx: &mut crate::ai::review_context::ReviewContext) -> String {
         use std::fmt::Write;
 
         let mut prompt = String::new();
@@ -1046,26 +1047,39 @@ pub trait AiProvider: Send + Sync {
         let mut files_included = 0;
         let mut files_skipped = 0;
 
-        for file in &ctx.pr.files {
+        for i in 0..ctx.pr.files.len() {
             // Check file count limit
             if files_included >= MAX_FILES {
                 files_skipped += 1;
                 continue;
             }
 
+            let (filename, status, additions, deletions, patch, patch_truncated, full_content) = {
+                let file = &ctx.pr.files[i];
+                (
+                    file.filename.clone(),
+                    file.status.clone(),
+                    file.additions,
+                    file.deletions,
+                    file.patch.clone(),
+                    file.patch_truncated,
+                    file.full_content.clone(),
+                )
+            };
+
             let _ = writeln!(
                 prompt,
                 "- {} ({}) +{} -{}\n",
-                sanitize_prompt_field(&file.filename),
-                sanitize_prompt_field(&file.status),
-                file.additions,
-                file.deletions
+                sanitize_prompt_field(&filename),
+                sanitize_prompt_field(&status),
+                additions,
+                deletions
             );
 
             // Include patch if available (sanitize then truncate large patches)
-            if let Some(patch) = &file.patch {
+            if let Some(patch) = patch {
                 const MAX_PATCH_LENGTH: usize = 2000;
-                let sanitized_patch = sanitize_prompt_field(patch);
+                let sanitized_patch = sanitize_prompt_field(&patch);
                 let patch_content = if sanitized_patch.len() > MAX_PATCH_LENGTH {
                     format!(
                         "{}...\n[APTU: patch truncated by size budget -- do not speculate on missing content]",
@@ -1087,7 +1101,7 @@ pub trait AiProvider: Send + Sync {
                 }
 
                 // Add annotation if patch was truncated by GitHub API
-                if file.patch_truncated {
+                if patch_truncated {
                     let _ = writeln!(
                         prompt,
                         "[APTU: patch truncated by GitHub API -- do not speculate on missing content]\n```diff\n{patch_content}\n```\n"
@@ -1098,19 +1112,24 @@ pub trait AiProvider: Send + Sync {
                 total_diff_size += patch_size;
             }
 
-            // Include full file content if available (cap at MAX_FULL_CONTENT_CHARS)
-            if let Some(content) = &file.full_content {
-                let sanitized = sanitize_prompt_field(content);
-                let is_truncated = sanitized.len() > MAX_FULL_CONTENT_CHARS;
+            // Include full file content if available (cap at ctx.max_chars_per_file)
+            if let Some(content) = full_content {
+                let sanitized = sanitize_prompt_field(&content);
+                let original_len = sanitized.len();
+                let max_chars = ctx.max_chars_per_file;
+                let is_truncated = original_len > max_chars;
                 let displayed = if is_truncated {
-                    sanitized[..MAX_FULL_CONTENT_CHARS].to_string()
+                    let truncated = sanitized[..max_chars].to_string();
+                    let truncated_len = truncated.len();
+                    ctx.record_truncation(&filename, original_len, truncated_len);
+                    truncated
                 } else {
                     sanitized
                 };
                 let _ = writeln!(
                     prompt,
                     "<file_content path=\"{}\">\n{}\n</file_content>",
-                    sanitize_prompt_field(&file.filename),
+                    sanitize_prompt_field(&filename),
                     displayed
                 );
                 if is_truncated {
@@ -1415,14 +1434,18 @@ mod tests {
             dep_enrichments: vec![],
         };
 
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
         assert!(prompt.contains("files omitted due to size limits"));
         assert!(prompt.contains("MAX_FILES=20"));
     }
@@ -1474,14 +1497,18 @@ mod tests {
             dep_enrichments: vec![],
         };
 
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
         // Both files should be listed
         assert!(prompt.contains("file1.rs"));
         assert!(prompt.contains("file2.rs"));
@@ -1521,14 +1548,18 @@ mod tests {
             dep_enrichments: vec![],
         };
 
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
         assert!(prompt.contains("file1.rs"));
         assert!(prompt.contains("added"));
         assert!(!prompt.contains("files omitted"));
@@ -1586,14 +1617,18 @@ mod tests {
             dep_enrichments: vec![],
         };
 
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
         // The sanitizer removes only <pull_request> / </pull_request> delimiters.
         // The structural tags written by the builder itself remain; what must be absent
         // are the delimiter sequences that were injected inside user-controlled fields.
@@ -1838,14 +1873,17 @@ mod tests {
         // and non-empty ast_context (retained because it fits after call_graph drop)
         let ast_context = "Y".repeat(500);
         let call_graph = "";
-        let ctx = crate::ai::review_context::ReviewContext {
+        let mut ctx = crate::ai::review_context::ReviewContext {
             pr,
             ast_context: ast_context.clone(),
             call_graph: call_graph.to_string(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
-        let prompt = TestProvider::build_pr_review_user_prompt(&ctx);
+        let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
 
         // Assert: call_graph absent, ast_context present
         assert!(
@@ -1891,14 +1929,17 @@ mod tests {
         // Act: call build_pr_review_user_prompt with both empty (dropped by review_pr)
         let ast_context = "";
         let call_graph = "";
-        let ctx = crate::ai::review_context::ReviewContext {
+        let mut ctx = crate::ai::review_context::ReviewContext {
             pr,
             ast_context: ast_context.to_string(),
             call_graph: call_graph.to_string(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
-        let prompt = TestProvider::build_pr_review_user_prompt(&ctx);
+        let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
 
         // Assert: both absent, PR title retained
         assert!(
@@ -1974,14 +2015,17 @@ mod tests {
 
         let ast_context = "";
         let call_graph = "";
-        let ctx = crate::ai::review_context::ReviewContext {
+        let mut ctx = crate::ai::review_context::ReviewContext {
             pr: pr_mut,
             ast_context: ast_context.to_string(),
             call_graph: call_graph.to_string(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
-        let prompt = TestProvider::build_pr_review_user_prompt(&ctx);
+        let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
 
         // Assert: largest patches absent, smallest present
         assert!(
@@ -2047,14 +2091,17 @@ mod tests {
 
         let ast_context = "";
         let call_graph = "";
-        let ctx = crate::ai::review_context::ReviewContext {
+        let mut ctx = crate::ai::review_context::ReviewContext {
             pr: pr_mut,
             ast_context: ast_context.to_string(),
             call_graph: call_graph.to_string(),
             inferred_repo_path: None,
             cwd_inferred: false,
+            max_chars_per_file: 16_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
         };
-        let prompt = TestProvider::build_pr_review_user_prompt(&ctx);
+        let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
 
         // Assert: no file_content XML blocks appear
         assert!(
@@ -2127,15 +2174,19 @@ mod tests {
             dep_enrichments: vec![],
         };
 
-        // Act: build prompt
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        // Act: build prompt with cap below content size to trigger truncation
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 4_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
 
         // Assert: truncation annotation is present outside file_content tags
         assert!(
@@ -2220,14 +2271,18 @@ mod tests {
         };
 
         // Act: build review prompt
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
 
         // Assert: all truncation annotations use consistent [APTU: ...] format
         assert!(
@@ -2279,14 +2334,18 @@ mod tests {
         };
 
         // Act: build review prompt
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
 
         // Assert: no dependency_release_notes block when no manifest files changed
         assert!(
@@ -2334,14 +2393,18 @@ mod tests {
         };
 
         // Act: build review prompt
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
 
         // Assert: dependency_release_notes block injected after </pull_request>
         let pull_request_end = prompt
@@ -2401,14 +2464,18 @@ mod tests {
         };
 
         // Act: build review prompt
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
 
         // Assert: XML delimiters in release notes are sanitized
         assert!(
@@ -2463,14 +2530,18 @@ mod tests {
         };
 
         // Act: build review prompt
-        let prompt =
-            TestProvider::build_pr_review_user_prompt(&crate::ai::review_context::ReviewContext {
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
                 pr,
                 ast_context: String::new(),
                 call_graph: String::new(),
                 inferred_repo_path: None,
                 cwd_inferred: false,
-            });
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+            },
+        );
 
         // Assert: dep_enrichments are present in prompt when not over budget
         assert!(

@@ -749,8 +749,8 @@ model = "gemini-3.1-flash-lite-preview"
             "max_full_content_files should default to 10"
         );
         assert_eq!(
-            review_config.max_chars_per_file, 4_000,
-            "max_chars_per_file should default to 4_000"
+            review_config.max_chars_per_file, 16_000,
+            "max_chars_per_file should default to 16_000"
         );
 
         // Assert: AppConfig::default().review equals ReviewConfig::default()
