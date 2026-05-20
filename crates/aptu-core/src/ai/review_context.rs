@@ -568,4 +568,117 @@ mod tests {
             "file patch should be retained when dep drop brought size within budget"
         );
     }
+
+    #[test]
+    fn test_verbose_summary_all_fields() {
+        // Arrange: ReviewContext with repo path (inferred), dep enrichments, ast, call graph
+        let mut pr = make_pr_with_content(10, 0);
+        pr.dep_enrichments = vec![
+            DepReleaseNote {
+                package_name: "tokio".to_string(),
+                old_version: "1.37.0".to_string(),
+                new_version: "1.38.0".to_string(),
+                registry: "crates.io".to_string(),
+                github_url: "https://github.com/tokio-rs/tokio".to_string(),
+                body: "release notes".to_string(),
+                fetch_note: String::new(),
+            },
+            DepReleaseNote {
+                package_name: "serde".to_string(),
+                old_version: "1.0.199".to_string(),
+                new_version: "1.0.200".to_string(),
+                registry: "crates.io".to_string(),
+                github_url: "https://github.com/serde-rs/serde".to_string(),
+                body: "release notes".to_string(),
+                fetch_note: String::new(),
+            },
+        ];
+        let ctx = ReviewContext {
+            pr,
+            ast_context: "fn foo() {}".to_string(),
+            call_graph: "foo -> bar".to_string(),
+            inferred_repo_path: Some(std::path::PathBuf::from("/tmp/repo")),
+            cwd_inferred: true,
+        };
+
+        // Act
+        let summary = ctx.verbose_summary();
+
+        // Assert: repo path with inferred label
+        assert!(
+            summary.contains("/tmp/repo"),
+            "summary should contain the repo path"
+        );
+        assert!(
+            summary.contains("(inferred)"),
+            "summary should mark CWD-inferred path"
+        );
+        // Assert: dep package names
+        assert!(
+            summary.contains("tokio"),
+            "summary should list dep package names"
+        );
+        assert!(
+            summary.contains("serde"),
+            "summary should list dep package names"
+        );
+        // Assert: context sizes
+        assert!(
+            summary.contains("AST:"),
+            "summary should include AST char count"
+        );
+        assert!(
+            summary.contains("call graph:"),
+            "summary should include call graph char count"
+        );
+    }
+
+    #[test]
+    fn test_verbose_summary_empty_context() {
+        // Arrange: ReviewContext with no enrichments and no repo path
+        let mut pr = make_pr_with_content(0, 0);
+        pr.dep_enrichments.clear();
+        let ctx = ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+        };
+
+        // Act
+        let summary = ctx.verbose_summary();
+
+        // Assert: nothing to report means empty string
+        assert!(
+            summary.is_empty(),
+            "summary should be empty when no enrichments are present"
+        );
+    }
+
+    #[test]
+    fn test_verbose_summary_explicit_repo_path_no_inferred_label() {
+        // Arrange: repo path supplied explicitly (cwd_inferred: false)
+        let pr = make_pr_with_content(0, 0);
+        let ctx = ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: Some(std::path::PathBuf::from("/explicit/path")),
+            cwd_inferred: false,
+        };
+
+        // Act
+        let summary = ctx.verbose_summary();
+
+        // Assert: path shown but no "(inferred)" label
+        assert!(
+            summary.contains("/explicit/path"),
+            "summary should contain the explicit repo path"
+        );
+        assert!(
+            !summary.contains("(inferred)"),
+            "summary should not mark an explicitly supplied path as inferred"
+        );
+    }
 }
