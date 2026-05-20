@@ -247,55 +247,72 @@ fn apply_budget_drops(
         }
     }
 
-    // Drop largest file patches first if still over budget
-    if estimated_size > max_prompt_chars {
-        let mut file_sizes: Vec<(usize, usize)> = pr
-            .files
-            .iter()
-            .enumerate()
-            .map(|(idx, f)| (idx, f.patch.as_ref().map_or(0, String::len)))
-            .collect();
-        file_sizes.sort_by_key(|x| std::cmp::Reverse(x.1));
+    drop_patches_by_size(&mut pr.files, &mut estimated_size, max_prompt_chars);
+    drop_full_content_by_size(&mut pr.files, &mut estimated_size, max_prompt_chars);
+}
 
-        for (file_idx, patch_size) in file_sizes {
-            if estimated_size <= max_prompt_chars {
-                break;
-            }
-            if patch_size > 0 {
-                tracing::warn!(
-                    file = %pr.files[file_idx].filename,
-                    patch_chars = patch_size,
-                    "Dropping patch: prompt budget exceeded"
-                );
-                pr.files[file_idx].patch = None;
-                estimated_size -= patch_size;
-            }
-        }
+/// Drops file patches in descending size order until under budget.
+fn drop_patches_by_size(
+    files: &mut [crate::ai::types::PrFile],
+    estimated_size: &mut usize,
+    max_prompt_chars: usize,
+) {
+    if *estimated_size <= max_prompt_chars {
+        return;
     }
 
-    // Drop full_content if still over budget
-    if estimated_size > max_prompt_chars {
-        let mut full_content_sizes: Vec<(usize, usize)> = pr
-            .files
-            .iter()
-            .enumerate()
-            .map(|(idx, f)| (idx, f.full_content.as_ref().map_or(0, String::len)))
-            .collect();
-        full_content_sizes.sort_by_key(|x| std::cmp::Reverse(x.1));
+    let mut file_sizes: Vec<(usize, usize)> = files
+        .iter()
+        .enumerate()
+        .map(|(idx, f)| (idx, f.patch.as_ref().map_or(0, String::len)))
+        .collect();
+    file_sizes.sort_by_key(|x| std::cmp::Reverse(x.1));
 
-        for (file_idx, content_size) in full_content_sizes {
-            if estimated_size <= max_prompt_chars {
-                break;
-            }
-            if content_size > 0 {
-                tracing::warn!(
-                    file = %pr.files[file_idx].filename,
-                    content_chars = content_size,
-                    "Dropping full_content: prompt budget exceeded"
-                );
-                pr.files[file_idx].full_content = None;
-                estimated_size -= content_size;
-            }
+    for (file_idx, patch_size) in file_sizes {
+        if *estimated_size <= max_prompt_chars {
+            break;
+        }
+        if patch_size > 0 {
+            tracing::warn!(
+                file = %files[file_idx].filename,
+                patch_chars = patch_size,
+                "Dropping patch: prompt budget exceeded"
+            );
+            files[file_idx].patch = None;
+            *estimated_size -= patch_size;
+        }
+    }
+}
+
+/// Drops file `full_content` in descending size order until under budget.
+fn drop_full_content_by_size(
+    files: &mut [crate::ai::types::PrFile],
+    estimated_size: &mut usize,
+    max_prompt_chars: usize,
+) {
+    if *estimated_size <= max_prompt_chars {
+        return;
+    }
+
+    let mut full_content_sizes: Vec<(usize, usize)> = files
+        .iter()
+        .enumerate()
+        .map(|(idx, f)| (idx, f.full_content.as_ref().map_or(0, String::len)))
+        .collect();
+    full_content_sizes.sort_by_key(|x| std::cmp::Reverse(x.1));
+
+    for (file_idx, content_size) in full_content_sizes {
+        if *estimated_size <= max_prompt_chars {
+            break;
+        }
+        if content_size > 0 {
+            tracing::warn!(
+                file = %files[file_idx].filename,
+                content_chars = content_size,
+                "Dropping full_content: prompt budget exceeded"
+            );
+            files[file_idx].full_content = None;
+            *estimated_size -= content_size;
         }
     }
 }
