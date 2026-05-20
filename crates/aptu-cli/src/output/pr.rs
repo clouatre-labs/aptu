@@ -642,6 +642,7 @@ mod tests {
                 prompt_chars: 0,
                 cache_read_tokens: 0,
                 cache_write_tokens: 0,
+                trace_id: None,
             },
             security_findings,
             dry_run: false,

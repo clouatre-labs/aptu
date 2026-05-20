@@ -66,16 +66,20 @@ pub async fn analyze(
     ai_config: &aptu_core::AiConfig,
     repo_path: Option<String>,
     deep: bool,
-) -> Result<(PrReviewResponse, aptu_core::history::AiStats)> {
+) -> Result<(
+    PrReviewResponse,
+    aptu_core::history::AiStats,
+    aptu_core::metrics::ReviewContextRecord,
+)> {
     // Create CLI token provider
     let provider = CliTokenProvider;
 
     // Call facade for analysis
-    let (review, ai_stats) =
+    let (review, ai_stats, context_record) =
         aptu_core::analyze_pr(&provider, pr_details, ai_config, repo_path, deep).await?;
 
     debug!("PR analyzed successfully");
-    Ok((review, ai_stats))
+    Ok((review, ai_stats, context_record))
 }
 
 /// Format the header line for a single inline review comment.

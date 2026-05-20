@@ -755,7 +755,11 @@ pub async fn analyze_pr(
     ai_config: &AiConfig,
     repo_path: Option<String>,
     deep: bool,
-) -> crate::Result<(crate::ai::types::PrReviewResponse, crate::history::AiStats)> {
+) -> crate::Result<(
+    crate::ai::types::PrReviewResponse,
+    crate::history::AiStats,
+    crate::metrics::ReviewContextRecord,
+)> {
     // Load config once at function entry to ensure consistent review settings
     let app_config = load_config().unwrap_or_default();
     let review_config = app_config.review;
@@ -811,13 +815,46 @@ pub async fn analyze_pr(
         return Err(AptuError::SecurityScan { message });
     }
 
+    // Generate trace ID for this review operation
+    let trace_id = uuid::Uuid::new_v4().simple().to_string();
+
     // Use fallback chain if configured
-    try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
-        let review_ctx = ctx.clone();
-        let review_cfg = review_config.clone();
-        async move { client.review_pr(review_ctx, &review_cfg).await }
-    })
-    .await
+    let (response, mut ai_stats, finish_reasons) =
+        try_with_fallback(provider, &provider_name, &model_name, ai_config, |client| {
+            let review_ctx = ctx.clone();
+            let review_cfg = review_config.clone();
+            async move { client.review_pr(review_ctx, &review_cfg).await }
+        })
+        .await?;
+
+    // Set trace_id on ai_stats
+    ai_stats.trace_id = Some(trace_id.clone());
+
+    // Build ReviewContextRecord from context and response metadata
+    let context_record = crate::metrics::ReviewContextRecord {
+        trace_id,
+        operation: "pr_review".to_string(),
+        pr: format!(
+            "{}/{}#{}",
+            pr_details.owner, pr_details.repo, pr_details.number
+        ),
+        model: ai_stats.model.clone(),
+        github_actor: std::env::var("GITHUB_ACTOR").ok(),
+        files_total: ctx.files_total,
+        files_with_patch: ctx.files_with_patch,
+        files_truncated: ctx.files_truncated,
+        truncated_chars_dropped: ctx.truncated_chars_dropped,
+        ast_context_chars: ctx.ast_context.len(),
+        call_graph_chars: ctx.call_graph.len(),
+        dep_enrichments_count: ctx.dep_enrichments_count,
+        dep_enrichments_chars: ctx.dep_enrichments_chars,
+        budget_drops: ctx.budget_drops,
+        cwd_inferred: ctx.cwd_inferred,
+        prompt_chars_final: ai_stats.prompt_chars,
+        finish_reasons,
+    };
+
+    Ok((response, ai_stats, context_record))
 }
 
 /// Posts a PR review to GitHub.
@@ -988,6 +1025,7 @@ pub async fn label_pr(
         prompt_chars: 0,
         cache_read_tokens: 0,
         cache_write_tokens: 0,
+        trace_id: None,
     });
 
     // Apply labels if not dry-run

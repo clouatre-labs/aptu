@@ -129,6 +129,11 @@ pub struct UsageInfo {
 pub struct Choice {
     /// The generated message.
     pub message: ChatMessage,
+    /// Reason the model stopped generating (e.g., `stop`, `length`).
+    /// Supports both `finish_reason` and `stop_reason` field names across providers.
+    #[serde(default)]
+    #[serde(alias = "stop_reason")]
+    pub finish_reason: Option<String>,
 }
 
 /// Guidance for contributors on whether an issue is beginner-friendly.
@@ -588,5 +593,43 @@ mod tests {
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(!json.contains("cache_control"));
+    }
+
+    #[test]
+    fn test_choice_deserializes_with_finish_reason() {
+        let json = r#"{
+            "message": {
+                "role": "assistant",
+                "content": "test response"
+            },
+            "finish_reason": "stop"
+        }"#;
+        let choice: Choice = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(choice.finish_reason, Some("stop".to_string()));
+    }
+
+    #[test]
+    fn test_choice_deserializes_without_finish_reason() {
+        let json = r#"{
+            "message": {
+                "role": "assistant",
+                "content": "test response"
+            }
+        }"#;
+        let choice: Choice = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(choice.finish_reason, None);
+    }
+
+    #[test]
+    fn test_choice_deserializes_with_stop_reason_alias() {
+        let json = r#"{
+            "message": {
+                "role": "assistant",
+                "content": "test response"
+            },
+            "stop_reason": "length"
+        }"#;
+        let choice: Choice = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(choice.finish_reason, Some("length".to_string()));
     }
 }

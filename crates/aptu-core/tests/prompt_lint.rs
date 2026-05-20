@@ -205,6 +205,12 @@ fn all_user_prompts_contain_schema() {
         max_chars_per_file: 16_000,
         files_truncated: 0,
         truncated_chars_dropped: 0,
+        files_total: 0,
+        files_with_patch: 0,
+        dep_enrichments_count: 0,
+        dep_enrichments_chars: 0,
+        budget_drops: Vec::new(),
+        prompt_chars_final: 0,
     };
     let pr_review_user = StubProvider::build_pr_review_user_prompt(&mut ctx);
     assert!(
@@ -263,6 +269,12 @@ mod fetch_file_contents_tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            files_total: 0,
+            files_with_patch: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
         let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
         assert!(
@@ -316,6 +328,12 @@ mod fetch_file_contents_tests {
             max_chars_per_file: CAP,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            files_total: 0,
+            files_with_patch: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
         let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
 
@@ -376,6 +394,12 @@ mod fetch_file_contents_tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            files_total: 0,
+            files_with_patch: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
         let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
         // The prompt builder includes call_graph as-is; budget enforcement is done in review_pr
@@ -421,6 +445,12 @@ mod fetch_file_contents_tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            files_total: 0,
+            files_with_patch: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
 
         // Act: inspect the ReviewContext fields
@@ -469,6 +499,12 @@ mod fetch_file_contents_tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            files_total: 0,
+            files_with_patch: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
 
         // Act: call build_pr_review_user_prompt with minimal ReviewContext
@@ -534,6 +570,12 @@ mod fetch_file_contents_tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            files_total: 0,
+            files_with_patch: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
 
         // Act: call build_pr_review_user_prompt
@@ -614,6 +656,12 @@ mod fetch_file_contents_tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            files_total: 0,
+            files_with_patch: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
 
         // Act: call verbose_summary()

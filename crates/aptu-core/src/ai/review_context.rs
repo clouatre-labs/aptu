@@ -32,6 +32,18 @@ pub struct ReviewContext {
     pub files_truncated: usize,
     /// Total characters dropped across all truncated files.
     pub truncated_chars_dropped: usize,
+    /// Total number of files in the PR.
+    pub files_total: usize,
+    /// Number of files with a patch (non-empty diff).
+    pub files_with_patch: usize,
+    /// Number of dependency enrichments applied.
+    pub dep_enrichments_count: usize,
+    /// Total characters in dependency enrichments.
+    pub dep_enrichments_chars: usize,
+    /// Names of context items dropped due to budget constraints.
+    pub budget_drops: Vec<String>,
+    /// Final assembled prompt character count.
+    pub prompt_chars_final: usize,
 }
 
 impl ReviewContext {
@@ -131,6 +143,12 @@ impl Default for ReviewContext {
             max_chars_per_file: crate::config::ReviewConfig::default().max_chars_per_file,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            files_total: 0,
+            files_with_patch: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         }
     }
 }
@@ -187,6 +205,7 @@ pub async fn build_review_context(
 
     // Step 6: Apply budget drop order
     let mut ast_context = ast_context;
+    let budget_drops = Vec::new();
     apply_budget_drops(
         &mut pr,
         &mut ast_context,
@@ -194,6 +213,20 @@ pub async fn build_review_context(
         deep,
         max_prompt_chars,
     );
+
+    // Collect tracking metrics
+    let files_total = pr.files.len();
+    let files_with_patch = pr
+        .files
+        .iter()
+        .filter(|f| f.patch.is_some() && !f.patch.as_ref().unwrap().is_empty())
+        .count();
+    let dep_enrichments_count = pr.dep_enrichments.len();
+    let dep_enrichments_chars = pr
+        .dep_enrichments
+        .iter()
+        .map(|d| serde_json::to_string(d).unwrap_or_default().len())
+        .sum();
 
     Ok(ReviewContext {
         pr,
@@ -204,6 +237,12 @@ pub async fn build_review_context(
         max_chars_per_file: review_config.max_chars_per_file,
         files_truncated: 0,
         truncated_chars_dropped: 0,
+        files_total,
+        files_with_patch,
+        dep_enrichments_count,
+        dep_enrichments_chars,
+        budget_drops,
+        prompt_chars_final: 0,
     })
 }
 
@@ -681,6 +720,7 @@ mod tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            ..Default::default()
         };
 
         // Act
@@ -729,6 +769,7 @@ mod tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            ..Default::default()
         };
 
         // Act
@@ -755,8 +796,14 @@ mod tests {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: 4_000,
+            files_total: 0,
+            files_with_patch: 0,
             files_truncated: 3,
             truncated_chars_dropped: 900,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
         let summary = ctx_with.verbose_summary();
         assert!(
@@ -772,8 +819,14 @@ mod tests {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: 4_000,
+            files_total: 0,
+            files_with_patch: 0,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
         let summary_clean = ctx_without.verbose_summary();
         assert!(
@@ -849,8 +902,14 @@ mod tests {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: cap,
+            files_total: 0,
+            files_with_patch: 0,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
 
         // Act
@@ -934,8 +993,14 @@ mod tests {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: cap,
+            files_total: 0,
+            files_with_patch: 0,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
         };
 
         // Act

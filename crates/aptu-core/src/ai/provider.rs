@@ -321,7 +321,7 @@ pub trait AiProvider: Send + Sync {
     async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
         &self,
         request: &ChatCompletionRequest,
-    ) -> Result<(T, AiStats)> {
+    ) -> Result<(T, AiStats, Vec<String>)> {
         use tracing::{info, warn};
 
         use crate::error::AptuError;
@@ -449,7 +449,15 @@ pub trait AiProvider: Send + Sync {
             prompt_chars: 0,
             cache_read_tokens,
             cache_write_tokens,
+            trace_id: None,
         };
+
+        // Extract finish_reasons from choices
+        let finish_reasons: Vec<String> = completion
+            .choices
+            .iter()
+            .filter_map(|c| c.finish_reason.clone())
+            .collect();
 
         // Emit structured metrics
         info!(
@@ -470,7 +478,7 @@ pub trait AiProvider: Send + Sync {
             "Cache token usage"
         );
 
-        Ok((parsed, ai_stats))
+        Ok((parsed, ai_stats, finish_reasons))
     }
 
     /// Analyzes a GitHub issue using the provider's API.
@@ -533,7 +541,8 @@ pub trait AiProvider: Send + Sync {
         };
 
         // Send request and parse JSON with retry logic
-        let (triage, ai_stats) = self.send_and_parse::<TriageResponse>(&request).await?;
+        let (triage, ai_stats, _finish_reasons) =
+            self.send_and_parse::<TriageResponse>(&request).await?;
 
         debug!(
             input_tokens = ai_stats.input_tokens,
@@ -617,7 +626,7 @@ pub trait AiProvider: Send + Sync {
         };
 
         // Send request and parse JSON with retry logic
-        let (create_response, ai_stats) = self
+        let (create_response, ai_stats, _finish_reasons) = self
             .send_and_parse::<super::types::CreateIssueResponse>(&request)
             .await?;
 
@@ -832,7 +841,7 @@ pub trait AiProvider: Send + Sync {
         &self,
         mut ctx: crate::ai::review_context::ReviewContext,
         review_config: &crate::config::ReviewConfig,
-    ) -> Result<(super::types::PrReviewResponse, AiStats)> {
+    ) -> Result<(super::types::PrReviewResponse, AiStats, Vec<String>)> {
         debug!(model = %self.model(), "Calling {} API for PR review", self.name());
 
         // Build request
@@ -900,7 +909,7 @@ pub trait AiProvider: Send + Sync {
         };
 
         // Send request and parse JSON with retry logic
-        let (review, mut ai_stats) = self
+        let (review, mut ai_stats, finish_reasons) = self
             .send_and_parse::<super::types::PrReviewResponse>(&request)
             .await?;
 
@@ -915,7 +924,7 @@ pub trait AiProvider: Send + Sync {
             "PR review complete with stats"
         );
 
-        Ok((review, ai_stats))
+        Ok((review, ai_stats, finish_reasons))
     }
 
     /// Suggests labels for a pull request using the provider's API.
@@ -985,7 +994,7 @@ pub trait AiProvider: Send + Sync {
         };
 
         // Send request and parse JSON with retry logic
-        let (response, ai_stats) = self
+        let (response, ai_stats, _finish_reasons) = self
             .send_and_parse::<super::types::PrLabelResponse>(&request)
             .await?;
 
@@ -1444,6 +1453,7 @@ mod tests {
                 max_chars_per_file: 16_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
         assert!(prompt.contains("files omitted due to size limits"));
@@ -1507,6 +1517,7 @@ mod tests {
                 max_chars_per_file: 16_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
         // Both files should be listed
@@ -1558,6 +1569,7 @@ mod tests {
                 max_chars_per_file: 16_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
         assert!(prompt.contains("file1.rs"));
@@ -1627,6 +1639,7 @@ mod tests {
                 max_chars_per_file: 16_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
         // The sanitizer removes only <pull_request> / </pull_request> delimiters.
@@ -1882,6 +1895,7 @@ mod tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            ..Default::default()
         };
         let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
 
@@ -1938,6 +1952,7 @@ mod tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            ..Default::default()
         };
         let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
 
@@ -2024,6 +2039,7 @@ mod tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            ..Default::default()
         };
         let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
 
@@ -2100,6 +2116,7 @@ mod tests {
             max_chars_per_file: 16_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            ..Default::default()
         };
         let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
 
@@ -2185,6 +2202,7 @@ mod tests {
                 max_chars_per_file: 4_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
 
@@ -2281,6 +2299,7 @@ mod tests {
                 max_chars_per_file: 16_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
 
@@ -2344,6 +2363,7 @@ mod tests {
                 max_chars_per_file: 16_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
 
@@ -2403,6 +2423,7 @@ mod tests {
                 max_chars_per_file: 16_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
 
@@ -2474,6 +2495,7 @@ mod tests {
                 max_chars_per_file: 16_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
 
@@ -2540,6 +2562,7 @@ mod tests {
                 max_chars_per_file: 16_000,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
+                ..Default::default()
             },
         );
 

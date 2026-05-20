@@ -43,6 +43,10 @@ pub struct AiStats {
     /// Number of cache write tokens (from Anthropic API).
     #[serde(default)]
     pub cache_write_tokens: u64,
+    /// Trace ID for correlating with context records (optional, not serialized if None).
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
 }
 
 /// Status of a contribution.
@@ -289,6 +293,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         };
 
         let json = serde_json::to_string(&stats).expect("serialize");
@@ -311,6 +316,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         let json = serde_json::to_string(&contribution).expect("serialize");
@@ -355,6 +361,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         let mut c2 = test_contribution();
@@ -369,6 +376,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         data.contributions.push(c1);
@@ -394,6 +402,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         let mut c2 = test_contribution();
@@ -408,6 +417,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         data.contributions.push(c1);
@@ -432,6 +442,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         let mut c2 = test_contribution();
@@ -446,6 +457,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         data.contributions.push(c1);
@@ -476,6 +488,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         let mut c2 = test_contribution();
@@ -490,6 +503,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         let mut c3 = test_contribution();
@@ -504,6 +518,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            trace_id: None,
         });
 
         data.contributions.push(c1);
@@ -529,6 +544,7 @@ mod tests {
             prompt_chars: 5000,
             cache_read_tokens: 100,
             cache_write_tokens: 50,
+            trace_id: None,
         };
 
         let json = serde_json::to_string(&stats).expect("serialize");
