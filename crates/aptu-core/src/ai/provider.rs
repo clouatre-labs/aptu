@@ -1088,8 +1088,12 @@ pub trait AiProvider: Send + Sync {
                 deletions
             );
 
-            // Include patch if available (sanitize then truncate large patches)
-            if let Some(patch) = patch {
+            // Include patch if available (sanitize then truncate large patches).
+            // Skip the patch for added files that already have full_content: the patch
+            // is redundant and its 2000-char truncation produces hallucinations.
+            if let Some(patch) = patch
+                && !(status == "added" && full_content.is_some())
+            {
                 const MAX_PATCH_LENGTH: usize = 2000;
                 let sanitized_patch = sanitize_prompt_field(&patch);
                 let patch_content = if sanitized_patch.len() > MAX_PATCH_LENGTH {
@@ -1578,6 +1582,126 @@ mod tests {
         assert!(prompt.contains("file1.rs"));
         assert!(prompt.contains("added"));
         assert!(!prompt.contains("files omitted"));
+    }
+
+    #[test]
+    fn test_build_pr_review_user_prompt_added_file_skips_patch_when_full_content_present() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: added file with both patch and full_content present
+        let files = vec![PrFile {
+            filename: "docs/guide.md".to_string(),
+            status: "added".to_string(),
+            additions: 5,
+            deletions: 0,
+            patch: Some("+unique_patch_string_xyz".to_string()),
+            patch_truncated: false,
+            full_content: Some("full content of the new file abc123".to_string()),
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 42,
+            title: "Add docs".to_string(),
+            body: "Adds a guide".to_string(),
+            head_branch: "docs-branch".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/42".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        // Act
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
+                pr,
+                ast_context: String::new(),
+                call_graph: String::new(),
+                inferred_repo_path: None,
+                cwd_inferred: false,
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+                ..Default::default()
+            },
+        );
+
+        // Assert: patch block absent, full_content block present, no truncation annotation
+        assert!(
+            !prompt.contains("unique_patch_string_xyz"),
+            "patch content must be absent when status=added and full_content is present"
+        );
+        assert!(
+            prompt.contains("full content of the new file abc123"),
+            "full_content must be present in the prompt"
+        );
+        assert!(
+            prompt.contains("<file_content path=\"docs/guide.md\">"),
+            "file_content block must be present"
+        );
+        assert!(
+            !prompt.contains("[APTU: patch truncated by size budget"),
+            "no truncation annotation must appear for the skipped patch"
+        );
+    }
+
+    #[test]
+    fn test_build_pr_review_user_prompt_added_file_includes_patch_when_no_full_content() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: added file with patch but full_content fetch failed (None)
+        let files = vec![PrFile {
+            filename: "src/new_module.rs".to_string(),
+            status: "added".to_string(),
+            additions: 3,
+            deletions: 0,
+            patch: Some("+fallback_patch_content_qrs".to_string()),
+            patch_truncated: false,
+            full_content: None,
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 99,
+            title: "Add module".to_string(),
+            body: "Adds a new module".to_string(),
+            head_branch: "new-mod".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/99".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        // Act
+        let prompt = TestProvider::build_pr_review_user_prompt(
+            &mut crate::ai::review_context::ReviewContext {
+                pr,
+                ast_context: String::new(),
+                call_graph: String::new(),
+                inferred_repo_path: None,
+                cwd_inferred: false,
+                max_chars_per_file: 16_000,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+                ..Default::default()
+            },
+        );
+
+        // Assert: patch must be present as fallback when full_content is absent
+        assert!(
+            prompt.contains("fallback_patch_content_qrs"),
+            "patch must be included when status=added and full_content is None"
+        );
     }
 
     #[test]

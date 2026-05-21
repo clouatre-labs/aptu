@@ -6,7 +6,7 @@
 - suggestions: Non-blocking improvements
 - disclaimer: If PR involves platform versions (iOS, Android, Node, Rust, Python, Java, simulator, packages, frameworks), explain validation skipped. Otherwise null.
 
-Focus: Correctness, Security, Performance, Maintainability, Testing. Skip platform version flagging.
+Focus: Correctness, Security, Performance, Maintainability, Testing. For prose-only PRs (all changed files are .md, .txt, .rst, or similar), assess only what is observable in the provided content: factual accuracy, front-matter fields present in the diff, and links. Do not infer rendering behavior, schema requirements, or formatting conventions from general knowledge. Skip platform version flagging.
 
 ## Dependency Release Notes
 
