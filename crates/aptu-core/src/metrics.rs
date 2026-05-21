@@ -155,8 +155,10 @@ mod tests {
             prompt_chars: 500,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
-        };
+        }
+        .with_computed_etu();
 
         append_jsonl_impl(&file_path_str, &stats).unwrap();
 
@@ -187,8 +189,10 @@ mod tests {
             prompt_chars: 500,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
-        };
+        }
+        .with_computed_etu();
 
         // Should not panic or error
         append_jsonl(&stats);
@@ -213,8 +217,10 @@ mod tests {
             prompt_chars: 500,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
-        };
+        }
+        .with_computed_etu();
 
         // Should not panic; logs a warning internally
         append_jsonl(&stats);
@@ -242,8 +248,10 @@ mod tests {
             prompt_chars: 1000,
             cache_read_tokens: 50,
             cache_write_tokens: 25,
+            effective_token_units: 0.0,
             trace_id: None,
-        };
+        }
+        .with_computed_etu();
 
         append_jsonl_impl(&file_path_str, &stats).unwrap();
 

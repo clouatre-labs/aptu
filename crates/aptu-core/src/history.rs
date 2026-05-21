@@ -15,8 +15,32 @@ use uuid::Uuid;
 
 use crate::config::data_dir;
 
+// ETU weight constants. These are the structural Anthropic cache pricing ratios;
+// they belong here alongside AiStats rather than in the provider layer.
+const ETU_WEIGHT_INPUT: f64 = 1.0;
+/// Cache-read tokens cost 0.1× input price (90% discount). Stable since Claude 3.
+const ETU_WEIGHT_CACHE_READ: f64 = 0.1;
+/// Cache-write tokens cost 1.25× input price (5-min TTL). Confirmed May 2026.
+const ETU_WEIGHT_CACHE_WRITE: f64 = 1.25;
+/// Output tokens cost 5× input price across all current models. Stable since Claude 3.
+const ETU_WEIGHT_OUTPUT: f64 = 5.0;
+
+/// Compute Effective Token Units from raw token counts.
+///
+/// ETU = 1.0·input + 0.1·`cache_read` + 1.25·`cache_write` + 5.0·output
+///
+/// Weights are structural Anthropic cache pricing ratios (not per-model prices),
+/// stable across all model generations since Claude 3. No pricing table needed.
+#[allow(clippy::cast_precision_loss)]
+pub(crate) fn compute_etu(input: u64, cache_read: u64, cache_write: u64, output: u64) -> f64 {
+    ETU_WEIGHT_INPUT * input as f64
+        + ETU_WEIGHT_CACHE_READ * cache_read as f64
+        + ETU_WEIGHT_CACHE_WRITE * cache_write as f64
+        + ETU_WEIGHT_OUTPUT * output as f64
+}
+
 /// AI usage statistics for a contribution.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct AiStats {
     /// Provider name (e.g., "openrouter", "anthropic").
     pub provider: String,
@@ -43,10 +67,85 @@ pub struct AiStats {
     /// Number of cache write tokens (from Anthropic API).
     #[serde(default)]
     pub cache_write_tokens: u64,
+    /// Effective Token Units: a normalized throughput signal comparable across operations.
+    /// Computed via [`compute_etu`]; see that function for the formula and weight rationale.
+    #[serde(default)]
+    pub effective_token_units: f64,
     /// Trace ID for correlating with context records (optional, not serialized if None).
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
+}
+
+impl AiStats {
+    /// Recompute and set `effective_token_units` from the current token counts.
+    ///
+    /// Call at the end of any construction chain to ensure ETU stays consistent
+    /// with the token fields rather than being set manually at each site.
+    #[must_use]
+    pub fn with_computed_etu(mut self) -> Self {
+        self.effective_token_units = compute_etu(
+            self.input_tokens,
+            self.cache_read_tokens,
+            self.cache_write_tokens,
+            self.output_tokens,
+        );
+        self
+    }
+}
+
+impl<'de> Deserialize<'de> for AiStats {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Helper {
+            #[serde(default)]
+            provider: String,
+            #[serde(default)]
+            model: String,
+            #[serde(default)]
+            input_tokens: u64,
+            #[serde(default)]
+            output_tokens: u64,
+            #[serde(default)]
+            duration_ms: u64,
+            #[serde(default)]
+            cost_usd: Option<f64>,
+            #[serde(default)]
+            fallback_provider: Option<String>,
+            #[serde(default)]
+            prompt_chars: usize,
+            #[serde(default)]
+            cache_read_tokens: u64,
+            #[serde(default)]
+            cache_write_tokens: u64,
+            /// Ignored on deserialise; recomputed in the From impl.
+            #[serde(default)]
+            #[allow(dead_code)]
+            effective_token_units: f64,
+            #[serde(default)]
+            trace_id: Option<String>,
+        }
+
+        let h = Helper::deserialize(deserializer)?;
+        Ok(AiStats {
+            provider: h.provider,
+            model: h.model,
+            input_tokens: h.input_tokens,
+            output_tokens: h.output_tokens,
+            duration_ms: h.duration_ms,
+            cost_usd: h.cost_usd,
+            fallback_provider: h.fallback_provider,
+            prompt_chars: h.prompt_chars,
+            cache_read_tokens: h.cache_read_tokens,
+            cache_write_tokens: h.cache_write_tokens,
+            effective_token_units: 0.0,
+            trace_id: h.trace_id,
+        }
+        .with_computed_etu())
+    }
 }
 
 /// Status of a contribution.
@@ -293,13 +392,28 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         };
 
         let json = serde_json::to_string(&stats).expect("serialize");
         let parsed: AiStats = serde_json::from_str(&json).expect("deserialize");
 
-        assert_eq!(stats, parsed);
+        // After deserialization, ETU is always recomputed from token counts,
+        // so we compare all fields except effective_token_units.
+        assert_eq!(stats.provider, parsed.provider);
+        assert_eq!(stats.model, parsed.model);
+        assert_eq!(stats.input_tokens, parsed.input_tokens);
+        assert_eq!(stats.output_tokens, parsed.output_tokens);
+        assert_eq!(stats.duration_ms, parsed.duration_ms);
+        assert_eq!(stats.cost_usd, parsed.cost_usd);
+        assert_eq!(stats.fallback_provider, parsed.fallback_provider);
+        assert_eq!(stats.prompt_chars, parsed.prompt_chars);
+        assert_eq!(stats.cache_read_tokens, parsed.cache_read_tokens);
+        assert_eq!(stats.cache_write_tokens, parsed.cache_write_tokens);
+        assert_eq!(stats.trace_id, parsed.trace_id);
+        // ETU must be recomputed: 1000 input + 500*5 output = 3500.0
+        assert!((parsed.effective_token_units - 3500.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -316,6 +430,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -361,6 +476,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -376,6 +492,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -402,6 +519,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -417,6 +535,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -442,6 +561,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -457,6 +577,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -488,6 +609,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -503,6 +625,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -518,6 +641,7 @@ mod tests {
             prompt_chars: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            effective_token_units: 0.0,
             trace_id: None,
         });
 
@@ -544,15 +668,29 @@ mod tests {
             prompt_chars: 5000,
             cache_read_tokens: 100,
             cache_write_tokens: 50,
+            effective_token_units: 0.0,
             trace_id: None,
         };
 
         let json = serde_json::to_string(&stats).expect("serialize");
         let parsed: AiStats = serde_json::from_str(&json).expect("deserialize");
 
-        assert_eq!(stats, parsed);
+        // After deserialization, ETU is always recomputed from token counts,
+        // so we compare all fields except effective_token_units.
+        assert_eq!(stats.provider, parsed.provider);
+        assert_eq!(stats.model, parsed.model);
+        assert_eq!(stats.input_tokens, parsed.input_tokens);
+        assert_eq!(stats.output_tokens, parsed.output_tokens);
+        assert_eq!(stats.duration_ms, parsed.duration_ms);
+        assert_eq!(stats.cost_usd, parsed.cost_usd);
+        assert_eq!(stats.fallback_provider, parsed.fallback_provider);
+        assert_eq!(stats.prompt_chars, parsed.prompt_chars);
+        assert_eq!(stats.cache_read_tokens, 100);
+        assert_eq!(stats.cache_write_tokens, 50);
         assert_eq!(parsed.cache_read_tokens, 100);
         assert_eq!(parsed.cache_write_tokens, 50);
+        // ETU must be recomputed: 1000 input + 0.1*100 cache_read + 1.25*50 cache_write + 500*5 output = 3572.5
+        assert!((parsed.effective_token_units - 3572.5).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -572,5 +710,45 @@ mod tests {
 
         assert_eq!(parsed.cache_read_tokens, 0);
         assert_eq!(parsed.cache_write_tokens, 0);
+    }
+
+    #[test]
+    fn test_etu_formula() {
+        // All four token classes with non-trivial values.
+        // input(1000) + cache_read(0.1*500=50) + cache_write(1.25*100=125) + output(5.0*200=1000) = 2175.0
+        let stats = AiStats {
+            input_tokens: 1000,
+            output_tokens: 200,
+            cache_read_tokens: 500,
+            cache_write_tokens: 100,
+            ..AiStats::default()
+        }
+        .with_computed_etu();
+        assert!((stats.effective_token_units - 2175.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_etu_zero_on_default() {
+        // Zero inputs produce zero ETU; also covers the serde default path.
+        let stats = AiStats::default().with_computed_etu();
+        assert_eq!(stats.effective_token_units, 0.0);
+    }
+
+    #[test]
+    fn test_etu_recomputed_on_deserialize() {
+        // A JSON record with a stale/wrong effective_token_units value.
+        // After deserialization the field must be recomputed from token counts.
+        let json = r#"{
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-6",
+            "input_tokens": 1000,
+            "output_tokens": 200,
+            "cache_read_tokens": 500,
+            "cache_write_tokens": 100,
+            "effective_token_units": 99999.0
+        }"#;
+        let stats: AiStats = serde_json::from_str(json).unwrap();
+        // Must equal compute_etu(1000, 500, 100, 200) = 2175.0, not 99999.0
+        assert!((stats.effective_token_units - 2175.0).abs() < f64::EPSILON);
     }
 }

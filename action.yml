@@ -170,6 +170,12 @@ outputs:
   cost-usd:
     description: Estimated total cost in USD (provider-dependent, may be empty)
     value: ${{ steps.metrics-aggregate.outputs.cost_usd }}
+  effective-token-units:
+    description: Effective Token Units (normalized throughput signal)
+    value: ${{ steps.metrics-aggregate.outputs.effective_token_units }}
+  cache-hit-ratio:
+    description: Cache hit ratio as integer percent (cache_read / (input + cache_read)), or n/a
+    value: ${{ steps.metrics-aggregate.outputs.cache_hit_ratio }}
 
 runs:
   using: composite
@@ -505,6 +511,9 @@ runs:
       if: always()
       shell: bash
       run: |
+        if ! command -v jq >/dev/null 2>&1; then
+          echo "::warning::aptu: jq not found; token usage metrics will be unavailable" >&2
+        fi
         if [ -f "$RUNNER_TEMP/aptu-token-usage.jsonl" ]; then
           input_tokens=$(jq -s '[.[].input_tokens] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl")
           output_tokens=$(jq -s '[.[].output_tokens] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl")
@@ -514,11 +523,27 @@ runs:
           echo "output_tokens=$output_tokens" >> "$GITHUB_OUTPUT"
           echo "duration_ms=$duration_ms" >> "$GITHUB_OUTPUT"
           echo "cost_usd=$cost_usd" >> "$GITHUB_OUTPUT"
+          
+          # Effective Token Units (sum across all records)
+          ETU=$(jq -s '[.[].effective_token_units // 0] | add // 0 | ceil' "$RUNNER_TEMP/aptu-token-usage.jsonl" 2>/tmp/jq-etu-err || { echo "::warning::aptu: jq parse failed for effective_token_units: $(cat /tmp/jq-etu-err 2>/dev/null)" >&2; echo "0"; })
+          echo "effective_token_units=$ETU" >> "$GITHUB_OUTPUT"
+          
+          # Cache hit ratio (cache_read / (input + cache_read)), as integer percent, or n/a
+          TOTAL_INPUT=$(jq -s '[.[].input_tokens // 0] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl" 2>/dev/null || echo "0")
+          TOTAL_CACHE_READ=$(jq -s '[.[].cache_read_tokens // 0] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl" 2>/dev/null || echo "0")
+          if [ "$TOTAL_INPUT" -gt 0 ] || [ "$TOTAL_CACHE_READ" -gt 0 ]; then
+            CACHE_PCT=$(jq -n "($TOTAL_CACHE_READ / ($TOTAL_INPUT + $TOTAL_CACHE_READ) * 100) | round" 2>/tmp/jq-cache-err || { echo "::warning::aptu: jq parse failed for cache_hit_ratio: $(cat /tmp/jq-cache-err 2>/dev/null)" >&2; echo "0"; })
+            echo "cache_hit_ratio=${CACHE_PCT}%" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache_hit_ratio=n/a" >> "$GITHUB_OUTPUT"
+          fi
         else
           echo "input_tokens=0" >> "$GITHUB_OUTPUT"
           echo "output_tokens=0" >> "$GITHUB_OUTPUT"
           echo "duration_ms=0" >> "$GITHUB_OUTPUT"
           echo "cost_usd=" >> "$GITHUB_OUTPUT"
+          echo "effective_token_units=0" >> "$GITHUB_OUTPUT"
+          echo "cache_hit_ratio=n/a" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Write token usage summary
@@ -527,10 +552,30 @@ runs:
       run: |
         if [ -f "$RUNNER_TEMP/aptu-token-usage.jsonl" ]; then
           echo "### Aptu token usage" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Model | Input | Output | Cache read | Cache write | Duration | Cost |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          jq -r '. | "| \(.model) | \(.input_tokens) | \(.output_tokens) | \(.cache_read_tokens // 0) | \(.cache_write_tokens // 0) | \(.duration_ms)ms | \(if .cost_usd then "$\(.cost_usd)" else "n/a" end) |"' \
+          echo "| Model | Input | Output | Cache read | Cache write | Duration | ETU | Cache% | Cost |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '. | "| \(.model) | \(.input_tokens) | \(.output_tokens) | \(.cache_read_tokens // 0) | \(.cache_write_tokens // 0) | \(.duration_ms)ms | \(.effective_token_units // 0 | ceil | tostring) | \(if ((.input_tokens // 0) + (.cache_read_tokens // 0)) > 0 then ((.cache_read_tokens // 0) / ((.input_tokens // 0) + (.cache_read_tokens // 0)) * 100 | round | tostring) + "%" else "n/a" end) | \(if .cost_usd then ("$" + (.cost_usd | tostring)) else "n/a" end) |"' \
             "$RUNNER_TEMP/aptu-token-usage.jsonl" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        
+        # Context budget summary
+        if [ -n "${APTU_CONTEXT_FILE:-}" ] && [ -f "$APTU_CONTEXT_FILE" ]; then
+          FILES_TOTAL=$(jq -s '[.[].files_total // 0] | add // 0' "$APTU_CONTEXT_FILE")
+          FILES_TRUNC=$(jq -s '[.[].files_truncated // 0] | add // 0' "$APTU_CONTEXT_FILE")
+          CHARS_DROPPED=$(jq -s '[.[].truncated_chars_dropped // 0] | add // 0' "$APTU_CONTEXT_FILE")
+          PROMPT_CHARS=$(jq -s '[.[].prompt_chars_final // 0] | max // 0' "$APTU_CONTEXT_FILE")
+          MAX_CHARS=120000
+          BUDGET_PCT=$(( PROMPT_CHARS * 100 / MAX_CHARS ))
+          DROPS=$(jq -rs '[.[].budget_drops // [] | .[]] | unique | join(", ")' "$APTU_CONTEXT_FILE")
+          {
+            echo ""
+            echo "#### Context budget"
+            echo "Files: ${FILES_TOTAL} total, ${FILES_TRUNC} truncated (${CHARS_DROPPED} chars dropped)"
+            echo "Prompt budget: ${BUDGET_PCT}% of ${MAX_CHARS} chars"
+            if [ -n "$DROPS" ]; then
+              echo "Dropped due to budget: ${DROPS}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
         fi
 
     - name: Upload token usage artifact

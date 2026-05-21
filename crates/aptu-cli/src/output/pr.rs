@@ -340,6 +340,11 @@ impl Renderable for PrReviewResult {
             if let Some(cost) = self.ai_stats.cost_usd {
                 writeln!(w, "  Cost: ${cost:.6}")?;
             }
+            writeln!(
+                w,
+                "  ETU:    {:.0}",
+                self.ai_stats.effective_token_units.max(0.0)
+            )?;
             writeln!(w, "  Prompt: {} chars", self.ai_stats.prompt_chars)?;
             writeln!(w)?;
         }
@@ -642,8 +647,10 @@ mod tests {
                 prompt_chars: 0,
                 cache_read_tokens: 0,
                 cache_write_tokens: 0,
+                effective_token_units: 0.0,
                 trace_id: None,
-            },
+            }
+            .with_computed_etu(),
             security_findings,
             dry_run: false,
             labels: vec![],
