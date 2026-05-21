@@ -142,9 +142,11 @@ When no API key is provided the action falls back to `openrouter` / `inception/m
 | `input-tokens` | Total input tokens consumed across all AI calls |
 | `output-tokens` | Total output tokens consumed across all AI calls |
 | `duration-ms` | Total AI call duration in milliseconds |
-| `cost-usd` | Estimated cost in USD (provider-dependent; may be empty) |
+| `cost-usd` | Estimated cost in USD (provider-dependent; `n/a` when not reported) |
+| `effective-token-units` | Normalized throughput signal: `1.0·input + 0.1·cache_read + 1.25·cache_write + 5.0·output`. Comparable across operations and providers regardless of which model was used. |
+| `cache-hit-ratio` | Cache read tokens as a percentage of total input traffic (`n/a` when no cache tokens present). Tracks prompt-caching efficiency. |
 
-Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploaded as a workflow artifact (`aptu-token-usage-<run-id>`), and summarized in `$GITHUB_STEP_SUMMARY`.
+Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploaded as a workflow artifact (`aptu-token-usage-<run-id>`), and summarized in `$GITHUB_STEP_SUMMARY` with columns for ETU and Cache%.
 
 ## Permissions
 
@@ -160,8 +162,8 @@ Two environment variables control optional output files written during PR review
 
 | Variable | Description |
 |----------|-------------|
-| `APTU_CONTEXT_FILE` | Path to write a per-review context JSONL. Each record contains `pr_url`, `repo`, `total_chars`, `budget_drops`, and `prompt_chars_final`. Useful for debugging which enrichments were dropped. |
-| `APTU_METRICS_FILE` | Path to write per-review token usage JSONL. |
+| `APTU_CONTEXT_FILE` | Path to write a per-review context JSONL. Each record contains `pr_url`, `repo`, `total_chars`, `budget_drops`, `files_truncated`, `truncated_chars_dropped`, and `prompt_chars_final`. Useful for debugging which enrichments were dropped. When set via the Action, the context budget (files reviewed/truncated, chars dropped, budget %) is appended to `$GITHUB_STEP_SUMMARY`. |
+| `APTU_METRICS_FILE` | Path to write per-review token usage JSONL. Each record includes `effective_token_units` alongside raw token counts. |
 
 When running via the GitHub Action, both files are set automatically and uploaded as workflow artifacts (`aptu-review-context.jsonl` and `aptu-token-usage.jsonl`).
 
