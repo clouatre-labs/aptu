@@ -1,5 +1,5 @@
-name: Aptu Triage
-description: Automatically triage GitHub issues and review pull requests using AI-powered analysis with aptu
+name: Aptu
+description: "GitHub automation: AI issue triage, AI PR review, PR labeling, security scanning, and PR queue ranking"
 author: Aptu Contributors
 
 branding:
