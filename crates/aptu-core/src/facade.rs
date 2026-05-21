@@ -1014,18 +1014,22 @@ pub async fn label_pr(
     }
 
     // If no AI stats were captured, create a default one
-    let stats = ai_stats.unwrap_or_else(|| crate::history::AiStats {
-        provider: "unknown".to_string(),
-        model: "unknown".to_string(),
-        input_tokens: 0,
-        output_tokens: 0,
-        duration_ms: 0,
-        cost_usd: None,
-        fallback_provider: None,
-        prompt_chars: 0,
-        cache_read_tokens: 0,
-        cache_write_tokens: 0,
-        trace_id: None,
+    let stats = ai_stats.unwrap_or_else(|| {
+        crate::history::AiStats {
+            provider: "unknown".to_string(),
+            model: "unknown".to_string(),
+            input_tokens: 0,
+            output_tokens: 0,
+            duration_ms: 0,
+            cost_usd: None,
+            fallback_provider: None,
+            prompt_chars: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            effective_token_units: 0.0,
+            trace_id: None,
+        }
+        .with_computed_etu()
     });
 
     // Apply labels if not dry-run

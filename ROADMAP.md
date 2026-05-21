@@ -77,21 +77,22 @@ Tracked in #94.
 
 ## Effective Tokens Metric
 
-From GitHub's production analysis of their own agentic workflows (May 2026, 62% reduction on Auto-Triage):
+Normalized throughput signal that is comparable across operations and over time without a per-model pricing table.
 
 ```
-ET = m * (1.0 * I + 0.1 * C + 4.0 * O)
+ETU = 1.0 * I + 0.1 * C + 1.25 * W + 5.0 * O
 ```
 
-| Model | Multiplier `m` |
-|---|---|
-| Gemini Flash Lite | 0.05 |
-| Gemini Flash | 0.10 |
-| Claude Haiku | 0.25 |
-| Claude Sonnet | 1.00 |
-| Claude Opus | 5.00 |
+Where I = input tokens, C = cache read tokens, W = cache write tokens, O = output tokens.
 
-Track ET per run in the JSONL artifact. A 10% ET reduction = a genuine 10% cost reduction regardless of which model is in use.
+Weights are the structural Anthropic cache pricing ratios (confirmed May 2026, stable across all model generations since Claude 3):
+- Cache read: 0.1× base input (90% discount)
+- Cache write: 1.25× base input (5-min TTL, conservative; 1-hr TTL is 2×)
+- Output: 5× base input (consistent across Haiku 4.5, Sonnet 4.6, Opus 4.7)
+
+The per-model multiplier `m` from the earlier formulation was removed: it required a drift-prone per-model pricing table. ETU is unit-less (input-equivalent tokens), not dollars. A 10% ETU reduction is a genuine 10% cost reduction regardless of which model is in use.
+
+Track ETU per run in the JSONL artifact and in `GITHUB_STEP_SUMMARY`. Emitted as `effective_token_units` in `AiStats` and in `action.yml` outputs.
 
 ---
 

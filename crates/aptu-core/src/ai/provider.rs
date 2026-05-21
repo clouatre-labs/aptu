@@ -449,8 +449,10 @@ pub trait AiProvider: Send + Sync {
             prompt_chars: 0,
             cache_read_tokens,
             cache_write_tokens,
+            effective_token_units: 0.0,
             trace_id: None,
-        };
+        }
+        .with_computed_etu();
 
         // Extract finish_reasons from choices
         let finish_reasons: Vec<String> = completion
