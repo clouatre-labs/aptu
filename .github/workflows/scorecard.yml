@@ -11,7 +11,7 @@ permissions:
 jobs:
   scorecard:
     name: Scorecard Analysis
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       security-events: write
