@@ -2,27 +2,9 @@
 
 //! Security pattern engine with regex-based vulnerability detection.
 //!
-//! # Adding or updating patterns
-//!
-//! All patterns live in `patterns.json` (embedded via `include_str!` at compile time).
-//! Each entry is a JSON object with the following fields:
-//!
-//! | Field | Required | Description |
-//! |---|---|---|
-//! | `id` | yes | Unique kebab-case identifier (e.g. `"hardcoded-api-key"`) |
-//! | `description` | yes | Human-readable summary shown in scan output |
-//! | `pattern` | yes | Rust `regex` crate syntax; dot and hyphen are literal inside `[…]` without escaping |
-//! | `severity` | yes | `"critical"`, `"high"`, `"medium"`, or `"low"` |
-//! | `confidence` | yes | `"high"`, `"medium"`, or `"low"` |
-//! | `cwe` | recommended | MITRE CWE identifier (e.g. `"CWE-798"`); verify at <https://cwe.mitre.org> |
-//! | `remediation` | recommended | Actionable fix guidance shown to the developer |
-//! | `authority_url` | recommended | Canonical CWE or OWASP reference URL; must be non-empty to pass CI tests |
-//! | `file_extensions` | yes | Array of extensions to restrict scanning (e.g. `[".rs", ".py"]`); use `[]` for all files |
-//!
-//! After editing `patterns.json`, run `cargo test -p aptu-core` to verify:
-//! - JSON parses without error (engine initialisation panics on malformed JSON)
-//! - All patterns have non-empty `remediation` and `authority_url` (`test_all_patterns_have_remediation_and_authority_url`)
-//! - Your new pattern matches the intended inputs and rejects false positives
+//! Patterns are defined in `patterns.json` (embedded at compile time). See [`PatternDefinition`]
+//! for the field schema. After editing, run `cargo test -p aptu-core` to validate JSON structure,
+//! required fields, and regex compilation.
 
 use crate::security::types::{Finding, PatternDefinition};
 use regex::Regex;
