@@ -378,43 +378,57 @@ pub async fn run_queue(
 
     debug!(total_prs = all_prs.len(), "Fetched open PRs");
 
-    // Map to QueuedPr and track drafts
-    let mut queued_prs: Vec<crate::output::pr::QueuedPr> = Vec::new();
-    let mut draft_count = 0;
+    // Partition drafts (excluded from queue) from open PRs.
+    // SimplePullRequest from the list endpoint does not include additions/deletions;
+    // fetch the full PullRequest for each non-draft concurrently to get those fields.
+    let mut draft_count = 0usize;
+    let mut non_draft_numbers: Vec<u64> = Vec::new();
+    for pr in &all_prs {
+        if pr.draft.unwrap_or(false) {
+            draft_count += 1;
+        } else {
+            non_draft_numbers.push(pr.number);
+        }
+    }
+
+    let full_prs = {
+        let fetches = non_draft_numbers.iter().map(|&number| {
+            let client = client.clone();
+            let owner = owner.to_owned();
+            let repo = repo.to_owned();
+            async move {
+                client
+                    .pulls(&owner, &repo)
+                    .get(number)
+                    .await
+                    .with_context(|| format!("Failed to fetch PR #{number}"))
+            }
+        });
+        futures::future::try_join_all(fetches).await?
+    };
 
     let now = chrono::Utc::now();
 
-    for pr in all_prs {
-        let is_draft = pr.draft.unwrap_or(false);
-        if is_draft {
-            draft_count += 1;
-            continue;
-        }
-
-        let number = pr.number;
-        let title = pr.title.clone();
-        let author = pr.user.login.clone();
-
-        #[allow(clippy::cast_precision_loss)]
-        let age_days = {
-            let duration = now.signed_duration_since(pr.created_at);
-            duration.num_seconds() as f64 / 86400.0
-        };
-
-        let additions = pr.additions;
-        let deletions = pr.deletions;
-
-        queued_prs.push(crate::output::pr::QueuedPr {
-            number,
-            title,
-            author,
-            age_days,
-            additions,
-            deletions,
-            score: 0.0, // Computed below
-            draft: false,
-        });
-    }
+    let mut queued_prs: Vec<crate::output::pr::QueuedPr> = full_prs
+        .into_iter()
+        .map(|pr| {
+            #[allow(clippy::cast_precision_loss)]
+            let age_days = {
+                let duration = now.signed_duration_since(pr.created_at);
+                duration.num_seconds() as f64 / 86400.0
+            };
+            crate::output::pr::QueuedPr {
+                number: pr.number,
+                title: pr.title.clone(),
+                author: pr.user.login.clone(),
+                age_days,
+                additions: pr.additions,
+                deletions: pr.deletions,
+                score: 0.0, // Computed below
+                draft: false,
+            }
+        })
+        .collect();
 
     let total_open = queued_prs.len() + draft_count;
 

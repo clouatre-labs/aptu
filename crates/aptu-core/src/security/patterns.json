@@ -190,9 +190,9 @@
     "pattern": "(?i)ignore (all |previous |above )*(instructions|rules|guidelines)",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Sanitize and validate all user-supplied content before including it in AI prompts; apply input allowlists.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": []
   },
   {
@@ -201,9 +201,9 @@
     "pattern": "(?i)\\bSYSTEM\\b\\s*:",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Sanitize and validate all user-supplied content before including it in AI prompts; apply input allowlists.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": []
   },
   {
@@ -212,9 +212,9 @@
     "pattern": "(?m)^\\s*(?i)system\\s*:",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Sanitize and validate all user-supplied content before including it in AI prompts; apply input allowlists.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": []
   },
   {
@@ -223,10 +223,22 @@
     "pattern": "(?i)</pull_request>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-jailbreak-preamble",
@@ -234,9 +246,9 @@
     "pattern": "(?i)you are now (a |an )?(malicious|evil|unrestricted|unfiltered|jailbroken|hacker|attacker)",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Sanitize and validate all user-supplied content before including it in AI prompts; apply input allowlists.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": []
   },
   {
@@ -245,10 +257,22 @@
     "pattern": "(?i)</issue_content>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-issue-body",
@@ -256,10 +280,22 @@
     "pattern": "(?i)</issue_body>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-pr-diff",
@@ -267,10 +303,22 @@
     "pattern": "(?i)</pr_diff>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-commit-message",
@@ -278,10 +326,22 @@
     "pattern": "(?i)</commit_message>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-pr-comment",
@@ -289,10 +349,22 @@
     "pattern": "(?i)</pr_comment>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-file-content",
@@ -300,10 +372,22 @@
     "pattern": "(?i)</file_content>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "ssrf-http-request",
@@ -325,6 +409,17 @@
     "cwe": "CWE-601",
     "remediation": "Validate redirect targets against an allowlist of permitted domains; reject or encode external URLs.",
     "authority_url": "https://cwe.mitre.org/data/definitions/601.html",
+    "file_extensions": []
+  },
+  {
+    "id": "leaked-github-token",
+    "description": "Hardcoded GitHub App installation token (ghs_) detected",
+    "pattern": "ghs_[A-Za-z0-9._-]{36,}",
+    "severity": "critical",
+    "confidence": "high",
+    "cwe": "CWE-798",
+    "remediation": "Rotate the token immediately via GitHub App settings. Store credentials in environment variables or a secrets manager; never embed tokens in source code.",
+    "authority_url": "https://cwe.mitre.org/data/definitions/798.html",
     "file_extensions": []
   }
 ]
