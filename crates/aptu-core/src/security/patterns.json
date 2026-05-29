@@ -226,7 +226,19 @@
     "cwe": "CWE-77",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
     "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-jailbreak-preamble",
@@ -248,7 +260,19 @@
     "cwe": "CWE-77",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
     "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-issue-body",
@@ -259,7 +283,19 @@
     "cwe": "CWE-77",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
     "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-pr-diff",
@@ -270,7 +306,19 @@
     "cwe": "CWE-77",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
     "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-commit-message",
@@ -281,7 +329,19 @@
     "cwe": "CWE-77",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
     "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-pr-comment",
@@ -292,7 +352,19 @@
     "cwe": "CWE-77",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
     "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "prompt-injection-closing-tag-file-content",
@@ -303,7 +375,19 @@
     "cwe": "CWE-77",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
     "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-    "file_extensions": [".md", ".mdx", ".txt", ".html", ".htm", ".yaml", ".yml", ".json", ".toml", ".rst", ".org"]
+    "file_extensions": [
+      ".md",
+      ".mdx",
+      ".txt",
+      ".html",
+      ".htm",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".toml",
+      ".rst",
+      ".org"
+    ]
   },
   {
     "id": "ssrf-http-request",
@@ -325,6 +409,17 @@
     "cwe": "CWE-601",
     "remediation": "Validate redirect targets against an allowlist of permitted domains; reject or encode external URLs.",
     "authority_url": "https://cwe.mitre.org/data/definitions/601.html",
+    "file_extensions": []
+  },
+  {
+    "id": "leaked-github-token",
+    "description": "Hardcoded GitHub App installation token (ghs_) detected",
+    "pattern": "ghs_[A-Za-z0-9._-]{36,}",
+    "severity": "critical",
+    "confidence": "high",
+    "cwe": "CWE-798",
+    "remediation": "Rotate the token immediately via GitHub App settings. Store credentials in environment variables or a secrets manager; never embed tokens in source code.",
+    "authority_url": "https://cwe.mitre.org/data/definitions/798.html",
     "file_extensions": []
   }
 ]

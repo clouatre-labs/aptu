@@ -298,6 +298,48 @@ mod tests {
     }
 
     #[test]
+    fn test_github_token_pattern() {
+        let engine = PatternEngine::global();
+
+        // Case 1: Short opaque ghs_ token (40 chars after prefix)
+        let code_short = r#"
+            token = "ghs_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AB"
+        "#;
+        let findings = engine.scan(code_short, "test.rs");
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.pattern_id == "leaked-github-token"),
+            "Should detect short opaque ghs_ token"
+        );
+
+        // Case 2: Long JWT-format ghs_ token (two dots, ~520 total chars)
+        let code_jwt = r#"
+            token = "ghs_AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB.CCCCCCCCCCCCCCCCCCCC"
+        "#;
+        let findings = engine.scan(code_jwt, "test.rs");
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.pattern_id == "leaked-github-token"),
+            "Should detect long JWT-format ghs_ token"
+        );
+
+        // Case 3: Wrong prefix (ghp_ and ghu_) should not match
+        let code_wrong_prefix = r#"
+            ghp_token = "ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AB"
+            ghu_token = "ghu_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AB"
+        "#;
+        let findings = engine.scan(code_wrong_prefix, "test.rs");
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.pattern_id == "leaked-github-token"),
+            "Should not detect ghp_ or ghu_ prefixed tokens"
+        );
+    }
+
+    #[test]
     fn test_all_patterns_have_remediation_and_authority_url() {
         let engine = PatternEngine::from_embedded_json().unwrap();
         for def in engine.definitions() {
