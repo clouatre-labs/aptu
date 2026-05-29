@@ -190,9 +190,9 @@
     "pattern": "(?i)ignore (all |previous |above )*(instructions|rules|guidelines)",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Sanitize and validate all user-supplied content before including it in AI prompts; apply input allowlists.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": []
   },
   {
@@ -201,9 +201,9 @@
     "pattern": "(?i)\\bSYSTEM\\b\\s*:",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Sanitize and validate all user-supplied content before including it in AI prompts; apply input allowlists.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": []
   },
   {
@@ -212,9 +212,9 @@
     "pattern": "(?m)^\\s*(?i)system\\s*:",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Sanitize and validate all user-supplied content before including it in AI prompts; apply input allowlists.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": []
   },
   {
@@ -223,9 +223,9 @@
     "pattern": "(?i)</pull_request>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": [
       ".md",
       ".mdx",
@@ -246,9 +246,9 @@
     "pattern": "(?i)you are now (a |an )?(malicious|evil|unrestricted|unfiltered|jailbroken|hacker|attacker)",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Sanitize and validate all user-supplied content before including it in AI prompts; apply input allowlists.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": []
   },
   {
@@ -257,9 +257,9 @@
     "pattern": "(?i)</issue_content>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": [
       ".md",
       ".mdx",
@@ -280,9 +280,9 @@
     "pattern": "(?i)</issue_body>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": [
       ".md",
       ".mdx",
@@ -303,9 +303,9 @@
     "pattern": "(?i)</pr_diff>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": [
       ".md",
       ".mdx",
@@ -326,9 +326,9 @@
     "pattern": "(?i)</commit_message>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": [
       ".md",
       ".mdx",
@@ -349,9 +349,9 @@
     "pattern": "(?i)</pr_comment>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": [
       ".md",
       ".mdx",
@@ -372,9 +372,9 @@
     "pattern": "(?i)</file_content>",
     "severity": "high",
     "confidence": "medium",
-    "cwe": "CWE-77",
+    "cwe": "CWE-1336",
     "remediation": "Escape or strip XML delimiters in user-supplied content before embedding it in structured AI prompts.",
-    "authority_url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "authority_url": "https://cwe.mitre.org/data/definitions/1336.html",
     "file_extensions": [
       ".md",
       ".mdx",
