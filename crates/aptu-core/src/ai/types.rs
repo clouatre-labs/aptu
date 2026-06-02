@@ -547,13 +547,15 @@ pub struct PrLabelResponse {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[test]
     fn test_complexity_assessment_deserialize() {
         let json = r#"{"level":"high","estimated_loc":450,"affected_areas":["crates/aptu-cli/src/cli.rs"],"recommendation":"Decompose into sub-issues"}"#;
         let ca: ComplexityAssessment = serde_json::from_str(json).unwrap();
-        assert!(matches!(ca.level, ComplexityLevel::High));
+        assert_matches!(ca.level, ComplexityLevel::High);
         assert_eq!(ca.estimated_loc, Some(450));
     }
 

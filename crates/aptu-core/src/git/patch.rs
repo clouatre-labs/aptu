@@ -397,6 +397,8 @@ fn branch_exists_remote(name: &str, repo_root: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[test]
@@ -413,7 +415,7 @@ mod tests {
     #[test]
     fn test_git_version_too_old() {
         let err = parse_git_version_str("git version 2.38.0\n");
-        assert!(matches!(err, Err(PatchError::GitTooOld { .. })));
+        assert_matches!(err, Err(PatchError::GitTooOld { .. }));
     }
 
     #[test]
@@ -426,21 +428,21 @@ mod tests {
     fn test_validate_patch_paths_traversal() {
         let diff = "+++ b/../etc/passwd\n";
         let err = validate_patch_paths(diff);
-        assert!(matches!(err, Err(PatchError::PathTraversal { .. })));
+        assert_matches!(err, Err(PatchError::PathTraversal { .. }));
     }
 
     #[test]
     fn test_validate_patch_paths_absolute() {
         let diff = "+++ b//etc/shadow\n";
         let err = validate_patch_paths(diff);
-        assert!(matches!(err, Err(PatchError::PathTraversal { .. })));
+        assert_matches!(err, Err(PatchError::PathTraversal { .. }));
     }
 
     #[test]
     fn test_validate_patch_paths_symlink_mode() {
         let diff = "new file mode 120000\n";
         let err = validate_patch_paths(diff);
-        assert!(matches!(err, Err(PatchError::SymlinkMode { .. })));
+        assert_matches!(err, Err(PatchError::SymlinkMode { .. }));
     }
 
     #[test]

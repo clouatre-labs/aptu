@@ -1966,34 +1966,6 @@ pub async fn revert_pr(
 }
 
 #[cfg(test)]
-mod tests_infer_repo_path {
-    #[test]
-    fn test_infer_repo_path_matching_origin() {
-        // This test verifies that infer_repo_path_from_cwd returns Some when
-        // the git origin matches the PR owner/repo (case-insensitive).
-        // In a real test environment, we would mock git commands.
-        // For now, we test the case-insensitive comparison logic.
-
-        // Simulate: origin = "block/goose", PR owner = "Block", repo = "Goose"
-        // The function should match case-insensitively.
-        // This is a placeholder test that documents the expected behavior.
-        // Real integration tests would require mocking git subprocess calls.
-        assert!(
-            true,
-            "Case-insensitive matching is implemented in infer_repo_path_from_cwd"
-        );
-    }
-
-    #[test]
-    fn test_infer_repo_path_non_matching_origin() {
-        // This test verifies that infer_repo_path_from_cwd returns None when
-        // the git origin does not match the PR owner/repo.
-        // Real integration tests would require mocking git subprocess calls.
-        assert!(true, "Non-matching origin returns None (silent fallback)");
-    }
-}
-
-#[cfg(test)]
 mod tests_call_graph_auto_enable {
     #[test]
     fn test_call_graph_auto_enabled_within_budget() {
