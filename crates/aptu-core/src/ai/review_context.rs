@@ -182,7 +182,7 @@ pub async fn build_review_context(
     let (inferred_repo_path, cwd_inferred) = resolve_repo_path(&pr, repo_path);
     let repo_path_ref = inferred_repo_path
         .as_ref()
-        .map(|p| p.to_string_lossy().to_string());
+        .map(|p| p.to_string_lossy().into_owned());
 
     // Step 2: Build AST context if repo_path resolved
     let ast_context = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
@@ -220,7 +220,7 @@ pub async fn build_review_context(
     let files_with_patch = pr
         .files
         .iter()
-        .filter(|f| f.patch.is_some() && !f.patch.as_ref().unwrap().is_empty())
+        .filter(|f| f.patch.as_deref().is_some_and(|p| !p.is_empty()))
         .count();
     let dep_enrichments_count = pr.dep_enrichments.len();
     let dep_enrichments_chars = pr

@@ -93,7 +93,7 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
             continue;
         }
         let full_path = Path::new(repo_path).join(&file.filename);
-        let path_str = full_path.to_string_lossy().to_string();
+        let path_str = full_path.to_string_lossy().into_owned();
 
         match analyze_file(&path_str, None) {
             Ok(analysis) => {
@@ -175,7 +175,7 @@ fn build_call_graph_context_sync(repo_path: &str, files: &[PrFile]) -> String {
             continue;
         }
         let full_path = repo.join(&file.filename);
-        let path_str = full_path.to_string_lossy().to_string();
+        let path_str = full_path.to_string_lossy().into_owned();
 
         // Get function names in this file
         let fn_names: Vec<String> = match analyze_file(&path_str, None) {
@@ -214,7 +214,7 @@ fn build_call_graph_context_sync(repo_path: &str, files: &[PrFile]) -> String {
                                 caller_sym,
                                 caller_file
                                     .file_name()
-                                    .map(|n| n.to_string_lossy().to_string())
+                                    .map(|n| n.to_string_lossy().into_owned())
                                     .unwrap_or_default(),
                                 caller_line
                             );

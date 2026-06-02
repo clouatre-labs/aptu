@@ -85,13 +85,10 @@ pub struct TriageResult {
 #[allow(clippy::large_enum_variant)]
 pub enum SingleTriageOutcome {
     /// Triage succeeded.
-    #[allow(dead_code)]
     Success(Box<TriageResult>),
     /// Triage was skipped (e.g., already triaged).
-    #[allow(dead_code)]
     Skipped(String),
     /// Triage failed with an error.
-    #[allow(dead_code)]
     Failed(String),
 }
 
@@ -189,13 +186,10 @@ pub struct PrReviewResult {
 #[allow(clippy::large_enum_variant)]
 pub enum SinglePrReviewOutcome {
     /// PR review succeeded.
-    #[allow(dead_code)]
     Success(Box<PrReviewResult>),
     /// PR review was skipped.
-    #[allow(dead_code)]
     Skipped(String),
     /// PR review failed with an error.
-    #[allow(dead_code)]
     Failed(String),
 }
 

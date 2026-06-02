@@ -164,7 +164,7 @@ pub fn git_version_check(cwd: &Path) -> Result<(), PatchError> {
         .arg("--version")
         .current_dir(cwd)
         .output()?;
-    let s = String::from_utf8_lossy(&output.stdout).to_string();
+    let s = String::from_utf8_lossy(&output.stdout).into_owned();
     parse_git_version_str(&s)
 }
 
