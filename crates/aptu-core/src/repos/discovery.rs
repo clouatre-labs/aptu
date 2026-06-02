@@ -95,8 +95,8 @@ pub fn score_repo(repo: &octocrab::models::Repository, filter: &DiscoveryFilter)
     score += star_score;
 
     // Language match (0-30 points)
-    if let Some(ref filter_lang) = filter.language
-        && let Some(ref repo_lang) = repo.language
+    if let Some(filter_lang) = &filter.language
+        && let Some(repo_lang) = &repo.language
         && let Some(lang_str) = repo_lang.as_str()
         && lang_str.to_lowercase() == filter_lang.to_lowercase()
     {
@@ -143,7 +143,7 @@ pub fn build_search_query(filter: &DiscoveryFilter) -> String {
 
     let _ = write!(query, " stars:>={}", filter.min_stars);
 
-    if let Some(ref lang) = filter.language {
+    if let Some(lang) = &filter.language {
         let _ = write!(query, " language:{lang}");
     }
 

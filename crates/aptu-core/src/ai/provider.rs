@@ -856,7 +856,7 @@ pub trait AiProvider: Send + Sync {
         };
 
         // Prepend repository instructions if available
-        if let Some(ref instructions) = ctx.pr.instructions {
+        if let Some(instructions) = &ctx.pr.instructions {
             // Escape XML delimiters to prevent tag injection
             let escaped_instructions = instructions
                 .replace('&', "&amp;")

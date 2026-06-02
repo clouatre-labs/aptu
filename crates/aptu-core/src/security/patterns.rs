@@ -80,7 +80,7 @@ impl PatternEngine {
             for compiled in &self.patterns {
                 // Skip if pattern has file extension filter and doesn't match
                 if !compiled.definition.file_extensions.is_empty() {
-                    if let Some(ref ext) = file_ext {
+                    if let Some(ext) = &file_ext {
                         if !compiled.definition.file_extensions.contains(ext) {
                             continue;
                         }

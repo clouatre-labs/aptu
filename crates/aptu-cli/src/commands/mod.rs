@@ -843,7 +843,7 @@ async fn run_pr_command(
             let instructions_file_str = instructions_file.map(|p| p.to_string_lossy().into_owned());
 
             // Override instructions_file in config if provided via CLI
-            if let Some(ref path) = instructions_file_str {
+            if let Some(path) = &instructions_file_str {
                 config_clone.review.instructions_file = Some(path.clone());
             }
 
