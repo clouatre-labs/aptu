@@ -151,7 +151,7 @@ fn emit_output(output_format: OutputFormat, findings: &[Finding]) -> Result<()> 
                 for f in findings {
                     println!(
                         "  [{}] {} ({}:{}): {}",
-                        format!("{:?}", f.severity).to_uppercase(),
+                        f.severity.as_str().to_uppercase(),
                         f.pattern_id,
                         f.file_path,
                         f.line_number,

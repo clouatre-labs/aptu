@@ -142,7 +142,7 @@ mod tests {
     fn test_append_jsonl_creates_file() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("metrics.jsonl");
-        let file_path_str = file_path.to_string_lossy().to_string();
+        let file_path_str = file_path.to_string_lossy().into_owned();
 
         let stats = AiStats {
             provider: "test-provider".to_string(),
@@ -235,7 +235,7 @@ mod tests {
     fn test_append_jsonl_cache_tokens_in_record() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("metrics.jsonl");
-        let file_path_str = file_path.to_string_lossy().to_string();
+        let file_path_str = file_path.to_string_lossy().into_owned();
 
         let stats = AiStats {
             provider: "anthropic".to_string(),
@@ -296,7 +296,7 @@ mod tests {
     fn test_write_context_jsonl_creates_file() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("context.jsonl");
-        let file_path_str = file_path.to_string_lossy().to_string();
+        let file_path_str = file_path.to_string_lossy().into_owned();
 
         let record = ReviewContextRecord {
             trace_id: "test-trace-id".to_string(),

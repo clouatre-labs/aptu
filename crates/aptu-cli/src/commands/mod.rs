@@ -808,7 +808,7 @@ async fn run_pr_command(
             deep,
             instructions_file,
         } => {
-            let repo_path_str = repo_path.map(|p| p.to_string_lossy().to_string());
+            let repo_path_str = repo_path.map(|p| p.to_string_lossy().into_owned());
             let repo_context = repo
                 .as_deref()
                 .or(inferred_repo.as_deref())
@@ -840,7 +840,7 @@ async fn run_pr_command(
             let repo_context_owned = repo_context.map(std::string::ToString::to_string);
             let mut config_clone = config.clone();
             let repo_path_str_owned = repo_path_str.clone();
-            let instructions_file_str = instructions_file.map(|p| p.to_string_lossy().to_string());
+            let instructions_file_str = instructions_file.map(|p| p.to_string_lossy().into_owned());
 
             // Override instructions_file in config if provided via CLI
             if let Some(ref path) = instructions_file_str {
