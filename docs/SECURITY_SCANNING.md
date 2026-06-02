@@ -124,7 +124,7 @@ Use `--exclude` to suppress known-safe test fixtures and the security pattern de
 Every built-in pattern includes:
 
 - **`remediation`** - Concise, actionable guidance for fixing the detected issue.
-- **`authority_url`** - Normative reference: a CWE URL (`https://cwe.mitre.org/data/definitions/{N}.html`) for CWE-tagged patterns, or the OWASP LLM Top 10 URL for prompt-injection patterns.
+- **`authority_url`** - Normative reference: a CWE URL (`https://cwe.mitre.org/data/definitions/{N}.html`) for all patterns, including prompt-injection patterns (CWE-1336).
 
 When output is SARIF, these fields populate `tool.driver.rules[]`:
 
