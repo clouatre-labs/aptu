@@ -259,7 +259,7 @@ Configure a GPG key for signing commits and tags:
 
 1. Update version in `Cargo.toml`
 2. Commit: `git commit -S -s -m "chore: bump version to X.Y.Z"`
-3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
+3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"` -- must be a GPG-signed annotated tag; a lightweight tag (`git tag vX.Y.Z`) will be rejected by the `verify-tag-signature` gate and no assets will be built
 4. **First release of a new minor version only** (e.g. `v0.9.0`, `v1.0.0`): pre-create the
    floating tag before pushing, otherwise the release workflow fails (the `Release Tag Protection`
    ruleset blocks `GITHUB_TOKEN` from creating new `refs/tags/v*` refs via POST, but allows
@@ -328,6 +328,18 @@ gh workflow run release.yml -f dry_run=true -f version=X.Y.Z
 ```
 
 This builds all targets without publishing or creating a release.
+
+### Asset Recovery
+
+If a release tag was pushed but the workflow failed before assets were uploaded (e.g., a lightweight tag was used instead of a signed annotated tag), trigger the release workflow manually against the existing tag:
+
+```bash
+gh workflow run release.yml -f tag_name=vX.Y.Z -f dry_run=false -f version=X.Y.Z
+```
+
+Or via the GitHub UI: Actions -> Release -> Run workflow -> set `tag_name` to the existing tag (e.g. `v0.8.5`), `dry_run` to `false`.
+
+This skips `verify-tag-signature`, targets the existing release object, builds and uploads all assets, and skips publish, Homebrew, and the floating-tag update (none of which are needed for asset recovery). Crates.io publish must be done separately if not already completed.
 
 ### Versioning
 
