@@ -96,6 +96,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           checksum: sha256
           archive: aptu-cli-${{ inputs.version }}-$target
+          ref: ${{ inputs.tag_name != '' && format('refs/tags/{0}', inputs.tag_name) || github.ref }}
       - name: Build binary (dry-run)
         if: ${{ inputs.dry_run }}
         run: cargo build --release --target ${{ inputs.target }} -p aptu-cli  # zizmor: ignore[template-injection]
