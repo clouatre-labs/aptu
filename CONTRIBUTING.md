@@ -259,7 +259,7 @@ Configure a GPG key for signing commits and tags:
 
 1. Update version in `Cargo.toml`
 2. Commit: `git commit -S -s -m "chore: bump version to X.Y.Z"`
-3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"` -- must be a GPG-signed annotated tag; a lightweight tag (`git tag vX.Y.Z`) will be rejected by the `verify-tag-signature` gate and no assets will be built
+3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"` -- must be a GPG-signed annotated tag; a lightweight tag (`git tag vX.Y.Z`) will be rejected by the `verify-tag-signature` gate and no assets will be built. Verify before pushing: `git tag -v vX.Y.Z`
 4. **First release of a new minor version only** (e.g. `v0.9.0`, `v1.0.0`): pre-create the
    floating tag before pushing, otherwise the release workflow fails (the `Release Tag Protection`
    ruleset blocks `GITHUB_TOKEN` from creating new `refs/tags/v*` refs via POST, but allows
