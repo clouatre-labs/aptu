@@ -23,6 +23,11 @@ on:
         required: true
         type: string
         description: Release version for archive naming (e.g., 0.1.3)
+      tag_name:
+        required: false
+        type: string
+        default: ''
+        description: Tag name to upload assets to (e.g. v0.8.5). When empty, falls back to github.ref_name. Use for workflow_dispatch recovery runs.
       dry_run:
         required: false
         type: boolean
@@ -48,6 +53,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Resolve release tag
+        id: resolve-tag
+        env:
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -n "$INPUT_TAG_NAME" ]; then
+            echo "RELEASE_TAG=$INPUT_TAG_NAME" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_TAG=$REF_NAME" >> "$GITHUB_ENV"
+          fi
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Install Rust toolchain
@@ -92,7 +108,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: | # zizmor: ignore[template-injection]
-          gh release upload ${{ github.ref_name }} "${{ steps.upload-cli.outputs.tar }}.bundle" --clobber
+          gh release upload $RELEASE_TAG "${{ steps.upload-cli.outputs.tar }}.bundle" --clobber
       - name: Attest build provenance (tarball)
         if: ${{ !inputs.dry_run }}
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
@@ -108,7 +124,7 @@ jobs:
         run: | # zizmor: ignore[template-injection]
           DEB_FILE=$(find target/${{ inputs.target }}/debian -name "aptu-cli_*.deb" -type f)
           if [ -n "$DEB_FILE" ]; then
-            gh release upload ${{ github.ref_name }} "$DEB_FILE" --clobber
+            gh release upload $RELEASE_TAG "$DEB_FILE" --clobber
           fi
       - name: Sign aptu .deb with cosign
         if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
@@ -124,7 +140,7 @@ jobs:
         run: | # zizmor: ignore[template-injection]
           DEB_FILE=$(find target/${{ inputs.target }}/debian -name "aptu-cli_*.deb" -type f)
           if [ -n "$DEB_FILE" ]; then
-            gh release upload ${{ github.ref_name }} "$DEB_FILE.bundle" --clobber
+            gh release upload $RELEASE_TAG "$DEB_FILE.bundle" --clobber
           fi
       - name: Attest build provenance (aptu .deb)
         if: ${{ !inputs.dry_run && (startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux')) }}
