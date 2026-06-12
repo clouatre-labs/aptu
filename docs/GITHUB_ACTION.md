@@ -57,6 +57,8 @@ Provide **one** API key. The action detects the provider automatically.
 | Z.AI | `zai-api-key` | (set via `model`) |
 | ZenMux | `zenmux-api-key` | (set via `model`) |
 
+> Model IDs shown are defaults at time of writing. Use `aptu models list` to discover current available models.
+
 When no API key is provided the action falls back to `openrouter` / `inception/mercury-2` via the built-in fallback chain. Override with `provider` and `model` inputs. See [Configuration](CONFIGURATION.md) for details.
 
 ## Inputs
