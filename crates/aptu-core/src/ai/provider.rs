@@ -534,10 +534,14 @@ pub trait AiProvider: Send + Sync {
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
             messages,
-            response_format: Some(ResponseFormat {
-                format_type: "json_object".to_string(),
-                json_schema: None,
-            }),
+            response_format: if self.is_anthropic() {
+                None
+            } else {
+                Some(ResponseFormat {
+                    format_type: "json_object".to_string(),
+                    json_schema: None,
+                })
+            },
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
         };
@@ -619,10 +623,14 @@ pub trait AiProvider: Send + Sync {
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
             messages,
-            response_format: Some(ResponseFormat {
-                format_type: "json_object".to_string(),
-                json_schema: None,
-            }),
+            response_format: if self.is_anthropic() {
+                None
+            } else {
+                Some(ResponseFormat {
+                    format_type: "json_object".to_string(),
+                    json_schema: None,
+                })
+            },
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
         };
@@ -903,10 +911,14 @@ pub trait AiProvider: Send + Sync {
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
             messages,
-            response_format: Some(ResponseFormat {
-                format_type: "json_object".to_string(),
-                json_schema: None,
-            }),
+            response_format: if self.is_anthropic() {
+                None
+            } else {
+                Some(ResponseFormat {
+                    format_type: "json_object".to_string(),
+                    json_schema: None,
+                })
+            },
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
         };
@@ -988,10 +1000,14 @@ pub trait AiProvider: Send + Sync {
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
             messages,
-            response_format: Some(ResponseFormat {
-                format_type: "json_object".to_string(),
-                json_schema: None,
-            }),
+            response_format: if self.is_anthropic() {
+                None
+            } else {
+                Some(ResponseFormat {
+                    format_type: "json_object".to_string(),
+                    json_schema: None,
+                })
+            },
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
         };
@@ -2699,5 +2715,90 @@ mod tests {
             "dependency_release_notes block should be present"
         );
         assert!(prompt.contains("lib"), "package name should be in prompt");
+    }
+
+    // ---------------------------------------------------------------------------
+    // response_format conditional tests
+    // ---------------------------------------------------------------------------
+
+    struct AnthropicTestProvider;
+
+    impl AiProvider for AnthropicTestProvider {
+        fn name(&self) -> &'static str {
+            "anthropic"
+        }
+
+        fn api_url(&self) -> &'static str {
+            "https://api.anthropic.com/v1"
+        }
+
+        fn api_key_env(&self) -> &'static str {
+            "ANTHROPIC_API_KEY"
+        }
+
+        fn http_client(&self) -> &Client {
+            unimplemented!()
+        }
+
+        fn api_key(&self) -> &SecretString {
+            unimplemented!()
+        }
+
+        fn model(&self) -> &'static str {
+            "claude-opus-4-8"
+        }
+
+        fn max_tokens(&self) -> u32 {
+            2048
+        }
+
+        fn temperature(&self) -> f32 {
+            0.3
+        }
+    }
+
+    #[test]
+    fn test_anthropic_strips_response_format() {
+        // Arrange: Anthropic provider; is_anthropic() returns true
+        let provider = AnthropicTestProvider;
+        // Act: evaluate the conditional that all four builders use
+        let response_format: Option<ResponseFormat> = if provider.is_anthropic() {
+            None
+        } else {
+            Some(ResponseFormat {
+                format_type: "json_object".to_string(),
+                json_schema: None,
+            })
+        };
+        // Assert: Anthropic receives no response_format field
+        assert!(
+            response_format.is_none(),
+            "response_format must be None for Anthropic direct API"
+        );
+    }
+
+    #[test]
+    fn test_non_anthropic_keeps_response_format() {
+        // Arrange: non-Anthropic provider (TestProvider.name() == "test")
+        let provider = TestProvider;
+        // Act: evaluate the same conditional
+        let response_format: Option<ResponseFormat> = if provider.is_anthropic() {
+            None
+        } else {
+            Some(ResponseFormat {
+                format_type: "json_object".to_string(),
+                json_schema: None,
+            })
+        };
+        // Assert: non-Anthropic providers retain response_format
+        assert!(
+            response_format.is_some(),
+            "response_format must be Some for non-Anthropic providers"
+        );
+        assert_eq!(
+            response_format.unwrap().format_type,
+            "json_object",
+            "format_type must be json_object"
+        );
     }
 }
