@@ -205,9 +205,13 @@ jobs:
           # creation, indistinguishable from other POST failures, causing the PATCH fallback to
           # fail with 404 when the ref truly does not exist yet.
           # Note: a command in an if-condition does not trigger set -e on failure.
-          # The refs API does prefix matching, so GET refs/tags/v0.5 returns v0.5.0 as well.
-          # We must verify the returned ref field matches exactly to avoid a false positive.
-          EXISTING_REF=$(gh api "repos/${{ github.repository }}/git/refs/tags/$MINOR_TAG" --jq '.[0].ref // .ref' 2>/dev/null || true)
+          # The refs API does prefix matching, so GET refs/tags/v0.8 also returns refs/tags/v0.8.5,
+          # refs/tags/v0.8.6, etc. The response may be an array or a single object depending on how
+          # many refs match. We normalise to an array and filter for an exact ref match to avoid a
+          # false negative that sends us into the POST branch when the tag already exists.
+          EXISTING_REF=$(gh api "repos/${{ github.repository }}/git/refs/tags/$MINOR_TAG" 2>/dev/null \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); items=d if isinstance(d,list) else [d]; print(next((x['ref'] for x in items if x['ref']=='refs/tags/$MINOR_TAG'),''))" \
+            || true)
           if [[ "$EXISTING_REF" == "refs/tags/$MINOR_TAG" ]]; then
             gh api \
               --method PATCH \
