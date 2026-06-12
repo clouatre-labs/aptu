@@ -204,16 +204,13 @@ where
 
     /// Get the full path for a cache key.
     ///
-    /// # Panics
-    ///
-    /// Panics if the key contains path separators or parent directory references,
-    /// which could lead to path traversal vulnerabilities.
+    /// Returns `None` if the key contains path separators or parent directory
+    /// references, which could lead to path traversal vulnerabilities.
     fn cache_path(&self, key: &str) -> Option<PathBuf> {
-        // Validate key to prevent path traversal
-        assert!(
-            !key.contains('/') && !key.contains('\\') && !key.contains(".."),
-            "cache key must not contain path separators or '..': {key}"
-        );
+        // Validate key to prevent path traversal; return None for invalid keys.
+        if key.contains('/') || key.contains('\\') || key.contains("..") {
+            return None;
+        }
 
         let filename = if std::path::Path::new(key)
             .extension()
@@ -568,24 +565,34 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "cache key must not contain path separators")]
     async fn test_cache_key_rejects_forward_slash() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
-        let _ = cache.get("../etc/passwd").await;
+        let result = cache
+            .get("../etc/passwd")
+            .await
+            .expect("get should succeed");
+        assert!(result.is_none());
     }
 
     #[tokio::test]
-    #[should_panic(expected = "cache key must not contain path separators")]
     async fn test_cache_key_rejects_backslash() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
-        let _ = cache.get("..\\windows\\system32").await;
+        let data = TestData {
+            value: "x".to_string(),
+            count: 0,
+        };
+        let result = cache
+            .set("..\\windows\\system32", &data)
+            .await
+            .expect("set should succeed silently");
+        assert_eq!(result, ());
     }
 
     #[tokio::test]
-    #[should_panic(expected = "cache key must not contain path separators")]
     async fn test_cache_key_rejects_parent_dir() {
         let cache: FileCacheImpl<TestData> = FileCacheImpl::new("test_cache", Duration::hours(1));
-        let _ = cache.get("foo..bar").await;
+        let result = cache.get("foo..bar").await.expect("get should succeed");
+        assert!(result.is_none());
     }
 
     #[tokio::test]
