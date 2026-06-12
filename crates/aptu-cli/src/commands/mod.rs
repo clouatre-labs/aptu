@@ -3,6 +3,7 @@
 //! Command handlers for Aptu CLI.
 
 pub mod auth;
+pub mod common;
 pub mod completion;
 pub mod create;
 pub mod history;
@@ -14,12 +15,11 @@ pub mod scan_security;
 pub mod triage;
 pub mod types;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use console::style;
 use dialoguer::Confirm;
-use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use tracing::debug;
 
@@ -27,6 +27,7 @@ use crate::cli::{
     AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
     OutputFormat, PrCommand, RepoCommand,
 };
+use crate::commands::common::maybe_spinner;
 use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewOutcome};
 use crate::output;
 use aptu_core::{AppConfig, State, check_already_triaged, history::ContributionStatus};
@@ -37,23 +38,6 @@ struct ReviewOptions {
     dry_run: bool,
     yes: bool,
     no_comment: bool,
-}
-
-/// Creates a styled spinner (only if interactive).
-fn maybe_spinner(ctx: &OutputContext, message: &str) -> Option<ProgressBar> {
-    if ctx.is_interactive() {
-        let s = ProgressBar::new_spinner();
-        s.set_style(
-            ProgressStyle::default_spinner()
-                .template("{spinner:.cyan} {msg} ({elapsed:.cyan})")
-                .expect("Invalid spinner template"),
-        );
-        s.set_message(message.to_string());
-        s.enable_steady_tick(Duration::from_millis(100));
-        Some(s)
-    } else {
-        None
-    }
 }
 
 /// Should we post a comment based on configuration and user interaction?
@@ -114,10 +98,6 @@ fn show_triage_success(
     }
 }
 
-/// Triage a single issue and return the result.
-///
-/// Returns Ok(Some(result)) if triaged successfully, Ok(None) if skipped (already triaged),
-/// or Err if an error occurred.
 /// Configuration for a single triage operation.
 #[allow(clippy::struct_excessive_bools)]
 struct TriageConfig<'a> {
@@ -401,8 +381,6 @@ async fn review_single_pr(
     Ok(Some(result))
 }
 
-/// Dispatch to the appropriate command handler.
-#[allow(clippy::too_many_lines)]
 /// Run the auth command.
 async fn run_auth_command(
     auth_cmd: AuthCommand,
