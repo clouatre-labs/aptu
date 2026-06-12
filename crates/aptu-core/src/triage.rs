@@ -698,4 +698,49 @@ mod tests {
         assert!(!body.contains("[!"));
         assert!(!body.contains("```suggestion"));
     }
+
+    #[test]
+    fn test_render_triage_markdown_with_complexity() {
+        use crate::ai::types::{ComplexityAssessment, ComplexityLevel};
+
+        // Arrange: triage response with a High complexity assessment
+        let triage = TriageResponse {
+            summary: "Complex change".to_string(),
+            implementation_approach: None,
+            clarifying_questions: vec![],
+            potential_duplicates: vec![],
+            related_issues: vec![],
+            suggested_labels: vec![],
+            suggested_milestone: None,
+            status_note: None,
+            contributor_guidance: None,
+            complexity: Some(ComplexityAssessment {
+                level: ComplexityLevel::High,
+                estimated_loc: Some(300),
+                affected_areas: vec!["crates/aptu-core/src/retry.rs".to_string()],
+                recommendation: Some("Decompose into sub-issues".to_string()),
+            }),
+        };
+
+        // Act
+        let markdown = render_triage_markdown(&triage);
+
+        // Assert: complexity section is present with expected content
+        assert!(
+            markdown.contains("### Complexity"),
+            "markdown must contain complexity section header"
+        );
+        assert!(
+            markdown.contains("High"),
+            "markdown must contain complexity level"
+        );
+        assert!(
+            markdown.contains("300"),
+            "markdown must contain estimated LOC"
+        );
+        assert!(
+            markdown.contains("Decompose into sub-issues"),
+            "markdown must contain recommendation"
+        );
+    }
 }

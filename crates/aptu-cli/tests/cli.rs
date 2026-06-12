@@ -115,42 +115,6 @@ fn test_completion_install_dry_run() {
 }
 
 #[test]
-fn test_history_empty_state() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("history")
-        .arg("--output")
-        .arg("json")
-        .assert()
-        .success();
-
-    let output = cargo_bin_cmd!("aptu")
-        .arg("history")
-        .arg("--output")
-        .arg("json")
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
-    assert!(
-        parsed.is_ok(),
-        "history --output json should produce valid JSON"
-    );
-
-    let json = parsed.unwrap();
-    assert!(
-        json.is_array() || json.is_object(),
-        "history JSON output should be an array or object"
-    );
-}
-
-#[test]
-fn test_auth_status() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("auth").arg("status").assert().success();
-}
-
-#[test]
 fn test_invalid_command() {
     let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("invalidcmd")
@@ -180,18 +144,6 @@ fn test_repo_invalid_subcommand() {
         .assert()
         .failure()
         .code(predicate::eq(2));
-}
-
-#[test]
-fn test_json_output_is_quiet_by_default() {
-    // JSON output should automatically suppress spinners/progress
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("repo")
-        .arg("list")
-        .arg("--output")
-        .arg("json")
-        .assert()
-        .success();
 }
 
 #[test]

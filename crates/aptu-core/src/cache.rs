@@ -10,7 +10,6 @@
 // stable in Rust 1.95 / edition 2024). The trait is intentionally crate-internal
 // (not part of the public API) and is never used as `dyn FileCache`, so the lint
 // warning is a false positive. There is no plan to expose this trait publicly.
-#![allow(clippy::async_yields_async)]
 
 use std::path::PathBuf;
 use std::sync::OnceLock;

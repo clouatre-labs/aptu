@@ -53,7 +53,6 @@ walkdir = { workspace = true }
 
 # Concurrency
 futures = { workspace = true }
-backon = { workspace = true }
 rayon = { workspace = true }
 
 [dev-dependencies]

@@ -139,7 +139,6 @@ dependencies = [
  "anyhow",
  "aptu-core",
  "assert_cmd",
- "backon",
  "chrono",
  "clap",
  "clap_complete",

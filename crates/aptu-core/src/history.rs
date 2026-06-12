@@ -751,4 +751,44 @@ mod tests {
         // Must equal compute_etu(1000, 500, 100, 200) = 2175.0, not 99999.0
         assert!((stats.effective_token_units - 2175.0).abs() < f64::EPSILON);
     }
+
+    #[test]
+    fn test_history_disk_io_roundtrip() {
+        // Arrange: build a HistoryData with one contribution and write it to a temp file
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("history.json");
+        let mut data = HistoryData::default();
+        data.contributions.push(test_contribution());
+
+        // Act: serialize to disk and deserialize back
+        let contents = serde_json::to_string_pretty(&data).expect("serialize");
+        fs::write(&path, &contents).expect("write");
+        let read_back = fs::read_to_string(&path).expect("read");
+        let loaded: HistoryData = serde_json::from_str(&read_back).expect("deserialize");
+
+        // Assert: round-trip preserves contribution count and key fields
+        assert_eq!(loaded.contributions.len(), 1);
+        assert_eq!(loaded.contributions[0].repo, data.contributions[0].repo);
+        assert_eq!(loaded.contributions[0].issue, data.contributions[0].issue);
+    }
+
+    #[test]
+    fn test_history_corrupt_json_fallback() {
+        // Arrange: write invalid JSON to a temp file
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("history.json");
+        fs::write(&path, b"{ not valid json !!!").expect("write");
+
+        // Act: attempt to deserialize -- should fail gracefully
+        let read_back = fs::read_to_string(&path).expect("read");
+        let result: Result<HistoryData, _> = serde_json::from_str(&read_back);
+
+        // Assert: deserialization fails; caller would fall back to default
+        assert!(
+            result.is_err(),
+            "corrupt JSON must not deserialize successfully"
+        );
+        let fallback = result.unwrap_or_default();
+        assert!(fallback.contributions.is_empty(), "fallback must be empty");
+    }
 }
