@@ -17,7 +17,9 @@ use std::sync::OnceLock;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+#[cfg(test)]
+use tracing::debug;
+use tracing::warn;
 
 /// Ensures the cache unavailable warning is only emitted once.
 static CACHE_UNAVAILABLE_WARNING: OnceLock<()> = OnceLock::new();
@@ -38,7 +40,7 @@ pub const DEFAULT_SECURITY_TTL_DAYS: i64 = 7;
 ///
 /// Wraps cached data with timestamp and optional etag for validation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CacheEntry<T> {
+pub(crate) struct CacheEntry<T> {
     /// The cached data.
     pub data: T,
     /// When the entry was cached.
@@ -59,6 +61,7 @@ impl<T> CacheEntry<T> {
     }
 
     /// Create a new cache entry with an etag.
+    #[cfg(test)]
     pub fn with_etag(data: T, etag: String) -> Self {
         Self {
             data,
@@ -102,7 +105,7 @@ pub fn cache_dir() -> Option<PathBuf> {
 /// consumers but is never intended to be implemented externally or used as `dyn FileCache`.
 /// All known implementors are in this crate, so auto-trait bounds are not a concern.
 #[allow(async_fn_in_trait)]
-pub trait FileCache<V> {
+pub(crate) trait FileCache<V> {
     /// Get a cached value if it exists and is valid.
     ///
     /// # Arguments
@@ -138,6 +141,7 @@ pub trait FileCache<V> {
     /// # Arguments
     ///
     /// * `key` - Cache key (filename without extension)
+    #[cfg(test)]
     async fn remove(&self, key: &str) -> Result<()>;
 }
 
@@ -145,7 +149,7 @@ pub trait FileCache<V> {
 ///
 /// Stores serialized data in JSON files with embedded metadata.
 /// When cache directory is unavailable (None), all operations become no-ops.
-pub struct FileCacheImpl<V> {
+pub(crate) struct FileCacheImpl<V> {
     cache_dir: Option<PathBuf>,
     ttl: Duration,
     subdirectory: String,
@@ -237,6 +241,7 @@ where
     /// # Returns
     ///
     /// The number of files evicted.
+    #[cfg(test)]
     pub async fn evict_stale(&self, eviction_days: i64) -> usize {
         if !self.is_enabled() {
             return 0;
@@ -383,6 +388,7 @@ where
         Ok(())
     }
 
+    #[cfg(test)]
     async fn remove(&self, key: &str) -> Result<()> {
         if !self.is_enabled() {
             return Ok(());

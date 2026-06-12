@@ -16,7 +16,7 @@ use std::process::Command;
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use aptu_core::utils::truncate_with_suffix;
 ///
 /// let text = "This is a very long string that needs truncation";
@@ -25,7 +25,7 @@ use std::process::Command;
 /// assert!(result.chars().count() <= 20);
 /// ```
 #[must_use]
-pub fn truncate_with_suffix(text: &str, max_len: usize, suffix: &str) -> String {
+pub(crate) fn truncate_with_suffix(text: &str, max_len: usize, suffix: &str) -> String {
     let char_count = text.chars().count();
     if char_count <= max_len {
         text.to_string()
@@ -138,7 +138,7 @@ pub fn parse_and_format_relative_time(timestamp: &str) -> String {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use aptu_core::utils::is_priority_label;
 ///
 /// // Numeric priority labels
@@ -157,7 +157,7 @@ pub fn parse_and_format_relative_time(timestamp: &str) -> String {
 /// assert!(!is_priority_label("priority: urgent"));
 /// ```
 #[must_use]
-pub fn is_priority_label(label: &str) -> bool {
+pub(crate) fn is_priority_label(label: &str) -> bool {
     let lower = label.to_lowercase();
 
     // Check for p[0-9] pattern (e.g., p0, p1, p2, p3, p4)
@@ -184,14 +184,14 @@ pub fn is_priority_label(label: &str) -> bool {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use aptu_core::utils::parse_git_remote_url;
 ///
 /// assert_eq!(parse_git_remote_url("git@github.com:owner/repo.git"), Ok("owner/repo".to_string()));
 /// assert_eq!(parse_git_remote_url("https://github.com/owner/repo.git"), Ok("owner/repo".to_string()));
 /// assert_eq!(parse_git_remote_url("git@github.com:owner/repo"), Ok("owner/repo".to_string()));
 /// ```
-pub fn parse_git_remote_url(url: &str) -> Result<String, String> {
+pub(crate) fn parse_git_remote_url(url: &str) -> Result<String, String> {
     // Parse SSH format: git@github.com:owner/repo.git
     if let Some(ssh_part) = url.strip_prefix("git@github.com:") {
         let repo = ssh_part.strip_suffix(".git").unwrap_or(ssh_part);
