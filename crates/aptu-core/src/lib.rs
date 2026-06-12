@@ -110,7 +110,7 @@ pub use facade::{
     add_custom_repo, analyze_issue, analyze_pr, apply_triage_labels, create_pr, discover_repos,
     fetch_issue_for_triage, fetch_issues, fetch_pr_for_review, format_issue, label_pr,
     list_curated_repos, list_models, list_repos, post_issue, post_pr_review, post_triage_comment,
-    remove_custom_repo, validate_model,
+    remove_custom_repo, revert_issue, revert_pr, validate_model,
 };
 pub use github::issues::ApplyResult;
 pub use github::pulls::PrCreateResult;
