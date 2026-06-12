@@ -118,8 +118,6 @@ fn show_triage_success(
 ///
 /// Returns Ok(Some(result)) if triaged successfully, Ok(None) if skipped (already triaged),
 /// or Err if an error occurred.
-#[allow(clippy::too_many_lines)]
-#[allow(clippy::fn_params_excessive_bools)]
 /// Configuration for a single triage operation.
 #[allow(clippy::struct_excessive_bools)]
 struct TriageConfig<'a> {

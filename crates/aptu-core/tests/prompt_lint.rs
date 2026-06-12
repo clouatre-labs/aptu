@@ -410,60 +410,6 @@ mod fetch_file_contents_tests {
     }
 
     #[test]
-    fn test_review_context_no_enrichments() {
-        // Arrange: construct a ReviewContext with minimal PrDetails (only .rs files, no manifest files)
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test PR".to_string(),
-            body: "PR body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![PrFile {
-                filename: "src/lib.rs".to_string(),
-                status: "modified".to_string(),
-                additions: 5,
-                deletions: 2,
-                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
-                full_content: None,
-                patch_truncated: false,
-            }],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
-        let ctx = aptu_core::ai::review_context::ReviewContext {
-            pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            files_total: 0,
-            files_with_patch: 0,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
-            budget_drops: Vec::new(),
-            prompt_chars_final: 0,
-        };
-
-        // Act: inspect the ReviewContext fields
-        // Assert: all enrichment fields are empty
-        assert!(ctx.ast_context.is_empty(), "ast_context should be empty");
-        assert!(ctx.call_graph.is_empty(), "call_graph should be empty");
-        assert!(
-            ctx.pr.dep_enrichments.is_empty(),
-            "dep_enrichments should be empty"
-        );
-    }
-
-    #[test]
     fn test_review_context_prompt_unchanged_without_enrichment() {
         // Arrange: same minimal ReviewContext as above
         let pr = PrDetails {

@@ -727,7 +727,6 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
 
 /// Builds AST context for changed files when the `ast-context` feature is enabled
 /// and a `repo_path` is provided. Returns an empty string otherwise.
-#[allow(clippy::unused_async)] // async required for the ast-context feature path
 /// Analyzes PR details with AI to generate a review.
 ///
 /// This function takes pre-fetched PR details and performs AI analysis.

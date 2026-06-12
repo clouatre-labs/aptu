@@ -61,9 +61,6 @@ comfy-table = "7"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
-# FFI
-uniffi = { version = "0.31.0" }
-
 # Schemas
 schemars = { version = "1.0" }
 

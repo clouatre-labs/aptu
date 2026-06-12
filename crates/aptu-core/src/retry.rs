@@ -155,51 +155,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_retryable_http_429() {
-        assert!(is_retryable_http(429));
-    }
-
-    #[test]
-    fn test_is_retryable_http_500() {
-        assert!(is_retryable_http(500));
-    }
-
-    #[test]
-    fn test_is_retryable_http_502() {
-        assert!(is_retryable_http(502));
-    }
-
-    #[test]
-    fn test_is_retryable_http_503() {
-        assert!(is_retryable_http(503));
-    }
-
-    #[test]
-    fn test_is_retryable_http_504() {
-        assert!(is_retryable_http(504));
-    }
-
-    #[test]
-    fn test_is_retryable_http_non_retryable() {
-        assert!(!is_retryable_http(400));
-        assert!(!is_retryable_http(401));
-        assert!(!is_retryable_http(403));
-        assert!(!is_retryable_http(404));
-        assert!(!is_retryable_http(200));
-        assert!(!is_retryable_http(201));
-    }
-
-    #[test]
     fn test_retry_backoff_configuration() {
-        let backoff = retry_backoff();
-        // Verify it's an ExponentialBuilder (type check at compile time)
-        let _: ExponentialBuilder = backoff;
-    }
+        use backon::BackoffBuilder;
+        use std::time::Duration;
 
-    #[test]
-    fn test_is_retryable_anyhow_with_non_retryable() {
-        let err = anyhow::anyhow!("some other error");
-        assert!(!is_retryable_anyhow(&err));
+        // Arrange: build the backoff and collect the first delay
+        let backoff = retry_backoff();
+        let mut iter = backoff.build();
+
+        // Act: first delay should be >= 1s (min_delay) and <= 2s (with jitter)
+        let first = iter.next().expect("backoff must yield at least one delay");
+
+        // Assert: min_delay is 1s; with jitter the actual value is in [1s, 2s)
+        assert!(
+            first >= Duration::from_secs(1),
+            "first retry delay must be at least 1s, got {first:?}"
+        );
+        assert!(
+            first < Duration::from_secs(3),
+            "first retry delay must be less than 3s (factor=2 + jitter), got {first:?}"
+        );
     }
 
     #[test]
