@@ -534,14 +534,7 @@ pub trait AiProvider: Send + Sync {
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
             messages,
-            response_format: if self.is_anthropic() {
-                None
-            } else {
-                Some(ResponseFormat {
-                    format_type: "json_object".to_string(),
-                    json_schema: None,
-                })
-            },
+            response_format: provider_response_format(self),
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
         };
@@ -623,14 +616,7 @@ pub trait AiProvider: Send + Sync {
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
             messages,
-            response_format: if self.is_anthropic() {
-                None
-            } else {
-                Some(ResponseFormat {
-                    format_type: "json_object".to_string(),
-                    json_schema: None,
-                })
-            },
+            response_format: provider_response_format(self),
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
         };
@@ -911,14 +897,7 @@ pub trait AiProvider: Send + Sync {
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
             messages,
-            response_format: if self.is_anthropic() {
-                None
-            } else {
-                Some(ResponseFormat {
-                    format_type: "json_object".to_string(),
-                    json_schema: None,
-                })
-            },
+            response_format: provider_response_format(self),
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
         };
@@ -1000,14 +979,7 @@ pub trait AiProvider: Send + Sync {
         let request = ChatCompletionRequest {
             model: self.model().to_string(),
             messages,
-            response_format: if self.is_anthropic() {
-                None
-            } else {
-                Some(ResponseFormat {
-                    format_type: "json_object".to_string(),
-                    json_schema: None,
-                })
-            },
+            response_format: provider_response_format(self),
             max_tokens: Some(self.max_tokens()),
             temperature: Some(self.temperature()),
         };
@@ -1276,6 +1248,25 @@ pub trait AiProvider: Send + Sync {
         prompt.push_str(crate::ai::prompts::PR_LABEL_SCHEMA);
 
         prompt
+    }
+}
+
+/// Returns the `response_format` value appropriate for the given provider.
+///
+/// Returns `None` for the Anthropic direct API, which rejects the field, and
+/// `Some(ResponseFormat { format_type: "json_object" })` for all other providers.
+/// The `skip_serializing_if` attribute on `ChatCompletionRequest::response_format`
+/// ensures `None` is omitted from the serialized request body.
+pub(crate) fn provider_response_format<P: AiProvider + ?Sized>(
+    provider: &P,
+) -> Option<ResponseFormat> {
+    if provider.is_anthropic() {
+        None
+    } else {
+        Some(ResponseFormat {
+            format_type: "json_object".to_string(),
+            json_schema: None,
+        })
     }
 }
 
@@ -2761,15 +2752,8 @@ mod tests {
     fn test_anthropic_strips_response_format() {
         // Arrange: Anthropic provider; is_anthropic() returns true
         let provider = AnthropicTestProvider;
-        // Act: evaluate the conditional that all four builders use
-        let response_format: Option<ResponseFormat> = if provider.is_anthropic() {
-            None
-        } else {
-            Some(ResponseFormat {
-                format_type: "json_object".to_string(),
-                json_schema: None,
-            })
-        };
+        // Act: call the shared helper used by all four request builders
+        let response_format = provider_response_format(&provider);
         // Assert: Anthropic receives no response_format field
         assert!(
             response_format.is_none(),
@@ -2781,15 +2765,8 @@ mod tests {
     fn test_non_anthropic_keeps_response_format() {
         // Arrange: non-Anthropic provider (TestProvider.name() == "test")
         let provider = TestProvider;
-        // Act: evaluate the same conditional
-        let response_format: Option<ResponseFormat> = if provider.is_anthropic() {
-            None
-        } else {
-            Some(ResponseFormat {
-                format_type: "json_object".to_string(),
-                json_schema: None,
-            })
-        };
+        // Act: call the shared helper used by all four request builders
+        let response_format = provider_response_format(&provider);
         // Assert: non-Anthropic providers retain response_format
         assert!(
             response_format.is_some(),
