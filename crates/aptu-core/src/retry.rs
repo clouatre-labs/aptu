@@ -24,7 +24,7 @@ use backon::ExponentialBuilder;
 ///
 /// `true` if the status code indicates a transient error that should be retried
 #[must_use]
-pub fn is_retryable_http(status: u16) -> bool {
+pub(crate) fn is_retryable_http(status: u16) -> bool {
     matches!(status, 429 | 500 | 502 | 503 | 504)
 }
 
@@ -71,7 +71,7 @@ pub(crate) fn is_retryable_octocrab(e: &octocrab::Error) -> bool {
 ///
 /// `true` if the error is transient and should be retried
 #[must_use]
-pub fn is_retryable_anyhow(e: &anyhow::Error) -> bool {
+pub(crate) fn is_retryable_anyhow(e: &anyhow::Error) -> bool {
     // Check if it's an octocrab error
     if let Some(oct_err) = e.downcast_ref::<octocrab::Error>() {
         return is_retryable_octocrab(oct_err);
@@ -113,7 +113,7 @@ pub fn is_retryable_anyhow(e: &anyhow::Error) -> bool {
 ///
 /// An `ExponentialBuilder` configured for retry operations
 #[must_use]
-pub fn retry_backoff() -> ExponentialBuilder {
+pub(crate) fn retry_backoff() -> ExponentialBuilder {
     ExponentialBuilder::default()
         .with_factor(2.0)
         .with_min_delay(std::time::Duration::from_secs(1))

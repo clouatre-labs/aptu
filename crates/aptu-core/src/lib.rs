@@ -30,12 +30,6 @@ pub use config::{
 };
 
 // ============================================================================
-// Caching
-// ============================================================================
-
-pub use cache::{CacheEntry, FileCache, FileCacheImpl};
-
-// ============================================================================
 // AI Triage
 // ============================================================================
 
@@ -50,7 +44,7 @@ pub use ai::{AiClient, AiModel, ModelProvider, ProviderConfig, all_providers, ge
 
 pub use github::auth::TokenSource;
 pub use github::graphql::IssueNode;
-pub use github::ratelimit::{RateLimitStatus, check_rate_limit};
+pub use github::ratelimit::check_rate_limit;
 pub use octocrab::params::State;
 
 // ============================================================================
@@ -82,12 +76,6 @@ pub use triage::{
 };
 
 // ============================================================================
-// Retry Logic
-// ============================================================================
-
-pub use retry::{is_retryable_anyhow, is_retryable_http, retry_backoff};
-
-// ============================================================================
 // Bulk Processing
 // ============================================================================
 
@@ -98,8 +86,7 @@ pub use bulk::{BulkOutcome, BulkResult, process_bulk};
 // ============================================================================
 
 pub use utils::{
-    format_relative_time, infer_repo_from_git, is_priority_label, parse_and_format_relative_time,
-    truncate, truncate_with_suffix,
+    format_relative_time, infer_repo_from_git, parse_and_format_relative_time, truncate,
 };
 
 // ============================================================================

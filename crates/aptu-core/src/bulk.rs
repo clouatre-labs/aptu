@@ -13,7 +13,7 @@ use anyhow::Result;
 use backon::Retryable;
 use futures::{StreamExt, stream};
 
-use crate::{is_retryable_anyhow, retry_backoff};
+use crate::retry::{is_retryable_anyhow, retry_backoff};
 
 /// Outcome of processing a single item in a bulk operation.
 #[derive(Debug, Clone)]
