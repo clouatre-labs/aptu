@@ -25,7 +25,7 @@ impl CreditsStatus {
 
 /// Cache control directive for prompt caching (Anthropic).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct CacheControl {
+pub(crate) struct CacheControl {
     /// Cache type: "ephemeral" for Anthropic prompt caching.
     #[serde(rename = "type")]
     pub kind: String,
@@ -47,7 +47,7 @@ impl CacheControl {
 
 /// A chat message for the `OpenRouter` API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatMessage {
+pub(crate) struct ChatMessage {
     /// Role: "system", "user", or "assistant".
     pub role: String,
     /// Message content. May be `null` for reasoning models (e.g. `minimax/minimax-m2.7`)
@@ -64,7 +64,7 @@ pub struct ChatMessage {
 
 /// Request body for `OpenRouter` chat completions API.
 #[derive(Debug, Serialize)]
-pub struct ChatCompletionRequest {
+pub(crate) struct ChatCompletionRequest {
     /// Model identifier (e.g., "mistralai/mistral-small-2603").
     pub model: String,
     /// List of messages in the conversation.
@@ -82,7 +82,7 @@ pub struct ChatCompletionRequest {
 
 /// Response format specification for structured output.
 #[derive(Debug, Serialize)]
-pub struct ResponseFormat {
+pub(crate) struct ResponseFormat {
     /// Type of response format ("`json_object`" or "`json_schema`" for structured output).
     #[serde(rename = "type")]
     pub format_type: String,
@@ -93,7 +93,7 @@ pub struct ResponseFormat {
 
 /// Response from `OpenRouter` chat completions API.
 #[derive(Debug, Deserialize)]
-pub struct ChatCompletionResponse {
+pub(crate) struct ChatCompletionResponse {
     /// List of choices (usually just one).
     pub choices: Vec<Choice>,
     /// Usage information from the API.
@@ -103,7 +103,7 @@ pub struct ChatCompletionResponse {
 
 /// Token usage information from the API.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct UsageInfo {
+pub(crate) struct UsageInfo {
     /// Number of tokens in the prompt.
     #[serde(default)]
     pub prompt_tokens: u64,
@@ -126,7 +126,7 @@ pub struct UsageInfo {
 
 /// A single choice in the chat completion response.
 #[derive(Debug, Deserialize)]
-pub struct Choice {
+pub(crate) struct Choice {
     /// The generated message.
     pub message: ChatMessage,
     /// Reason the model stopped generating (e.g., `stop`, `length`).
