@@ -103,6 +103,8 @@ Flags can be used independently (`--model` alone uses configured provider). CLI 
 
 ## AI Provider Setup
 
+Model IDs and pricing change frequently. Use `aptu models list` to discover available models from any configured provider.
+
 Aptu supports multiple AI providers. Choose the one that works best for you:
 
 ### Anthropic
@@ -153,6 +155,8 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    model = "gemini-3.1-flash-lite-preview"
    ```
 
+Use `aptu models list --provider gemini` to discover current model IDs.
+
 **Free Tier:** 15 requests/minute, 1M+ tokens/day, 1M token context window
 
 ### Groq
@@ -201,7 +205,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    model = "glm-4.5-air"
    ```
 
-**Budget Tier:** glm-4.5-air with 128K context window ($0.20/$1.10 per 1M tokens)
+**Budget Tier:** glm-4.5-air with 128K context window (pricing subject to change; see Z.AI documentation)
 
 ### ZenMux
 

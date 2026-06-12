@@ -1,6 +1,6 @@
 # Roadmap
 
-_Near-Term: Q2 2026 | Medium-Term: Q3–Q4 2026 | Long-Term: 2027+_
+_Near-Term (next 3-6 months) | Medium-Term (6-18 months) | Long-Term (18+ months)_
 
 This document describes the project direction across three time horizons. Items are based on open issues, the project specification, and known user needs. Dates are approximate and depend on maintainer availability.
 
