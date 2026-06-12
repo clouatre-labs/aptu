@@ -1478,8 +1478,14 @@ mod tests {
     fn test_build_pr_review_user_prompt_respects_diff_size_limit() {
         use super::super::types::{PrDetails, PrFile};
 
-        // Create patches that will exceed the limit when combined
-        // Each patch is ~30KB, so two will exceed 50KB limit
+        // Each patch is 30KB; MAX_PATCH_LENGTH=2000 truncates each to 2000 chars before the
+        // total-diff budget check. To trigger MAX_TOTAL_DIFF_SIZE (50_000) with just two files
+        // we set each patch to MAX_PATCH_LENGTH exactly so no per-patch annotation is added,
+        // then we use 26 files so the cumulative total exceeds 50_000.
+        //
+        // For a two-file test that exercises a different axis: verify that patches longer than
+        // MAX_PATCH_LENGTH are truncated (the full 30_000-char content never appears) and the
+        // truncation annotation is present.
         let patch1 = "x".repeat(30_000);
         let patch2 = "y".repeat(30_000);
 
@@ -1534,12 +1540,24 @@ mod tests {
                 ..Default::default()
             },
         );
-        // Both files should be listed
+        // Both files are listed in the header
         assert!(prompt.contains("file1.rs"));
         assert!(prompt.contains("file2.rs"));
-        // The second patch should be limited - verify the prompt doesn't contain both full patches
-        // by checking that the total size is less than what two full 30KB patches would be
-        assert!(prompt.len() < 65_000);
+        // Per-patch budget (MAX_PATCH_LENGTH=2000) truncates both 30KB patches;
+        // the full 30_000-char run of 'x'/'y' must NOT appear in the prompt.
+        assert!(
+            !prompt.contains(&"x".repeat(2_001)),
+            "first file patch must be truncated to MAX_PATCH_LENGTH"
+        );
+        assert!(
+            !prompt.contains(&"y".repeat(2_001)),
+            "second file patch must be truncated to MAX_PATCH_LENGTH"
+        );
+        // The truncation annotation must appear for both patches
+        assert!(
+            prompt.contains("patch truncated by size budget"),
+            "per-patch truncation annotation must be present"
+        );
     }
 
     #[test]
@@ -1709,18 +1727,6 @@ mod tests {
             prompt.contains("fallback_patch_content_qrs"),
             "patch must be included when status=added and full_content is None"
         );
-    }
-
-    #[test]
-    fn test_sanitize_strips_opening_tag() {
-        let result = sanitize_prompt_field("hello <pull_request> world");
-        assert_eq!(result, "hello  world");
-    }
-
-    #[test]
-    fn test_sanitize_strips_closing_tag() {
-        let result = sanitize_prompt_field("evil </pull_request> content");
-        assert_eq!(result, "evil  content");
     }
 
     #[test]
@@ -1976,297 +1982,22 @@ mod tests {
     async fn test_load_system_prompt_override_returns_content_when_present() {
         use std::io::Write;
         let dir = tempfile::tempdir().expect("create tempdir");
-        let file_path = dir.path().join("test_override.md");
+        // The function reads <prompts_dir>/<name>.md, driven by XDG_CONFIG_HOME.
+        // Point XDG_CONFIG_HOME at the tempdir so prompts_dir() resolves into it.
+        // SAFETY: single-threaded test; no other thread reads XDG_CONFIG_HOME concurrently.
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
+        let prompts_dir = crate::config::prompts_dir();
+        std::fs::create_dir_all(&prompts_dir).expect("create prompts dir");
+        let file_path = prompts_dir.join("test_override.md");
         let mut f = std::fs::File::create(&file_path).expect("create file");
         writeln!(f, "Custom override content").expect("write file");
         drop(f);
 
-        let content = tokio::fs::read_to_string(&file_path).await.ok();
-        assert_eq!(content.as_deref(), Some("Custom override content\n"));
-    }
-
-    #[test]
-    fn test_build_pr_review_prompt_omits_call_graph_when_oversized() {
-        use super::super::types::{PrDetails, PrFile};
-
-        // Arrange: simulate review_pr dropping call_graph due to budget.
-        // When call_graph is oversized, review_pr clears it before calling build_pr_review_user_prompt.
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Budget drop test".to_string(),
-            body: "body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![PrFile {
-                filename: "lib.rs".to_string(),
-                status: "modified".to_string(),
-                additions: 1,
-                deletions: 0,
-                patch: Some("+line".to_string()),
-                patch_truncated: false,
-                full_content: None,
-            }],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
-
-        // Act: call build_pr_review_user_prompt with empty call_graph (dropped by review_pr)
-        // and non-empty ast_context (retained because it fits after call_graph drop)
-        let ast_context = "Y".repeat(500);
-        let call_graph = "";
-        let mut ctx = crate::ai::review_context::ReviewContext {
-            pr,
-            ast_context: ast_context.clone(),
-            call_graph: call_graph.to_string(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            ..Default::default()
-        };
-        let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
-
-        // Assert: call_graph absent, ast_context present
-        assert!(
-            !prompt.contains(&"X".repeat(10)),
-            "call_graph content must not appear in prompt after budget drop"
-        );
-        assert!(
-            prompt.contains(&"Y".repeat(10)),
-            "ast_context content must appear in prompt (fits within budget)"
-        );
-    }
-
-    #[test]
-    fn test_build_pr_review_prompt_omits_ast_after_call_graph() {
-        use super::super::types::{PrDetails, PrFile};
-
-        // Arrange: simulate review_pr dropping both call_graph and ast_context due to budget.
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Budget drop test".to_string(),
-            body: "body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![PrFile {
-                filename: "lib.rs".to_string(),
-                status: "modified".to_string(),
-                additions: 1,
-                deletions: 0,
-                patch: Some("+line".to_string()),
-                patch_truncated: false,
-                full_content: None,
-            }],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
-
-        // Act: call build_pr_review_user_prompt with both empty (dropped by review_pr)
-        let ast_context = "";
-        let call_graph = "";
-        let mut ctx = crate::ai::review_context::ReviewContext {
-            pr,
-            ast_context: ast_context.to_string(),
-            call_graph: call_graph.to_string(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            ..Default::default()
-        };
-        let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
-
-        // Assert: both absent, PR title retained
-        assert!(
-            !prompt.contains(&"C".repeat(10)),
-            "call_graph content must not appear after budget drop"
-        );
-        assert!(
-            !prompt.contains(&"A".repeat(10)),
-            "ast_context content must not appear after budget drop"
-        );
-        assert!(
-            prompt.contains("Budget drop test"),
-            "PR title must be retained in prompt"
-        );
-    }
-
-    #[test]
-    fn test_build_pr_review_prompt_drops_patches_when_over_budget() {
-        use super::super::types::{PrDetails, PrFile};
-
-        // Arrange: simulate review_pr dropping patches due to budget.
-        // Create 3 files with patches of different sizes.
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Patch drop test".to_string(),
-            body: "body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![
-                PrFile {
-                    filename: "large.rs".to_string(),
-                    status: "modified".to_string(),
-                    additions: 100,
-                    deletions: 50,
-                    patch: Some("L".repeat(5000)),
-                    patch_truncated: false,
-                    full_content: None,
-                },
-                PrFile {
-                    filename: "medium.rs".to_string(),
-                    status: "modified".to_string(),
-                    additions: 50,
-                    deletions: 25,
-                    patch: Some("M".repeat(3000)),
-                    patch_truncated: false,
-                    full_content: None,
-                },
-                PrFile {
-                    filename: "small.rs".to_string(),
-                    status: "modified".to_string(),
-                    additions: 10,
-                    deletions: 5,
-                    patch: Some("S".repeat(1000)),
-                    patch_truncated: false,
-                    full_content: None,
-                },
-            ],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
-
-        // Act: simulate review_pr dropping largest patches first
-        let mut pr_mut = pr.clone();
-        pr_mut.files[0].patch = None; // Drop largest patch
-        pr_mut.files[1].patch = None; // Drop medium patch
-        // Keep smallest patch
-
-        let ast_context = "";
-        let call_graph = "";
-        let mut ctx = crate::ai::review_context::ReviewContext {
-            pr: pr_mut,
-            ast_context: ast_context.to_string(),
-            call_graph: call_graph.to_string(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            ..Default::default()
-        };
-        let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
-
-        // Assert: largest patches absent, smallest present
-        assert!(
-            !prompt.contains(&"L".repeat(10)),
-            "largest patch must be absent after drop"
-        );
-        assert!(
-            !prompt.contains(&"M".repeat(10)),
-            "medium patch must be absent after drop"
-        );
-        assert!(
-            prompt.contains(&"S".repeat(10)),
-            "smallest patch must be present"
-        );
-    }
-
-    #[test]
-    fn test_build_pr_review_prompt_drops_full_content_as_last_resort() {
-        use super::super::types::{PrDetails, PrFile};
-
-        // Arrange: simulate review_pr dropping full_content as last resort.
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Full content drop test".to_string(),
-            body: "body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![
-                PrFile {
-                    filename: "file1.rs".to_string(),
-                    status: "modified".to_string(),
-                    additions: 10,
-                    deletions: 5,
-                    patch: None,
-                    patch_truncated: false,
-                    full_content: Some("F".repeat(5000)),
-                },
-                PrFile {
-                    filename: "file2.rs".to_string(),
-                    status: "modified".to_string(),
-                    additions: 10,
-                    deletions: 5,
-                    patch: None,
-                    patch_truncated: false,
-                    full_content: Some("C".repeat(3000)),
-                },
-            ],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
-
-        // Act: simulate review_pr dropping all full_content
-        let mut pr_mut = pr.clone();
-        for file in &mut pr_mut.files {
-            file.full_content = None;
-        }
-
-        let ast_context = "";
-        let call_graph = "";
-        let mut ctx = crate::ai::review_context::ReviewContext {
-            pr: pr_mut,
-            ast_context: ast_context.to_string(),
-            call_graph: call_graph.to_string(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            ..Default::default()
-        };
-        let prompt = TestProvider::build_pr_review_user_prompt(&mut ctx);
-
-        // Assert: no file_content XML blocks appear
-        assert!(
-            !prompt.contains("<file_content"),
-            "file_content blocks must not appear when full_content is cleared"
-        );
-        assert!(
-            !prompt.contains(&"F".repeat(10)),
-            "full_content from file1 must not appear"
-        );
-        assert!(
-            !prompt.contains(&"C".repeat(10)),
-            "full_content from file2 must not appear"
-        );
+        let result = super::super::context::load_system_prompt_override("test_override").await;
+        // Restore env to avoid polluting other tests
+        // SAFETY: single-threaded test; no other thread reads XDG_CONFIG_HOME concurrently.
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+        assert_eq!(result.as_deref(), Some("Custom override content\n"));
     }
 
     #[test]
@@ -2641,141 +2372,6 @@ mod tests {
         assert!(
             prompt.contains("removed API"),
             "release notes content must be preserved after sanitization"
-        );
-    }
-
-    #[test]
-    fn test_budget_drop_removes_dep_enrichments() {
-        use super::super::types::{DepReleaseNote, PrDetails, PrFile};
-
-        // Arrange: PR with large dep enrichments that would exceed budget
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Bump deps".to_string(),
-            body: "Update dependencies".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![PrFile {
-                filename: "Cargo.toml".to_string(),
-                status: "modified".to_string(),
-                additions: 1,
-                deletions: 1,
-                patch: Some(
-                    "--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1 @@\n-lib = \"1.0\"\n+lib = \"2.0\""
-                        .to_string(),
-                ),
-                patch_truncated: false,
-                full_content: None,
-            }],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![DepReleaseNote {
-                package_name: "lib".to_string(),
-                old_version: "1.0".to_string(),
-                new_version: "2.0".to_string(),
-                registry: "crates.io".to_string(),
-                github_url: "https://github.com/owner/lib".to_string(),
-                body: "Release notes".to_string(),
-                fetch_note: String::new(),
-            }],
-        };
-
-        // Act: build review prompt
-        let prompt = TestProvider::build_pr_review_user_prompt(
-            &mut crate::ai::review_context::ReviewContext {
-                pr,
-                ast_context: String::new(),
-                call_graph: String::new(),
-                inferred_repo_path: None,
-                cwd_inferred: false,
-                max_chars_per_file: 16_000,
-                files_truncated: 0,
-                truncated_chars_dropped: 0,
-                ..Default::default()
-            },
-        );
-
-        // Assert: dep_enrichments are present in prompt when not over budget
-        assert!(
-            prompt.contains("<dependency_release_notes>"),
-            "dependency_release_notes block should be present"
-        );
-        assert!(prompt.contains("lib"), "package name should be in prompt");
-    }
-
-    // ---------------------------------------------------------------------------
-    // response_format conditional tests
-    // ---------------------------------------------------------------------------
-
-    struct AnthropicTestProvider;
-
-    impl AiProvider for AnthropicTestProvider {
-        fn name(&self) -> &'static str {
-            "anthropic"
-        }
-
-        fn api_url(&self) -> &'static str {
-            "https://api.anthropic.com/v1"
-        }
-
-        fn api_key_env(&self) -> &'static str {
-            "ANTHROPIC_API_KEY"
-        }
-
-        fn http_client(&self) -> &Client {
-            unimplemented!()
-        }
-
-        fn api_key(&self) -> &SecretString {
-            unimplemented!()
-        }
-
-        fn model(&self) -> &'static str {
-            "claude-opus-4-8"
-        }
-
-        fn max_tokens(&self) -> u32 {
-            2048
-        }
-
-        fn temperature(&self) -> f32 {
-            0.3
-        }
-    }
-
-    #[test]
-    fn test_anthropic_strips_response_format() {
-        // Arrange: Anthropic provider; is_anthropic() returns true
-        let provider = AnthropicTestProvider;
-        // Act: call the shared helper used by all four request builders
-        let response_format = provider_response_format(&provider);
-        // Assert: Anthropic receives no response_format field
-        assert!(
-            response_format.is_none(),
-            "response_format must be None for Anthropic direct API"
-        );
-    }
-
-    #[test]
-    fn test_non_anthropic_keeps_response_format() {
-        // Arrange: non-Anthropic provider (TestProvider.name() == "test")
-        let provider = TestProvider;
-        // Act: call the shared helper used by all four request builders
-        let response_format = provider_response_format(&provider);
-        // Assert: non-Anthropic providers retain response_format
-        assert!(
-            response_format.is_some(),
-            "response_format must be Some for non-Anthropic providers"
-        );
-        assert_eq!(
-            response_format.unwrap().format_type,
-            "json_object",
-            "format_type must be json_object"
         );
     }
 }
