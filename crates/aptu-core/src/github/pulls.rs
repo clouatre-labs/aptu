@@ -169,7 +169,10 @@ pub async fn fetch_pr_details(
                     owner,
                     repo,
                     &file.filename,
-                    &pr.head.sha,
+                    pr.head
+                        .as_deref()
+                        .map(|h| h.sha.as_str())
+                        .unwrap_or_default(),
                     review_config.max_chars_per_file,
                 )
                 .await
@@ -186,7 +189,10 @@ pub async fn fetch_pr_details(
         owner,
         repo,
         &pr_files,
-        &pr.head.sha,
+        pr.head
+            .as_deref()
+            .map(|h| h.sha.as_str())
+            .unwrap_or_default(),
         review_config.max_full_content_files,
         review_config.max_chars_per_file,
     )
@@ -207,19 +213,41 @@ pub async fn fetch_pr_details(
         })
         .collect();
 
-    let labels: Vec<String> = pr.labels.iter().map(|l| l.name.clone()).collect();
+    let labels: Vec<String> = pr
+        .labels
+        .iter()
+        .flat_map(|v| v.iter())
+        .map(|l| l.name.clone())
+        .collect();
 
     let details = PrDetails {
         owner: owner.to_string(),
         repo: repo.to_string(),
         number,
-        title: pr.title.clone(),
+        title: pr.title.clone().unwrap_or_default(),
         body: pr.body.clone().unwrap_or_default(),
-        base_branch: pr.base.ref_field,
-        head_branch: pr.head.ref_field,
-        head_sha: pr.head.sha,
+        base_branch: pr
+            .base
+            .as_deref()
+            .map(|b| b.ref_field.clone())
+            .unwrap_or_default(),
+        head_branch: pr
+            .head
+            .as_deref()
+            .map(|h| h.ref_field.clone())
+            .unwrap_or_default(),
+        head_sha: pr
+            .head
+            .as_deref()
+            .map(|h| h.sha.as_str())
+            .unwrap_or_default()
+            .to_string(),
         files: pr_files,
-        url: pr.html_url.to_string(),
+        url: pr
+            .html_url
+            .as_ref()
+            .map(std::string::ToString::to_string)
+            .unwrap_or_default(),
         labels,
         review_comments: Vec::new(),
         instructions: None,
@@ -690,15 +718,27 @@ pub async fn create_pull_request(
         })?;
 
     let result = PrCreateResult {
-        pr_number: pr.number,
-        url: pr.html_url.to_string(),
-        branch: pr.head.ref_field,
-        base: pr.base.ref_field,
-        title: pr.title.clone(),
+        pr_number: pr.number.unwrap_or(0),
+        url: pr
+            .html_url
+            .as_ref()
+            .map(std::string::ToString::to_string)
+            .unwrap_or_default(),
+        branch: pr
+            .head
+            .as_deref()
+            .map(|h| h.ref_field.clone())
+            .unwrap_or_default(),
+        base: pr
+            .base
+            .as_deref()
+            .map(|b| b.ref_field.clone())
+            .unwrap_or_default(),
+        title: pr.title.clone().unwrap_or_default(),
         draft: pr.draft.unwrap_or(false),
-        files_changed: u32::try_from(pr.changed_files).unwrap_or(u32::MAX),
-        additions: pr.additions,
-        deletions: pr.deletions,
+        files_changed: u32::try_from(pr.changed_files.unwrap_or(0)).unwrap_or(u32::MAX),
+        additions: pr.additions.unwrap_or(0),
+        deletions: pr.deletions.unwrap_or(0),
     };
 
     debug!(

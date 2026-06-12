@@ -337,6 +337,7 @@ pub fn compute_score(additions: u64, deletions: u64, age_days: f64, max_size: u6
 /// TODO: In follow-up PR, add CI status and conflict detection.
 /// TODO: In follow-up PR, add caching of results.
 #[instrument(skip_all, fields(repo, limit))]
+#[allow(clippy::too_many_lines)]
 pub async fn run_queue(
     _config: &aptu_core::AppConfig,
     owner: &str,
@@ -387,7 +388,7 @@ pub async fn run_queue(
         if pr.draft.unwrap_or(false) {
             draft_count += 1;
         } else {
-            non_draft_numbers.push(pr.number);
+            non_draft_numbers.push(pr.number.unwrap_or(0));
         }
     }
 
@@ -411,22 +412,44 @@ pub async fn run_queue(
 
     let mut queued_prs: Vec<crate::output::pr::QueuedPr> = full_prs
         .into_iter()
-        .map(|pr| {
+        .filter_map(|pr| {
+            let number = pr.number.unwrap_or(0);
+            if number == 0 {
+                tracing::warn!("Skipping PR with missing or invalid number; excluding from queue");
+                return None;
+            }
             #[allow(clippy::cast_precision_loss)]
             let age_days = {
-                let duration = now.signed_duration_since(pr.created_at);
+                let created = pr.created_at.unwrap_or_else(chrono::Utc::now);
+                let duration = now.signed_duration_since(created);
                 duration.num_seconds() as f64 / 86400.0
             };
-            crate::output::pr::QueuedPr {
-                number: pr.number,
-                title: pr.title.clone(),
-                author: pr.user.login.clone(),
+            let title = pr.title.clone().unwrap_or_default();
+            let author = pr
+                .user
+                .as_ref()
+                .map(|u| u.login.clone())
+                .unwrap_or_default();
+            let additions = pr.additions.unwrap_or(0);
+            let deletions = pr.deletions.unwrap_or(0);
+            tracing::debug!(
+                pr_number = number,
+                title = %title,
+                author = %author,
+                additions,
+                deletions,
+                "Mapping PR into queue entry"
+            );
+            Some(crate::output::pr::QueuedPr {
+                number,
+                title,
+                author,
                 age_days,
-                additions: pr.additions,
-                deletions: pr.deletions,
+                additions,
+                deletions,
                 score: 0.0, // Computed below
                 draft: false,
-            }
+            })
         })
         .collect();
 
@@ -623,5 +646,26 @@ mod tests {
         };
         let header = format_comment_header(&comment);
         assert_eq!(header, "src/lib.rs  [INFO]");
+    }
+
+    #[test]
+    fn test_queue_skips_pr_with_zero_number() {
+        // Arrange: simulate filter_map logic for a PR with number == 0
+        let numbers: Vec<Option<u64>> = vec![Some(0), Some(1), Some(2)];
+
+        // Act: apply the same filter_map guard used in run_queue
+        let kept: Vec<u64> = numbers
+            .into_iter()
+            .filter_map(|n| {
+                let number = n.unwrap_or(0);
+                if number == 0 {
+                    return None;
+                }
+                Some(number)
+            })
+            .collect();
+
+        // Assert: PR with number 0 is excluded; valid PRs pass through
+        assert_eq!(kept, vec![1, 2]);
     }
 }
