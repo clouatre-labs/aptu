@@ -15,7 +15,7 @@ repository = "https://github.com/clouatre-labs/aptu"
 toml = "1.0"
 fastrand = "2"
 percent-encoding = "2"
-serial_test = "3.4.0"
+serial_test = "3.5.0"
 tempfile = "3.27.0"
 # Core
 aptu-core = { path = "crates/aptu-core", version = "0.8.7" }
