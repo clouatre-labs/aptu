@@ -439,11 +439,7 @@ pub async fn create_issue(
 ) -> Result<(String, u64)> {
     debug!("Creating GitHub issue");
 
-    let issue = client
-        .issues(owner, repo)
-        .create(title)
-        .body(body)
-        .send()
+    let issue = Box::pin(client.issues(owner, repo).create(title).body(body).send())
         .await
         .with_context(|| format!("Failed to create issue in {owner}/{repo}"))?;
 
