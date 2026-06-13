@@ -482,7 +482,7 @@ pub async fn post_issue(
     let client = create_client_from_provider(provider)?;
 
     // Post issue to GitHub
-    gh_create_issue(&client, owner, repo, title, body)
+    Box::pin(gh_create_issue(&client, owner, repo, title, body))
         .await
         .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
