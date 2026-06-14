@@ -15,7 +15,7 @@ on:
 
 jobs:
   aptu:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm  # arm64 runner; ~50% cheaper; aptu ships native arm64 binary
     permissions:
       contents: read
       issues: write
@@ -51,7 +51,7 @@ Provide **one** API key. The action detects the provider automatically.
 |----------|-------|---------------|
 | Anthropic | `anthropic-api-key` | (set via `model`) |
 | Cerebras | `cerebras-api-key` | (set via `model`) |
-| Google Gemini | `gemini-api-key` | `gemini-3.1-flash-lite-preview` |
+| Google Gemini | `gemini-api-key` | `gemini-3.1-flash-lite` |
 | Groq | `groq-api-key` | (set via `model`) |
 | OpenRouter | `openrouter-api-key` | `mistralai/mistral-small-2603` |
 | Z.AI | `zai-api-key` | (set via `model`) |
@@ -157,6 +157,7 @@ Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploade
 | `issues: write` | Issue triage (comments, labels) |
 | `pull-requests: write` | PR labeling and review (comments, labels) |
 | `contents: read` | Repository context (all features) |
+| `attestations: read` | SLSA binary verification (`gh attestation verify`) |
 
 ## Observability
 
@@ -182,7 +183,7 @@ on:
 
 jobs:
   triage:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm  # arm64 runner; ~50% cheaper; aptu ships native arm64 binary
     permissions:
       contents: read
       issues: write
