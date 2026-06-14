@@ -6,7 +6,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.issue.number || github.run_id }}
-  cancel-in-progress: false
+  cancel-in-progress: false  # each issue event must complete; cancellation would leave triage half-done
 
 permissions: {}
 

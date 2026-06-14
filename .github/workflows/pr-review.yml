@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: false
+  cancel-in-progress: false  # each PR event must complete; cancellation by a follow-up push would leave review half-done
 
 permissions: {}
 
