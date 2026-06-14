@@ -45,7 +45,7 @@ inputs:
   model:
     description: >
       Model identifier for the selected provider. Defaults to mistralai/mistral-small-2603
-      when provider is openrouter, or gemini-3.1-flash-lite-preview when provider is gemini.
+      when provider is openrouter, or gemini-3.1-flash-lite when provider is gemini.
       See docs/CONFIGURATION.md for per-provider model lists.
     required: false
     default: ''
@@ -245,9 +245,9 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        APTU_VERSION: ${{ steps.resolve-version.outputs.version }}
       run: |
         set -euo pipefail
-        APTU_VERSION="${{ steps.resolve-version.outputs.version }}"
         echo "::group::Installing aptu v$APTU_VERSION"
 
         case "$(uname -m)" in
@@ -312,22 +312,22 @@ runs:
         set -e
 
         ISSUE_REF="${REPO}#${ISSUE_NUMBER}"
-        ARGS=""
+        ARGS=()
 
         if [[ "$DRY_RUN" == "true" ]]; then
-          ARGS="$ARGS --dry-run"
+          ARGS+=(--dry-run)
         fi
 
         if [[ "$APPLY_LABELS" == "false" ]]; then
-          ARGS="$ARGS --no-apply"
+          ARGS+=(--no-apply)
         fi
 
         if [[ "$NO_COMMENT" == "true" ]]; then
-          ARGS="$ARGS --no-comment"
+          ARGS+=(--no-comment)
         fi
 
-        echo "Running: aptu issue triage $ARGS $ISSUE_REF"
-        aptu issue triage $ARGS "$ISSUE_REF"
+        echo "Running: aptu issue triage ${ARGS[*]} $ISSUE_REF"
+        aptu issue triage "${ARGS[@]}" "$ISSUE_REF"
 
     - name: Run aptu issue triage (scheduled batch)
       if: github.event_name == 'schedule' && steps.check-skip.outputs.skip != 'true'
@@ -352,24 +352,24 @@ runs:
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
-        ARGS="--repo $REPO"
+        ARGS=(--repo "$REPO")
         if [[ -n "$SINCE" ]]; then
-          ARGS="$ARGS --since $SINCE"
+          ARGS+=(--since "$SINCE")
         fi
         if [[ -n "$ISSUE_STATE" && "$ISSUE_STATE" != "open" ]]; then
-          ARGS="$ARGS --state $ISSUE_STATE"
+          ARGS+=(--state "$ISSUE_STATE")
         fi
         if [[ "$DRY_RUN" == "true" ]]; then
-          ARGS="$ARGS --dry-run"
+          ARGS+=(--dry-run)
         fi
         if [[ "$APPLY_LABELS" == "false" ]]; then
-          ARGS="$ARGS --no-apply"
+          ARGS+=(--no-apply)
         fi
         if [[ "$NO_COMMENT" == "true" ]]; then
-          ARGS="$ARGS --no-comment"
+          ARGS+=(--no-comment)
         fi
-        echo "Running: aptu issue triage $ARGS"
-        aptu issue triage $ARGS
+        echo "Running: aptu issue triage ${ARGS[*]}"
+        aptu issue triage "${ARGS[@]}"
 
     - name: Run aptu PR label
       if: github.event_name == 'pull_request'
@@ -393,14 +393,14 @@ runs:
         set -e
 
         PR_REF="${REPO}#${PR_NUMBER}"
-        ARGS=""
+        ARGS=()
 
         if [[ "$DRY_RUN" == "true" ]]; then
-          ARGS="$ARGS --dry-run"
+          ARGS+=(--dry-run)
         fi
 
-        echo "Running: aptu pr label $ARGS $PR_REF"
-        aptu pr label $ARGS "$PR_REF"
+        echo "Running: aptu pr label ${ARGS[*]} $PR_REF"
+        aptu pr label "${ARGS[@]}" "$PR_REF"
 
     - name: Run aptu PR review
       if: github.event_name == 'pull_request'
@@ -431,32 +431,32 @@ runs:
         set -e
 
         PR_REF="${REPO}#${PR_NUMBER}"
-        ARGS="--comment --force"
+        ARGS=(--comment --force)
 
         if [[ "$DRY_RUN" == "true" ]]; then
-          ARGS="$ARGS --dry-run"
+          ARGS+=(--dry-run)
         fi
 
         if [[ "$APPLY_LABELS" == "false" ]]; then
-          ARGS="$ARGS --no-apply"
+          ARGS+=(--no-apply)
         fi
 
         if [[ "$NO_COMMENT" == "true" ]]; then
-          ARGS="$ARGS --no-comment"
+          ARGS+=(--no-comment)
         fi
 
         if [[ -n "$REPO_PATH" ]]; then
-          ARGS="$ARGS --repo-path $REPO_PATH"
+          ARGS+=(--repo-path "$REPO_PATH")
         fi
         if [[ "$DEEP" == "true" && -n "$REPO_PATH" ]]; then
-          ARGS="$ARGS --deep"
+          ARGS+=(--deep)
         fi
         if [[ -n "$INSTRUCTIONS_FILE" ]]; then
-          ARGS="$ARGS --instructions-file $INSTRUCTIONS_FILE"
+          ARGS+=(--instructions-file "$INSTRUCTIONS_FILE")
         fi
 
-        echo "Running: aptu pr review $ARGS $PR_REF"
-        aptu pr review $ARGS "$PR_REF"
+        echo "Running: aptu pr review ${ARGS[*]} $PR_REF"
+        aptu pr review "${ARGS[@]}" "$PR_REF"
 
     - name: Run aptu scan-security
       if: inputs.scan-path != '' || inputs.scan-security-diff != ''
