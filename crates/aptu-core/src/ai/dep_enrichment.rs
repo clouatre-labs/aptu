@@ -297,10 +297,13 @@ async fn enrich_single_package(
     let (body, release_fetch_note) =
         release_notes_from_octocrab(&owner, &repo, &new_version, max_chars).await;
     #[cfg(target_arch = "wasm32")]
-    let (body, release_fetch_note) = (
-        String::new(),
-        "GitHub fetch unavailable on wasm32".to_string(),
-    );
+    let (body, release_fetch_note) = {
+        tracing::debug!("GitHub fetch unavailable on wasm32");
+        (
+            String::new(),
+            "GitHub fetch unavailable on wasm32".to_string(),
+        )
+    };
 
     if !release_fetch_note.is_empty() {
         fetch_note = release_fetch_note;
