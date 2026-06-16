@@ -51,6 +51,14 @@ pub async fn list_models(
         })
 }
 
+#[cfg(target_arch = "wasm32")]
+pub async fn list_models(
+    _provider: &dyn crate::auth::TokenProvider,
+    _provider_name: &str,
+) -> crate::Result<Vec<crate::ai::registry::CachedModel>> {
+    crate::facade::wasm_unsupported!("list_models");
+}
+
 /// Validates if a model exists for a provider.
 ///
 /// This function checks if a specific model identifier is available for a provider,
@@ -92,4 +100,13 @@ pub async fn validate_model(
         .map_err(|e| AptuError::ModelRegistry {
             message: format!("Failed to validate model: {e}"),
         })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn validate_model(
+    _provider: &dyn crate::auth::TokenProvider,
+    _provider_name: &str,
+    _model_id: &str,
+) -> crate::Result<bool> {
+    crate::facade::wasm_unsupported!("validate_model");
 }

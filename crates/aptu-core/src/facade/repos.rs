@@ -133,6 +133,15 @@ pub async fn fetch_issues(
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+pub async fn fetch_issues(
+    _provider: &dyn crate::auth::TokenProvider,
+    _repo_filter: Option<&str>,
+    _use_cache: bool,
+) -> crate::Result<Vec<(String, Vec<crate::github::graphql::IssueNode>)>> {
+    crate::facade::wasm_unsupported!("fetch_issues");
+}
+
 /// Fetches curated repositories with platform-agnostic API.
 ///
 /// This function provides a facade for fetching curated repositories,
@@ -148,6 +157,13 @@ pub async fn fetch_issues(
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn list_curated_repos() -> crate::Result<Vec<CuratedRepo>> {
     repos::fetch().await
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn list_curated_repos() -> crate::Result<Vec<CuratedRepo>> {
+    Err(AptuError::GitHub {
+        message: "list_curated_repos is not supported on wasm32-unknown-unknown".into(),
+    })
 }
 
 /// Adds a custom repository.
@@ -199,6 +215,14 @@ pub async fn add_custom_repo(owner: &str, name: &str) -> crate::Result<CuratedRe
     Ok(repo)
 }
 
+#[cfg(target_arch = "wasm32")]
+pub async fn add_custom_repo(owner: &str, name: &str) -> crate::Result<CuratedRepo> {
+    let _ = (owner, name);
+    Err(AptuError::GitHub {
+        message: "add_custom_repo is not supported on wasm32-unknown-unknown".into(),
+    })
+}
+
 /// Removes a custom repository.
 ///
 /// # Arguments
@@ -235,6 +259,14 @@ pub fn remove_custom_repo(owner: &str, name: &str) -> crate::Result<bool> {
     Ok(true)
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn remove_custom_repo(owner: &str, name: &str) -> crate::Result<bool> {
+    let _ = (owner, name);
+    Err(AptuError::GitHub {
+        message: "remove_custom_repo is not supported on wasm32-unknown-unknown".into(),
+    })
+}
+
 /// Lists repositories with optional filtering.
 ///
 /// # Arguments
@@ -252,6 +284,14 @@ pub fn remove_custom_repo(owner: &str, name: &str) -> crate::Result<bool> {
 #[instrument]
 pub async fn list_repos(filter: repos::RepoFilter) -> crate::Result<Vec<CuratedRepo>> {
     repos::fetch_all(filter).await
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn list_repos(filter: repos::RepoFilter) -> crate::Result<Vec<CuratedRepo>> {
+    let _ = filter;
+    Err(AptuError::GitHub {
+        message: "list_repos is not supported on wasm32-unknown-unknown".into(),
+    })
 }
 
 /// Discovers repositories matching a filter via GitHub Search API.
@@ -282,4 +322,12 @@ pub async fn discover_repos(
     let token = provider.github_token().ok_or(AptuError::NotAuthenticated)?;
     let token = SecretString::from(token);
     repos::discovery::search_repositories(&token, &filter).await
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn discover_repos(
+    _provider: &dyn crate::auth::TokenProvider,
+    _filter: crate::repos::discovery::DiscoveryFilter,
+) -> crate::Result<Vec<crate::repos::discovery::DiscoveredRepo>> {
+    crate::facade::wasm_unsupported!("discover_repos");
 }

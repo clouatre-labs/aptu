@@ -134,6 +134,15 @@ pub async fn analyze_issue(
     Ok((ai_response, stats))
 }
 
+#[cfg(target_arch = "wasm32")]
+pub async fn analyze_issue(
+    _provider: &dyn crate::auth::TokenProvider,
+    _issue: &crate::ai::types::IssueDetails,
+    _ai_config: &crate::config::AiConfig,
+) -> crate::Result<(crate::ai::AiResponse, crate::history::AiStats)> {
+    crate::facade::wasm_unsupported!("analyze_issue");
+}
+
 /// Fetches an issue for triage analysis.
 ///
 /// Parses the issue reference, checks authentication, and fetches issue details
@@ -292,6 +301,15 @@ pub async fn fetch_issue_for_triage(
     Ok(issue_details)
 }
 
+#[cfg(target_arch = "wasm32")]
+pub async fn fetch_issue_for_triage(
+    _provider: &dyn crate::auth::TokenProvider,
+    _reference: &str,
+    _repo_context: Option<&str>,
+) -> crate::Result<crate::ai::types::IssueDetails> {
+    crate::facade::wasm_unsupported!("fetch_issue_for_triage");
+}
+
 /// Posts a triage comment to GitHub.
 ///
 /// Renders the triage response as markdown and posts it as a comment on the issue.
@@ -337,6 +355,15 @@ pub async fn post_triage_comment(
 
     debug!(comment_url = %comment_url, "Triage comment posted");
     Ok(comment_url)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn post_triage_comment(
+    _provider: &dyn crate::auth::TokenProvider,
+    _issue_details: &crate::ai::types::IssueDetails,
+    _triage: &crate::ai::types::TriageResponse,
+) -> crate::Result<String> {
+    crate::facade::wasm_unsupported!("post_triage_comment");
 }
 
 /// Applies AI-suggested labels and milestone to an issue.
@@ -398,6 +425,15 @@ pub async fn apply_triage_labels(
     );
 
     Ok(result)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn apply_triage_labels(
+    _provider: &dyn crate::auth::TokenProvider,
+    _issue_details: &crate::ai::types::IssueDetails,
+    _triage: &crate::ai::types::TriageResponse,
+) -> crate::Result<crate::github::issues::ApplyResult> {
+    crate::facade::wasm_unsupported!("apply_triage_labels");
 }
 
 /// Formats a GitHub issue with AI assistance.
@@ -497,6 +533,17 @@ pub async fn post_issue(
         .map_err(|e| AptuError::GitHub {
             message: e.to_string(),
         })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn post_issue(
+    _provider: &dyn crate::auth::TokenProvider,
+    _owner: &str,
+    _repo: &str,
+    _title: &str,
+    _body: &str,
+) -> crate::Result<(String, u64)> {
+    crate::facade::wasm_unsupported!("post_issue");
 }
 
 #[cfg(test)]

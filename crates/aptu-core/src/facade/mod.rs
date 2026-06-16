@@ -7,6 +7,22 @@
 //! Each platform (CLI, iOS, MCP) implements `TokenProvider` and calls these
 //! functions with their own credential source.
 
+/// Returns `Err(AptuError::GitHub)` with a "not supported on wasm32" message.
+///
+/// Used in `#[cfg(target_arch = "wasm32")]` stub bodies to avoid repeating
+/// the same boilerplate across all facade submodules.
+#[cfg(target_arch = "wasm32")]
+macro_rules! wasm_unsupported {
+    ($fn_name:expr) => {
+        return Err(crate::error::AptuError::GitHub {
+            message: format!("{} is not supported on wasm32-unknown-unknown", $fn_name),
+        })
+    };
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) use wasm_unsupported;
+
 pub mod ai_client;
 pub mod issues;
 pub mod models;
