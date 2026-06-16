@@ -92,6 +92,7 @@ impl<T> CacheEntry<T> {
 /// - Windows: `C:\Users\<User>\AppData\Local\aptu`
 ///
 /// Returns `None` if the cache directory cannot be determined.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn cache_dir() -> Option<PathBuf> {
     dirs::cache_dir().map(|dir| dir.join("aptu"))
@@ -149,6 +150,7 @@ pub(crate) trait FileCache<V> {
 ///
 /// Stores serialized data in JSON files with embedded metadata.
 /// When cache directory is unavailable (None), all operations become no-ops.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) struct FileCacheImpl<V> {
     cache_dir: Option<PathBuf>,
     ttl: Duration,
@@ -156,6 +158,7 @@ pub(crate) struct FileCacheImpl<V> {
     _phantom: std::marker::PhantomData<V>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<V> FileCacheImpl<V>
 where
     V: Serialize + for<'de> Deserialize<'de>,
@@ -295,6 +298,7 @@ where
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<V> FileCache<V> for FileCacheImpl<V>
 where
     V: Serialize + for<'de> Deserialize<'de>,
@@ -406,6 +410,76 @@ where
                 .await
                 .with_context(|| format!("Failed to remove cache file: {}", path.display()))?;
         }
+        Ok(())
+    }
+}
+
+/// In-memory cache implementation using a `HashMap`.
+///
+/// Stores serialized data in memory with no filesystem dependency.
+/// Always available (no cfg gate), making it suitable for WASM and
+/// test environments. TTL is accepted but ignored -- entries never
+/// expire in memory.
+#[allow(dead_code)]
+pub(crate) struct InMemoryCache<V> {
+    store: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
+    _phantom: std::marker::PhantomData<V>,
+}
+
+impl<V> InMemoryCache<V>
+where
+    V: Serialize + serde::de::DeserializeOwned + Send,
+{
+    /// Create a new in-memory cache.
+    #[must_use]
+    #[allow(dead_code)]
+    pub fn new() -> Self {
+        Self {
+            store: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<V> Default for InMemoryCache<V>
+where
+    V: Serialize + serde::de::DeserializeOwned + Send,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<V> FileCache<V> for InMemoryCache<V>
+where
+    V: Serialize + serde::de::DeserializeOwned + Send,
+{
+    async fn get(&self, key: &str) -> Result<Option<V>> {
+        let guard = self.store.lock().await;
+        match guard.get(key) {
+            Some(bytes) => {
+                let value: V = serde_json::from_slice(bytes)
+                    .with_context(|| format!("Failed to deserialize cache entry for key: {key}"))?;
+                Ok(Some(value))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn get_stale(&self, key: &str) -> Result<Option<V>> {
+        self.get(key).await
+    }
+
+    async fn set(&self, key: &str, value: &V) -> Result<()> {
+        let bytes = serde_json::to_vec(value)
+            .with_context(|| format!("Failed to serialize cache entry for key: {key}"))?;
+        self.store.lock().await.insert(key.to_string(), bytes);
+        Ok(())
+    }
+
+    #[cfg(test)]
+    async fn remove(&self, key: &str) -> Result<()> {
+        self.store.lock().await.remove(key);
         Ok(())
     }
 }
@@ -701,5 +775,53 @@ mod tests {
 
         // Cleanup
         cache.remove("fresh_key").await.ok();
+    }
+
+    #[tokio::test]
+    async fn test_in_memory_cache_get_set() {
+        let cache = InMemoryCache::<TestData>::new();
+        let data = TestData {
+            value: "hello".to_string(),
+            count: 42,
+        };
+        cache
+            .set("my_key", &data)
+            .await
+            .expect("set should succeed");
+        let result = cache.get("my_key").await.expect("get should succeed");
+        assert_eq!(result, Some(data));
+    }
+
+    #[tokio::test]
+    async fn test_in_memory_cache_get_miss() {
+        let cache = InMemoryCache::<TestData>::new();
+        let result = cache.get("no_such_key").await.expect("get should succeed");
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_in_memory_cache_overwrite() {
+        let cache = InMemoryCache::<TestData>::new();
+        let data1 = TestData {
+            value: "first".to_string(),
+            count: 1,
+        };
+        let data2 = TestData {
+            value: "second".to_string(),
+            count: 2,
+        };
+        cache
+            .set("overwrite_key", &data1)
+            .await
+            .expect("first set should succeed");
+        cache
+            .set("overwrite_key", &data2)
+            .await
+            .expect("second set should succeed");
+        let result = cache
+            .get("overwrite_key")
+            .await
+            .expect("get should succeed");
+        assert_eq!(result, Some(data2));
     }
 }
