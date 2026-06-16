@@ -6,7 +6,12 @@
 
 [advisories]
 version = 2
-ignore = []
+# RUSTSEC-2023-0071: Marvin Attack timing sidechannel in rsa 0.9.x.
+# No patch is available. rsa is a transitive dep of jsonwebtoken <- octocrab
+# (jwt-rust-crypto feature). JWT signing is not performed in an
+# attacker-observable timing context in this CLI; risk is accepted until an
+# upstream fix lands in jsonwebtoken or octocrab drops the rsa dependency.
+ignore = ["RUSTSEC-2023-0071"]
 
 [licenses]
 version = 2
