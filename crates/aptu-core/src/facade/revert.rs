@@ -126,6 +126,18 @@ pub async fn revert_issue(
     })
 }
 
+#[cfg(target_arch = "wasm32")]
+pub async fn revert_issue(
+    _owner: &str,
+    _repo: &str,
+    _number: u64,
+    _dry_run: bool,
+) -> crate::Result<()> {
+    Err(AptuError::GitHub {
+        message: "revert_issue is not supported on wasm32-unknown-unknown".into(),
+    })
+}
+
 /// Reverts all comments and labels posted by the authenticated aptu user on a PR.
 ///
 /// Fetches the PR with review comments, identifies comments authored by the authenticated user,
@@ -239,5 +251,17 @@ pub async fn revert_pr(
         dry_run: false,
         labels_removed: labels_to_remove,
         comment_ids: comment_ids_to_delete,
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn revert_pr(
+    _owner: &str,
+    _repo: &str,
+    _number: u64,
+    _dry_run: bool,
+) -> crate::Result<()> {
+    Err(AptuError::GitHub {
+        message: "revert_pr is not supported on wasm32-unknown-unknown".into(),
     })
 }

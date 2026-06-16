@@ -80,6 +80,15 @@ pub async fn fetch_pr_for_review(
     Ok(pr)
 }
 
+#[cfg(target_arch = "wasm32")]
+pub async fn fetch_pr_for_review(
+    _provider: &dyn crate::auth::TokenProvider,
+    _reference: &str,
+    _repo_context: Option<&str>,
+) -> crate::Result<crate::ai::types::PrDetails> {
+    crate::facade::wasm_unsupported!("fetch_pr_for_review");
+}
+
 /// Reconstructs a unified diff string from PR file patches for security scanning.
 ///
 /// Files with `patch: None` (e.g. binary files or files with no changes) are silently
@@ -246,6 +255,21 @@ pub async fn analyze_pr(
     Ok((response, ai_stats, context_record))
 }
 
+#[cfg(target_arch = "wasm32")]
+pub async fn analyze_pr(
+    _provider: &dyn crate::auth::TokenProvider,
+    _pr_details: &crate::ai::types::PrDetails,
+    _ai_config: &crate::config::AiConfig,
+    _repo_path: Option<String>,
+    _deep: bool,
+) -> crate::Result<(
+    crate::ai::types::PrReviewResponse,
+    crate::history::AiStats,
+    crate::metrics::ReviewContextRecord,
+)> {
+    crate::facade::wasm_unsupported!("analyze_pr");
+}
+
 /// Posts a PR review to GitHub.
 ///
 /// This function abstracts the credential resolution and API client creation,
@@ -302,6 +326,19 @@ pub async fn post_pr_review(
     .map_err(|e| AptuError::GitHub {
         message: e.to_string(),
     })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn post_pr_review(
+    _provider: &dyn crate::auth::TokenProvider,
+    _reference: &str,
+    _repo_context: Option<&str>,
+    _body: &str,
+    _event: crate::ai::types::ReviewEvent,
+    _comments: &[crate::ai::types::PrReviewComment],
+    _commit_id: &str,
+) -> crate::Result<u64> {
+    crate::facade::wasm_unsupported!("post_pr_review");
 }
 
 /// Auto-label a pull request based on conventional commit prefix and file paths.
@@ -433,6 +470,17 @@ pub async fn label_pr(
     }
 
     Ok((number, pr_details.title, pr_details.url, labels, stats))
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn label_pr(
+    _provider: &dyn crate::auth::TokenProvider,
+    _reference: &str,
+    _repo_context: Option<&str>,
+    _dry_run: bool,
+    _ai_config: &crate::config::AiConfig,
+) -> crate::Result<(u64, String, String, Vec<String>, crate::history::AiStats)> {
+    crate::facade::wasm_unsupported!("label_pr");
 }
 
 #[cfg(test)]

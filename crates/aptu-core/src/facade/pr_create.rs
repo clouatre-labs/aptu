@@ -65,3 +65,17 @@ pub async fn create_pr(
         message: e.to_string(),
     })
 }
+
+#[cfg(target_arch = "wasm32")]
+pub async fn create_pr(
+    _provider: &dyn crate::auth::TokenProvider,
+    _owner: &str,
+    _repo: &str,
+    _title: &str,
+    _base_branch: &str,
+    _head_branch: &str,
+    _body: Option<&str>,
+    _draft: bool,
+) -> crate::Result<crate::github::pulls::PrCreateResult> {
+    crate::facade::wasm_unsupported!("create_pr");
+}
