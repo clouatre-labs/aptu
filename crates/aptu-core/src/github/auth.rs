@@ -177,6 +177,7 @@ fn parse_gh_cli_output(output: &std::process::Output) -> Option<SecretString> {
 /// - `gh` is not authenticated
 /// - The command times out (5 seconds)
 /// - Any other error occurs
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument]
 fn get_token_from_gh_cli() -> Option<SecretString> {
     debug!("Attempting to get token from gh CLI");
@@ -241,6 +242,7 @@ where
     });
 
     // Priority 3: GitHub CLI
+    #[cfg(not(target_arch = "wasm32"))]
     let result = result.or_else(|| {
         let token = get_token_from_gh_cli();
         if token.is_some() {
@@ -402,6 +404,7 @@ pub async fn authenticate(client_id: &SecretString) -> Result<()> {
 /// GitHub CLI, or system keyring.
 ///
 /// Returns an error if no token is found from any source.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument]
 pub fn create_client() -> Result<Octocrab> {
     let (token, source) =
@@ -430,6 +433,7 @@ pub fn create_client() -> Result<Octocrab> {
 /// # Errors
 ///
 /// Returns an error if the Octocrab client cannot be built.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(token))]
 pub fn create_client_with_token(token: &SecretString) -> Result<Octocrab> {
     info!("Creating GitHub client with provided token");
@@ -464,6 +468,7 @@ pub fn create_client_with_token(token: &SecretString) -> Result<Octocrab> {
 /// ```ignore
 /// let client = create_client_from_provider(provider)?;
 /// ```
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider))]
 pub fn create_client_from_provider(
     provider: &dyn crate::auth::TokenProvider,
@@ -512,6 +517,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_gh_cli_not_installed_returns_none() {
         // This test verifies that get_token_from_gh_cli gracefully handles
         // the case where gh is not in PATH (returns None, doesn't panic)

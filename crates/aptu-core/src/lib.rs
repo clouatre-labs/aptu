@@ -24,9 +24,11 @@ pub type Result<T> = std::result::Result<T, AptuError>;
 // Configuration
 // ============================================================================
 
+#[cfg(not(target_arch = "wasm32"))]
+pub use config::TomlConfigSource;
 pub use config::{
-    AiConfig, AppConfig, CacheConfig, GitHubConfig, TaskType, UiConfig, UserConfig, config_dir,
-    config_file_path, data_dir, load_config, prompts_dir,
+    AiConfig, AppConfig, CacheConfig, ConfigSource, GitHubConfig, InMemoryConfigSource, TaskType,
+    UiConfig, UserConfig, config_dir, config_file_path, data_dir, load_config, prompts_dir,
 };
 
 // ============================================================================

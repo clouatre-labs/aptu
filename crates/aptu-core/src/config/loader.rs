@@ -11,6 +11,84 @@ use crate::error::AptuError;
 
 use super::{AiConfig, CacheConfig, ReposConfig, ReviewConfig};
 
+/// Trait for loading application configuration from any source.
+///
+/// Decouples configuration loading from the filesystem, enabling
+/// file-based (TOML), in-memory (test/WASM), and future sources
+/// (e.g., iOS plist, remote config) to implement this trait.
+pub trait ConfigSource: Send + Sync {
+    /// Load and return the application configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AptuError::Config` if the source contains invalid data.
+    fn load(&self) -> Result<AppConfig, AptuError>;
+}
+
+/// In-memory configuration source for testing and WASM environments.
+///
+/// Holds a pre-built `AppConfig` and returns a clone on `load()`.
+/// Always available (no cfg gate).
+pub struct InMemoryConfigSource(pub AppConfig);
+
+impl ConfigSource for InMemoryConfigSource {
+    fn load(&self) -> Result<AppConfig, AptuError> {
+        Ok(self.0.clone())
+    }
+}
+
+/// TOML file-based configuration source.
+///
+/// Reads from the standard `config.toml` file in the XDG config directory
+/// and overlays environment variables with the `APTU_` prefix.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct TomlConfigSource;
+
+#[cfg(not(target_arch = "wasm32"))]
+impl TomlConfigSource {
+    /// Create a new TOML config source.
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Default for TomlConfigSource {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ConfigSource for TomlConfigSource {
+    fn load(&self) -> Result<AppConfig, AptuError> {
+        let config_path = config_file_path();
+
+        let config = Config::builder()
+            // Load from config file (optional - may not exist)
+            .add_source(File::with_name(config_path.to_string_lossy().as_ref()).required(false))
+            // Override with environment variables
+            .add_source(
+                Environment::with_prefix("APTU")
+                    .prefix_separator("_")
+                    .separator("__")
+                    .try_parsing(true),
+            )
+            .build()?;
+
+        let app_config: AppConfig = config.try_deserialize()?;
+
+        // Validate cache configuration
+        app_config
+            .cache
+            .validate()
+            .map_err(|e| AptuError::Config { message: e })?;
+
+        Ok(app_config)
+    }
+}
+
 /// User preferences.
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 #[serde(default)]
@@ -178,33 +256,14 @@ pub fn config_file_path() -> PathBuf {
 /// Environment variables use the prefix `APTU_` and double underscore
 /// for nested keys (e.g., `APTU_AI__MODEL`).
 ///
+/// This is a convenience shim that delegates to [`TomlConfigSource`].
+///
 /// # Errors
 ///
 /// Returns `AptuError::Config` if the config file exists but is invalid.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_config() -> Result<AppConfig, AptuError> {
-    let config_path = config_file_path();
-
-    let config = Config::builder()
-        // Load from config file (optional - may not exist)
-        .add_source(File::with_name(config_path.to_string_lossy().as_ref()).required(false))
-        // Override with environment variables
-        .add_source(
-            Environment::with_prefix("APTU")
-                .prefix_separator("_")
-                .separator("__")
-                .try_parsing(true),
-        )
-        .build()?;
-
-    let app_config: AppConfig = config.try_deserialize()?;
-
-    // Validate cache configuration
-    app_config
-        .cache
-        .validate()
-        .map_err(|e| AptuError::Config { message: e })?;
-
-    Ok(app_config)
+    TomlConfigSource::new().load()
 }
 
 #[cfg(test)]
@@ -766,6 +825,21 @@ model = "gemini-3.1-flash-lite-preview"
         assert_eq!(
             app_config.review.max_chars_per_file, review_config.max_chars_per_file,
             "AppConfig review defaults should match ReviewConfig defaults"
+        );
+    }
+
+    #[test]
+    fn test_in_memory_config_source_loads_defaults() {
+        let default_config = AppConfig::default();
+        let source = InMemoryConfigSource(default_config.clone());
+        let loaded = source.load().expect("load should succeed");
+        assert_eq!(loaded.ai.provider, default_config.ai.provider);
+        assert_eq!(loaded.ai.model, default_config.ai.model);
+        assert_eq!(loaded.ai.timeout_seconds, default_config.ai.timeout_seconds);
+        assert_eq!(loaded.ai.max_tokens, default_config.ai.max_tokens);
+        assert_eq!(
+            loaded.github.api_timeout_seconds,
+            default_config.github.api_timeout_seconds
         );
     }
 }

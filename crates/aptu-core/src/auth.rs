@@ -36,6 +36,8 @@ pub trait TokenProvider: Send + Sync {
 mod tests {
     use super::*;
     use crate::ai::registry::all_providers;
+    use secrecy::ExposeSecret;
+    use serial_test::serial;
     use std::collections::HashMap;
 
     /// Mock implementation for testing.
@@ -63,6 +65,27 @@ mod tests {
 
         fn ai_api_key(&self, provider: &str) -> Option<SecretString> {
             self.ai_keys.get(provider).cloned()
+        }
+    }
+
+    /// Reads tokens from environment variables at runtime.
+    ///
+    /// Always available (no cfg gate). On WASM, `std::env::var` returns
+    /// `Err(NotPresent)` for all variables, so both methods naturally
+    /// return `None` without needing platform gating.
+    pub struct EnvTokenProvider;
+
+    impl TokenProvider for EnvTokenProvider {
+        fn github_token(&self) -> Option<SecretString> {
+            std::env::var("GITHUB_TOKEN")
+                .or_else(|_| std::env::var("GH_TOKEN"))
+                .ok()
+                .map(SecretString::from)
+        }
+
+        fn ai_api_key(&self, provider: &str) -> Option<SecretString> {
+            let var = format!("{}_API_KEY", provider.to_uppercase().replace('-', "_"));
+            std::env::var(&var).ok().map(SecretString::from)
         }
     }
 
@@ -106,5 +129,49 @@ mod tests {
                 provider_config.name
             );
         }
+    }
+
+    #[test]
+    #[serial]
+    fn test_env_token_provider_github_token() {
+        // SAFETY: single-threaded test process; no concurrent env reads.
+        unsafe {
+            std::env::set_var("GITHUB_TOKEN", "test_gh_token_abc");
+        }
+        let provider = EnvTokenProvider;
+        let result = provider.github_token();
+        unsafe {
+            std::env::remove_var("GITHUB_TOKEN");
+        }
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().expose_secret(), "test_gh_token_abc");
+    }
+
+    #[test]
+    #[serial]
+    fn test_env_token_provider_ai_api_key() {
+        // SAFETY: single-threaded test process; no concurrent env reads.
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "sk-test-key");
+        }
+        let provider = EnvTokenProvider;
+        let result = provider.ai_api_key("openai");
+        unsafe {
+            std::env::remove_var("OPENAI_API_KEY");
+        }
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().expose_secret(), "sk-test-key");
+    }
+
+    #[test]
+    #[serial]
+    fn test_env_token_provider_no_env() {
+        // Ensure GITHUB_TOKEN and GH_TOKEN are unset
+        unsafe {
+            std::env::remove_var("GITHUB_TOKEN");
+            std::env::remove_var("GH_TOKEN");
+        }
+        let provider = EnvTokenProvider;
+        assert!(provider.github_token().is_none());
     }
 }
