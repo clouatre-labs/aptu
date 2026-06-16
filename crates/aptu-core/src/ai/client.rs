@@ -6,7 +6,6 @@
 //! registered in the provider registry. See [`super::registry`] for available providers.
 
 use std::env;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -43,6 +42,22 @@ impl std::fmt::Display for AuthMethod {
 pub struct ClaudeCredentials {
     /// OAuth access token.
     pub access_token: String,
+}
+
+/// Creates an HTTP client with timeout. On native targets, the request timeout
+/// is set on the client; on wasm32, the browser's fetch API manages timeouts
+/// independently and reqwest's `timeout()` is unavailable.
+fn build_http_client(timeout_seconds: u64) -> Result<Client> {
+    #[cfg(not(target_arch = "wasm32"))]
+    let http = Client::builder()
+        .timeout(std::time::Duration::from_secs(timeout_seconds))
+        .build()
+        .context("Failed to create HTTP client")?;
+    #[cfg(target_arch = "wasm32")]
+    let http = Client::builder()
+        .build()
+        .context("Failed to create HTTP client")?;
+    Ok(http)
 }
 
 /// Generic AI client for all providers.
@@ -129,11 +144,8 @@ impl AiClient {
             )
         })?;
 
-        // Create HTTP client with timeout
-        let http = Client::builder()
-            .timeout(Duration::from_secs(config.timeout_seconds))
-            .build()
-            .context("Failed to create HTTP client")?;
+        // Create HTTP client with timeout (timeout() is native-only; wasm32 uses fetch API)
+        let http = build_http_client(config.timeout_seconds)?;
 
         Ok(Self {
             provider,
@@ -196,11 +208,8 @@ impl AiClient {
             );
         }
 
-        // Create HTTP client with timeout
-        let http = Client::builder()
-            .timeout(Duration::from_secs(config.timeout_seconds))
-            .build()
-            .context("Failed to create HTTP client")?;
+        // Create HTTP client with timeout (timeout() is native-only; wasm32 uses fetch API)
+        let http = build_http_client(config.timeout_seconds)?;
 
         Ok(Self {
             provider,
@@ -348,7 +357,8 @@ impl AiClient {
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl AiProvider for AiClient {
     fn name(&self) -> &str {
         self.provider.name

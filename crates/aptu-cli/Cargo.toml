@@ -22,7 +22,7 @@ clap = { workspace = true }
 clap_complete = { workspace = true }
 
 # Async runtime
-tokio = { workspace = true }
+tokio = { version = "1", features = ["full"] }
 
 # Serialization
 serde = { workspace = true }

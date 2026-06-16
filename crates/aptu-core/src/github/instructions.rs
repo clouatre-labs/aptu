@@ -29,6 +29,7 @@ use tracing::instrument;
 /// * `repo` - Repository name
 /// * `head_sha` - Commit SHA to fetch from
 /// * `override_path` - Optional path to fetch instead of default paths
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, head_sha = %head_sha))]
 pub async fn fetch_repo_instructions(
     client: &octocrab::Octocrab,
@@ -74,6 +75,7 @@ pub async fn fetch_repo_instructions(
 /// Fetches a single file's content from the repository.
 ///
 /// Returns `None` on any error (404, decode failure, etc.).
+#[cfg(not(target_arch = "wasm32"))]
 async fn fetch_file_content(
     client: &octocrab::Octocrab,
     owner: &str,

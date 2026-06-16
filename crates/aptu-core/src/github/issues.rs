@@ -6,13 +6,16 @@
 //! and post triage comments.
 
 use anyhow::{Context, Result};
+#[cfg(not(target_arch = "wasm32"))]
 use backon::Retryable;
+#[cfg(not(target_arch = "wasm32"))]
 use octocrab::Octocrab;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
 use super::{ReferenceKind, parse_github_reference};
 use crate::ai::types::{IssueComment, IssueDetails, RepoIssueContext};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::retry::retry_backoff;
 use crate::utils::is_priority_label;
 
@@ -98,6 +101,7 @@ pub fn parse_issue_reference(
 /// # Errors
 ///
 /// Returns an error if the API request fails or the issue is not found.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
 pub async fn fetch_issue_with_comments(
     client: &Octocrab,
@@ -228,6 +232,7 @@ pub fn extract_keywords(title: &str) -> Vec<String> {
 /// # Errors
 ///
 /// Returns an error if the search API request fails.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, exclude_number = %exclude_number))]
 pub async fn search_related_issues(
     client: &Octocrab,
@@ -307,6 +312,7 @@ pub async fn search_related_issues(
 /// # Errors
 ///
 /// Returns an error if the API request fails.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client, body), fields(owner = %owner, repo = %repo, number = number))]
 pub async fn post_comment(
     client: &Octocrab,
@@ -336,6 +342,7 @@ pub async fn post_comment(
 ///
 /// Returns an error if the API request fails. 404 errors (comment not found)
 /// are treated as success (idempotent).
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, comment_id = comment_id))]
 pub async fn delete_issue_comment(
     client: &Octocrab,
@@ -374,6 +381,7 @@ pub async fn delete_issue_comment(
 ///
 /// Returns an error if the API request fails. 404 errors (label not found)
 /// are treated as success (idempotent).
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number, label = label))]
 pub async fn remove_issue_label(
     client: &Octocrab,
@@ -429,6 +437,7 @@ pub async fn remove_issue_label(
 /// # Errors
 ///
 /// Returns an error if the GitHub API call fails.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo))]
 pub async fn create_issue(
     client: &Octocrab,
@@ -523,6 +532,7 @@ fn merge_labels(existing_labels: &[String], suggested_labels: &[String]) -> Vec<
 /// # Errors
 ///
 /// Returns an error if the GitHub API call fails.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
 #[allow(clippy::too_many_arguments)]
 pub async fn update_issue_labels_and_milestone(
@@ -620,6 +630,7 @@ pub async fn update_issue_labels_and_milestone(
 ///
 /// Simplified label-only application function for PRs (no milestone, no merge logic).
 /// Returns an error if the GitHub API call fails.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
 pub async fn apply_labels_to_number(
     client: &Octocrab,
@@ -912,6 +923,7 @@ fn filter_tree_by_relevance(
 /// # Errors
 ///
 /// Returns an error if the API request fails (but not if tree is unavailable).
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo))]
 pub async fn fetch_repo_tree(
     client: &Octocrab,
@@ -983,6 +995,7 @@ pub async fn fetch_repo_tree(
 /// # Errors
 ///
 /// Returns an error if the REST API request fails.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo))]
 pub async fn fetch_issues_needing_triage(
     client: &Octocrab,

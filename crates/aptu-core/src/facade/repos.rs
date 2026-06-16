@@ -2,16 +2,26 @@
 
 //! Repository management facade functions.
 
+#[cfg(not(target_arch = "wasm32"))]
 use chrono::Duration;
+#[cfg(not(target_arch = "wasm32"))]
 use secrecy::SecretString;
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::instrument;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::auth::TokenProvider;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::cache::{FileCache, FileCacheImpl};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::config::load_config;
 use crate::error::AptuError;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::create_client_from_provider;
-use crate::github::graphql::{IssueNode, fetch_issues as gh_fetch_issues};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::github::graphql::IssueNode;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::github::graphql::fetch_issues as gh_fetch_issues;
 use crate::repos::{self, CuratedRepo};
 
 /// Fetches "good first issue" issues from curated repositories.
@@ -35,6 +45,7 @@ use crate::repos::{self, CuratedRepo};
 /// - GitHub token is not available from the provider
 /// - GitHub API call fails
 /// - Response parsing fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(repo_filter = ?repo_filter, use_cache))]
 pub async fn fetch_issues(
     provider: &dyn TokenProvider,
@@ -134,6 +145,7 @@ pub async fn fetch_issues(
 /// # Errors
 ///
 /// Returns an error if configuration cannot be loaded.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn list_curated_repos() -> crate::Result<Vec<CuratedRepo>> {
     repos::fetch().await
 }
@@ -156,6 +168,7 @@ pub async fn list_curated_repos() -> crate::Result<Vec<CuratedRepo>> {
 /// Returns an error if:
 /// - Repository cannot be found on GitHub
 /// - Custom repos file cannot be read or written
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument]
 pub async fn add_custom_repo(owner: &str, name: &str) -> crate::Result<CuratedRepo> {
     // Validate and fetch metadata from GitHub
@@ -200,6 +213,7 @@ pub async fn add_custom_repo(owner: &str, name: &str) -> crate::Result<CuratedRe
 /// # Errors
 ///
 /// Returns an error if the custom repos file cannot be read or written.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument]
 pub fn remove_custom_repo(owner: &str, name: &str) -> crate::Result<bool> {
     let full_name = format!("{owner}/{name}");
@@ -234,6 +248,7 @@ pub fn remove_custom_repo(owner: &str, name: &str) -> crate::Result<bool> {
 /// # Errors
 ///
 /// Returns an error if repositories cannot be fetched.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument]
 pub async fn list_repos(filter: repos::RepoFilter) -> crate::Result<Vec<CuratedRepo>> {
     repos::fetch_all(filter).await
@@ -258,6 +273,7 @@ pub async fn list_repos(filter: repos::RepoFilter) -> crate::Result<Vec<CuratedR
 /// Returns an error if:
 /// - GitHub token is not available from the provider
 /// - GitHub API call fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(language = ?filter.language, min_stars = filter.min_stars, limit = filter.limit))]
 pub async fn discover_repos(
     provider: &dyn TokenProvider,

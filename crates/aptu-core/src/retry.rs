@@ -42,6 +42,7 @@ pub(crate) fn is_retryable_http(status: u16) -> bool {
 /// # Returns
 ///
 /// `true` if the error is transient and should be retried
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub(crate) fn is_retryable_octocrab(e: &octocrab::Error) -> bool {
     match e {
@@ -72,12 +73,14 @@ pub(crate) fn is_retryable_octocrab(e: &octocrab::Error) -> bool {
 /// `true` if the error is transient and should be retried
 #[must_use]
 pub(crate) fn is_retryable_anyhow(e: &anyhow::Error) -> bool {
-    // Check if it's an octocrab error
+    // Check if it's an octocrab error (native only)
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(oct_err) = e.downcast_ref::<octocrab::Error>() {
         return is_retryable_octocrab(oct_err);
     }
 
-    // Check if it's a reqwest error
+    // Check if it's a reqwest error (native only; reqwest wasm API differs)
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(req_err) = e.downcast_ref::<reqwest::Error>() {
         // Retryable network errors
         if req_err.is_timeout() || req_err.is_connect() {

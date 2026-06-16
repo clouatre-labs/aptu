@@ -26,11 +26,8 @@ toml = { workspace = true }
 
 # HTTP/API
 reqwest = { workspace = true }
-octocrab = { workspace = true }
 secrecy = { workspace = true }
 zeroize = { workspace = true }
-backon = { workspace = true }
-
 # Configuration
 config = { workspace = true }
 dirs = { workspace = true }
@@ -47,7 +44,6 @@ uuid = { workspace = true }
 tracing = { workspace = true }
 
 # Async runtime
-tokio = { workspace = true }
 futures = { workspace = true }
 
 # Async traits
@@ -76,6 +72,16 @@ linux-keyutils-keyring-store = { version = "1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-native-keyring-store = { version = "1" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["full"] }
+backon = { version = "1", features = ["tokio-sleep"] }
+octocrab = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1", features = ["rt", "macros", "time", "sync", "io-util"] }
+backon = { version = "1" }
+uuid = { version = "1", features = ["v4", "serde", "js"] }
 
 [dev-dependencies]
 criterion = { workspace = true }

@@ -13,12 +13,14 @@
 //! 2. GitHub CLI (`gh auth token`)
 //! 3. System keyring (native aptu auth)
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
 use std::sync::{PoisonError, RwLock};
 
 use anyhow::{Context, Result};
 #[cfg(feature = "keyring")]
 use keyring_core::Entry;
+#[cfg(not(target_arch = "wasm32"))]
 use octocrab::Octocrab;
 #[cfg(feature = "keyring")]
 use reqwest::header::ACCEPT;

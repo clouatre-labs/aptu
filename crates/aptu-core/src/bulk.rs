@@ -10,9 +10,11 @@
 use std::fmt::Display;
 
 use anyhow::Result;
+#[cfg(not(target_arch = "wasm32"))]
 use backon::Retryable;
 use futures::{StreamExt, stream};
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::retry::{is_retryable_anyhow, retry_backoff};
 
 /// Outcome of processing a single item in a bulk operation.
@@ -145,6 +147,7 @@ where
             // Process with retry logic
             let id_for_retry = id_clone.clone();
             let data_for_retry = data_clone.clone();
+            #[cfg(not(target_arch = "wasm32"))]
             let result = (|| {
                 let processor = processor.clone();
                 let id = id_for_retry.clone();
@@ -162,6 +165,8 @@ where
                 );
             })
             .await;
+            #[cfg(target_arch = "wasm32")]
+            let result = processor((id_for_retry, data_for_retry)).await;
 
             (id_clone, result)
         };

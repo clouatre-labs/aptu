@@ -3,6 +3,7 @@
 //! Patch application and Git utilities for automated patch deployment.
 
 use std::path::{Path, PathBuf};
+#[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
 
 use crate::security::scanner::SecurityScanner;
@@ -88,6 +89,7 @@ pub enum PatchError {
 }
 
 /// Run a git command in the given directory. Returns trimmed stdout on success.
+#[cfg(not(target_arch = "wasm32"))]
 fn run_git(args: &[&str], cwd: &Path) -> Result<String, PatchError> {
     let output = Command::new("git").args(args).current_dir(cwd).output()?;
     if output.status.success() {
@@ -100,6 +102,7 @@ fn run_git(args: &[&str], cwd: &Path) -> Result<String, PatchError> {
 }
 
 /// Read a git config value. Returns None if not set.
+#[cfg(not(target_arch = "wasm32"))]
 fn git_config_get(key: &str, cwd: &Path) -> Option<String> {
     let output = Command::new("git")
         .args(["config", "--get", key])
@@ -159,6 +162,7 @@ pub fn parse_git_version_str(s: &str) -> Result<(), PatchError> {
 }
 
 /// Check that the system git binary is >= 2.39.2 (CVE-2023-23946 patched).
+#[cfg(not(target_arch = "wasm32"))]
 pub fn git_version_check(cwd: &Path) -> Result<(), PatchError> {
     let output = Command::new("git")
         .arg("--version")
@@ -256,6 +260,7 @@ pub fn slugify_title(title: &str) -> String {
 }
 
 /// Apply a patch file, commit, and push to origin. Returns the branch name that was pushed.
+#[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::too_many_arguments)]
 pub async fn apply_patch_and_push(
     patch_path: &Path,
@@ -356,6 +361,7 @@ pub async fn apply_patch_and_push(
 }
 
 /// Resolve branch name with collision handling.
+#[cfg(not(target_arch = "wasm32"))]
 fn resolve_branch_name(name: &str, repo_root: &Path) -> Result<String, PatchError> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -385,6 +391,7 @@ fn resolve_branch_name(name: &str, repo_root: &Path) -> Result<String, PatchErro
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn branch_exists_remote(name: &str, repo_root: &Path) -> bool {
     let refspec = format!("refs/heads/{name}");
     let output = Command::new("git")

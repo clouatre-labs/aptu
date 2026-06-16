@@ -104,6 +104,7 @@ pub fn setup_primary_client(config: &crate::config::AppConfig) -> anyhow::Result
 /// # Errors
 ///
 /// Returns an error if AI formatting fails or API is unavailable.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn create_issue(
     title: &str,
     body: &str,

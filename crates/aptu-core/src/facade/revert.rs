@@ -2,10 +2,12 @@
 
 //! Revert facade functions for undoing aptu-authored changes.
 
+#[cfg(not(target_arch = "wasm32"))]
 use octocrab::Octocrab;
 use tracing::{debug, instrument};
 
 use crate::error::AptuError;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::github::pulls::fetch_pr_details;
 
 /// Result from reverting issue comments and labels.
@@ -39,6 +41,7 @@ pub struct RevertOutcome {
 /// # Errors
 ///
 /// Returns an error if GitHub API calls fail or authentication fails.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number, dry_run))]
 pub async fn revert_issue(
     client: &Octocrab,
@@ -143,6 +146,7 @@ pub async fn revert_issue(
 /// # Errors
 ///
 /// Returns an error if GitHub API calls fail or authentication fails.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number, dry_run))]
 pub async fn revert_pr(
     client: &Octocrab,

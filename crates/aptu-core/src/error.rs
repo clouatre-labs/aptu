@@ -71,6 +71,7 @@ pub enum AptuError {
     InvalidAIResponse(#[source] serde_json::Error),
 
     /// Network/HTTP error from reqwest.
+    #[cfg(not(target_arch = "wasm32"))]
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
 
@@ -149,6 +150,7 @@ impl std::fmt::Display for ResourceType {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl From<octocrab::Error> for AptuError {
     fn from(err: octocrab::Error) -> Self {
         AptuError::GitHub {

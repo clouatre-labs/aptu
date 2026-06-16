@@ -2,8 +2,10 @@
 
 //! Model listing and validation facade functions.
 
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::instrument;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::auth::TokenProvider;
 use crate::error::AptuError;
 
@@ -28,6 +30,7 @@ use crate::error::AptuError;
 /// - Provider is not found
 /// - API request fails
 /// - Response parsing fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(provider_name))]
 pub async fn list_models(
     provider: &dyn TokenProvider,
@@ -69,6 +72,7 @@ pub async fn list_models(
 /// - Provider is not found
 /// - API request fails
 /// - Response parsing fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(provider_name, model_id))]
 pub async fn validate_model(
     provider: &dyn TokenProvider,

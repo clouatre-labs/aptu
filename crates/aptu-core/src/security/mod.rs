@@ -15,7 +15,9 @@ pub mod scanner;
 pub mod types;
 pub mod validator;
 
-pub use cache::{CachedFinding, FindingCache, cache_key};
+#[cfg(not(target_arch = "wasm32"))]
+pub use cache::FindingCache;
+pub use cache::{CachedFinding, cache_key};
 pub use detection::needs_security_scan;
 pub use ignore::SecurityConfig;
 pub use patterns::PatternEngine;
