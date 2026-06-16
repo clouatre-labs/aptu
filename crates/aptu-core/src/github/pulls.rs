@@ -6,6 +6,7 @@
 //! including file diffs for AI review.
 
 use anyhow::{Context, Result};
+#[cfg(not(target_arch = "wasm32"))]
 use octocrab::Octocrab;
 use tracing::{debug, instrument};
 
@@ -81,6 +82,7 @@ pub fn parse_pr_reference(
 /// # Errors
 ///
 /// Returns an error if the API call fails or PR is not found.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
 #[allow(clippy::too_many_lines)]
 pub async fn fetch_pr_details(
@@ -323,6 +325,7 @@ fn is_patch_truncated(patch: &str) -> bool {
 ///
 /// Returns the file content truncated to `max_chars`, or `None` if the file cannot be fetched.
 /// Non-fatal errors (404, rate limits) are logged as warnings.
+#[cfg(not(target_arch = "wasm32"))]
 async fn fetch_file_contents_single(
     client: &Octocrab,
     owner: &str,
@@ -405,6 +408,7 @@ async fn fetch_file_contents_single(
 /// Vector of `Option<String>` with one entry per input file (in order):
 /// - `Some(content)` if fetch succeeded
 /// - `None` if fetch failed, file was skipped, or file index exceeded `max_files`
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client, files), fields(owner = %owner, repo = %repo, max_files = max_files))]
 async fn fetch_file_contents(
     client: &Octocrab,
@@ -513,6 +517,7 @@ async fn fetch_file_contents(
 /// # Errors
 ///
 /// Returns an error if the API call fails, user lacks write access, or PR is not found.
+#[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(client, comments), fields(owner = %owner, repo = %repo, number = number, event = %event))]
 pub async fn post_pr_review(
@@ -582,6 +587,7 @@ pub async fn post_pr_review(
 ///
 /// Returns an error if the API request fails. 404 errors (comment not found)
 /// are treated as success (idempotent).
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, comment_id = comment_id))]
 pub async fn delete_pr_review_comment(
     client: &Octocrab,
@@ -692,6 +698,7 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
 /// # Errors
 ///
 /// Returns an error if the API call fails or the user lacks write access.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, head = %head_branch, base = %base_branch))]
 #[allow(clippy::too_many_arguments)]
 pub async fn create_pull_request(

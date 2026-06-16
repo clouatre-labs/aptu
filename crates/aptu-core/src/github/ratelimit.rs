@@ -51,6 +51,7 @@ impl RateLimitStatus {
 /// # Errors
 ///
 /// Returns an error if the API request fails.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn check_rate_limit(client: &octocrab::Octocrab) -> Result<RateLimitStatus> {
     debug!("Checking GitHub API rate limit");
 

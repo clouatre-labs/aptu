@@ -26,9 +26,11 @@ pub type Result<T> = std::result::Result<T, AptuError>;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use config::TomlConfigSource;
+#[cfg(not(target_arch = "wasm32"))]
+pub use config::load_config;
 pub use config::{
     AiConfig, AppConfig, CacheConfig, ConfigSource, GitHubConfig, InMemoryConfigSource, TaskType,
-    UiConfig, UserConfig, config_dir, config_file_path, data_dir, load_config, prompts_dir,
+    UiConfig, UserConfig, config_dir, config_file_path, data_dir, prompts_dir,
 };
 
 // ============================================================================
@@ -46,7 +48,9 @@ pub use ai::{AiClient, AiModel, ModelProvider, ProviderConfig, all_providers, ge
 
 pub use github::auth::TokenSource;
 pub use github::graphql::IssueNode;
+#[cfg(not(target_arch = "wasm32"))]
 pub use github::ratelimit::check_rate_limit;
+#[cfg(not(target_arch = "wasm32"))]
 pub use octocrab::params::State;
 
 // ============================================================================
@@ -65,7 +69,9 @@ pub use history::{AiStats, Contribution, ContributionStatus, HistoryData};
 // Repository Discovery
 // ============================================================================
 
-pub use repos::discovery::{DiscoveredRepo, DiscoveryFilter, search_repositories};
+#[cfg(not(target_arch = "wasm32"))]
+pub use repos::discovery::search_repositories;
+pub use repos::discovery::{DiscoveredRepo, DiscoveryFilter};
 pub use repos::{CuratedRepo, RepoFilter};
 
 // ============================================================================
@@ -95,22 +101,28 @@ pub use utils::{
 // Platform-Agnostic Facade
 // ============================================================================
 
+pub use facade::format_issue;
+#[cfg(not(target_arch = "wasm32"))]
 pub use facade::{
     add_custom_repo, analyze_issue, analyze_pr, apply_triage_labels, create_pr, discover_repos,
-    fetch_issue_for_triage, fetch_issues, fetch_pr_for_review, format_issue, label_pr,
-    list_curated_repos, list_models, list_repos, post_issue, post_pr_review, post_triage_comment,
-    remove_custom_repo, revert_issue, revert_pr, validate_model,
+    fetch_issue_for_triage, fetch_issues, fetch_pr_for_review, label_pr, list_curated_repos,
+    list_models, list_repos, post_issue, post_pr_review, post_triage_comment, remove_custom_repo,
+    revert_issue, revert_pr, validate_model,
 };
+#[cfg(not(target_arch = "wasm32"))]
 pub use github::issues::ApplyResult;
+#[cfg(not(target_arch = "wasm32"))]
 pub use github::pulls::PrCreateResult;
 
 // ============================================================================
 // Security Scanning
 // ============================================================================
 
+#[cfg(not(target_arch = "wasm32"))]
+pub use security::FindingCache;
 pub use security::{
-    Confidence, Finding, FindingCache, PatternEngine, SarifReport, SecurityConfig, SecurityScanner,
-    Severity, needs_security_scan,
+    Confidence, Finding, PatternEngine, SarifReport, SecurityConfig, SecurityScanner, Severity,
+    needs_security_scan,
 };
 
 // ============================================================================
@@ -138,4 +150,5 @@ pub mod security;
 pub mod triage;
 pub mod utils;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use git::patch::{PatchError, PatchStep, apply_patch_and_push};

@@ -242,12 +242,14 @@ pub trait ModelRegistry: Send + Sync {
 }
 
 /// Cached model registry with HTTP client and TTL support.
+#[cfg(not(target_arch = "wasm32"))]
 pub struct CachedModelRegistry<'a> {
     cache: crate::cache::FileCacheImpl<Vec<CachedModel>>,
     client: reqwest::Client,
     token_provider: &'a dyn TokenProvider,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl CachedModelRegistry<'_> {
     /// Create a new cached model registry.
     ///
@@ -467,6 +469,7 @@ impl CachedModelRegistry<'_> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 impl ModelRegistry for CachedModelRegistry<'_> {
     async fn list_models(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {

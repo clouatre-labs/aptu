@@ -203,6 +203,7 @@ async fn resolve_github_url(
 }
 
 /// Fetches release notes from GitHub via Octocrab.
+#[cfg(not(target_arch = "wasm32"))]
 async fn release_notes_from_octocrab(
     owner: &str,
     repo: &str,
@@ -292,8 +293,14 @@ async fn enrich_single_package(
         };
     };
 
+    #[cfg(not(target_arch = "wasm32"))]
     let (body, release_fetch_note) =
         release_notes_from_octocrab(&owner, &repo, &new_version, max_chars).await;
+    #[cfg(target_arch = "wasm32")]
+    let (body, release_fetch_note) = (
+        String::new(),
+        "GitHub fetch unavailable on wasm32".to_string(),
+    );
 
     if !release_fetch_note.is_empty() {
         fetch_note = release_fetch_note;

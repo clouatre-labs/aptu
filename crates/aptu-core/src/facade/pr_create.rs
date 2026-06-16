@@ -2,10 +2,13 @@
 
 //! PR creation facade functions.
 
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::instrument;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::auth::TokenProvider;
 use crate::error::AptuError;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::create_client_from_provider;
 
 /// Creates a pull request on GitHub.
@@ -30,6 +33,7 @@ use crate::github::auth::create_client_from_provider;
 /// - GitHub token is not available from the provider
 /// - GitHub API call fails
 /// - User lacks write access to the repository
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(owner = %owner, repo = %repo, head = %head_branch, base = %base_branch))]
 #[allow(clippy::too_many_arguments)]
 pub async fn create_pr(

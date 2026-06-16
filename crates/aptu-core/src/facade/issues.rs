@@ -9,10 +9,15 @@ use crate::ai::provider::MAX_LABELS;
 use crate::ai::types::{CreateIssueResponse, IssueDetails, TriageResponse};
 use crate::ai::{AiProvider, AiResponse};
 use crate::auth::TokenProvider;
-use crate::config::{AiConfig, TaskType, load_config};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::config::load_config;
+use crate::config::{AiConfig, TaskType};
 use crate::error::AptuError;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::{create_client_from_provider, create_client_with_token};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::github::graphql::fetch_issue_with_repo_context;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::github::issues::{create_issue as gh_create_issue, filter_labels_by_relevance};
 use crate::sanitize::sanitise_user_field;
 use crate::security::SecurityScanner;
@@ -37,6 +42,7 @@ use crate::security::SecurityScanner;
 /// - GitHub or AI provider token is not available from the provider
 /// - AI API call fails
 /// - Response parsing fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider, issue), fields(issue_number = issue.number, repo = %format!("{}/{}", issue.owner, issue.repo)))]
 pub async fn analyze_issue(
     provider: &dyn TokenProvider,
@@ -149,6 +155,7 @@ pub async fn analyze_issue(
 /// - GitHub token is not available from the provider
 /// - Issue reference cannot be parsed
 /// - GitHub API call fails
+#[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::too_many_lines)]
 #[instrument(skip(provider), fields(reference = %reference))]
 pub async fn fetch_issue_for_triage(
@@ -304,6 +311,7 @@ pub async fn fetch_issue_for_triage(
 /// Returns an error if:
 /// - GitHub token is not available from the provider
 /// - GitHub API call fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider, triage), fields(owner = %issue_details.owner, repo = %issue_details.repo, number = issue_details.number))]
 pub async fn post_triage_comment(
     provider: &dyn TokenProvider,
@@ -352,6 +360,7 @@ pub async fn post_triage_comment(
 /// Returns an error if:
 /// - GitHub token is not available from the provider
 /// - GitHub API call fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider, triage), fields(owner = %issue_details.owner, repo = %issue_details.repo, number = issue_details.number))]
 pub async fn apply_triage_labels(
     provider: &dyn TokenProvider,
@@ -470,6 +479,7 @@ pub async fn format_issue(
 /// Returns an error if:
 /// - GitHub token is not available from the provider
 /// - GitHub API call fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(owner = %owner, repo = %repo))]
 pub async fn post_issue(
     provider: &dyn TokenProvider,

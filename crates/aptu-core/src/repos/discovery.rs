@@ -10,10 +10,15 @@ use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::cache::FileCache;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::config::load_config;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::error::AptuError;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::create_client_with_token;
+#[cfg(not(target_arch = "wasm32"))]
 use secrecy::SecretString;
 
 /// A discovered repository from GitHub search.
@@ -79,6 +84,7 @@ impl Default for DiscoveryFilter {
 /// # Returns
 ///
 /// A score from 0-100.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn score_repo(repo: &octocrab::models::Repository, filter: &DiscoveryFilter) -> u32 {
     let mut score = 0u32;
@@ -170,6 +176,7 @@ pub fn build_search_query(filter: &DiscoveryFilter) -> String {
 /// Returns an error if:
 /// - GitHub API call fails
 /// - Response parsing fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(token), fields(language = ?filter.language, min_stars = filter.min_stars, limit = filter.limit))]
 pub async fn search_repositories(
     token: &SecretString,

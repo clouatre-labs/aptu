@@ -6,17 +6,22 @@
 //! stored in TOML format at `~/.config/aptu/repos.toml`.
 
 use std::collections::HashMap;
+#[cfg(not(target_arch = "wasm32"))]
 use std::fs;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
 use tracing::{debug, instrument};
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::config::config_dir;
 use crate::error::AptuError;
 use crate::repos::CuratedRepo;
 
 /// Returns the path to the custom repositories file.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn repos_file_path() -> PathBuf {
     config_dir().join("repos.toml")
@@ -64,6 +69,7 @@ impl From<CustomRepoEntry> for CuratedRepo {
 /// # Errors
 ///
 /// Returns an error if the file exists but is invalid TOML.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument]
 pub fn read_custom_repos() -> crate::Result<Vec<CuratedRepo>> {
     let path = repos_file_path();
@@ -94,6 +100,7 @@ pub fn read_custom_repos() -> crate::Result<Vec<CuratedRepo>> {
 /// # Errors
 ///
 /// Returns an error if the file cannot be written.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(repos))]
 pub fn write_custom_repos(repos: &[CuratedRepo]) -> crate::Result<()> {
     let path = repos_file_path();
@@ -148,6 +155,7 @@ pub fn write_custom_repos(repos: &[CuratedRepo]) -> crate::Result<()> {
 /// # Errors
 ///
 /// Returns an error if the repository cannot be found or accessed.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument]
 pub async fn validate_and_fetch_metadata(owner: &str, name: &str) -> crate::Result<CuratedRepo> {
     use octocrab::Octocrab;

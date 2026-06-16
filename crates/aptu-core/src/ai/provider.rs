@@ -141,7 +141,8 @@ fn sanitize_prompt_field(s: &str) -> String {
 ///
 /// Defines the interface that all AI providers must implement.
 /// Default implementations are provided for shared logic.
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait AiProvider: Send + Sync {
     /// Returns the name of the provider (e.g., "gemini", "openrouter").
     fn name(&self) -> &str;
@@ -225,7 +226,7 @@ pub trait AiProvider: Send + Sync {
     ///
     /// Default implementation handles HTTP headers, error responses (401, 429).
     /// Does not include retry logic - use `send_and_parse()` for retry behavior.
-    #[instrument(skip(self, request), fields(provider = self.name(), model = self.model()))]
+    #[cfg_attr(not(target_arch = "wasm32"), instrument(skip(self, request), fields(provider = self.name(), model = self.model())))]
     async fn send_request_inner(
         &self,
         request: &ChatCompletionRequest,
@@ -501,6 +502,7 @@ pub trait AiProvider: Send + Sync {
         debug!(model = %self.model(), "Calling {} API", self.name());
 
         // Build request
+        #[cfg(not(target_arch = "wasm32"))]
         let system_content = if let Some(override_prompt) =
             super::context::load_system_prompt_override("triage_system").await
         {
@@ -508,6 +510,8 @@ pub trait AiProvider: Send + Sync {
         } else {
             Self::build_system_prompt(self.custom_guidance())
         };
+        #[cfg(target_arch = "wasm32")]
+        let system_content = Self::build_system_prompt(self.custom_guidance());
 
         let mut messages = vec![
             ChatMessage {
@@ -583,6 +587,7 @@ pub trait AiProvider: Send + Sync {
         debug!(model = %self.model(), "Calling {} API for issue creation", self.name());
 
         // Build request
+        #[cfg(not(target_arch = "wasm32"))]
         let system_content = if let Some(override_prompt) =
             super::context::load_system_prompt_override("create_system").await
         {
@@ -590,6 +595,8 @@ pub trait AiProvider: Send + Sync {
         } else {
             Self::build_create_system_prompt(self.custom_guidance())
         };
+        #[cfg(target_arch = "wasm32")]
+        let system_content = Self::build_create_system_prompt(self.custom_guidance());
 
         let mut messages = vec![
             ChatMessage {
@@ -841,6 +848,7 @@ pub trait AiProvider: Send + Sync {
         debug!(model = %self.model(), "Calling {} API for PR review", self.name());
 
         // Build request
+        #[cfg(not(target_arch = "wasm32"))]
         let mut system_content = if let Some(override_prompt) =
             super::context::load_system_prompt_override("pr_review_system").await
         {
@@ -848,6 +856,8 @@ pub trait AiProvider: Send + Sync {
         } else {
             Self::build_pr_review_system_prompt(self.custom_guidance())
         };
+        #[cfg(target_arch = "wasm32")]
+        let mut system_content = Self::build_pr_review_system_prompt(self.custom_guidance());
 
         // Prepend repository instructions if available
         if let Some(instructions) = &ctx.pr.instructions {
@@ -946,6 +956,7 @@ pub trait AiProvider: Send + Sync {
         debug!(model = %self.model(), "Calling {} API for PR label suggestion", self.name());
 
         // Build request
+        #[cfg(not(target_arch = "wasm32"))]
         let system_content = if let Some(override_prompt) =
             super::context::load_system_prompt_override("pr_label_system").await
         {
@@ -953,6 +964,8 @@ pub trait AiProvider: Send + Sync {
         } else {
             Self::build_pr_label_system_prompt(self.custom_guidance())
         };
+        #[cfg(target_arch = "wasm32")]
+        let system_content = Self::build_pr_label_system_prompt(self.custom_guidance());
 
         let mut messages = vec![
             ChatMessage {

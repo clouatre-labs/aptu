@@ -18,7 +18,9 @@ use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, warn};
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::cache::FileCache;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::config::load_config;
 
 /// Embedded curated repositories as fallback when network fetch fails.
@@ -63,6 +65,7 @@ fn embedded_defaults() -> Vec<CuratedRepo> {
 /// Network errors propagate; JSON parse failures fall back to embedded defaults.
 /// Shared HTTP client with a 30s timeout, consistent with the AI-layer clients.
 /// A static client benefits from connection pooling across repeated calls.
+#[cfg(not(target_arch = "wasm32"))]
 static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
     // LazyLock closures must return a value, not Result, so errors cannot be
     // propagated. build() fails only on TLS initialisation errors; in that case
@@ -78,6 +81,7 @@ static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::
         })
 });
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn fetch_from_remote(url: &str) -> crate::Result<Vec<CuratedRepo>> {
     debug!("Fetching curated repositories from {}", url);
     let response = HTTP_CLIENT.get(url).send().await?;
@@ -105,6 +109,7 @@ async fn fetch_from_remote(url: &str) -> crate::Result<Vec<CuratedRepo>> {
 ///
 /// Returns an error if:
 /// - Configuration cannot be loaded
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn fetch() -> crate::Result<Vec<CuratedRepo>> {
     let config = load_config()?;
     let url = &config.cache.curated_repos_url;
@@ -166,6 +171,7 @@ fn add_filtered_repos(
 /// # Errors
 ///
 /// Returns an error if configuration cannot be loaded or repositories cannot be fetched.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn fetch_all(filter: RepoFilter) -> crate::Result<Vec<CuratedRepo>> {
     let config = load_config()?;
     let mut repos = Vec::new();

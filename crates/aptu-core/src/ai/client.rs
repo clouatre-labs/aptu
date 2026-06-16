@@ -129,9 +129,14 @@ impl AiClient {
             )
         })?;
 
-        // Create HTTP client with timeout
+        // Create HTTP client with timeout (timeout() is native-only; wasm32 uses fetch API)
+        #[cfg(not(target_arch = "wasm32"))]
         let http = Client::builder()
             .timeout(Duration::from_secs(config.timeout_seconds))
+            .build()
+            .context("Failed to create HTTP client")?;
+        #[cfg(target_arch = "wasm32")]
+        let http = Client::builder()
             .build()
             .context("Failed to create HTTP client")?;
 
@@ -196,9 +201,14 @@ impl AiClient {
             );
         }
 
-        // Create HTTP client with timeout
+        // Create HTTP client with timeout (timeout() is native-only; wasm32 uses fetch API)
+        #[cfg(not(target_arch = "wasm32"))]
         let http = Client::builder()
             .timeout(Duration::from_secs(config.timeout_seconds))
+            .build()
+            .context("Failed to create HTTP client")?;
+        #[cfg(target_arch = "wasm32")]
+        let http = Client::builder()
             .build()
             .context("Failed to create HTTP client")?;
 
@@ -348,7 +358,8 @@ impl AiClient {
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl AiProvider for AiClient {
     fn name(&self) -> &str {
         self.provider.name

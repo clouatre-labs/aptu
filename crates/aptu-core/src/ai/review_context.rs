@@ -179,7 +179,10 @@ pub async fn build_review_context(
     review_config: &ReviewConfig,
 ) -> crate::Result<ReviewContext> {
     // Step 1: Resolve repo_path (explicit or inferred from CWD)
+    #[cfg(not(target_arch = "wasm32"))]
     let (inferred_repo_path, cwd_inferred) = resolve_repo_path(&pr, repo_path);
+    #[cfg(target_arch = "wasm32")]
+    let (inferred_repo_path, cwd_inferred) = (repo_path.map(std::path::PathBuf::from), false);
     let repo_path_ref = inferred_repo_path
         .as_ref()
         .map(|p| p.to_string_lossy().into_owned());
@@ -250,6 +253,7 @@ pub async fn build_review_context(
 /// Resolves the repository path from explicit argument or CWD inference.
 ///
 /// Returns a tuple of `(inferred_repo_path, cwd_inferred)`.
+#[cfg(not(target_arch = "wasm32"))]
 fn resolve_repo_path(
     pr: &PrDetails,
     explicit_repo_path: Option<String>,
@@ -510,6 +514,7 @@ async fn build_ctx_call_graph(
 }
 
 /// Infers the repository path from the current working directory.
+#[cfg(not(target_arch = "wasm32"))]
 fn infer_repo_path_from_cwd(pr_owner: &str, pr_repo: &str) -> Option<String> {
     let git_root = get_git_root()?;
     let origin_url = get_git_origin_url()?;
@@ -547,6 +552,7 @@ fn infer_repo_path_from_cwd(pr_owner: &str, pr_repo: &str) -> Option<String> {
 }
 
 /// Get git repository root directory.
+#[cfg(not(target_arch = "wasm32"))]
 fn get_git_root() -> Option<String> {
     use std::process::Command;
 
@@ -566,6 +572,7 @@ fn get_git_root() -> Option<String> {
 }
 
 /// Get git origin URL.
+#[cfg(not(target_arch = "wasm32"))]
 fn get_git_origin_url() -> Option<String> {
     use std::process::Command;
 

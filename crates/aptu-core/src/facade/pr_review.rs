@@ -7,9 +7,13 @@ use tracing::{debug, error, instrument};
 use crate::ai::provider::AiProvider;
 use crate::ai::types::{PrDetails, PrReviewComment, ReviewEvent};
 use crate::auth::TokenProvider;
-use crate::config::{AiConfig, TaskType, load_config};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::config::load_config;
+use crate::config::{AiConfig, TaskType};
 use crate::error::AptuError;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::create_client_from_provider;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::github::pulls::{fetch_pr_details, post_pr_review as gh_post_pr_review};
 use crate::sanitize::sanitise_user_field;
 use crate::security::SecurityScanner;
@@ -34,6 +38,7 @@ use crate::security::SecurityScanner;
 /// Returns an error if:
 /// - GitHub token is not available from the provider
 /// - PR cannot be fetched
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(reference = %reference))]
 pub async fn fetch_pr_for_review(
     provider: &dyn TokenProvider,
@@ -126,6 +131,7 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
 /// Returns an error if:
 /// - AI provider token is not available from the provider
 /// - AI API call fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider, pr_details), fields(number = pr_details.number))]
 pub async fn analyze_pr(
     provider: &dyn TokenProvider,
@@ -266,6 +272,7 @@ pub async fn analyze_pr(
 /// - PR cannot be parsed or found
 /// - User lacks write access to the repository
 /// - API call fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider, comments), fields(reference = %reference, event = %event))]
 pub async fn post_pr_review(
     provider: &dyn TokenProvider,
@@ -319,6 +326,7 @@ pub async fn post_pr_review(
 /// - GitHub token is not available from the provider
 /// - PR cannot be parsed or found
 /// - API call fails
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(reference = %reference))]
 pub async fn label_pr(
     provider: &dyn TokenProvider,

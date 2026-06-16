@@ -6,7 +6,9 @@
 //! efficiently, avoiding multiple REST API calls.
 
 use anyhow::{Context, Result};
+#[cfg(not(target_arch = "wasm32"))]
 use backon::Retryable;
+#[cfg(not(target_arch = "wasm32"))]
 use octocrab::Octocrab;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -14,6 +16,7 @@ use tracing::{debug, instrument};
 
 use crate::ai::types::{IssueComment, RepoLabel, RepoMilestone};
 use crate::error::{AptuError, ResourceType};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::retry::retry_backoff;
 
 /// Viewer permission level on a repository.
@@ -122,6 +125,7 @@ fn build_issues_query<R: AsRef<str>>(repos: &[(R, R)]) -> Value {
 ///
 /// Accepts a slice of (owner, name) tuples.
 /// Returns a vector of (`repo_name`, issues) tuples.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client, repos), fields(repo_count = repos.len()))]
 pub async fn fetch_issues<R: AsRef<str>>(
     client: &Octocrab,
@@ -422,6 +426,7 @@ fn is_not_found_error(errors: &Value) -> bool {
 ///
 /// Returns an error if the GraphQL query fails or the issue is not found.
 /// If the issue is not found but a PR with the same number exists, returns a `TypeMismatch` error.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
 pub async fn fetch_issue_with_repo_context(
     client: &Octocrab,
@@ -610,6 +615,7 @@ fn build_tag_resolution_query(owner: &str, repo: &str, ref_name: &str) -> Value 
 /// # Returns
 ///
 /// The commit SHA for the tag, or None if the tag doesn't exist.
+#[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client))]
 pub async fn resolve_tag_to_commit_sha(
     client: &Octocrab,

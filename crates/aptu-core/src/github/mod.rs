@@ -14,7 +14,8 @@ pub mod issues;
 pub mod pulls;
 pub mod ratelimit;
 
-// Re-export client creation function (unconditional)
+// Re-export client creation function (wasm32: no GitHub client)
+#[cfg(not(target_arch = "wasm32"))]
 pub use auth::create_client;
 
 // Re-export keyring lifecycle functions

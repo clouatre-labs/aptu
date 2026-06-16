@@ -27,8 +27,10 @@ pub use ai::{AiConfig, FallbackConfig, FallbackEntry, TaskOverride, TaskType, Ta
 pub use cache::{CacheConfig, ReposConfig};
 #[cfg(not(target_arch = "wasm32"))]
 pub use loader::TomlConfigSource;
+#[cfg(not(target_arch = "wasm32"))]
+pub use loader::load_config;
 pub use loader::{
     AppConfig, ConfigSource, GitHubConfig, InMemoryConfigSource, PromptConfig, UiConfig,
-    UserConfig, config_dir, config_file_path, data_dir, load_config, prompts_dir,
+    UserConfig, config_dir, config_file_path, data_dir, prompts_dir,
 };
 pub use review::ReviewConfig;

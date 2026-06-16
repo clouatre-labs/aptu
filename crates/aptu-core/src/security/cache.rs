@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::instrument;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::cache::{FileCache, FileCacheImpl};
 
 use super::ValidatedFinding;
@@ -78,10 +79,12 @@ pub fn cache_key(
 ///
 /// Wraps `FileCacheImpl` with a 7-day TTL for validated findings.
 /// Uses SHA-256 hashes as cache keys to ensure privacy and uniqueness.
+#[cfg(not(target_arch = "wasm32"))]
 pub struct FindingCache {
     cache: FileCacheImpl<CachedFinding>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl FindingCache {
     /// Create a new finding cache with default settings.
     ///
@@ -155,6 +158,7 @@ impl FindingCache {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Default for FindingCache {
     fn default() -> Self {
         Self::new()

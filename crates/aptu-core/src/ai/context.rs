@@ -33,6 +33,7 @@ pub fn load_custom_guidance(custom_guidance: Option<&str>) -> String {
 
 /// Load a system prompt override from `~/.config/aptu/prompts/<name>.md`.
 /// Returns the file content if the file exists and is readable, or `None` otherwise.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn load_system_prompt_override(name: &str) -> Option<String> {
     let path = crate::config::prompts_dir().join(format!("{name}.md"));
     tokio::fs::read_to_string(&path).await.ok()
