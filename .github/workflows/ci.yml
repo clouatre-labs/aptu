@@ -233,6 +233,28 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  wasm-check:
+    name: WASM Check
+    runs-on: ubuntu-24.04-arm
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: "aptu"
+      - name: cargo check (wasm32)
+        run: cargo check -p aptu-core --target wasm32-unknown-unknown --no-default-features
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-24.04-arm
@@ -325,7 +347,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions: {}
     if: always()
-    needs: [commitlint, check-base, deny, format, lint, test, build, integration, scan-self, zizmor, gitleaks]
+    needs: [commitlint, check-base, deny, format, lint, test, build, integration, scan-self, zizmor, gitleaks, wasm-check]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
