@@ -158,14 +158,15 @@ fn all_user_prompts_contain_schema() {
         .comments(vec![])
         .url("https://github.com/test/repo/issues/1".to_string())
         .build();
-    let triage_user = StubProvider::build_user_prompt(&issue);
+    let triage_user = aptu_core::ai::prompts::build_user_prompt(&issue);
     assert!(
         triage_user.contains("summary") && triage_user.contains("suggested_labels"),
         "triage user prompt missing schema fields"
     );
 
     // create user prompt
-    let create_user = StubProvider::build_create_user_prompt("My title", "My body", "test/repo");
+    let create_user =
+        aptu_core::ai::prompts::build_create_user_prompt("My title", "My body", "test/repo");
     assert!(
         create_user.contains("formatted_title") && create_user.contains("formatted_body"),
         "create user prompt missing schema fields"
@@ -212,14 +213,14 @@ fn all_user_prompts_contain_schema() {
         budget_drops: Vec::new(),
         prompt_chars_final: 0,
     };
-    let pr_review_user = StubProvider::build_pr_review_user_prompt(&mut ctx);
+    let pr_review_user = aptu_core::ai::prompts::build_pr_review_user_prompt(&mut ctx);
     assert!(
         pr_review_user.contains("verdict") && pr_review_user.contains("summary"),
         "pr_review user prompt missing schema fields"
     );
 
     // pr_label user prompt
-    let pr_label_user = StubProvider::build_pr_label_user_prompt(
+    let pr_label_user = aptu_core::ai::prompts::build_pr_label_user_prompt(
         "feat: add thing",
         "body",
         &["src/lib.rs".to_string()],
