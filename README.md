@@ -2,7 +2,9 @@
 
 [![crates.io](https://img.shields.io/crates/v/aptu-cli.svg?style=flat-square&color=fc8d62&logo=rust)](https://crates.io/crates/aptu-cli) [![docs.rs](https://img.shields.io/badge/docs.rs-aptu--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs)](https://docs.rs/aptu-core) [![REUSE](https://img.shields.io/reuse/compliance/github.com/clouatre-labs/aptu?style=flat-square)](https://api.reuse.software/info/github.com/clouatre-labs/aptu) [![SLSA Level 3](https://img.shields.io/badge/SLSA-Level%203-green?style=flat-square)](https://slsa.dev) [![OpenSSF Best Practices](https://img.shields.io/cii/level/11662?style=flat-square)](https://www.bestpractices.dev/projects/11662)
 
-**AI-Powered Triage Utility** - A CLI for OSS issue triage with AI assistance.
+Surface what needs review, skip what does not -- without leaving your terminal.
+
+**AI-Powered Triage Utility** - AI-powered OSS issue triage and PR review with contribution history tracking.
 
 Aptu is a context-engineering experiment: instead of throwing big models at problems, it crafts tight prompts that let smaller models do the job with fewer tokens and surprising precision.
 
@@ -32,12 +34,13 @@ See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BE
 - **PR Analysis** - AI-powered pull request review and feedback; `aptu pr create --diff <file>` applies a patch, commits, and opens a PR
 - **Prompt Customization** - Override built-in system prompts per operation or append custom guidance via config
 - **GitHub Action** - Auto-triage incoming issues with labels and comments
-- **Multiple Providers** - Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux
+- **Multiple Providers** - Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux; free-tier models available via OpenRouter
 - **Local History** - Track your contributions offline
 - **Multiple Outputs** - Text, JSON, YAML, Markdown, and SARIF
 - **Claude OAuth** - Authenticate with Anthropic via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required
 - **Dependency Enrichment** - Automatically fetches upstream release notes for dependency bump PRs (Renovate / Dependabot)
 - **Observability** - Per-review context JSONL (`APTU_CONTEXT_FILE`) and token usage metrics (`APTU_METRICS_FILE`) for explainability and budget debugging (see [Observability](docs/GITHUB_ACTION.md#observability) and [Environment Variables](docs/CONFIGURATION.md#environment-variables))
+- **OpenSSF Best Practices Silver** - Fewer than 1% of open source projects reach this level; see [Security](#security)
 
 ## Installation
 
@@ -64,6 +67,15 @@ aptu issue triage block/goose#123    # Triage with AI
 aptu issue triage block/goose#123 --dry-run  # Preview
 aptu history               # View your contributions
 ```
+
+## Observability
+
+```bash
+export APTU_METRICS_FILE=metrics.jsonl
+aptu pr review owner/repo#123   # token usage appended to metrics.jsonl per run
+```
+
+See [docs/GITHUB_ACTION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_ACTION.md#observability) for full field reference.
 
 ## Security Scanning
 

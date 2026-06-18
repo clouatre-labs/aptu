@@ -19,6 +19,8 @@ These items address known gaps and complete features already partially implement
 - **Revert command**: `aptu issue revert <ISSUE>` and `aptu pr revert <PR>` undo all aptu-applied labels and comments on a given issue or PR; builds adopter trust without requiring manual cleanup
 - **API key memory hygiene**: apply `zeroize` on drop to all secret-typed fields in `aptu-core`; prevents secrets from lingering in freed memory after deallocation (single-dependency hardening)
 - **Claude Max/Pro/Team OAuth**: authenticate via an existing Claude subscription (`credentials.json` from the `claude` CLI) as an alternative to a dedicated API key; eliminates the main onboarding friction point for Anthropic users
+- **Prompt caching**: 10-30% cost reduction on active repos, no model switch required. System prompt (5,000 chars) + AST/call-graph context do not change between runs on the same repo. Cache-read cost is 0.1x input cost on both Gemini and Anthropic.
+- **GitHub App support**: enables PRs from forks and org-wide installation without per-repo token management -- the primary blocker for team adoption
 
 ## Medium-Term (6-18 months)
 
@@ -39,6 +41,14 @@ These items are directional signals, not commitments. They depend on the project
 - **Independent security audit**: engage a third-party security firm to audit the credential handling, AI prompt injection surface, and SARIF pipeline
 - **Structured prompt versioning**: version and test prompts as first-class artifacts alongside source code
 - **Federated repo registry**: shared curated repository lists across organizations, with opt-in contribution
+
+## Out of Scope
+
+The following items are deliberately excluded; see [Not Planned](#not-planned) for rationale:
+
+- iOS app
+- Gamification and leaderboards
+- MCP server (aptu-mcp)
 
 ## Not Planned
 
