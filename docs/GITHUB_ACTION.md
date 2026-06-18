@@ -114,6 +114,9 @@ When no API key is provided the action falls back to `openrouter` / `inception/m
 | `instructions-file` | No | `''` | Path to instructions file; overrides default `AGENTS.md` / `.github/instructions/pr-review.md` discovery |
 | `repo-path` | No | `''` | Local repository root for AST context injection (Rust, Python, Go, Java, TypeScript, TSX, JS, C, C++, C#, Fortran); leave empty to skip. If omitted, aptu infers the repository root from the current working directory. Explicit values override inference. |
 | `deep` | No | `false` | Enable cross-file call-graph context (requires `repo-path`). When `repo-path` is available (explicit or inferred from CWD), call graph enrichment is also auto-enabled for reviews where the remaining prompt budget exceeds `min_budget_for_call_graph` (default: 20 000 chars). Setting `deep: true` forces inclusion regardless of budget. |
+| `max-diff-chars` | No | `''` | Maximum total diff characters across all files included in the review prompt (default: 200 000). Leave empty to use the built-in default. Maps to `[review] max_diff_chars`. |
+| `max-patch-chars-per-file` | No | `''` | Maximum characters for an individual file patch (default: 10 000). Patches exceeding this are dropped entirely rather than sliced mid-hunk. Maps to `[review] max_patch_chars_per_file`. |
+| `max-diff-bytes` | No | `''` | Maximum bytes for the raw PR diff before prompt assembly; prompt-injection defence pre-check (default: 524 288 = 512 KiB). Maps to `[prompt] max_diff_bytes`. |
 
 **Dependency Enrichment:** For PRs that bump dependencies (Renovate, Dependabot, or manual version bumps), aptu automatically fetches upstream GitHub Release notes and includes them in the review context. Controlled by `max_dep_packages` and `max_dep_release_chars` in `[review]` config.
 
