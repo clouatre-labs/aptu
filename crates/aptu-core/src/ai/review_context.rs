@@ -955,7 +955,7 @@ mod tests {
         };
 
         // Act
-        let _ = TrackingProvider::build_pr_review_user_prompt(&mut ctx);
+        let prompt = TrackingProvider::build_pr_review_user_prompt(&mut ctx);
 
         // Assert
         assert!(
@@ -1037,7 +1037,7 @@ mod tests {
         };
 
         // Act
-        let _ = NoDblProvider::build_pr_review_user_prompt(&mut ctx);
+        let prompt = NoDblProvider::build_pr_review_user_prompt(&mut ctx);
 
         // Assert: file is dropped entirely (whole-file drop)
         assert!(

@@ -1097,5 +1097,4 @@ mod tests {
             "multi-byte content exceeding budget must be dropped cleanly"
         );
     }
-
 }
