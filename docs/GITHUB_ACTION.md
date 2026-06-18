@@ -113,12 +113,22 @@ When no API key is provided the action falls back to `openrouter` / `inception/m
 |-------|----------|---------|-------------|
 | `instructions-file` | No | `''` | Path to instructions file; overrides default `AGENTS.md` / `.github/instructions/pr-review.md` discovery |
 | `repo-path` | No | `''` | Local repository root for AST context injection (Rust, Python, Go, Java, TypeScript, TSX, JS, C, C++, C#, Fortran); leave empty to skip. If omitted, aptu infers the repository root from the current working directory. Explicit values override inference. |
-| `deep` | No | `false` | Enable cross-file call-graph context (requires `repo-path`). When `repo-path` is available (explicit or inferred from CWD), call graph enrichment is also auto-enabled for reviews where the remaining prompt budget exceeds `min_budget_for_call_graph` (default: 20 000 chars). Setting `deep: true` forces inclusion regardless of budget. |
-| `max-diff-chars` | No | `200000` | Maximum total diff characters across all files included in the review prompt. Diffs exceeding this are dropped from the prompt. Maps to `[review] max_diff_chars`. |
-| `max-patch-chars-per-file` | No | `10000` | Maximum characters for an individual file patch. Patches exceeding this are dropped entirely rather than sliced mid-hunk. Maps to `[review] max_patch_chars_per_file`. |
-| `max-diff-bytes` | No | `524288` | Maximum bytes for the raw PR diff; prompt-injection defence pre-check (512 KiB). Raise for large refactor PRs. Maps to `[prompt] max_diff_bytes`. |
+| `deep` | No | `false` | Force cross-file call-graph context unconditionally. When omitted, call graph is auto-enabled when remaining prompt budget exceeds `min-budget-for-call-graph`. |
 
-**Dependency Enrichment:** For PRs that bump dependencies (Renovate, Dependabot, or manual version bumps), aptu automatically fetches upstream GitHub Release notes and includes them in the review context. Controlled by `max_dep_packages` and `max_dep_release_chars` in `[review]` config.
+**Prompt budget inputs** — all optional, defaults match the compiled-in values. Each maps to the corresponding `[review]` or `[prompt]` key in `config.toml` (see [docs/CONFIGURATION.md](CONFIGURATION.md#pr-review-limits)).
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `max-prompt-chars` | `120000` | Total prompt character budget. Sections are dropped in order (call graph, AST, full content, diff hunks) when exceeded. |
+| `max-full-content-files` | `10` | Maximum files fetched in full via the GitHub Contents API per review. |
+| `max-chars-per-file` | `16000` | Maximum characters of full file content per file. |
+| `max-diff-chars` | `200000` | Maximum total diff characters across all files. Diffs exceeding this are dropped from the prompt. |
+| `max-patch-chars-per-file` | `10000` | Maximum characters per individual file patch. Patches exceeding this are dropped entirely rather than sliced mid-hunk. |
+| `max-instructions-chars` | `1500` | Maximum characters of instructions file content. |
+| `min-budget-for-call-graph` | `20000` | Remaining prompt budget threshold below which call-graph enrichment is skipped. Set to `0` to always include it. |
+| `max-dep-packages` | `3` | Maximum dependency bump packages for which upstream release notes are fetched. |
+| `max-dep-release-chars` | `2000` | Maximum characters of upstream release notes per dependency package. |
+| `max-diff-bytes` | `524288` | Maximum bytes for the raw PR diff; prompt-injection defence pre-check (512 KiB). Maps to `[prompt] max_diff_bytes`. |
 
 ### Security Scan
 
