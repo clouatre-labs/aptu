@@ -34,7 +34,7 @@ dirs = { workspace = true }
 keyring-core = { workspace = true, optional = true }
 
 # Optional: AST analysis for context injection
-aptu-coder-core = { version = "0.16.3", optional = true, default-features = false, features = ["lang-rust", "lang-go", "lang-java", "lang-python", "lang-typescript", "lang-tsx", "lang-fortran", "lang-javascript", "lang-cpp", "lang-csharp"] }
+aptu-coder-core = { version = "0.20.1", optional = true, default-features = false, features = ["lang-rust", "lang-go", "lang-java", "lang-python", "lang-typescript", "lang-tsx", "lang-fortran", "lang-javascript", "lang-cpp", "lang-csharp", "lang-css", "lang-yaml"] }
 
 # History
 chrono = { workspace = true }
