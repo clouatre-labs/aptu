@@ -316,10 +316,12 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         if let Some(content) = full_content {
             let sanitized = sanitize_prompt_field(&content);
             if sanitized.len() > ctx.max_chars_per_file {
-                files_skipped += 1;
+                let truncated: String = sanitized.chars().take(ctx.max_chars_per_file).collect();
                 let _ = writeln!(
                     prompt,
-                    "[APTU: file content dropped: exceeds per-file char budget]\n"
+                    "<file_content path=\"{}\">\n{}\n</file_content>\n[APTU: file content truncated by size budget -- do not speculate on missing content]\n",
+                    sanitize_prompt_field(&filename),
+                    truncated
                 );
                 files_included += 1;
                 continue;
@@ -341,6 +343,8 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
             "\n[{files_skipped} files omitted due to size limits (file count, patch size, or per-file content budget)]",
         );
     }
+
+    prompt.push_str("</pull_request>\n");
 
     // Inject dependency release notes if available
     if !ctx.pr.dep_enrichments.is_empty() {
@@ -978,16 +982,20 @@ mod tests {
                 ..Default::default()
             });
         assert!(
-            !prompt.contains("<file_content"),
-            "full_content exceeding max_chars_per_file must not produce a <file_content> block"
+            prompt.contains("truncated by size budget"),
+            "full_content exceeding max_chars_per_file must produce a truncation annotation"
         );
         assert!(
-            prompt.contains("file content dropped: exceeds per-file char budget"),
-            "drop annotation must appear in the prompt"
+            !prompt.contains("file content dropped"),
+            "content should be truncated, not dropped"
         );
         assert!(
-            prompt.contains("files omitted due to size limits"),
-            "files_skipped annotation must be present"
+            prompt.contains("<file_content"),
+            "truncated content must appear in <file_content> block"
+        );
+        assert!(
+            !prompt.contains("files omitted due to size limits"),
+            "truncated content is not skipped, so files_skipped annotation must not be present"
         );
     }
 
@@ -1036,11 +1044,11 @@ mod tests {
             });
         assert!(
             prompt.contains("small_patch_keep_me"),
-            "patch must still be included when full_content is dropped"
+            "patch must still be included when full_content is truncated"
         );
         assert!(
-            prompt.contains("file content dropped: exceeds per-file char budget"),
-            "drop annotation must appear"
+            prompt.contains("truncated by size budget"),
+            "truncation annotation must appear"
         );
     }
 
@@ -1093,8 +1101,8 @@ mod tests {
                 ..Default::default()
             });
         assert!(
-            prompt.contains("file content dropped: exceeds per-file char budget"),
-            "multi-byte content exceeding budget must be dropped cleanly"
+            prompt.contains("truncated by size budget"),
+            "multi-byte content exceeding budget must be truncated cleanly without panic"
         );
     }
 }

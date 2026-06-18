@@ -543,8 +543,8 @@ mod tests {
             ..Default::default()
         });
         assert!(
-            prompt.contains("[APTU: file content dropped: exceeds per-file char budget]"),
-            "drop annotation must be present for oversized full_content"
+            prompt.contains("[APTU: file content truncated by size budget"),
+            "truncation annotation must be present for oversized full_content"
         );
         let file_content_end = prompt
             .find("</file_content>")

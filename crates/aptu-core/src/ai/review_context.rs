@@ -959,8 +959,8 @@ mod tests {
 
         // Assert
         assert!(
-            prompt.contains("file content dropped: exceeds per-file char budget"),
-            "full_content exceeding budget must produce drop annotation"
+            prompt.contains("truncated by size budget"),
+            "full_content exceeding budget must produce truncation annotation"
         );
     }
 
@@ -1041,8 +1041,8 @@ mod tests {
 
         // Assert: file is dropped entirely (whole-file drop)
         assert!(
-            prompt.contains("file content dropped: exceeds per-file char budget"),
-            "content exceeding budget must produce drop annotation"
+            prompt.contains("truncated by size budget"),
+            "content exceeding budget must produce truncation annotation"
         );
     }
 }
