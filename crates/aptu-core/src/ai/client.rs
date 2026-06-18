@@ -360,16 +360,8 @@ impl AiClient {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl AiProvider for AiClient {
-    fn name(&self) -> &str {
-        self.provider.name
-    }
-
-    fn api_url(&self) -> &str {
-        self.provider.api_url
-    }
-
-    fn api_key_env(&self) -> &str {
-        self.provider.api_key_env
+    fn config(&self) -> &ProviderConfig {
+        self.provider
     }
 
     fn http_client(&self) -> &Client {

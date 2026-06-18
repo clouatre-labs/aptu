@@ -613,6 +613,7 @@ fn parse_origin_owner_repo(url: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::registry::ProviderConfig;
     use crate::ai::types::{DepReleaseNote, PrFile};
 
     fn make_pr_with_content(patch_chars: usize, full_content_chars: usize) -> PrDetails {
@@ -872,30 +873,24 @@ mod tests {
         use crate::ai::provider::AiProvider;
 
         struct TrackingProvider;
+        static TRACKING_PROVIDER_CONFIG: ProviderConfig = ProviderConfig {
+            name: "tracking",
+            display_name: "Tracking",
+            api_url: "https://example.com",
+            api_key_env: "TRACKING_API_KEY",
+            model: "model",
+            max_tokens: 2048,
+            temperature: 0.3,
+        };
         impl AiProvider for TrackingProvider {
-            fn name(&self) -> &'static str {
-                "tracking"
-            }
-            fn api_url(&self) -> &'static str {
-                "https://example.com"
-            }
-            fn api_key_env(&self) -> &'static str {
-                "TRACKING_API_KEY"
+            fn config(&self) -> &ProviderConfig {
+                &TRACKING_PROVIDER_CONFIG
             }
             fn http_client(&self) -> &reqwest::Client {
                 unimplemented!()
             }
             fn api_key(&self) -> &secrecy::SecretString {
                 unimplemented!()
-            }
-            fn model(&self) -> &'static str {
-                "model"
-            }
-            fn max_tokens(&self) -> u32 {
-                2048
-            }
-            fn temperature(&self) -> f32 {
-                0.3
             }
         }
 
@@ -964,30 +959,24 @@ mod tests {
         use crate::ai::provider::AiProvider;
 
         struct NoDblProvider;
+        static NODBL_PROVIDER_CONFIG: ProviderConfig = ProviderConfig {
+            name: "nodbl",
+            display_name: "NoDbl",
+            api_url: "https://example.com",
+            api_key_env: "NODBL_API_KEY",
+            model: "model",
+            max_tokens: 2048,
+            temperature: 0.3,
+        };
         impl AiProvider for NoDblProvider {
-            fn name(&self) -> &'static str {
-                "nodbl"
-            }
-            fn api_url(&self) -> &'static str {
-                "https://example.com"
-            }
-            fn api_key_env(&self) -> &'static str {
-                "NODBL_API_KEY"
+            fn config(&self) -> &ProviderConfig {
+                &NODBL_PROVIDER_CONFIG
             }
             fn http_client(&self) -> &reqwest::Client {
                 unimplemented!()
             }
             fn api_key(&self) -> &secrecy::SecretString {
                 unimplemented!()
-            }
-            fn model(&self) -> &'static str {
-                "model"
-            }
-            fn max_tokens(&self) -> u32 {
-                2048
-            }
-            fn temperature(&self) -> f32 {
-                0.3
             }
         }
 

@@ -32,7 +32,7 @@ use crate::auth::TokenProvider;
 use crate::cache::FileCache;
 
 /// Configuration for an AI provider.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ProviderConfig {
     /// Provider identifier (lowercase, used in config files)
     pub name: &'static str,
@@ -45,6 +45,15 @@ pub struct ProviderConfig {
 
     /// Environment variable name for API key
     pub api_key_env: &'static str,
+
+    /// Default model name for this provider
+    pub model: &'static str,
+
+    /// Default maximum tokens for API responses
+    pub max_tokens: u32,
+
+    /// Default temperature for API requests
+    pub temperature: f32,
 }
 
 // ============================================================================
@@ -64,42 +73,63 @@ pub static PROVIDERS: &[ProviderConfig] = &[
         display_name: "Google Gemini",
         api_url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         api_key_env: "GEMINI_API_KEY",
+        model: "gemini-3.1-flash-lite-preview",
+        max_tokens: 4096,
+        temperature: 0.3,
     },
     ProviderConfig {
         name: "openrouter",
         display_name: "OpenRouter",
         api_url: "https://openrouter.ai/api/v1/chat/completions",
         api_key_env: "OPENROUTER_API_KEY",
+        model: "mistralai/mistral-small-2603",
+        max_tokens: 4096,
+        temperature: 0.3,
     },
     ProviderConfig {
         name: "groq",
         display_name: "Groq",
         api_url: "https://api.groq.com/openai/v1/chat/completions",
         api_key_env: "GROQ_API_KEY",
+        model: "llama3-70b-8192",
+        max_tokens: 4096,
+        temperature: 0.3,
     },
     ProviderConfig {
         name: "cerebras",
         display_name: "Cerebras",
         api_url: "https://api.cerebras.ai/v1/chat/completions",
         api_key_env: "CEREBRAS_API_KEY",
+        model: "llama3.1-8b",
+        max_tokens: 4096,
+        temperature: 0.3,
     },
     ProviderConfig {
         name: "zenmux",
         display_name: "Zenmux",
         api_url: "https://zenmux.ai/api/v1/chat/completions",
         api_key_env: "ZENMUX_API_KEY",
+        model: "gpt-4o-mini",
+        max_tokens: 4096,
+        temperature: 0.3,
     },
     ProviderConfig {
         name: "zai",
         display_name: "Z.AI (Zhipu)",
         api_url: "https://api.z.ai/api/paas/v4/chat/completions",
         api_key_env: "ZAI_API_KEY",
+        model: "glm-4-plus",
+        max_tokens: 4096,
+        temperature: 0.3,
     },
     ProviderConfig {
         name: PROVIDER_ANTHROPIC,
         display_name: "Anthropic",
         api_url: "https://api.anthropic.com/v1/chat/completions",
         api_key_env: "ANTHROPIC_API_KEY",
+        model: "claude-sonnet-4-6",
+        max_tokens: 4096,
+        temperature: 0.3,
     },
 ];
 

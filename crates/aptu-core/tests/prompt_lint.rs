@@ -19,30 +19,26 @@ use aptu_core::ai::types::{IssueDetails, PrDetails, PrFile};
 
 struct StubProvider;
 
+static STUB_PROVIDER_CONFIG: aptu_core::ai::registry::ProviderConfig =
+    aptu_core::ai::registry::ProviderConfig {
+        name: "stub",
+        display_name: "Stub",
+        api_url: "https://stub.example.com",
+        api_key_env: "STUB_API_KEY",
+        model: "stub-model",
+        max_tokens: 2048,
+        temperature: 0.3,
+    };
+
 impl AiProvider for StubProvider {
-    fn name(&self) -> &'static str {
-        "stub"
-    }
-    fn api_url(&self) -> &'static str {
-        "https://stub.example.com"
-    }
-    fn api_key_env(&self) -> &'static str {
-        "STUB_API_KEY"
+    fn config(&self) -> &aptu_core::ai::registry::ProviderConfig {
+        &STUB_PROVIDER_CONFIG
     }
     fn http_client(&self) -> &reqwest::Client {
         unimplemented!()
     }
     fn api_key(&self) -> &secrecy::SecretString {
         unimplemented!()
-    }
-    fn model(&self) -> &'static str {
-        "stub-model"
-    }
-    fn max_tokens(&self) -> u32 {
-        2048
-    }
-    fn temperature(&self) -> f32 {
-        0.3
     }
 }
 

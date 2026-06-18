@@ -18,6 +18,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use secrecy::SecretString;
 
+use crate::ai::registry::ProviderConfig;
 use crate::ai::types::{
     ChatCompletionRequest, ChatCompletionResponse, CreateIssueResponse, IssueDetails,
     PrReviewResponse,
@@ -51,14 +52,23 @@ pub const MAX_MILESTONES: usize = 10;
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait AiProvider: Send + Sync {
+    /// Returns the provider configuration.
+    fn config(&self) -> &ProviderConfig;
+
     /// Returns the name of the provider (e.g., "gemini", "openrouter").
-    fn name(&self) -> &str;
+    fn name(&self) -> &str {
+        self.config().name
+    }
 
     /// Returns the API URL for this provider.
-    fn api_url(&self) -> &str;
+    fn api_url(&self) -> &str {
+        self.config().api_url
+    }
 
     /// Returns the environment variable name for the API key.
-    fn api_key_env(&self) -> &str;
+    fn api_key_env(&self) -> &str {
+        self.config().api_key_env
+    }
 
     /// Returns the HTTP client for making requests.
     fn http_client(&self) -> &Client;
@@ -67,13 +77,19 @@ pub trait AiProvider: Send + Sync {
     fn api_key(&self) -> &SecretString;
 
     /// Returns the model name.
-    fn model(&self) -> &str;
+    fn model(&self) -> &str {
+        self.config().model
+    }
 
     /// Returns the maximum tokens for API responses.
-    fn max_tokens(&self) -> u32;
+    fn max_tokens(&self) -> u32 {
+        self.config().max_tokens
+    }
 
     /// Returns the temperature for API requests.
-    fn temperature(&self) -> f32;
+    fn temperature(&self) -> f32 {
+        self.config().temperature
+    }
 
     /// Returns whether this provider is Anthropic-compatible and supports
     /// `cache_control` on message blocks.
@@ -214,6 +230,16 @@ pub trait AiProvider: Send + Sync {
 pub(crate) mod test_utils {
     use super::*;
 
+    pub(crate) static TEST_PROVIDER_CONFIG: ProviderConfig = ProviderConfig {
+        name: "test",
+        display_name: "Test",
+        api_url: "https://test.example.com",
+        api_key_env: "TEST_API_KEY",
+        model: "test-model",
+        max_tokens: 2048,
+        temperature: 0.3,
+    };
+
     #[derive(Debug, serde::Deserialize)]
     pub(crate) struct ErrorTestResponse {
         pub(crate) _message: String,
@@ -222,16 +248,8 @@ pub(crate) mod test_utils {
     pub(crate) struct TestProvider;
 
     impl AiProvider for TestProvider {
-        fn name(&self) -> &'static str {
-            "test"
-        }
-
-        fn api_url(&self) -> &'static str {
-            "https://test.example.com"
-        }
-
-        fn api_key_env(&self) -> &'static str {
-            "TEST_API_KEY"
+        fn config(&self) -> &ProviderConfig {
+            &TEST_PROVIDER_CONFIG
         }
 
         fn http_client(&self) -> &Client {
@@ -240,18 +258,6 @@ pub(crate) mod test_utils {
 
         fn api_key(&self) -> &SecretString {
             unimplemented!()
-        }
-
-        fn model(&self) -> &'static str {
-            "test-model"
-        }
-
-        fn max_tokens(&self) -> u32 {
-            2048
-        }
-
-        fn temperature(&self) -> f32 {
-            0.3
         }
     }
 }
