@@ -124,6 +124,73 @@ inputs:
       include call graph regardless of available budget.
     required: false
     default: 'false'
+  max-prompt-chars:
+    description: >
+      Total prompt character budget for PR review. When the assembled prompt exceeds
+      this limit, sections are dropped in order: call graph, AST, full file content,
+      diff hunks. System prompt and PR metadata are never dropped.
+      Maps to [review] max_prompt_chars in config.toml.
+    required: false
+    default: '120000'
+  max-full-content-files:
+    description: >
+      Maximum number of files fetched in full via the GitHub Contents API per review.
+      Maps to [review] max_full_content_files in config.toml.
+    required: false
+    default: '10'
+  max-chars-per-file:
+    description: >
+      Maximum characters of full file content included per file in the review prompt.
+      Maps to [review] max_chars_per_file in config.toml.
+    required: false
+    default: '16000'
+  max-diff-chars:
+    description: >
+      Maximum total diff characters across all files in the review prompt.
+      Diffs exceeding this limit are dropped from the prompt before assembly.
+      Maps to [review] max_diff_chars in config.toml.
+    required: false
+    default: '200000'
+  max-patch-chars-per-file:
+    description: >
+      Maximum characters for an individual file patch in the review prompt.
+      File patches exceeding this limit are dropped entirely rather than sliced mid-hunk.
+      Maps to [review] max_patch_chars_per_file in config.toml.
+    required: false
+    default: '10000'
+  max-instructions-chars:
+    description: >
+      Maximum characters of instructions file content included in the review prompt.
+      Maps to [review] max_instructions_chars in config.toml.
+    required: false
+    default: '1500'
+  min-budget-for-call-graph:
+    description: >
+      Minimum remaining prompt budget (chars) to auto-enable call-graph enrichment.
+      Set to 0 to always include call graph when repo-path is available.
+      Maps to [review] min_budget_for_call_graph in config.toml.
+    required: false
+    default: '20000'
+  max-dep-packages:
+    description: >
+      Maximum number of dependency bump packages for which upstream release notes
+      are fetched and included in the review prompt.
+      Maps to [review] max_dep_packages in config.toml.
+    required: false
+    default: '3'
+  max-dep-release-chars:
+    description: >
+      Maximum characters of upstream release notes included per dependency package.
+      Maps to [review] max_dep_release_chars in config.toml.
+    required: false
+    default: '2000'
+  max-diff-bytes:
+    description: >
+      Maximum bytes for the raw PR diff; prompt-injection defence pre-check applied
+      before prompt assembly. Raise for large refactor PRs.
+      Maps to [prompt] max_diff_bytes in config.toml.
+    required: false
+    default: '524288'
 
   # --- Scan security ---
   scan-path:
@@ -425,6 +492,16 @@ runs:
         INSTRUCTIONS_FILE: ${{ inputs.instructions-file }}
         NO_COMMENT: ${{ inputs.no-comment }}
         REPO_PATH: ${{ inputs.repo-path }}
+        APTU_REVIEW__MAX_PROMPT_CHARS: ${{ inputs.max-prompt-chars }}
+        APTU_REVIEW__MAX_FULL_CONTENT_FILES: ${{ inputs.max-full-content-files }}
+        APTU_REVIEW__MAX_CHARS_PER_FILE: ${{ inputs.max-chars-per-file }}
+        APTU_REVIEW__MAX_DIFF_CHARS: ${{ inputs.max-diff-chars }}
+        APTU_REVIEW__MAX_PATCH_CHARS_PER_FILE: ${{ inputs.max-patch-chars-per-file }}
+        APTU_REVIEW__MAX_INSTRUCTIONS_CHARS: ${{ inputs.max-instructions-chars }}
+        APTU_REVIEW__MIN_BUDGET_FOR_CALL_GRAPH: ${{ inputs.min-budget-for-call-graph }}
+        APTU_REVIEW__MAX_DEP_PACKAGES: ${{ inputs.max-dep-packages }}
+        APTU_REVIEW__MAX_DEP_RELEASE_CHARS: ${{ inputs.max-dep-release-chars }}
+        APTU_PROMPT__MAX_DIFF_BYTES: ${{ inputs.max-diff-bytes }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
         APTU_CONTEXT_FILE: ${{ runner.temp }}/aptu-review-context.jsonl
       run: |
@@ -564,7 +641,7 @@ runs:
           FILES_TRUNC=$(jq -s '[.[].files_truncated // 0] | add // 0' "$APTU_CONTEXT_FILE")
           CHARS_DROPPED=$(jq -s '[.[].truncated_chars_dropped // 0] | add // 0' "$APTU_CONTEXT_FILE")
           PROMPT_CHARS=$(jq -s '[.[].prompt_chars_final // 0] | max // 0' "$APTU_CONTEXT_FILE")
-          MAX_CHARS=120000
+          MAX_CHARS=$(jq -s '[.[].max_prompt_chars // 120000] | max' "$APTU_CONTEXT_FILE")
           BUDGET_PCT=$(( PROMPT_CHARS * 100 / MAX_CHARS ))
           DROPS=$(jq -rs '[.[].budget_drops // [] | .[]] | unique | join(", ")' "$APTU_CONTEXT_FILE")
           {

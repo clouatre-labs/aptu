@@ -78,11 +78,19 @@ The `ReviewContext` struct centralises all enrichment decisions: AST context, ca
 Returns the branch name that was pushed, or a `PatchError` variant on any failure.
 
 ### Facade Functions
-`aptu-core/facade.rs` provides high-level functions for CLI/FFI:
-- `fetch_issues()`, `analyze_issue()`, `post_triage_comment()`
-- `review_pr()`, `post_pr_review()`
+`aptu-core/facade/` is a module directory of high-level entry points for CLI and FFI consumers, one file per concern:
 
-Each function accepts a `&dyn TokenProvider` for credential resolution.
+| File | Key exports |
+|------|-------------|
+| `ai_client.rs` | AI client construction and fallback-chain helpers |
+| `issues.rs` | `analyze_issue()`, `fetch_issue_for_triage()`, `post_triage_comment()`, `apply_triage_labels()`, `post_issue()`, `format_issue()` |
+| `models.rs` | `list_models()`, `validate_model()` |
+| `pr_create.rs` | `create_pr()` |
+| `pr_review.rs` | `fetch_pr_for_review()`, `analyze_pr()`, `post_pr_review()`, `label_pr()` |
+| `repos.rs` | `fetch_issues()`, `list_curated_repos()`, `add_custom_repo()`, `remove_custom_repo()`, `list_repos()`, `discover_repos()` |
+| `revert.rs` | `revert_issue()`, `revert_pr()` |
+
+Each function accepts a `&dyn TokenProvider` for credential resolution. Functions that require OS I/O (keyring, filesystem, process spawning) are `#[cfg(not(target_arch = "wasm32"))]`-gated; the `wasm_unsupported!` macro in `facade/mod.rs` provides uniform stub bodies for the wasm32 target.
 
 ### Prompt System
 
@@ -91,7 +99,7 @@ System prompts are built from two layers embedded at compile time via `include_s
 - **Schema files** (`.json`) - JSON schema that constrains AI response structure
 - **Guideline files** (`.md`) - Instructions and examples for each operation
 
-Builder functions (`build_triage_system_prompt`, `build_review_system_prompt`, etc.) in `prompts/mod.rs` are shared between `provider.rs` (runtime) and `tests/prompt_lint.rs` to guarantee tests exercise the same construction logic.
+Builder functions (`build_triage_system_prompt`, `build_review_system_prompt`, etc.) in `prompts/mod.rs` are shared between `ai/provider/` (the runtime module directory, one file per operation) and `tests/prompt_lint.rs` to guarantee tests exercise the same construction logic.
 
 At runtime, two override mechanisms are applied in order:
 
@@ -135,10 +143,12 @@ This means users can tune AI behavior without recompiling, and developers can au
 ├── [review]
 │   ├── max_prompt_chars = 120000
 │   ├── max_full_content_files = 10
-│   └── max_chars_per_file = 4000
+│   ├── max_chars_per_file = 16000
+│   ├── max_diff_chars = 200000
+│   └── max_patch_chars_per_file = 10000
 └── [prompt]
     ├── max_issue_body_bytes = 32768
-    ├── max_diff_bytes = 131072
+    ├── max_diff_bytes = 524288
     └── max_commit_message_bytes = 4096
 ```
 
@@ -148,6 +158,7 @@ This means users can tune AI behavior without recompiling, and developers can au
 - **CLI integration tests**: `crates/aptu-cli/tests/cli.rs` using `assert_cmd` (binary invocation, no HTTP mocking)
 - **Core integration tests**: `crates/aptu-core/tests/prompt_lint.rs` and `crates/aptu-core/tests/security_integration.rs`
 - **Shell integration tests**: `tests/integration.bats` using the bats framework
+- **WASM portability check**: the `wasm-check` CI job runs `cargo check -p aptu-core --target wasm32-unknown-unknown --no-default-features`; OS-dependent code is `#[cfg(not(target_arch = "wasm32"))]`-gated and replaced with stubs on that target
 
 ## Rust Edition & Tooling
 
