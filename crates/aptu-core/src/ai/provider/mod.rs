@@ -36,9 +36,6 @@ pub const MAX_COMMENTS: usize = 5;
 /// Maximum number of files to include in PR review prompt.
 pub const MAX_FILES: usize = 20;
 
-/// Maximum total diff size (in characters) for PR review prompt.
-pub const MAX_TOTAL_DIFF_SIZE: usize = 50_000;
-
 /// Maximum number of labels to include in the prompt.
 pub const MAX_LABELS: usize = 30;
 

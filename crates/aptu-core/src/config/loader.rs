@@ -148,12 +148,12 @@ pub struct PromptConfig {
     /// but increase token usage and prompt injection surface area. The default
     /// (32 KiB) balances context richness against cost and security.
     pub max_issue_body_bytes: usize,
-    /// Maximum bytes for a PR diff (default: 128 KiB).
+    /// Maximum bytes for a PR diff (default: 512 KiB).
     ///
     /// Limits the total size of all file patches in a PR before they are
-    /// wrapped in XML tags and sent to the AI model. The default (128 KiB)
-    /// accommodates typical multi-file changes while keeping token usage
-    /// reasonable and reducing prompt injection risk.
+    /// wrapped in XML tags and sent to the AI model. Raised from 128 KiB
+    /// to 512 KiB to accommodate large refactor PRs; injection defence is
+    /// provided by XML tag stripping which is independent of diff size.
     pub max_diff_bytes: usize,
     /// Maximum bytes for a commit message (default: 4 KiB).
     ///
@@ -167,7 +167,7 @@ impl Default for PromptConfig {
     fn default() -> Self {
         Self {
             max_issue_body_bytes: 32_768,
-            max_diff_bytes: 131_072,
+            max_diff_bytes: 524_288,
             max_commit_message_bytes: 4_096,
         }
     }

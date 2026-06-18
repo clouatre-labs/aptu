@@ -242,8 +242,8 @@ mod tests {
 
     #[test]
     fn test_build_pr_review_user_prompt_respects_diff_size_limit() {
-        let patch1 = "x".repeat(30_000);
-        let patch2 = "y".repeat(30_000);
+        let patch1 = "x".repeat(3_000);
+        let patch2 = "y".repeat(3_000);
 
         let files = vec![
             PrFile {
@@ -290,23 +290,27 @@ mod tests {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: 16_000,
+            max_diff_chars: 4_000,
+            max_patch_chars_per_file: 10_000,
             files_truncated: 0,
             truncated_chars_dropped: 0,
             ..Default::default()
         });
-        assert!(prompt.contains("file1.rs"));
-        assert!(prompt.contains("file2.rs"));
+        // file1's 3k patch is under max_patch_chars_per_file (10k), so fully included
+        assert!(prompt.contains("file1.rs"), "file1 must be listed");
         assert!(
-            !prompt.contains(&"x".repeat(2_001)),
-            "first file patch must be truncated to MAX_PATCH_LENGTH"
+            prompt.contains(&"x".repeat(3_000)),
+            "file1 patch must be fully included (under max_patch_chars_per_file)"
+        );
+        // file2 is listed but its patch is omitted because cumulative total exceeds max_diff_chars
+        assert!(prompt.contains("file2.rs"), "file2 must be listed");
+        assert!(
+            !prompt.contains(&"y".repeat(100)),
+            "file2 patch must be omitted (cumulative total exceeds max_diff_chars)"
         );
         assert!(
-            !prompt.contains(&"y".repeat(2_001)),
-            "second file patch must be truncated to MAX_PATCH_LENGTH"
-        );
-        assert!(
-            prompt.contains("patch truncated by size budget"),
-            "per-patch truncation annotation must be present"
+            prompt.contains("files omitted due to size limits"),
+            "files_skipped annotation must be present"
         );
     }
 

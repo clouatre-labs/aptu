@@ -120,7 +120,7 @@ pub enum AptuError {
 
     /// A user-supplied input field exceeds its configured byte limit.
     #[error(
-        "input field `{field}` exceeds limit: {actual_bytes} bytes (limit: {limit_bytes} bytes)"
+        "input field `{field}` exceeds limit: {actual_bytes} bytes (limit: {limit_bytes} bytes){hint}"
     )]
     InputExceedsLimit {
         /// Name of the field that exceeded the limit.
@@ -129,6 +129,8 @@ pub enum AptuError {
         actual_bytes: usize,
         /// Configured byte limit.
         limit_bytes: usize,
+        /// Optional hint for how to resolve the limit (empty if none).
+        hint: String,
     },
 }
 

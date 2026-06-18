@@ -98,7 +98,6 @@ const MAX_COMMENTS: usize = 5;
 const MAX_LABELS: usize = 20;
 const MAX_MILESTONES: usize = 10;
 const MAX_FILES: usize = 20;
-const MAX_TOTAL_DIFF_SIZE: usize = 50_000;
 
 /// Builds the user prompt for issue triage.
 #[must_use]
@@ -285,24 +284,17 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         if let Some(patch) = patch
             && !(status == "added" && full_content.is_some())
         {
-            const MAX_PATCH_LENGTH: usize = 2000;
             let sanitized_patch = sanitize_prompt_field(&patch);
-            let patch_content = if sanitized_patch.len() > MAX_PATCH_LENGTH {
-                format!(
-                    "{}...\n[APTU: patch truncated by size budget -- do not speculate on missing content]",
-                    &sanitized_patch[..MAX_PATCH_LENGTH],
-                )
-            } else {
-                sanitized_patch
-            };
+            let patch_size = sanitized_patch.len();
+
+            // Drop whole patch if it exceeds per-file max
+            if patch_size > ctx.max_patch_chars_per_file {
+                files_skipped += 1;
+                continue;
+            }
 
             // Check if adding this patch would exceed total diff size limit
-            let patch_size = patch_content.len();
-            if total_diff_size + patch_size > MAX_TOTAL_DIFF_SIZE {
-                let _ = writeln!(
-                    prompt,
-                    "```diff\n[APTU: patch omitted due to size budget -- do not speculate on missing content]\n```\n"
-                );
+            if total_diff_size + patch_size > ctx.max_diff_chars {
                 files_skipped += 1;
                 continue;
             }
@@ -311,10 +303,10 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
             if patch_truncated {
                 let _ = writeln!(
                     prompt,
-                    "[APTU: patch truncated by GitHub API -- do not speculate on missing content]\n```diff\n{patch_content}\n```\n"
+                    "[APTU: patch truncated by GitHub API -- do not speculate on missing content]\n```diff\n{sanitized_patch}\n```\n"
                 );
             } else {
-                let _ = writeln!(prompt, "```diff\n{patch_content}\n```\n");
+                let _ = writeln!(prompt, "```diff\n{sanitized_patch}\n```\n");
             }
             total_diff_size += patch_size;
         }
@@ -356,7 +348,8 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     if files_skipped > 0 {
         let _ = writeln!(
             prompt,
-            "\n[{files_skipped} files omitted due to size limits (MAX_FILES={MAX_FILES}, MAX_TOTAL_DIFF_SIZE={MAX_TOTAL_DIFF_SIZE})]"
+            "\n[{files_skipped} files omitted due to size limits (MAX_FILES={MAX_FILES}, MAX_TOTAL_DIFF_SIZE={})]",
+            ctx.max_diff_chars,
         );
     }
 
@@ -785,8 +778,12 @@ mod tests {
                 ..Default::default()
             });
         assert!(
-            prompt.contains("[APTU: patch truncated by size budget"),
-            "patch truncation annotation must be present"
+            !prompt.contains("[APTU: patch truncated by size budget"),
+            "patches longer than max_patch_chars_per_file are dropped entirely, not truncated"
+        );
+        assert!(
+            prompt.contains("files omitted due to size limits"),
+            "both patches exceed max_patch_chars_per_file so files_skipped annotation must be present"
         );
         assert!(prompt.contains("file1.rs"));
         assert!(prompt.contains("file2.rs"));

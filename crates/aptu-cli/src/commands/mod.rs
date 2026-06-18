@@ -298,6 +298,15 @@ async fn review_single_pr(
         s.finish_and_clear();
     }
 
+    // Warn about budget drops before logging metrics
+    if !context_record.budget_drops.is_empty() {
+        eprintln!(
+            "warning: review context truncated -- {} section(s) dropped to fit prompt budget: {}.\n  Raise limits under [review] in ~/.config/aptu/config.toml",
+            context_record.budget_drops.len(),
+            context_record.budget_drops.join(", ")
+        );
+    }
+
     // Log metrics (fire-and-forget)
     aptu_core::metrics::append_jsonl(&ai_stats);
     aptu_core::metrics::write_context_jsonl(&context_record);

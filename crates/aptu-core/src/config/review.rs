@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 /// - `max_chars_per_file`: 16,000 chars per file gives adequate context for most files
 ///   without dominating the prompt budget; budget drop logic trims below 120k if needed.
 /// - `max_instructions_chars`: 1,500 chars caps repository instructions to prevent prompt bloat.
+/// - `max_diff_chars`: 200,000 chars caps the total diff content across all files in the prompt.
+/// - `max_patch_chars_per_file`: 10,000 chars caps each individual file patch before dropping it entirely.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct ReviewConfig {
@@ -24,6 +26,10 @@ pub struct ReviewConfig {
     pub max_full_content_files: usize,
     /// Maximum characters per file's full content (default: `16_000`).
     pub max_chars_per_file: usize,
+    /// Maximum total diff characters across all files in the prompt (default: `200_000`).
+    pub max_diff_chars: usize,
+    /// Maximum characters per individual file patch before the patch is dropped entirely (default: `10_000`).
+    pub max_patch_chars_per_file: usize,
     /// Maximum characters for repository instructions (default: `1_500`).
     #[serde(default = "default_max_instructions_chars")]
     pub max_instructions_chars: usize,
@@ -60,14 +66,16 @@ fn default_max_dep_packages() -> usize {
 impl Default for ReviewConfig {
     fn default() -> Self {
         Self {
-            max_prompt_chars: 120_000, // Conservative budget for LLM context windows with overhead
-            max_full_content_files: 10, // Cap GitHub Contents API calls to limit latency and rate limits
-            max_chars_per_file: 16_000, // Adequate context per file; budget drop logic trims total below 120k
-            max_instructions_chars: 1_500, // Cap repository instructions to prevent prompt bloat
+            max_prompt_chars: 120_000,
+            max_full_content_files: 10,
+            max_chars_per_file: 16_000,
+            max_diff_chars: 200_000,
+            max_patch_chars_per_file: 10_000,
+            max_instructions_chars: 1_500,
             instructions_file: None,
-            min_budget_for_call_graph: 20_000, // Auto-enable call graph if remaining budget exceeds this
-            max_dep_release_chars: 2_000, // Cap dependency release notes to prevent prompt bloat
-            max_dep_packages: 3,          // Limit enriched packages to avoid excessive API calls
+            min_budget_for_call_graph: 20_000,
+            max_dep_release_chars: 2_000,
+            max_dep_packages: 3,
         }
     }
 }
