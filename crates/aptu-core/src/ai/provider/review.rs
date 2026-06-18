@@ -237,7 +237,7 @@ mod tests {
             ..Default::default()
         });
         assert!(prompt.contains("files omitted due to size limits"));
-        assert!(prompt.contains("MAX_FILES=20"));
+        assert!(prompt.contains("files omitted due to size limits"));
     }
 
     #[test]
@@ -543,8 +543,8 @@ mod tests {
             ..Default::default()
         });
         assert!(
-            prompt.contains("[APTU: file content truncated by size budget -- do not speculate on missing content]"),
-            "truncation annotation must be present for truncated full_content"
+            prompt.contains("[APTU: file content dropped: exceeds per-file char budget]"),
+            "drop annotation must be present for oversized full_content"
         );
         let file_content_end = prompt
             .find("</file_content>")
@@ -611,7 +611,7 @@ mod tests {
         });
         assert!(
             prompt.contains("truncated by size budget"),
-            "truncation annotation must be present"
+            "drop annotation must be present"
         );
         for line in prompt.lines() {
             if line.contains("truncated by size budget") {

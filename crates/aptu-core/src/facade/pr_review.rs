@@ -262,6 +262,7 @@ pub async fn analyze_pr(
         cwd_inferred: ctx.cwd_inferred,
         prompt_chars_final: ai_stats.prompt_chars,
         finish_reasons,
+        max_prompt_chars: review_config.max_prompt_chars,
     };
 
     Ok((response, ai_stats, context_record))

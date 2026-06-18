@@ -312,48 +312,35 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         }
 
         // Include full file content if available (cap at ctx.max_chars_per_file)
+        // Include full file content if available (cap at ctx.max_chars_per_file)
         if let Some(content) = full_content {
             let sanitized = sanitize_prompt_field(&content);
-            let original_len = sanitized.len();
-            let max_chars = ctx.max_chars_per_file;
-            let is_truncated = original_len > max_chars;
-            let displayed = if is_truncated {
-                let truncated = sanitized[..max_chars].to_string();
-                let truncated_len = truncated.len();
-                ctx.record_truncation(&filename, original_len, truncated_len);
-                truncated
-            } else {
-                sanitized
-            };
-            let _ = writeln!(
-                prompt,
-                "<file_content path=\"{}\">\n{}\n</file_content>",
-                sanitize_prompt_field(&filename),
-                displayed
-            );
-            if is_truncated {
+            if sanitized.len() > ctx.max_chars_per_file {
+                files_skipped += 1;
                 let _ = writeln!(
                     prompt,
-                    "[APTU: file content truncated by size budget -- do not speculate on missing content]\n"
+                    "[APTU: file content dropped: exceeds per-file char budget]\n"
                 );
-            } else {
-                let _ = writeln!(prompt);
+                files_included += 1;
+                continue;
             }
+            let _ = writeln!(
+                prompt,
+                "<file_content path=\"{}\">\n{}\n</file_content>\n",
+                sanitize_prompt_field(&filename),
+                sanitized
+            );
         }
 
         files_included += 1;
     }
 
-    // Add truncation message if files were skipped
     if files_skipped > 0 {
         let _ = writeln!(
             prompt,
-            "\n[{files_skipped} files omitted due to size limits (MAX_FILES={MAX_FILES}, MAX_TOTAL_DIFF_SIZE={})]",
-            ctx.max_diff_chars,
+            "\n[{files_skipped} files omitted due to size limits (file count, patch size, or per-file content budget)]",
         );
     }
-
-    prompt.push_str("</pull_request>");
 
     // Inject dependency release notes if available
     if !ctx.pr.dep_enrichments.is_empty() {
@@ -717,7 +704,7 @@ mod tests {
                 ..Default::default()
             });
         assert!(prompt.contains("files omitted due to size limits"));
-        assert!(prompt.contains("MAX_FILES=20"));
+        assert!(prompt.contains("files omitted due to size limits"));
     }
 
     #[test]
@@ -946,4 +933,169 @@ mod tests {
             "patch must be included when status=added and full_content is None"
         );
     }
+
+    #[test]
+    fn test_full_content_whole_file_drop() {
+        use super::super::types::{PrDetails, PrFile};
+
+        let files = vec![PrFile {
+            filename: "big_file.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 0,
+            deletions: 0,
+            patch: Some("+small_patch".to_string()),
+            patch_truncated: false,
+            full_content: Some("A".repeat(10_000)),
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        let prompt =
+            build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
+                pr,
+                ast_context: String::new(),
+                call_graph: String::new(),
+                inferred_repo_path: None,
+                cwd_inferred: false,
+                max_chars_per_file: 100,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+                ..Default::default()
+            });
+        assert!(
+            !prompt.contains("<file_content"),
+            "full_content exceeding max_chars_per_file must not produce a <file_content> block"
+        );
+        assert!(
+            prompt.contains("file content dropped: exceeds per-file char budget"),
+            "drop annotation must appear in the prompt"
+        );
+        assert!(
+            prompt.contains("files omitted due to size limits"),
+            "files_skipped annotation must be present"
+        );
+    }
+
+    #[test]
+    fn test_full_content_drop_keeps_patch() {
+        use super::super::types::{PrDetails, PrFile};
+
+        let files = vec![PrFile {
+            filename: "file_with_content.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 0,
+            patch: Some("+small_patch_keep_me".to_string()),
+            patch_truncated: false,
+            full_content: Some("B".repeat(10_000)),
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 2,
+            title: "Test PR 2".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/2".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        let prompt =
+            build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
+                pr,
+                ast_context: String::new(),
+                call_graph: String::new(),
+                inferred_repo_path: None,
+                cwd_inferred: false,
+                max_chars_per_file: 100,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+                ..Default::default()
+            });
+        assert!(
+            prompt.contains("small_patch_keep_me"),
+            "patch must still be included when full_content is dropped"
+        );
+        assert!(
+            prompt.contains("file content dropped: exceeds per-file char budget"),
+            "drop annotation must appear"
+        );
+    }
+
+    #[test]
+    fn test_full_content_utf8_boundary_no_panic() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Provide full_content whose byte length exceeds the budget.
+        // Using a literal multi-byte character to ensure the byte boundary
+        // would have fallen mid character with the old byte-slice approach.
+        let multi_byte_content: String = (0..50).map(|_| "\u{1F600}").collect();
+
+        let files = vec![PrFile {
+            filename: "utf8_file.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 0,
+            deletions: 0,
+            patch: Some("+patch".to_string()),
+            patch_truncated: false,
+            full_content: Some(multi_byte_content),
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 3,
+            title: "Test PR 3".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/3".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        let prompt =
+            build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
+                pr,
+                ast_context: String::new(),
+                call_graph: String::new(),
+                inferred_repo_path: None,
+                cwd_inferred: false,
+                max_chars_per_file: 101,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+                ..Default::default()
+            });
+        assert!(
+            prompt.contains("file content dropped: exceeds per-file char budget"),
+            "multi-byte content exceeding budget must be dropped cleanly"
+        );
+    }
+
 }

@@ -958,14 +958,9 @@ mod tests {
         let _ = TrackingProvider::build_pr_review_user_prompt(&mut ctx);
 
         // Assert
-        assert_eq!(
-            ctx.files_truncated, 1,
-            "files_truncated must be 1 after one truncation"
-        );
-        assert_eq!(
-            ctx.truncated_chars_dropped,
-            original_len - cap,
-            "truncated_chars_dropped must equal chars removed"
+        assert!(
+            prompt.contains("file content dropped: exceeds per-file char budget"),
+            "full_content exceeding budget must produce drop annotation"
         );
     }
 
@@ -1044,8 +1039,10 @@ mod tests {
         // Act
         let _ = NoDblProvider::build_pr_review_user_prompt(&mut ctx);
 
-        // Assert: exactly one truncation of exactly 1 char
-        assert_eq!(ctx.files_truncated, 1, "exactly one file must be truncated");
-        assert_eq!(ctx.truncated_chars_dropped, 1, "exactly 1 char dropped");
+        // Assert: file is dropped entirely (whole-file drop)
+        assert!(
+            prompt.contains("file content dropped: exceeds per-file char budget"),
+            "content exceeding budget must produce drop annotation"
+        );
     }
 }
