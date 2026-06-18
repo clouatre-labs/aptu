@@ -126,26 +126,25 @@ inputs:
     default: 'false'
   max-diff-chars:
     description: >
-      Maximum total diff characters across all files included in the PR review prompt
-      (default: 200 000). Diffs exceeding this limit are truncated before prompt assembly.
+      Maximum total diff characters across all files included in the PR review prompt.
+      Diffs exceeding this limit are dropped from the prompt before assembly.
       Maps to [review] max_diff_chars in config.toml.
     required: false
-    default: ''
+    default: '200000'
   max-patch-chars-per-file:
     description: >
-      Maximum characters for an individual file patch in the PR review prompt
-      (default: 10 000). File patches exceeding this limit are dropped entirely rather
-      than sliced mid-hunk. Maps to [review] max_patch_chars_per_file in config.toml.
+      Maximum characters for an individual file patch in the PR review prompt.
+      File patches exceeding this limit are dropped entirely rather than sliced mid-hunk.
+      Maps to [review] max_patch_chars_per_file in config.toml.
     required: false
-    default: ''
+    default: '10000'
   max-diff-bytes:
     description: >
-      Maximum bytes for the raw PR diff before prompt assembly; enforces the
-      prompt-injection defence pre-check (default: 524 288 = 512 KiB).
+      Maximum bytes for the raw PR diff; enforces the prompt-injection defence pre-check.
       Raise for large refactor PRs; lower to tighten the injection-surface budget.
       Maps to [prompt] max_diff_bytes in config.toml.
     required: false
-    default: ''
+    default: '524288'
 
   # --- Scan security ---
   scan-path:
@@ -447,9 +446,9 @@ runs:
         INSTRUCTIONS_FILE: ${{ inputs.instructions-file }}
         NO_COMMENT: ${{ inputs.no-comment }}
         REPO_PATH: ${{ inputs.repo-path }}
-        MAX_DIFF_CHARS: ${{ inputs.max-diff-chars }}
-        MAX_PATCH_CHARS_PER_FILE: ${{ inputs.max-patch-chars-per-file }}
-        MAX_DIFF_BYTES: ${{ inputs.max-diff-bytes }}
+        APTU_REVIEW__MAX_DIFF_CHARS: ${{ inputs.max-diff-chars }}
+        APTU_REVIEW__MAX_PATCH_CHARS_PER_FILE: ${{ inputs.max-patch-chars-per-file }}
+        APTU_PROMPT__MAX_DIFF_BYTES: ${{ inputs.max-diff-bytes }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
         APTU_CONTEXT_FILE: ${{ runner.temp }}/aptu-review-context.jsonl
       run: |
@@ -478,15 +477,6 @@ runs:
         fi
         if [[ -n "$INSTRUCTIONS_FILE" ]]; then
           ARGS+=(--instructions-file "$INSTRUCTIONS_FILE")
-        fi
-        if [[ -n "$MAX_DIFF_CHARS" ]]; then
-          export APTU_REVIEW__MAX_DIFF_CHARS="$MAX_DIFF_CHARS"
-        fi
-        if [[ -n "$MAX_PATCH_CHARS_PER_FILE" ]]; then
-          export APTU_REVIEW__MAX_PATCH_CHARS_PER_FILE="$MAX_PATCH_CHARS_PER_FILE"
-        fi
-        if [[ -n "$MAX_DIFF_BYTES" ]]; then
-          export APTU_PROMPT__MAX_DIFF_BYTES="$MAX_DIFF_BYTES"
         fi
 
         echo "Running: aptu pr review ${ARGS[*]} $PR_REF"
