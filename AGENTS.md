@@ -1,6 +1,6 @@
 # Aptu - Rust CLI [Production]
 
-AI-powered OSS issue triage and PR review with gamification.
+AI-powered OSS issue triage and PR review with contribution history tracking.
 
 Smart defaults (TTY, rate limits, permissions); `--output json` for automation (schema is a contract); KISS; clean refactors over deprecation.
 
@@ -72,6 +72,7 @@ Cargo profiles defined in workspace `Cargo.toml`: `release` (size-optimized, LTO
 - `aptu scan-security <path>` walks a directory with local pattern matching; no AI call; each `PatternDefinition` carries `remediation` text and `authority_url` (CWE or OWASP reference)
 - SARIF output (`--output sarif`) populates `tool.driver.rules[]` with CWE `helpUri`; upload via `scan.yml` workflow; see `docs/SECURITY_SCANNING.md`
 - CI self-audit gate: `scan-self` job in `ci.yml` runs `--fail-on critical,high --output github-annotations` on every push/PR
+- scan-security performs all pattern matching locally -- no code is sent to external services.
 - Prompt-injection input limits in `[prompt]` (`PromptConfig`: `max_issue_body_bytes=32768`, `max_diff_bytes=131072`, `max_commit_message_bytes=4096`); CLI exits non-zero on breach
 
 ### GitHub Integration

@@ -36,6 +36,8 @@ External APIs (GitHub, AI Provider)
 Format & Display Output
 ```
 
+A typical aptu invocation follows this path: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a prompt with AST and call-graph context; the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
+
 ## Key Abstractions
 
 ### TokenProvider Trait
