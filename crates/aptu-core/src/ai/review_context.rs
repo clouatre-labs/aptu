@@ -880,4 +880,43 @@ mod tests {
             "verbose_summary must omit truncation line when files_truncated == 0"
         );
     }
+
+    #[test]
+    fn test_should_enable_call_graph_budget_boundary() {
+        // budget_remaining == min_budget_for_call_graph -> false (strict >)
+        let config = ReviewConfig {
+            min_budget_for_call_graph: 20_000,
+            ..ReviewConfig::default()
+        };
+        assert!(
+            !should_enable_call_graph(false, 20_000, &config),
+            "should_enable_call_graph must be false when budget_remaining equals min_budget_for_call_graph"
+        );
+    }
+
+    #[test]
+    fn test_should_enable_call_graph_budget_below_threshold() {
+        // budget_remaining < min_budget_for_call_graph, deep=false -> false
+        let config = ReviewConfig {
+            min_budget_for_call_graph: 20_000,
+            ..ReviewConfig::default()
+        };
+        assert!(
+            !should_enable_call_graph(false, 10_000, &config),
+            "should_enable_call_graph must be false when budget_remaining < min_budget_for_call_graph and deep=false"
+        );
+    }
+
+    #[test]
+    fn test_should_enable_call_graph_deep_overrides_budget() {
+        // deep=true bypasses the budget gate entirely
+        let config = ReviewConfig {
+            min_budget_for_call_graph: 20_000,
+            ..ReviewConfig::default()
+        };
+        assert!(
+            should_enable_call_graph(true, 0, &config),
+            "should_enable_call_graph must be true when deep=true regardless of budget_remaining"
+        );
+    }
 }

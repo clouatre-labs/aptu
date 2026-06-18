@@ -125,7 +125,7 @@ When no API key is provided the action falls back to `openrouter` / `inception/m
 | `max-diff-chars` | `200000` | Maximum total diff characters across all files. Diffs exceeding this are dropped from the prompt. |
 | `max-patch-chars-per-file` | `10000` | Maximum characters per individual file patch. Patches exceeding this are dropped entirely rather than sliced mid-hunk. |
 | `max-instructions-chars` | `1500` | Maximum characters of instructions file content. |
-| `min-budget-for-call-graph` | `20000` | Remaining prompt budget threshold below which call-graph enrichment is skipped. Set to `0` to always include it. |
+| `min-budget-for-call-graph` | `20000` | Remaining prompt budget threshold below which call-graph enrichment is skipped. Set to `0` to always include it. The call-graph is enabled only when `budget_remaining > min_budget_for_call_graph` where `budget_remaining = max_prompt_chars - estimated_prompt_size`. A value >= `max-prompt-chars` disables call graph entirely. |
 | `max-dep-packages` | `3` | Maximum dependency bump packages for which upstream release notes are fetched. |
 | `max-dep-release-chars` | `2000` | Maximum characters of upstream release notes per dependency package. |
 | `max-diff-bytes` | `524288` | Maximum bytes for the raw PR diff; prompt-injection defence pre-check (512 KiB). Maps to `[prompt] max_diff_bytes`. |

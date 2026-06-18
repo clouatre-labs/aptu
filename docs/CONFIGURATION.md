@@ -240,6 +240,13 @@ max_dep_packages = 3               # Max dependency bump packages for which upst
 max_dep_release_chars = 2000       # Max chars of upstream release notes included per dependency package (default: 2 000)
 ```
 
+The call graph is enabled only when `budget_remaining > min_budget_for_call_graph`, where
+`budget_remaining = max_prompt_chars - estimated_size` (estimated size excludes the call graph itself).
+Setting `min_budget_for_call_graph >= max_prompt_chars` disables call graph enrichment entirely.
+Setting it above half of `max_prompt_chars` means call graph will only be built for the largest diffs.
+The prefix section "When the assembled prompt exceeds..." describes how call graph is the first section dropped,
+so a value that rarely enables call graph is typically acceptable.
+
 When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest files first), diff hunks (largest first). The system prompt and PR metadata are never dropped.
 
 ## Cache Configuration
