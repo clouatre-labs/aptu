@@ -229,13 +229,15 @@ Control how much context `aptu pr review` fetches and injects into the AI prompt
 
 ```toml
 [review]
-max_prompt_chars = 120000      # Total prompt character budget (default: 120 000)
-max_full_content_files = 10    # Max files fetched in full via GitHub Contents API (default: 10)
-max_chars_per_file = 16000     # raised from 4 000 in v0.7.0; reduce if you hit prompt size limits
-max_instructions_chars = 1500  # Max bytes of instructions file content included in review prompt (default: 1 500)
+max_prompt_chars = 120000          # Total prompt character budget (default: 120 000)
+max_full_content_files = 10        # Max files fetched in full via GitHub Contents API (default: 10)
+max_chars_per_file = 16000         # Max chars of full file content per file (default: 16 000)
+max_diff_chars = 200000            # Max total diff characters across all files in the prompt (default: 200 000)
+max_patch_chars_per_file = 10000   # Max chars per individual file patch; patches exceeding this are dropped entirely (default: 10 000)
+max_instructions_chars = 1500      # Max chars of instructions file content included in review prompt (default: 1 500)
 min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
-max_dep_packages = 3           # Max number of dependency bump packages for which upstream release notes are fetched (default: 3)
-max_dep_release_chars = 2000   # Max chars of upstream release notes included per dependency package (default: 2 000)
+max_dep_packages = 3               # Max dependency bump packages for which upstream release notes are fetched (default: 3)
+max_dep_release_chars = 2000       # Max chars of upstream release notes included per dependency package (default: 2 000)
 ```
 
 When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest files first), diff hunks (largest first). The system prompt and PR metadata are never dropped.
@@ -264,7 +266,7 @@ Aptu enforces per-field byte limits before inserting user-supplied content into 
 ```toml
 [prompt]
 max_issue_body_bytes    = 32768   # 32 KiB  — issue body
-max_diff_bytes          = 131072  # 128 KiB — PR diff
+max_diff_bytes          = 524288  # 512 KiB — PR diff (injection-defence pre-check)
 max_commit_message_bytes = 4096   # 4 KiB   — individual commit messages
 ```
 
