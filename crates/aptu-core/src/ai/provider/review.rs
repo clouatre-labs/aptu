@@ -237,7 +237,6 @@ mod tests {
             ..Default::default()
         });
         assert!(prompt.contains("files omitted due to size limits"));
-        assert!(prompt.contains("files omitted due to size limits"));
     }
 
     #[test]
@@ -404,6 +403,14 @@ mod tests {
         assert!(
             prompt.contains("full_content_for_added_file"),
             "full_content must be included when present"
+        );
+        assert!(
+            prompt.contains("<file_content path=\"file1.rs\">"),
+            "file_content block must be present for added file with full_content"
+        );
+        assert!(
+            !prompt.contains("[APTU: patch truncated by GitHub API"),
+            "no patch-truncated annotation when patch was not truncated"
         );
     }
 
