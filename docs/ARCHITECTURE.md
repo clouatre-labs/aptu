@@ -143,10 +143,12 @@ This means users can tune AI behavior without recompiling, and developers can au
 ├── [review]
 │   ├── max_prompt_chars = 120000
 │   ├── max_full_content_files = 10
-│   └── max_chars_per_file = 4000
+│   ├── max_chars_per_file = 16000
+│   ├── max_diff_chars = 200000
+│   └── max_patch_chars_per_file = 10000
 └── [prompt]
     ├── max_issue_body_bytes = 32768
-    ├── max_diff_bytes = 131072
+    ├── max_diff_bytes = 524288
     └── max_commit_message_bytes = 4096
 ```
 
