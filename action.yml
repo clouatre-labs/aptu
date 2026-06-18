@@ -119,8 +119,8 @@ inputs:
   deep:
     description: >
       Force cross-file call graph context in PR review unconditionally. When omitted, call
-      graph is still auto-enabled when the remaining prompt budget exceeds the
-      min_budget_for_call_graph threshold (default 20 000 chars). Set to 'true' to always
+      graph is auto-enabled when budget_remaining (= max_prompt_chars minus the pre-call-graph
+      prompt size estimate) exceeds min-budget-for-call-graph. Set to 'true' to always
       include call graph regardless of available budget.
     required: false
     default: 'false'
@@ -167,6 +167,10 @@ inputs:
   min-budget-for-call-graph:
     description: >
       Minimum remaining prompt budget (chars) to auto-enable call-graph enrichment.
+      budget_remaining = max-prompt-chars minus the pre-call-graph prompt size estimate;
+      call graph is built only when budget_remaining > this value (strict greater-than).
+      Setting this above half of max-prompt-chars means call graph rarely fires;
+      setting it >= max-prompt-chars disables auto-enable entirely (use deep: true instead).
       Set to 0 to always include call graph when repo-path is available.
       Maps to [review] min_budget_for_call_graph in config.toml.
     required: false

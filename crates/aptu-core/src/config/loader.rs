@@ -85,6 +85,11 @@ impl ConfigSource for TomlConfigSource {
             .validate()
             .map_err(|e| AptuError::Config { message: e })?;
 
+        // Validate review configuration consistency at load time (non-fatal warnings).
+        for warning in app_config.review.validate_consistency() {
+            tracing::warn!("{}", warning);
+        }
+
         Ok(app_config)
     }
 }
