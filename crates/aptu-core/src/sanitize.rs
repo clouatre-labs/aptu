@@ -58,6 +58,7 @@ pub(crate) fn sanitise_user_field(
             field: field_name.to_owned(),
             actual_bytes,
             limit_bytes: max_bytes,
+            hint: String::new(),
         });
     }
 
@@ -99,10 +100,12 @@ mod tests {
                 field,
                 actual_bytes,
                 limit_bytes,
+                hint,
             } => {
                 assert_eq!(field, "issue_body");
                 assert_eq!(actual_bytes, 101);
                 assert_eq!(limit_bytes, 100);
+                assert!(hint.is_empty(), "expected no hint, got: {hint}");
             }
             other => panic!("expected InputExceedsLimit, got {other:?}"),
         }
@@ -132,7 +135,7 @@ mod tests {
     fn test_prompt_config_defaults() {
         let config = crate::config::PromptConfig::default();
         assert_eq!(config.max_issue_body_bytes, 32_768);
-        assert_eq!(config.max_diff_bytes, 131_072);
+        assert_eq!(config.max_diff_bytes, 524_288);
         assert_eq!(config.max_commit_message_bytes, 4_096);
     }
 

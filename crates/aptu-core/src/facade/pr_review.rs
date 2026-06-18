@@ -97,17 +97,17 @@ pub async fn fetch_pr_for_review(
 /// degrades gracefully: `scan_diff` only inspects `+`-prefixed lines and ignores anything
 /// else, so corrupt hunks are skipped rather than causing errors.
 ///
-/// Total output is capped at [`crate::ai::provider::MAX_TOTAL_DIFF_SIZE`] bytes to bound
+/// Total output is capped at `200_000` bytes to bound
 /// memory use on PRs with extremely large patches.
 fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
-    use crate::ai::provider::MAX_TOTAL_DIFF_SIZE;
+    const MAX_RECONSTRUCT_DIFF_SIZE: usize = 200_000;
     let mut diff = String::new();
     for file in files {
         if let Some(patch) = &file.patch {
             // Cap check is intentionally pre-append (soft lower bound, not hard upper bound):
             // it avoids splitting a file header from its patch, which would produce a
             // malformed diff that confuses the scanner's file-path tracking.
-            if diff.len() >= MAX_TOTAL_DIFF_SIZE {
+            if diff.len() >= MAX_RECONSTRUCT_DIFF_SIZE {
                 break;
             }
             diff.push_str("+++ b/");
@@ -164,7 +164,19 @@ pub async fn analyze_pr(
         .iter()
         .map(|f| f.patch.as_deref().unwrap_or(""))
         .collect();
-    let _ = sanitise_user_field("pr_diff", &all_patches, app_config.prompt.max_diff_bytes)?;
+    let limit_kb = app_config.prompt.max_diff_bytes / 1024;
+    let _ = sanitise_user_field("pr_diff", &all_patches, app_config.prompt.max_diff_bytes)
+        .map_err(|e| match e {
+            AptuError::InputExceedsLimit { field, actual_bytes, limit_bytes, .. } => {
+                AptuError::InputExceedsLimit {
+                    field,
+                    actual_bytes,
+                    limit_bytes,
+                    hint: format!(" raise `prompt.max_diff_bytes` in ~/.config/aptu/config.toml (current limit: {limit_kb} KiB)"),
+                }
+            }
+            other => other,
+        })?;
 
     // Build review context with all enrichment decisions centralized
     let ctx = crate::ai::review_context::build_review_context(

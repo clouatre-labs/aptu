@@ -28,6 +28,10 @@ pub struct ReviewContext {
     pub cwd_inferred: bool,
     /// Maximum characters per file's full content in the prompt (from `ReviewConfig`).
     pub max_chars_per_file: usize,
+    /// Maximum total diff characters across all files in the prompt (from `ReviewConfig`).
+    pub max_diff_chars: usize,
+    /// Maximum characters per individual file patch before the patch is dropped entirely (from `ReviewConfig`).
+    pub max_patch_chars_per_file: usize,
     /// Number of files whose full content was truncated at prompt assembly.
     pub files_truncated: usize,
     /// Total characters dropped across all truncated files.
@@ -141,6 +145,9 @@ impl Default for ReviewContext {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: crate::config::ReviewConfig::default().max_chars_per_file,
+            max_diff_chars: crate::config::ReviewConfig::default().max_diff_chars,
+            max_patch_chars_per_file: crate::config::ReviewConfig::default()
+                .max_patch_chars_per_file,
             files_truncated: 0,
             truncated_chars_dropped: 0,
             files_total: 0,
@@ -239,6 +246,8 @@ pub async fn build_review_context(
         inferred_repo_path,
         cwd_inferred,
         max_chars_per_file: review_config.max_chars_per_file,
+        max_diff_chars: review_config.max_diff_chars,
+        max_patch_chars_per_file: review_config.max_patch_chars_per_file,
         files_truncated: 0,
         truncated_chars_dropped: 0,
         files_total,
@@ -829,6 +838,8 @@ mod tests {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: 4_000,
+            max_diff_chars: 200_000,
+            max_patch_chars_per_file: 10_000,
             files_total: 0,
             files_with_patch: 0,
             files_truncated: 3,
@@ -852,6 +863,8 @@ mod tests {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: 4_000,
+            max_diff_chars: 200_000,
+            max_patch_chars_per_file: 10_000,
             files_total: 0,
             files_with_patch: 0,
             files_truncated: 0,
@@ -929,6 +942,8 @@ mod tests {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: cap,
+            max_diff_chars: 200_000,
+            max_patch_chars_per_file: 10_000,
             files_total: 0,
             files_with_patch: 0,
             files_truncated: 0,
@@ -1014,6 +1029,8 @@ mod tests {
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: cap,
+            max_diff_chars: 200_000,
+            max_patch_chars_per_file: 10_000,
             files_total: 0,
             files_with_patch: 0,
             files_truncated: 0,

@@ -135,10 +135,18 @@ pub fn format_error(error: &Error) -> String {
                 field,
                 actual_bytes,
                 limit_bytes,
+                hint,
             } => {
-                format!(
-                    "input field `{field}` exceeds limit: {actual_bytes} bytes (limit: {limit_bytes} bytes)\n\nTip: The input is too large for safe processing. Consider reducing the size of the {field} field."
-                )
+                let base = format!(
+                    "input field `{field}` exceeds limit: {actual_bytes} bytes (limit: {limit_bytes} bytes)"
+                );
+                if hint.is_empty() {
+                    format!(
+                        "{base}\n\nTip: The input is too large for safe processing. Consider reducing the size of the {field} field."
+                    )
+                } else {
+                    format!("{base}{hint}")
+                }
             }
         }
     } else {
