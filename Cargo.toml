@@ -3,7 +3,7 @@ members = ["crates/aptu-cli", "crates/aptu-core"]
 resolver = "3"
 
 [workspace.package]
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 rust-version = "1.96.0"
 authors = ["Hugues Clouâtre"]
@@ -18,7 +18,7 @@ percent-encoding = "2"
 serial_test = "3.5.0"
 tempfile = "3.27.0"
 # Core
-aptu-core = { path = "crates/aptu-core", version = "0.9.0" }
+aptu-core = { path = "crates/aptu-core", version = "0.10.0" }
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
