@@ -83,6 +83,8 @@ pub struct ReviewContextRecord {
     pub prompt_chars_final: usize,
     /// Finish reasons from the AI response.
     pub finish_reasons: Vec<String>,
+    /// Maximum prompt character budget from review config.
+    pub max_prompt_chars: usize,
 }
 
 /// Append a PR review context record to the context JSONL file.
@@ -286,6 +288,7 @@ mod tests {
             cwd_inferred: false,
             prompt_chars_final: 5000,
             finish_reasons: vec!["stop".to_string()],
+            max_prompt_chars: 120_000,
         };
 
         // Should not panic or error
@@ -316,6 +319,7 @@ mod tests {
             cwd_inferred: true,
             prompt_chars_final: 5000,
             finish_reasons: vec!["stop".to_string()],
+            max_prompt_chars: 120_000,
         };
 
         write_context_jsonl_impl(&file_path_str, &record).unwrap();
@@ -330,5 +334,36 @@ mod tests {
         assert!(content.contains("\"budget_drops\":[\"call_graph\"]"));
         assert!(content.contains("\"finish_reasons\":[\"stop\"]"));
         assert!(content.ends_with('\n'));
+    }
+
+    #[test]
+    fn test_max_prompt_chars_recorded_in_context_record() {
+        let record = ReviewContextRecord {
+            trace_id: "test-trace".to_string(),
+            operation: "pr_review".to_string(),
+            pr: "owner/repo#1".to_string(),
+            model: "gpt-4".to_string(),
+            github_actor: None,
+            files_total: 5,
+            files_with_patch: 3,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
+            ast_context_chars: 100,
+            call_graph_chars: 50,
+            dep_enrichments_count: 2,
+            dep_enrichments_chars: 200,
+            budget_drops: vec![],
+            cwd_inferred: false,
+            prompt_chars_final: 5000,
+            finish_reasons: vec!["stop".to_string()],
+            max_prompt_chars: 120_000,
+        };
+
+        let json = serde_json::to_string(&record).expect("serialization failed");
+        assert!(
+            json.contains(r#""max_prompt_chars":120000"#),
+            "max_prompt_chars must be present in JSON with correct value, got: {}",
+            json,
+        );
     }
 }

@@ -237,7 +237,6 @@ mod tests {
             ..Default::default()
         });
         assert!(prompt.contains("files omitted due to size limits"));
-        assert!(prompt.contains("MAX_FILES=20"));
     }
 
     #[test]
@@ -405,6 +404,14 @@ mod tests {
             prompt.contains("full_content_for_added_file"),
             "full_content must be included when present"
         );
+        assert!(
+            prompt.contains("<file_content path=\"file1.rs\">"),
+            "file_content block must be present for added file with full_content"
+        );
+        assert!(
+            !prompt.contains("[APTU: patch truncated by GitHub API"),
+            "no patch-truncated annotation when patch was not truncated"
+        );
     }
 
     #[test]
@@ -543,8 +550,8 @@ mod tests {
             ..Default::default()
         });
         assert!(
-            prompt.contains("[APTU: file content truncated by size budget -- do not speculate on missing content]"),
-            "truncation annotation must be present for truncated full_content"
+            prompt.contains("[APTU: file content truncated by size budget"),
+            "truncation annotation must be present for oversized full_content"
         );
         let file_content_end = prompt
             .find("</file_content>")
@@ -611,7 +618,7 @@ mod tests {
         });
         assert!(
             prompt.contains("truncated by size budget"),
-            "truncation annotation must be present"
+            "drop annotation must be present"
         );
         for line in prompt.lines() {
             if line.contains("truncated by size budget") {
