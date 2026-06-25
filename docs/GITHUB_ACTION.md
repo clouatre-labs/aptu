@@ -103,7 +103,8 @@ When no API key is provided the action falls back to `openrouter` / `inception/m
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `reference` | No | `''` | Issue or PR number/URL to process; if empty, uses the event target |
+| `repo` | No | `''` | Target repository (`owner/repo`) for `repository_dispatch` invocations; required alongside `pull-number` to trigger PR steps |
+| `pull-number` | No | `''` | PR number for `repository_dispatch` invocations; required alongside `repo` to trigger PR label and PR review steps |
 | `since` | No | `''` | Batch triage: only triage issues created on or after this date (ISO 8601) |
 | `issue-state` | No | `open` | Batch triage: filter issues by state (`open`, `closed`, `all`) |
 

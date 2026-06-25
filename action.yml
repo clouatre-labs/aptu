@@ -82,8 +82,16 @@ inputs:
     default: 'true'
 
   # --- Issue triage ---
-  reference:
-    description: Reference for the command (issue/PR number or URL)
+  repo:
+    description: >
+      Target repository (owner/repo) for repository_dispatch invocations. When set alongside
+      pull-number, the PR label and PR review steps fire on repository_dispatch events.
+    required: false
+    default: ''
+  pull-number:
+    description: >
+      PR number for repository_dispatch invocations. Must be set alongside repo to trigger
+      PR label and PR review steps on repository_dispatch events.
     required: false
     default: ''
   since:
@@ -443,11 +451,11 @@ runs:
         aptu issue triage "${ARGS[@]}"
 
     - name: Run aptu PR label
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' || (github.event_name == 'repository_dispatch' && inputs.repo != '' && inputs['pull-number'] != '')
       shell: bash
       env:
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event_name == 'repository_dispatch' && inputs['pull-number'] || github.event.pull_request.number }}
+        REPO: ${{ github.event_name == 'repository_dispatch' && inputs.repo || github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
@@ -474,12 +482,12 @@ runs:
         aptu pr label "${ARGS[@]}" "$PR_REF"
 
     - name: Run aptu PR review
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' || (github.event_name == 'repository_dispatch' && inputs.repo != '' && inputs['pull-number'] != '')
       continue-on-error: true  # Non-blocking - AI review is advisory
       shell: bash
       env:
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event_name == 'repository_dispatch' && inputs['pull-number'] || github.event.pull_request.number }}
+        REPO: ${{ github.event_name == 'repository_dispatch' && inputs.repo || github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
