@@ -471,6 +471,11 @@ runs:
       run: |
         set -e
 
+        if [[ -z "$REPO" || -z "$PR_NUMBER" ]]; then
+          echo "::error::repository_dispatch: both 'repo' and 'pull-number' inputs are required but one or both are empty (REPO='${REPO}', PR_NUMBER='${PR_NUMBER}')"
+          exit 1
+        fi
+
         PR_REF="${REPO}#${PR_NUMBER}"
         ARGS=()
 
@@ -518,6 +523,11 @@ runs:
         APTU_CONTEXT_FILE: ${{ runner.temp }}/aptu-review-context.jsonl
       run: |
         set -e
+
+        if [[ -z "$REPO" || -z "$PR_NUMBER" ]]; then
+          echo "::error::repository_dispatch: both 'repo' and 'pull-number' inputs are required but one or both are empty (REPO='${REPO}', PR_NUMBER='${PR_NUMBER}')"
+          exit 1
+        fi
 
         PR_REF="${REPO}#${PR_NUMBER}"
         ARGS=(--comment --force)
