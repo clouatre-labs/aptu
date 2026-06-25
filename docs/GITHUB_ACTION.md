@@ -37,6 +37,7 @@ The action auto-detects the event type and runs the appropriate commands:
 |-------|----------|-------------|
 | `issues` | `aptu issue triage` | Analyze issue, suggest labels and milestone, post comment |
 | `pull_request` | `aptu pr label` then `aptu pr review` | Classify PR type, apply label, post advisory review comment |
+| `repository_dispatch` | `aptu pr label` then `aptu pr review` | Cross-repo PR review triggered from another repository; requires `repo` and `pull-number` inputs |
 | `schedule` | `aptu issue triage` (batch) | Triage all unlabeled issues since a given date |
 | Any (if `scan-path` or `scan-security-diff` set) | `aptu scan-security` | Scan for security issues, output SARIF |
 | Any (if `pr-queue: true`) | `aptu pr queue` | Output ranked reviewability list of open PRs |
@@ -229,6 +230,61 @@ Pass the checked-out repository path to inject function signatures and call-grap
           repo-path: ${{ github.workspace }}
           deep: 'true'
 ```
+
+## Cross-Repo PR Review
+
+Trigger Aptu from another repository using `repository_dispatch`. This lets a central workflow review PRs across multiple repositories without installing the action in each one.
+
+**Receiver workflow** (in the repo where Aptu is installed):
+
+```yaml
+name: Aptu cross-repo
+
+on:
+  repository_dispatch:
+    types: [pr-review]
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: clouatre-labs/aptu@v0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          repo: ${{ github.event.client_payload.repo }}
+          pull-number: ${{ github.event.client_payload.pull_number }}
+```
+
+**Sender workflow** (in the repository whose PRs you want reviewed):
+
+```yaml
+name: Request Aptu review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Dispatch to Aptu repo
+        run: |
+          gh api repos/your-org/aptu-host/dispatches \
+            -f event_type=pr-review \
+            -f "client_payload[repo]=${{ github.repository }}" \
+            -f "client_payload[pull_number]=${{ github.event.pull_request.number }}"
+        env:
+          GH_TOKEN: ${{ secrets.APTU_DISPATCH_TOKEN }}
+```
+
+The `APTU_DISPATCH_TOKEN` secret must have `repo` scope on the Aptu host repository to send the dispatch event. The `github-token` in the receiver workflow needs `pull-requests: write` on the target repository; use a PAT or GitHub App token if the target is a different organization.
 
 ## Security Scanning
 
