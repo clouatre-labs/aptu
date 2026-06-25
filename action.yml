@@ -85,13 +85,20 @@ inputs:
   repo:
     description: >
       Target repository (owner/repo) for repository_dispatch invocations. When set alongside
-      pull-number, the PR label and PR review steps fire on repository_dispatch events.
+      pull-number or issue-number, the PR label, PR review, and issue triage steps fire on
+      repository_dispatch events.
     required: false
     default: ''
   pull-number:
     description: >
       PR number for repository_dispatch invocations. Must be set alongside repo to trigger
       PR label and PR review steps on repository_dispatch events.
+    required: false
+    default: ''
+  issue-number:
+    description: >
+      Issue number for repository_dispatch invocations. Must be set alongside repo to trigger
+      the issue triage step on repository_dispatch events.
     required: false
     default: ''
   since:
@@ -368,11 +375,11 @@ runs:
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
     - name: Run aptu issue triage
-      if: github.event_name == 'issues' && steps.check-skip.outputs.skip != 'true'
+      if: (github.event_name == 'issues' || (github.event_name == 'repository_dispatch' && inputs.repo != '' && inputs['issue-number'] != '')) && steps.check-skip.outputs.skip != 'true'
       shell: bash
       env:
-        ISSUE_NUMBER: ${{ github.event.issue.number }}
-        REPO: ${{ github.repository }}
+        ISSUE_NUMBER: ${{ github.event_name == 'repository_dispatch' && inputs['issue-number'] || github.event.issue.number }}
+        REPO: ${{ github.event_name == 'repository_dispatch' && inputs.repo || github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
@@ -389,6 +396,11 @@ runs:
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
+
+        if [[ -z "$REPO" || -z "$ISSUE_NUMBER" ]]; then
+          echo "::error::Missing required inputs: repo and issue-number must both be set for repository_dispatch events"
+          exit 1
+        fi
 
         ISSUE_REF="${REPO}#${ISSUE_NUMBER}"
         ARGS=()
