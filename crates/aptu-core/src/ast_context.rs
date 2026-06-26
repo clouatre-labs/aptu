@@ -320,8 +320,8 @@ mod tests {
         // Markdown is supported in aptu-coder-core >= 0.22.0 (tree-sitter-md)
         #[cfg(feature = "ast-context")]
         assert!(
-            !result.is_empty(),
-            "Markdown file should be processed and return context"
+            result.contains("<ast_context>"),
+            "Markdown file should produce an <ast_context> block; got: {result:?}"
         );
         #[cfg(not(feature = "ast-context"))]
         assert!(
