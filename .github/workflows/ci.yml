@@ -200,6 +200,9 @@ jobs:
       - name: Run tests
         # --no-fail-fast: run all tests and report all failures at once
         run: cargo nextest run --workspace --locked --no-fail-fast
+      - name: Run tests with ast-context feature
+        # Exercises the strict !result.is_empty() assertion branch in ast_context tests
+        run: cargo nextest run -p aptu-core --locked --no-fail-fast --features ast-context
 
   build:
     name: Build CLI
