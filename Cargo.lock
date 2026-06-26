@@ -117,9 +117,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "apple-native-keyring-store"
@@ -165,9 +165,9 @@ dependencies = [
 
 [[package]]
 name = "aptu-coder-core"
-version = "0.20.5"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "562dbe5524e138b15403ae490e2fab72efca3bce3dde4daed7b0c6130d0dc3c8"
+checksum = "edaec2b57eddc51cdf6fef4623438ddc8238a4a0ef164649451e5ff8bbd5f547"
 dependencies = [
  "base64",
  "blake3",
@@ -175,6 +175,7 @@ dependencies = [
  "lru",
  "rayon",
  "regex",
+ "schemars",
  "serde",
  "serde_json",
  "snap",
@@ -190,6 +191,8 @@ dependencies = [
  "tree-sitter-go",
  "tree-sitter-java",
  "tree-sitter-javascript",
+ "tree-sitter-kotlin-ng",
+ "tree-sitter-md",
  "tree-sitter-python",
  "tree-sitter-rust",
  "tree-sitter-typescript",
@@ -592,9 +595,9 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "0.15.24"
+version = "0.15.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b34d0237145f33580b89724f75d16950efd3e2c91b2d823917ecb69ec7f84f0"
+checksum = "b85f248a4de22d204ceabc6299d89d2c70fbd7f09fea53c06c852369652d8139"
 dependencies = [
  "pathdiff",
  "serde_core",
@@ -1273,9 +1276,9 @@ dependencies = [
 
 [[package]]
 name = "granit-parser"
-version = "0.0.3"
+version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f50ba32164f9e098d5da618776a32afbb32270adcbe3d3d006107dae11e37c91"
+checksum = "14668345710c92cb04181d9268407067689327d4b055273e3c4179a0777ee6a1"
 dependencies = [
  "arraydeque",
  "smallvec",
@@ -2759,9 +2762,9 @@ dependencies = [
 
 [[package]]
 name = "serde-saphyr"
-version = "0.0.27"
+version = "0.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5897b4c3faadadd35fdb6689f015641f3bc481d5adaaac56231ea15aeb243db3"
+checksum = "a15e3bc297370dc9c526bcf0986f29167a9286cfaad404f2f572b3074dabe5ec"
 dependencies = [
  "ahash",
  "annotate-snippets",
@@ -2771,7 +2774,7 @@ dependencies = [
  "granit-parser",
  "nohash-hasher",
  "num-traits",
- "serde",
+ "serde_core",
  "smallvec",
  "zmij",
 ]
@@ -3493,10 +3496,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-kotlin-ng"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e800ebbda938acfbf224f4d2c34947a31994b1295ee6e819b65226c7b51b4450"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-language"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
+
+[[package]]
+name = "tree-sitter-md"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2efd398be546456c814598ee56c0f51769a77241511b4a58077815d120afa882"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
 
 [[package]]
 name = "tree-sitter-python"
