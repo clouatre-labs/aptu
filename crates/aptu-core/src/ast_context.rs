@@ -319,8 +319,14 @@ mod tests {
         let result = build_ast_context(".", &files).await;
         // Markdown is supported in aptu-coder-core >= 0.22.0 (tree-sitter-md)
         #[cfg(feature = "ast-context")]
-        assert!(!result.is_empty(), "Markdown file should be processed and return context");
+        assert!(
+            !result.is_empty(),
+            "Markdown file should be processed and return context"
+        );
         #[cfg(not(feature = "ast-context"))]
-        assert!(result.is_empty(), "without ast-context feature, build_ast_context returns empty");
+        assert!(
+            result.is_empty(),
+            "without ast-context feature, build_ast_context returns empty"
+        );
     }
 }
