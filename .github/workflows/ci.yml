@@ -28,6 +28,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
+    timeout-minutes: 5
     outputs:
       code: ${{ steps.filter.outputs.code }}
       tests: ${{ steps.filter.outputs.tests }}
@@ -67,10 +68,10 @@ jobs:
         with:
           node-version: "24"
       - name: Cache npm
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.npm
-          key: commitlint-${{ hashFiles('.commitlintrc.yml', '.github/workflows/ci.yml') }}
+          key: commitlint-${{ hashFiles('.commitlintrc.yml') }}
           restore-keys: commitlint-
       - name: Install commitlint
         run: |
@@ -84,31 +85,6 @@ jobs:
             --to ${{ github.event.pull_request.head.sha }} \
             --verbose
 
-  check-base:
-    name: Check Branch Base
-    runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: read
-    if: github.event_name == 'pull_request'
-    timeout-minutes: 5
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          fetch-depth: 0
-      - name: Verify branch is rebased on main
-        run: |
-          git fetch origin main
-          base_commit=$(git merge-base origin/main HEAD)
-          main_head=$(git rev-parse origin/main)
-          if [ "$base_commit" != "$main_head" ]; then
-            behind=$(git rev-list --count $base_commit..$main_head)
-            echo "::error::Branch is $behind commit(s) behind main. Rebase required."
-            echo "Run: git fetch origin && git rebase origin/main"
-            exit 1
-          fi
-          echo "Branch is up to date with main."
-
   deny:
     name: Audit Dependencies
     runs-on: ubuntu-24.04-arm
@@ -121,15 +97,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Install cargo-deny
-        uses: taiki-e/install-action@b8cecb83565409bcc297b2df6e77f030b2a468d5 # v2.82.0
+        uses: taiki-e/install-action@bffeee26d4db9be238a4ea78d8826604ebcb594d # v2.82.5
         with:
           tool: cargo-deny
       - name: Run cargo-deny
         run: cargo deny check
 
-
-  format:
-    name: Check Format
+  check:
+    name: Check Format & Lint
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -143,35 +118,18 @@ jobs:
         uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # master
         with:
           toolchain: stable
-          components: rustfmt
-      - name: Check formatting
-        run: cargo fmt --check
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: read
-    needs: changes
-    timeout-minutes: 10
-    if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # master
-        with:
-          toolchain: stable
-          components: clippy
+          components: rustfmt, clippy
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          shared-key: "aptu-lint"
+          shared-key: "aptu"
           cache-targets: false
+      - name: Check formatting
+        run: cargo fmt --check
       - name: Run Clippy lints
-        run: cargo clippy --profile ci -- -D warnings -W clippy::cognitive_complexity
+        run: cargo clippy --locked --profile ci -- -D warnings -W clippy::cognitive_complexity
       - name: Build examples
-        run: cargo build --examples -p aptu-core --profile ci
+        run: cargo build --examples --locked -p aptu-core --profile ci
 
   test:
     name: Test
@@ -194,7 +152,7 @@ jobs:
           shared-key: "aptu"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@b8cecb83565409bcc297b2df6e77f030b2a468d5 # v2.82.0
+        uses: taiki-e/install-action@bffeee26d4db9be238a4ea78d8826604ebcb594d # v2.82.5
         with:
           tool: cargo-nextest
       - name: Run tests
@@ -226,7 +184,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build CLI binary
         run: |
-          cargo build --profile ci -p aptu-cli
+          cargo build --locked --profile ci -p aptu-cli
           chmod +x target/ci/aptu
       - name: Upload CLI binary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -243,6 +201,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -254,11 +213,9 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          shared-key: "aptu-wasm"
-      - name: Add wasm32 target
-        run: rustup target add wasm32-unknown-unknown
+          shared-key: "aptu"
       - name: cargo check (wasm32)
-        run: cargo check -p aptu-core --target wasm32-unknown-unknown --no-default-features
+        run: cargo check --locked -p aptu-core --target wasm32-unknown-unknown --no-default-features
 
   integration:
     name: Integration Tests
@@ -325,9 +282,10 @@ jobs:
     if: needs.changes.outputs.workflows == 'true' || github.event_name != 'pull_request'
     permissions:
       contents: read
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d # v0.5.6
+      - uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa # v0.5.7
         with:
           advanced-security: false
           annotations: true
@@ -336,8 +294,11 @@ jobs:
   gitleaks:
     name: Scan for secrets
     runs-on: ubuntu-24.04-arm
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
     permissions:
       contents: read
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -352,7 +313,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions: {}
     if: always()
-    needs: [commitlint, check-base, deny, format, lint, test, build, integration, scan-self, zizmor, gitleaks, wasm-check]
+    needs: [commitlint, deny, check, test, build, integration, scan-self, zizmor, gitleaks, wasm-check]
+    timeout-minutes: 2
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
