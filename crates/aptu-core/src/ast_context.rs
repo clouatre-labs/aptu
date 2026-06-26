@@ -314,13 +314,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_ast_context_markdown_file_skipped() {
+    async fn test_ast_context_markdown_file_included() {
         let files = vec![make_pr_file("README.md")];
         let result = build_ast_context(".", &files).await;
-        // Markdown file should be skipped (edge case: unsupported extension)
+        // Markdown is supported in aptu-coder-core >= 0.22.0 (tree-sitter-md)
         assert!(
-            result.is_empty(),
-            "Markdown file should be skipped (not a supported language)"
+            result.is_empty() || result.contains("<ast_context>"),
+            "Markdown file should be processed by language_for_extension"
         );
     }
 }
