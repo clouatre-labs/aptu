@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 ///   without dominating the prompt budget; budget drop logic trims below 120k if needed.
 /// - `max_instructions_chars`: 1,500 chars caps repository instructions to prevent prompt bloat.
 /// - `max_diff_chars`: 200,000 chars caps the total diff content across all files in the prompt.
-/// - `max_patch_chars_per_file`: 10,000 chars caps each individual file patch before dropping it entirely.
+/// - `max_patch_chars_per_file`: 25,000 chars caps each individual file patch before dropping it entirely.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct ReviewConfig {
@@ -28,7 +28,7 @@ pub struct ReviewConfig {
     pub max_chars_per_file: usize,
     /// Maximum total diff characters across all files in the prompt (default: `200_000`).
     pub max_diff_chars: usize,
-    /// Maximum characters per individual file patch before the patch is dropped entirely (default: `10_000`).
+    /// Maximum characters per individual file patch before the patch is dropped entirely (default: `25_000`).
     pub max_patch_chars_per_file: usize,
     /// Maximum characters for repository instructions (default: `1_500`).
     #[serde(default = "default_max_instructions_chars")]
@@ -117,6 +117,15 @@ mod tests {
             warnings[0]
         );
     }
+
+    #[test]
+    fn test_default_max_patch_chars_per_file() {
+        let config = ReviewConfig::default();
+        assert_eq!(
+            config.max_patch_chars_per_file, 25_000,
+            "default max_patch_chars_per_file should be 25_000"
+        );
+    }
 }
 
 impl Default for ReviewConfig {
@@ -126,7 +135,7 @@ impl Default for ReviewConfig {
             max_full_content_files: 10,
             max_chars_per_file: 16_000,
             max_diff_chars: 200_000,
-            max_patch_chars_per_file: 10_000,
+            max_patch_chars_per_file: 25_000,
             max_instructions_chars: 1_500,
             instructions_file: None,
             min_budget_for_call_graph: 20_000,
