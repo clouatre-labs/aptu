@@ -91,6 +91,7 @@ use super::provider::{SCHEMA_PREAMBLE, sanitize_prompt_field};
 use super::review_context::ReviewContext;
 use super::types::IssueDetails;
 use std::fmt::Write;
+use tracing;
 
 // Constants used by user-prompt builders (mirrored from provider.rs)
 const MAX_BODY_LENGTH: usize = 2000;
@@ -284,13 +285,27 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         if let Some(patch) = patch
             && !(status == "added" && full_content.is_some())
         {
-            let sanitized_patch = sanitize_prompt_field(&patch);
-            let patch_size = sanitized_patch.len();
+            let mut sanitized_patch = sanitize_prompt_field(&patch);
+            let mut patch_size = sanitized_patch.len();
 
-            // Drop whole patch if it exceeds per-file max
+            // Truncate patch if it exceeds per-file max (instead of dropping silently)
             if patch_size > ctx.max_patch_chars_per_file {
-                files_skipped += 1;
-                continue;
+                tracing::warn!(
+                    file = %filename,
+                    patch_chars = patch_size,
+                    "patch truncated to budget",
+                );
+                let truncated: String = sanitized_patch
+                    .chars()
+                    .take(ctx.max_patch_chars_per_file)
+                    .collect();
+                let _ = writeln!(
+                    prompt,
+                    "[APTU: patch truncated from {} to {} chars]",
+                    patch_size, ctx.max_patch_chars_per_file
+                );
+                sanitized_patch = truncated;
+                patch_size = sanitized_patch.len();
             }
 
             // Check if adding this patch would exceed total diff size limit
@@ -826,6 +841,146 @@ mod tests {
         assert!(
             prompt.contains("truncated by size budget"),
             "multi-byte content exceeding budget must be truncated cleanly without panic"
+        );
+    }
+
+    #[test]
+    fn test_patch_truncated_by_size_includes_annotation() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: patch longer than per-file patch cap
+        const CAP: usize = 10_000;
+        let long_patch = "x".repeat(CAP + 1);
+        assert!(long_patch.len() > CAP);
+
+        let files = vec![PrFile {
+            filename: "oversized.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 0,
+            deletions: 0,
+            patch: Some(long_patch.clone()),
+            patch_truncated: false,
+            full_content: None,
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 4,
+            title: "Test PR 4".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/4".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        // Act: build prompt with explicit per-file patch cap
+        let prompt =
+            build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
+                pr,
+                ast_context: String::new(),
+                call_graph: String::new(),
+                inferred_repo_path: None,
+                cwd_inferred: false,
+                max_patch_chars_per_file: CAP,
+                max_diff_chars: 200_000,
+                max_chars_per_file: 100,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+                ..Default::default()
+            });
+
+        // Assert: annotation present and patch truncated to CAP chars
+        assert!(
+            prompt.contains("[APTU: patch truncated from"),
+            "oversized patch must produce a truncation annotation"
+        );
+        assert!(
+            prompt.contains(&"x".repeat(CAP)),
+            "prompt must contain the first {CAP} characters of the patch"
+        );
+        assert!(
+            !prompt.contains(&"x".repeat(CAP + 1)),
+            "prompt must not contain the full un-truncated patch"
+        );
+
+        // Assert: annotation appears before the ```diff``` fence
+        let ann_pos = prompt
+            .find("[APTU: patch truncated from")
+            .expect("truncation annotation must exist");
+        let diff_pos = prompt.find("```diff").expect("diff fence must exist");
+        assert!(
+            ann_pos < diff_pos,
+            "truncation annotation must appear before the diff fence"
+        );
+    }
+
+    #[test]
+    fn test_patch_exactly_at_limit_not_truncated() {
+        use super::super::types::{PrDetails, PrFile};
+
+        // Arrange: patch exactly at the per-file cap
+        const CAP: usize = 10_000;
+        let exact_patch = "y".repeat(CAP);
+        assert_eq!(exact_patch.len(), CAP);
+
+        let files = vec![PrFile {
+            filename: "exact_size.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 0,
+            deletions: 0,
+            patch: Some(exact_patch.clone()),
+            patch_truncated: false,
+            full_content: None,
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 5,
+            title: "Test PR 5".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/5".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        // Act: build prompt with cap equal to patch size
+        let prompt =
+            build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
+                pr,
+                ast_context: String::new(),
+                call_graph: String::new(),
+                inferred_repo_path: None,
+                cwd_inferred: false,
+                max_patch_chars_per_file: CAP,
+                max_diff_chars: 200_000,
+                max_chars_per_file: 100,
+                files_truncated: 0,
+                truncated_chars_dropped: 0,
+                ..Default::default()
+            });
+
+        // Assert: no truncation annotation
+        assert!(
+            !prompt.contains("[APTU: patch truncated from"),
+            "patch at exactly the limit must not produce a truncation annotation"
+        );
+        assert!(
+            prompt.contains(&"y".repeat(CAP)),
+            "prompt must contain the full patch"
         );
     }
 }
