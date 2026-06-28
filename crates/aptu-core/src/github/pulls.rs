@@ -159,6 +159,12 @@ pub async fn fetch_pr_details(
         }
     }
 
+    let head_sha = pr
+        .head
+        .as_deref()
+        .map(|h| h.sha.as_str())
+        .unwrap_or_default();
+
     // Detect truncated patches and attempt Contents API fallback
     for file in &mut pr_files {
         #[allow(clippy::collapsible_if)]
@@ -171,10 +177,7 @@ pub async fn fetch_pr_details(
                     owner,
                     repo,
                     &file.filename,
-                    pr.head
-                        .as_deref()
-                        .map(|h| h.sha.as_str())
-                        .unwrap_or_default(),
+                    head_sha,
                     review_config.max_chars_per_file,
                 )
                 .await
@@ -189,6 +192,7 @@ pub async fn fetch_pr_details(
     // Fetch full content from Contents API so the AI can review the full file, even though
     // the patch exceeds the character budget.
     for file in &mut pr_files {
+        // status is produced via format!("{:?}", f.status) which yields mixed-case values (e.g. "Added", "Renamed")
         let is_added_renamed_copied = matches!(
             file.status.to_lowercase().as_str(),
             "added" | "renamed" | "copied"
@@ -201,10 +205,7 @@ pub async fn fetch_pr_details(
                 owner,
                 repo,
                 &file.filename,
-                pr.head
-                    .as_deref()
-                    .map(|h| h.sha.as_str())
-                    .unwrap_or_default(),
+                head_sha,
                 review_config.max_chars_per_file,
             )
             .await
