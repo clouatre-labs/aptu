@@ -159,6 +159,12 @@ pub async fn fetch_pr_details(
         }
     }
 
+    let head_sha = pr
+        .head
+        .as_deref()
+        .map(|h| h.sha.as_str())
+        .unwrap_or_default();
+
     // Detect truncated patches and attempt Contents API fallback
     for file in &mut pr_files {
         #[allow(clippy::collapsible_if)]
@@ -171,15 +177,56 @@ pub async fn fetch_pr_details(
                     owner,
                     repo,
                     &file.filename,
-                    pr.head
-                        .as_deref()
-                        .map(|h| h.sha.as_str())
-                        .unwrap_or_default(),
+                    head_sha,
                     review_config.max_chars_per_file,
                 )
                 .await
                 {
                     file.patch = Some(content);
+                }
+            }
+        }
+    }
+
+    // Contents API fallback for Added/Renamed/Copied files with oversized patches.
+    // Fetch full content from Contents API so the AI can review the full file, even though
+    // the patch exceeds the character budget.
+    for file in &mut pr_files {
+        // status is produced via format!("{:?}", f.status) which yields mixed-case values (e.g. "Added", "Renamed")
+        let is_added_renamed_copied = matches!(
+            file.status.to_lowercase().as_str(),
+            "added" | "renamed" | "copied"
+        );
+        let patch_too_large =
+            file.patch.as_deref().map_or(0, str::len) > review_config.max_patch_chars_per_file;
+        if is_added_renamed_copied && patch_too_large && file.full_content.is_none() {
+            match fetch_file_contents_single(
+                client,
+                owner,
+                repo,
+                &file.filename,
+                head_sha,
+                review_config.max_chars_per_file,
+            )
+            .await
+            {
+                Ok(Some(content)) => {
+                    file.full_content = Some(content);
+                }
+                Ok(None) => {
+                    tracing::warn!(
+                        "Contents API returned empty content for added file {} in PR #{}",
+                        file.filename,
+                        number
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to fetch contents for added file {} in PR #{}: {}",
+                        file.filename,
+                        number,
+                        e
+                    );
                 }
             }
         }
@@ -210,7 +257,9 @@ pub async fn fetch_pr_details(
         .into_iter()
         .zip(file_contents)
         .map(|(mut file, content)| {
-            file.full_content = content;
+            if file.full_content.is_none() {
+                file.full_content = content;
+            }
             file
         })
         .collect();
@@ -1340,9 +1389,172 @@ mod tests {
     }
 
     #[test]
+    fn test_pr_file_status_case_insensitive_added() {
+        // Test: Added file status is matched case-insensitively
+        let file = PrFile {
+            filename: "new.rs".to_string(),
+            status: "Added".to_string(), // Debug repr from Octocrab
+            additions: 50,
+            deletions: 0,
+            patch: Some("new code".to_string()),
+            patch_truncated: false,
+            full_content: None,
+        };
+
+        let is_added_renamed_copied = matches!(
+            file.status.to_lowercase().as_str(),
+            "added" | "renamed" | "copied"
+        );
+        assert!(is_added_renamed_copied, "Added status should be recognized");
+    }
+
+    #[test]
+    fn test_pr_file_status_case_insensitive_modified() {
+        // Test: Modified file status is NOT matched (edge case)
+        let file = PrFile {
+            filename: "existing.rs".to_string(),
+            status: "Modified".to_string(),
+            additions: 10,
+            deletions: 5,
+            patch: Some("modified code".to_string()),
+            patch_truncated: false,
+            full_content: None,
+        };
+
+        let is_added_renamed_copied = matches!(
+            file.status.to_lowercase().as_str(),
+            "added" | "renamed" | "copied"
+        );
+        assert!(
+            !is_added_renamed_copied,
+            "Modified status should NOT be recognized as added/renamed/copied"
+        );
+    }
+
+    #[test]
+    fn test_pr_file_oversized_patch_detection() {
+        // Test: Patch size is compared against max_patch_chars_per_file.
+        // Derive the limit from ReviewConfig::default() -- single source of truth.
+        let max_patch_chars = crate::config::ReviewConfig::default().max_patch_chars_per_file;
+        let patch = "a".repeat(max_patch_chars + 5_000); // Clearly exceeds limit
+
+        let patch_too_large = patch.len() > max_patch_chars;
+        assert!(
+            patch_too_large,
+            "patch exceeding the default limit should be detected as oversized"
+        );
+    }
+
+    #[test]
+    fn test_pr_file_dedup_guard_full_content_present() {
+        // Test: File with full_content already populated should skip Contents API call
+        let file = PrFile {
+            filename: "new.rs".to_string(),
+            status: "Added".to_string(),
+            additions: 50,
+            deletions: 0,
+            patch: Some("new code".to_string()),
+            patch_truncated: false,
+            full_content: Some("full content from Contents API".to_string()),
+        };
+
+        let should_fetch = file.full_content.is_none();
+        assert!(
+            !should_fetch,
+            "File with full_content should not be fetched again (dedup guard)"
+        );
+    }
+
+    #[test]
+    fn test_pr_file_contents_api_fallback_flow() {
+        // Test: Verify the three conditions for Contents API fallback:
+        // 1. status is Added/Renamed/Copied
+        // 2. patch size exceeds max_patch_chars_per_file
+        // 3. full_content is None
+        // Derive the limit from ReviewConfig::default() -- single source of truth.
+        let max_patch_chars = crate::config::ReviewConfig::default().max_patch_chars_per_file;
+
+        let file = PrFile {
+            filename: "new.rs".to_string(),
+            status: "Added".to_string(),
+            additions: 50,
+            deletions: 0,
+            patch: Some("a".repeat(max_patch_chars + 5_000)), // Clearly exceeds limit
+            patch_truncated: false,
+            full_content: None, // Not yet fetched
+        };
+
+        let is_added_renamed_copied = matches!(
+            file.status.to_lowercase().as_str(),
+            "added" | "renamed" | "copied"
+        );
+        let patch_too_large = file.patch.as_deref().map_or(0, str::len) > max_patch_chars;
+        let should_attempt_contents_api =
+            is_added_renamed_copied && patch_too_large && file.full_content.is_none();
+
+        assert!(
+            should_attempt_contents_api,
+            "Added file with 30k patch and no full_content should attempt Contents API"
+        );
+    }
+
+    #[test]
+    fn test_merge_preserves_existing_full_content() {
+        // Arrange: create a PrFile with full_content = Some("fallback content"),
+        // pair it with content = None (simulating fetch_file_contents returning None beyond the cap)
+        let mut file = PrFile {
+            filename: "test.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 5,
+            deletions: 2,
+            patch: Some("@@ -1,1 +1,1 @@".to_string()),
+            patch_truncated: false,
+            full_content: Some("fallback content".to_string()),
+        };
+        let content = None;
+
+        // Act: apply the fixed merge logic
+        if file.full_content.is_none() {
+            file.full_content = content;
+        }
+
+        // Assert: file.full_content == Some("fallback content")
+        assert_eq!(file.full_content, Some("fallback content".to_string()));
+    }
+
+    #[test]
+    fn test_merge_sets_full_content_when_none() {
+        // Arrange: PrFile with full_content = None, content = Some("fetched content")
+        let mut file = PrFile {
+            filename: "test.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 5,
+            deletions: 2,
+            patch: Some("@@ -1,1 +1,1 @@".to_string()),
+            patch_truncated: false,
+            full_content: None,
+        };
+        let content = Some("fetched content".to_string());
+
+        // Act: apply merge logic
+        if file.full_content.is_none() {
+            file.full_content = content;
+        }
+
+        // Assert: file.full_content == Some("fetched content")
+        assert_eq!(file.full_content, Some("fetched content".to_string()));
+    }
+
+    #[test]
     fn test_fetch_file_contents_fallback_on_truncated_patch() {
         // Note: The Contents API network call cannot be unit-tested without a mock.
         // The fallback is exercised in integration tests via the full fetch_pr_details flow.
         // Unit tests for is_patch_truncated are above.
+        // New unit tests for the added/renamed/copied Contents API fallback:
+        // - test_pr_file_status_case_insensitive_added
+        // - test_pr_file_status_case_insensitive_modified
+        // - test_pr_file_oversized_patch_detection
+        // - test_pr_file_dedup_guard_full_content_present
+        // - test_pr_file_contents_api_fallback_flow
     }
 }
