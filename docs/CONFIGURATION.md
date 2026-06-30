@@ -5,7 +5,7 @@ Config file: `~/.config/aptu/config.toml`
 ```toml
 [ai]
 provider = "gemini"  # or "cerebras", "groq", "openrouter", "zai", "zenmux"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 allow_paid_models = true  # default: allows paid OpenRouter models
 
 [ui]
@@ -56,7 +56,7 @@ Configure a fallback chain to automatically try alternative providers when the p
 ```toml
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 # Fallback chain: try these providers in order if primary fails
 [ai.fallback]
@@ -68,7 +68,7 @@ Each fallback entry can optionally override the model for that specific provider
 ```toml
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 [ai.fallback]
 chain = [
@@ -152,7 +152,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```toml
    [ai]
    provider = "gemini"
-   model = "gemini-3.1-flash-lite-preview"
+   model = "gemini-3.1-flash-lite"
    ```
 
 Use `aptu models list --provider gemini` to discover current model IDs.

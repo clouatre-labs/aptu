@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// Default `OpenRouter` model identifier.
 pub const DEFAULT_OPENROUTER_MODEL: &str = "mistralai/mistral-small-2603";
 /// Default `Gemini` model identifier.
-pub const DEFAULT_GEMINI_MODEL: &str = "gemini-3.1-flash-lite-preview";
+pub const DEFAULT_GEMINI_MODEL: &str = "gemini-3.1-flash-lite";
 
 /// Task type for model selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
