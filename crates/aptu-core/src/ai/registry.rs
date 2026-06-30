@@ -73,7 +73,7 @@ pub static PROVIDERS: &[ProviderConfig] = &[
         display_name: "Google Gemini",
         api_url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         api_key_env: "GEMINI_API_KEY",
-        model: "gemini-3.1-flash-lite-preview",
+        model: "gemini-3.1-flash-lite",
         max_tokens: 4096,
         temperature: 0.3,
     },

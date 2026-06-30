@@ -333,10 +333,10 @@ mod tests {
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 [ai.tasks.triage]
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 "#;
 
         let config = Config::builder()
@@ -419,13 +419,13 @@ model = "anthropic/claude-sonnet-4.6"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 [ai.tasks.triage]
 provider = "gemini"
 
 [ai.tasks.review]
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 "#;
 
         let config = Config::builder()
@@ -457,7 +457,7 @@ model = "gemini-3.1-flash-lite-preview"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 "#;
 
         let config = Config::builder()
@@ -501,10 +501,10 @@ model = "gemini-3.1-flash-lite-preview"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 [ai.tasks.triage]
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 "#;
 
         let config = Config::builder()
@@ -541,7 +541,7 @@ model = "gemini-3.1-flash-lite-preview"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 [ai.tasks.review]
 provider = "openrouter"
@@ -581,7 +581,7 @@ provider = "openrouter"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 [ai.tasks.triage]
 provider = "openrouter"
@@ -593,7 +593,7 @@ model = "anthropic/claude-haiku-4.5"
 
 [ai.tasks.create]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 "#;
 
         let config = Config::builder()
@@ -677,7 +677,7 @@ provider = "openrouter"
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 [ai.fallback]
 chain = ["openrouter", "anthropic"]
@@ -691,7 +691,7 @@ chain = ["openrouter", "anthropic"]
         let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
 
         assert_eq!(app_config.ai.provider, "gemini");
-        assert_eq!(app_config.ai.model, "gemini-3.1-flash-lite-preview");
+        assert_eq!(app_config.ai.model, "gemini-3.1-flash-lite");
         assert!(app_config.ai.fallback.is_some());
 
         let fallback = app_config.ai.fallback.unwrap();
@@ -706,7 +706,7 @@ chain = ["openrouter", "anthropic"]
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 [ai.fallback]
 chain = []
@@ -730,7 +730,7 @@ chain = []
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 
 [ai.fallback]
 chain = ["openrouter"]
@@ -755,7 +755,7 @@ chain = ["openrouter"]
         let config_str = r#"
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.1-flash-lite"
 "#;
 
         let config = Config::builder()

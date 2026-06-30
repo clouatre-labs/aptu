@@ -174,7 +174,7 @@ impl AiClient {
     ///
     /// * `provider_name` - Name of the provider (e.g., "openrouter", "gemini")
     /// * `api_key` - API key as a `SecretString`
-    /// * `model_name` - Model name to use (e.g., "gemini-3.1-flash-lite-preview")
+    /// * `model_name` - Model name to use (e.g., "gemini-3.1-flash-lite")
     /// * `config` - AI configuration with timeout and cost control settings
     ///
     /// # Errors
