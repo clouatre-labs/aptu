@@ -108,7 +108,7 @@ The action writes token usage to `$GITHUB_STEP_SUMMARY` by default. Example outp
 | OpenRouter | 12,000 | 3,500 | 0% | 7.75 |
 ```
 
-Token usag is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploaded as a workflow artifact (`aptu-token-usage-<run-id>`), and summarized in `$GITHUB_STEP_SUMMARY` with columns for ETU and Cache%.
+Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploaded as a workflow artifact (`aptu-token-usage-<run-id>`), and summarized in `$GITHUB_STEP_SUMMARY` with columns for ETU and Cache%.
 
 ## Permissions
 
