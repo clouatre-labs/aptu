@@ -207,7 +207,7 @@ review:
 # External installs must supply their own AI API credentials
 ai:
   provider: gemini
-  model: gemini-2.5-flash
+  model: gemini-3.1-flash-lite
   # Name of a repository secret containing the API key (must match ^[A-Z0-9_]+$)
   api-key-secret: GEMINI_API_KEY
 
@@ -227,7 +227,7 @@ exclude_paths:
 | `review.instructions-file` | No | string | Path to custom PR review instructions within this repository (e.g., `.github/instructions/pr-review.md`). |
 | `review.skip-labeled` | No | boolean | Skip PR review dispatch if PR has any labels (default: `false`). |
 | `ai.provider` | See note | string | AI provider (`openai`, `anthropic`, `gemini`, `openrouter`, `bedrock`). Required for external installs. |
-| `ai.model` | See note | string | Model identifier (e.g., `gpt-4o-mini`, `claude-opus-4-8`, `gemini-2.5-flash`). Required for external installs. |
+| `ai.model` | See note | string | Model identifier (e.g., `gpt-4o-mini`, `claude-opus-4-8`, `gemini-3.1-flash-lite`). Required for external installs. |
 | `ai.api-key-secret` | See note | string | Name of a repository secret containing the API key. Must match `^[A-Z0-9_]+$`. Required for external installs. |
 | `exclude_paths` | No | string[] | Glob patterns. PR review dispatch is skipped if all changed files match any pattern. |
 
