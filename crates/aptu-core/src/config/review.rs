@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 ///   window limits (e.g., 128k token models), accounting for system prompt and response overhead.
 /// - `max_full_content_files`: 10 files caps GitHub Contents API calls per review to limit
 ///   latency and rate limit usage.
-/// - `max_chars_per_file`: 16,000 chars per file gives adequate context for most files
+/// - `max_chars_per_file`: 32,000 chars per file gives adequate context for most files
 ///   without dominating the prompt budget; budget drop logic trims below 120k if needed.
 /// - `max_instructions_chars`: 1,500 chars caps repository instructions to prevent prompt bloat.
 /// - `max_diff_chars`: 200,000 chars caps the total diff content across all files in the prompt.
@@ -24,7 +24,7 @@ pub struct ReviewConfig {
     pub max_prompt_chars: usize,
     /// Maximum number of files to fetch full content for (default: 10).
     pub max_full_content_files: usize,
-    /// Maximum characters per file's full content (default: `16_000`).
+    /// Maximum characters per file's full content (default: `32_000`).
     pub max_chars_per_file: usize,
     /// Maximum total diff characters across all files in the prompt (default: `200_000`).
     pub max_diff_chars: usize,
@@ -133,7 +133,7 @@ impl Default for ReviewConfig {
         Self {
             max_prompt_chars: 120_000,
             max_full_content_files: 10,
-            max_chars_per_file: 16_000,
+            max_chars_per_file: 32_000,
             max_diff_chars: 200_000,
             max_patch_chars_per_file: 25_000,
             max_instructions_chars: 1_500,
