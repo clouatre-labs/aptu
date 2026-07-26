@@ -388,7 +388,7 @@ pub async fn run_queue(
         if pr.draft.unwrap_or(false) {
             draft_count += 1;
         } else {
-            non_draft_numbers.push(pr.number.unwrap_or(0));
+            non_draft_numbers.push(pr.number);
         }
     }
 
@@ -413,7 +413,7 @@ pub async fn run_queue(
     let mut queued_prs: Vec<crate::output::pr::QueuedPr> = full_prs
         .into_iter()
         .filter_map(|pr| {
-            let number = pr.number.unwrap_or(0);
+            let number = pr.number;
             if number == 0 {
                 tracing::warn!("Skipping PR with missing or invalid number; excluding from queue");
                 return None;

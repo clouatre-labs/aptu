@@ -159,11 +159,7 @@ pub async fn fetch_pr_details(
         }
     }
 
-    let head_sha = pr
-        .head
-        .as_deref()
-        .map(|h| h.sha.as_str())
-        .unwrap_or_default();
+    let head_sha = pr.head.sha.as_str();
 
     // Detect truncated patches and attempt Contents API fallback
     for file in &mut pr_files {
@@ -238,10 +234,7 @@ pub async fn fetch_pr_details(
         owner,
         repo,
         &pr_files,
-        pr.head
-            .as_deref()
-            .map(|h| h.sha.as_str())
-            .unwrap_or_default(),
+        pr.head.sha.as_str(),
         review_config.max_full_content_files,
         review_config.max_chars_per_file,
     )
@@ -277,22 +270,9 @@ pub async fn fetch_pr_details(
         number,
         title: pr.title.clone().unwrap_or_default(),
         body: pr.body.clone().unwrap_or_default(),
-        base_branch: pr
-            .base
-            .as_deref()
-            .map(|b| b.ref_field.clone())
-            .unwrap_or_default(),
-        head_branch: pr
-            .head
-            .as_deref()
-            .map(|h| h.ref_field.clone())
-            .unwrap_or_default(),
-        head_sha: pr
-            .head
-            .as_deref()
-            .map(|h| h.sha.as_str())
-            .unwrap_or_default()
-            .to_string(),
+        base_branch: pr.base.ref_field.clone(),
+        head_branch: pr.head.ref_field.clone(),
+        head_sha: pr.head.sha.as_str().to_string(),
         files: pr_files,
         url: pr
             .html_url
@@ -774,22 +754,14 @@ pub async fn create_pull_request(
         })?;
 
     let result = PrCreateResult {
-        pr_number: pr.number.unwrap_or(0),
+        pr_number: pr.number,
         url: pr
             .html_url
             .as_ref()
             .map(std::string::ToString::to_string)
             .unwrap_or_default(),
-        branch: pr
-            .head
-            .as_deref()
-            .map(|h| h.ref_field.clone())
-            .unwrap_or_default(),
-        base: pr
-            .base
-            .as_deref()
-            .map(|b| b.ref_field.clone())
-            .unwrap_or_default(),
+        branch: pr.head.ref_field.clone(),
+        base: pr.base.ref_field.clone(),
         title: pr.title.clone().unwrap_or_default(),
         draft: pr.draft.unwrap_or(false),
         files_changed: u32::try_from(pr.changed_files.unwrap_or(0)).unwrap_or(u32::MAX),
