@@ -11,6 +11,7 @@ use octocrab::Octocrab;
 use tracing::{debug, instrument};
 
 use super::{ReferenceKind, parse_github_reference};
+use crate::ai::review_context::truncate_at_line_boundary;
 use crate::ai::types::{PrDetails, PrFile, PrReviewComment, ReviewEvent};
 use crate::error::{AptuError, ResourceType};
 use crate::triage::render_pr_review_comment_body;
@@ -375,8 +376,8 @@ async fn fetch_file_contents_single(
             // Try to decode the first item (should be the file, not a directory listing)
             if let Some(item) = content.items.first() {
                 if let Some(decoded) = item.decoded_content() {
-                    let truncated = if decoded.len() > max_chars {
-                        decoded.chars().take(max_chars).collect::<String>()
+                    let truncated = if decoded.chars().count() > max_chars {
+                        truncate_at_line_boundary(&decoded, max_chars)
                     } else {
                         decoded
                     };
@@ -482,8 +483,8 @@ async fn fetch_file_contents(
                 // Try to decode the first item (should be the file, not a directory listing)
                 if let Some(item) = content.items.first() {
                     if let Some(decoded) = item.decoded_content() {
-                        let truncated = if decoded.len() > max_chars_per_file {
-                            decoded.chars().take(max_chars_per_file).collect::<String>()
+                        let truncated = if decoded.chars().count() > max_chars_per_file {
+                            truncate_at_line_boundary(&decoded, max_chars_per_file)
                         } else {
                             decoded
                         };

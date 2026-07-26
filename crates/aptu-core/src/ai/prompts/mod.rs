@@ -88,7 +88,7 @@ pub fn build_pr_label_system_prompt(context: &str) -> String {
 // ---------------------------------------------------------------------------
 
 use super::provider::{SCHEMA_PREAMBLE, sanitize_prompt_field};
-use super::review_context::ReviewContext;
+use super::review_context::{ReviewContext, truncate_at_line_boundary};
 use super::types::IssueDetails;
 use std::fmt::Write;
 use tracing;
@@ -330,11 +330,11 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         // Include full file content if available (cap at ctx.max_chars_per_file)
         if let Some(content) = full_content {
             let sanitized = sanitize_prompt_field(&content);
-            if sanitized.len() > ctx.max_chars_per_file {
-                let truncated: String = sanitized.chars().take(ctx.max_chars_per_file).collect();
+            if sanitized.chars().count() > ctx.max_chars_per_file {
+                let truncated = truncate_at_line_boundary(&sanitized, ctx.max_chars_per_file);
                 let _ = writeln!(
                     prompt,
-                    "<file_content path=\"{}\">\n{}\n</file_content>\n[APTU: file content truncated by size budget -- do not speculate on missing content]\n",
+                    "<file_content path=\"{}\">\n{}\n[APTU: file content truncated by size budget -- do not speculate on missing content]\n</file_content>\n",
                     sanitize_prompt_field(&filename),
                     truncated
                 );
@@ -735,6 +735,17 @@ mod tests {
             !prompt.contains("files omitted due to size limits"),
             "truncated content is not skipped, so files_skipped annotation must not be present"
         );
+        // Verify annotation appears before </file_content> closing tag
+        let annotation_pos = prompt.find("truncated by size budget");
+        let close_tag_pos = prompt.find("</file_content>");
+        assert!(
+            annotation_pos.is_some() && close_tag_pos.is_some(),
+            "both annotation and closing tag must be present"
+        );
+        assert!(
+            annotation_pos.unwrap() < close_tag_pos.unwrap(),
+            "truncation annotation must appear before </file_content>"
+        );
     }
 
     #[test]
@@ -794,10 +805,10 @@ mod tests {
     fn test_full_content_utf8_boundary_no_panic() {
         use super::super::types::{PrDetails, PrFile};
 
-        // Provide full_content whose byte length exceeds the budget.
+        // Provide full_content whose char count exceeds the budget.
         // Using a literal multi-byte character to ensure the byte boundary
         // would have fallen mid character with the old byte-slice approach.
-        let multi_byte_content: String = (0..50).map(|_| "\u{1F600}").collect();
+        let multi_byte_content: String = (0..150).map(|_| "\u{1F600}").collect();
 
         let files = vec![PrFile {
             filename: "utf8_file.rs".to_string(),

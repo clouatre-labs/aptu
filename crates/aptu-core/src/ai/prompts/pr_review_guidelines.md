@@ -16,6 +16,8 @@ When a PR updates dependency versions (in Cargo.toml, package.json, or pyproject
 
 Some PR content (patches, file content, description) may be truncated due to size limits. When you encounter a truncation annotation (marked with `[APTU: ...]`), you MUST acknowledge the truncation in your response and MUST NOT speculate about missing content. If truncation prevents you from making a confident assessment, note this in your concerns or disclaimer.
 
+When file content is truncated at a line boundary, the last visible line may be syntactically incomplete by construction. Do not flag this incomplete line as an error or syntax issue -- it is only incomplete because the remainder of the line follows in truncated content.
+
 ## Examples
 
 ### Example 1 (happy path)

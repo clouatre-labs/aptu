@@ -199,7 +199,7 @@ fn all_user_prompts_contain_schema() {
         call_graph: String::new(),
         inferred_repo_path: None,
         cwd_inferred: false,
-        max_chars_per_file: 16_000,
+        max_chars_per_file: 32_000,
         max_diff_chars: 200_000,
         max_patch_chars_per_file: 10_000,
         files_truncated: 0,
@@ -233,9 +233,9 @@ fn all_user_prompts_contain_schema() {
 mod fetch_file_contents_tests {
     use super::*;
 
-    #[test]
-    fn test_file_content_injected_into_prompt() {
-        let pr = PrDetails {
+    /// Minimal `PrDetails` for a single `src/lib.rs` file with a patch and optional full content.
+    fn make_pr(full_content: Option<&str>) -> PrDetails {
+        PrDetails {
             owner: "test".to_string(),
             repo: "repo".to_string(),
             number: 1,
@@ -250,7 +250,7 @@ mod fetch_file_contents_tests {
                 additions: 5,
                 deletions: 2,
                 patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
-                full_content: Some("fn hello() {}".to_string()),
+                full_content: full_content.map(str::to_string),
                 patch_truncated: false,
             }],
             labels: vec![],
@@ -258,25 +258,20 @@ mod fetch_file_contents_tests {
             review_comments: vec![],
             instructions: None,
             dep_enrichments: vec![],
-        };
-        let mut ctx = aptu_core::ai::review_context::ReviewContext {
+        }
+    }
+
+    /// `ReviewContext` wrapping `pr` with all other fields at their defaults.
+    fn make_ctx(pr: PrDetails) -> aptu_core::ai::review_context::ReviewContext {
+        aptu_core::ai::review_context::ReviewContext {
             pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            max_diff_chars: 200_000,
-            max_patch_chars_per_file: 10_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            files_total: 0,
-            files_with_patch: 0,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
-            budget_drops: Vec::new(),
-            prompt_chars_final: 0,
-        };
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_file_content_injected_into_prompt() {
+        let mut ctx = make_ctx(make_pr(Some("fn hello() {}")));
         let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
         assert!(
             prompt.contains("<file_content path=\"src/lib.rs\">"),
@@ -295,14 +290,6 @@ mod fetch_file_contents_tests {
         let long_content = "x".repeat(CAP + 1000);
         assert!(long_content.len() > CAP);
         let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test PR".to_string(),
-            body: "PR body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
             files: vec![PrFile {
                 filename: "huge.rs".to_string(),
                 status: "modified".to_string(),
@@ -312,31 +299,13 @@ mod fetch_file_contents_tests {
                 full_content: Some(long_content.clone()),
                 patch_truncated: false,
             }],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
+            ..make_pr(None)
         };
 
         // Act: use explicit cap of 4000 to validate truncation at a specific boundary
         let mut ctx = aptu_core::ai::review_context::ReviewContext {
-            pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
             max_chars_per_file: CAP,
-            max_diff_chars: 200_000,
-            max_patch_chars_per_file: 10_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            files_total: 0,
-            files_with_patch: 0,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
-            budget_drops: Vec::new(),
-            prompt_chars_final: 0,
+            ..make_ctx(pr)
         };
         let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
 
@@ -349,62 +318,34 @@ mod fetch_file_contents_tests {
             .find("<file_content path=\"huge.rs\">\n")
             .expect("file_content block start");
         let content_start = block_start + "<file_content path=\"huge.rs\">\n".len();
-        let content_end = prompt[content_start..]
+        let block_end = prompt[content_start..]
             .find("\n</file_content>")
             .expect("file_content block end");
-        let included_content = &prompt[content_start..content_start + content_end];
-        assert_eq!(
-            included_content.len(),
-            CAP,
-            "file_content in prompt must be capped at max_chars_per_file"
+        let block_body = &prompt[content_start..content_start + block_end];
+        // The block body contains the truncated content followed by the annotation line
+        let lines: Vec<&str> = block_body.split('\n').collect();
+        assert!(
+            lines.len() >= 2,
+            "block body should have at least a content line and annotation line"
+        );
+        let content_line = lines[0];
+        assert!(
+            content_line.len() <= CAP,
+            "file_content body first line must be capped at max_chars_per_file"
+        );
+        assert!(
+            block_body.contains("truncated by size budget"),
+            "truncation annotation must be inside file_content block"
         );
     }
 
     #[test]
     fn test_build_pr_review_prompt_includes_call_graph_when_present() {
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test PR".to_string(),
-            body: "PR body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![PrFile {
-                filename: "src/lib.rs".to_string(),
-                status: "modified".to_string(),
-                additions: 5,
-                deletions: 2,
-                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
-                full_content: None,
-                patch_truncated: false,
-            }],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
         // Just verify that the prompt builder itself includes call_graph when provided
         let large_call_graph = "<call_graph>".to_string() + &"x".repeat(1000) + "</call_graph>";
         let mut ctx = aptu_core::ai::review_context::ReviewContext {
-            pr,
-            ast_context: String::new(),
             call_graph: large_call_graph.clone(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            max_diff_chars: 200_000,
-            max_patch_chars_per_file: 10_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            files_total: 0,
-            files_with_patch: 0,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
-            budget_drops: Vec::new(),
-            prompt_chars_final: 0,
+            ..make_ctx(make_pr(None))
         };
         let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
         // The prompt builder includes call_graph as-is; budget enforcement is done in review_pr
@@ -416,49 +357,7 @@ mod fetch_file_contents_tests {
 
     #[test]
     fn test_review_context_prompt_unchanged_without_enrichment() {
-        // Arrange: same minimal ReviewContext as above
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test PR".to_string(),
-            body: "PR body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![PrFile {
-                filename: "src/lib.rs".to_string(),
-                status: "modified".to_string(),
-                additions: 5,
-                deletions: 2,
-                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
-                full_content: None,
-                patch_truncated: false,
-            }],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
-        let mut ctx = aptu_core::ai::review_context::ReviewContext {
-            pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            max_diff_chars: 200_000,
-            max_patch_chars_per_file: 10_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            files_total: 0,
-            files_with_patch: 0,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
-            budget_drops: Vec::new(),
-            prompt_chars_final: 0,
-        };
+        let mut ctx = make_ctx(make_pr(None));
 
         // Act: call build_pr_review_user_prompt with minimal ReviewContext
         let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
@@ -482,55 +381,20 @@ mod fetch_file_contents_tests {
     #[test]
     fn test_review_context_injection_order() {
         // Arrange: construct ReviewContext with all enrichments populated
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test PR".to_string(),
-            body: "PR body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![PrFile {
-                filename: "src/lib.rs".to_string(),
-                status: "modified".to_string(),
-                additions: 5,
-                deletions: 2,
-                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
-                full_content: None,
-                patch_truncated: false,
-            }],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![aptu_core::ai::types::DepReleaseNote {
-                package_name: "serde".to_string(),
-                registry: "crates.io".to_string(),
-                old_version: "1.0.0".to_string(),
-                new_version: "1.0.200".to_string(),
-                body: "v1.0.200 notes".to_string(),
-                github_url: "https://github.com/serde-rs/serde".to_string(),
-                fetch_note: String::new(),
-            }],
-        };
+        let mut pr = make_pr(None);
+        pr.dep_enrichments = vec![aptu_core::ai::types::DepReleaseNote {
+            package_name: "serde".to_string(),
+            registry: "crates.io".to_string(),
+            old_version: "1.0.0".to_string(),
+            new_version: "1.0.200".to_string(),
+            body: "v1.0.200 notes".to_string(),
+            github_url: "https://github.com/serde-rs/serde".to_string(),
+            fetch_note: String::new(),
+        }];
         let mut ctx = aptu_core::ai::review_context::ReviewContext {
-            pr,
             ast_context: "fn foo() {}".to_string(),
             call_graph: "foo -> bar".to_string(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            max_diff_chars: 200_000,
-            max_patch_chars_per_file: 10_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            files_total: 0,
-            files_with_patch: 0,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
-            budget_drops: Vec::new(),
-            prompt_chars_final: 0,
+            ..make_ctx(pr)
         };
 
         // Act: call build_pr_review_user_prompt
@@ -570,55 +434,21 @@ mod fetch_file_contents_tests {
     #[test]
     fn test_verbose_summary_format() {
         // Arrange: construct ReviewContext with enrichments and inferred repo path
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test PR".to_string(),
-            body: "PR body".to_string(),
-            head_branch: "feat".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files: vec![PrFile {
-                filename: "src/lib.rs".to_string(),
-                status: "modified".to_string(),
-                additions: 5,
-                deletions: 2,
-                patch: Some("@@ -1,3 +1,4 @@\n+// new line".to_string()),
-                full_content: None,
-                patch_truncated: false,
-            }],
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![aptu_core::ai::types::DepReleaseNote {
-                package_name: "tokio".to_string(),
-                registry: "crates.io".to_string(),
-                old_version: "1.37".to_string(),
-                new_version: "1.38".to_string(),
-                body: "v1.38 notes".to_string(),
-                github_url: "https://github.com/tokio-rs/tokio".to_string(),
-                fetch_note: String::new(),
-            }],
-        };
+        let mut pr = make_pr(None);
+        pr.dep_enrichments = vec![aptu_core::ai::types::DepReleaseNote {
+            package_name: "tokio".to_string(),
+            registry: "crates.io".to_string(),
+            old_version: "1.37".to_string(),
+            new_version: "1.38".to_string(),
+            body: "v1.38 notes".to_string(),
+            github_url: "https://github.com/tokio-rs/tokio".to_string(),
+            fetch_note: String::new(),
+        }];
         let ctx = aptu_core::ai::review_context::ReviewContext {
-            pr,
             ast_context: "fn bar() {}".to_string(),
-            call_graph: String::new(),
             inferred_repo_path: Some(std::path::PathBuf::from("/tmp/repo")),
             cwd_inferred: true,
-            max_chars_per_file: 16_000,
-            max_diff_chars: 200_000,
-            max_patch_chars_per_file: 10_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            files_total: 0,
-            files_with_patch: 0,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
-            budget_drops: Vec::new(),
-            prompt_chars_final: 0,
+            ..make_ctx(pr)
         };
 
         // Act: call verbose_summary()

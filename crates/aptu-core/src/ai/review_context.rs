@@ -619,10 +619,36 @@ fn parse_origin_owner_repo(url: &str) -> Option<(String, String)> {
     Some((owner, repo))
 }
 
+/// Truncates `content` to at most `max_chars` characters, landing on the last newline
+/// before the limit. Falls back to a char-boundary slice if no newline is found.
+///
+/// Returns the original content unchanged when its character count is already
+/// within the limit.
+#[must_use]
+pub(crate) fn truncate_at_line_boundary(content: &str, max_chars: usize) -> String {
+    if content.chars().count() <= max_chars {
+        return content.to_string();
+    }
+
+    // Find the byte index of the max_chars-th character.
+    let cutoff_byte = content
+        .char_indices()
+        .nth(max_chars)
+        .map_or(content.len(), |(i, _)| i);
+
+    // Scan backward from the cutoff byte to find the last newline.
+    let truncated = &content[..cutoff_byte];
+    if let Some(newline_pos) = truncated.rfind('\n') {
+        content[..=newline_pos].to_string()
+    } else {
+        // No newline found; fall back to char-boundary slice at max_chars.
+        content[..cutoff_byte].to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::registry::ProviderConfig;
     use crate::ai::types::{DepReleaseNote, PrFile};
 
     fn make_pr_with_content(patch_chars: usize, full_content_chars: usize) -> PrDetails {
@@ -650,17 +676,21 @@ mod tests {
                 additions: 1,
                 deletions: 0,
             }],
-            dep_enrichments: vec![DepReleaseNote {
-                package_name: "serde".to_string(),
-                old_version: "1.0.0".to_string(),
-                new_version: "1.0.1".to_string(),
-                registry: "crates.io".to_string(),
-                github_url: "https://github.com/serde-rs/serde".to_string(),
-                body: "dep_body".to_string(),
-                fetch_note: String::new(),
-            }],
+            dep_enrichments: vec![],
             instructions: None,
             labels: vec![],
+        }
+    }
+
+    fn make_dep(package_name: &str) -> DepReleaseNote {
+        DepReleaseNote {
+            package_name: package_name.to_string(),
+            old_version: "1.0.0".to_string(),
+            new_version: "1.0.1".to_string(),
+            registry: "crates.io".to_string(),
+            github_url: format!("https://github.com/owner/{package_name}"),
+            body: "release notes".to_string(),
+            fetch_note: String::new(),
         }
     }
 
@@ -700,6 +730,7 @@ mod tests {
     fn test_apply_budget_drops_dep_enrichments_before_patches() {
         let mut pr = make_pr_with_content(200, 0);
         // Add a large dep enrichment body to make it over budget
+        pr.dep_enrichments.push(make_dep("serde"));
         pr.dep_enrichments[0].body = "d".repeat(400);
         let mut ast_context = String::new();
         let mut call_graph = String::new();
@@ -733,35 +764,13 @@ mod tests {
     fn test_verbose_summary_all_fields() {
         // Arrange: ReviewContext with repo path (inferred), dep enrichments, ast, call graph
         let mut pr = make_pr_with_content(10, 0);
-        pr.dep_enrichments = vec![
-            DepReleaseNote {
-                package_name: "tokio".to_string(),
-                old_version: "1.37.0".to_string(),
-                new_version: "1.38.0".to_string(),
-                registry: "crates.io".to_string(),
-                github_url: "https://github.com/tokio-rs/tokio".to_string(),
-                body: "release notes".to_string(),
-                fetch_note: String::new(),
-            },
-            DepReleaseNote {
-                package_name: "serde".to_string(),
-                old_version: "1.0.199".to_string(),
-                new_version: "1.0.200".to_string(),
-                registry: "crates.io".to_string(),
-                github_url: "https://github.com/serde-rs/serde".to_string(),
-                body: "release notes".to_string(),
-                fetch_note: String::new(),
-            },
-        ];
+        pr.dep_enrichments = vec![make_dep("tokio"), make_dep("serde")];
         let ctx = ReviewContext {
             pr,
             ast_context: "fn foo() {}".to_string(),
             call_graph: "foo -> bar".to_string(),
             inferred_repo_path: Some(std::path::PathBuf::from("/tmp/repo")),
             cwd_inferred: true,
-            max_chars_per_file: 16_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
             ..Default::default()
         };
 
@@ -800,17 +809,9 @@ mod tests {
     #[test]
     fn test_verbose_summary_empty_context() {
         // Arrange: ReviewContext with no enrichments and no repo path
-        let mut pr = make_pr_with_content(0, 0);
-        pr.dep_enrichments.clear();
+        let pr = make_pr_with_content(0, 0);
         let ctx = ReviewContext {
             pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
-            max_chars_per_file: 16_000,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
             ..Default::default()
         };
 
@@ -827,27 +828,15 @@ mod tests {
     #[test]
     fn test_verbose_summary_truncation_section_present_and_absent() {
         // Arrange
-        let mut pr = make_pr_with_content(0, 0);
-        pr.dep_enrichments.clear();
+        let pr = make_pr_with_content(0, 0);
 
         // Case 1: files_truncated > 0 -- section must be present
         let ctx_with = ReviewContext {
             pr: pr.clone(),
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
             max_chars_per_file: 4_000,
-            max_diff_chars: 200_000,
-            max_patch_chars_per_file: 10_000,
-            files_total: 0,
-            files_with_patch: 0,
             files_truncated: 3,
             truncated_chars_dropped: 900,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
-            budget_drops: Vec::new(),
-            prompt_chars_final: 0,
+            ..Default::default()
         };
         let summary = ctx_with.verbose_summary();
         assert!(
@@ -858,21 +847,8 @@ mod tests {
         // Case 2: files_truncated == 0 -- section must be absent
         let ctx_without = ReviewContext {
             pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
             max_chars_per_file: 4_000,
-            max_diff_chars: 200_000,
-            max_patch_chars_per_file: 10_000,
-            files_total: 0,
-            files_with_patch: 0,
-            files_truncated: 0,
-            truncated_chars_dropped: 0,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
-            budget_drops: Vec::new(),
-            prompt_chars_final: 0,
+            ..Default::default()
         };
         let summary_clean = ctx_without.verbose_summary();
         assert!(
@@ -918,5 +894,55 @@ mod tests {
             should_enable_call_graph(true, 0, &config),
             "should_enable_call_graph must be true when deep=true regardless of budget_remaining"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // truncate_at_line_boundary tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_truncate_at_line_boundary_happy_path() {
+        // Content with newlines; truncation should land on last newline before limit
+        let content = "line 1\nline 2\nline 3\nline 4\nline 5\n";
+        // max_chars=20: chars "line 1\nline 2\nlin" -> find last '\n' -> "line 1\nline 2\n"
+        let result = truncate_at_line_boundary(content, 20);
+        assert_eq!(result, "line 1\nline 2\n");
+        assert!(
+            result.chars().count() <= 20,
+            "truncated result must not exceed max_chars"
+        );
+        assert!(
+            result.ends_with('\n'),
+            "truncation should end at newline boundary when one exists"
+        );
+    }
+
+    #[test]
+    fn test_truncate_at_line_boundary_fallback_no_newline() {
+        // Content with no newline; must fall back to char boundary
+        let content = "abcdefghijklmnopqrstuvwxyz";
+        let result = truncate_at_line_boundary(content, 10);
+        assert_eq!(result, "abcdefghij");
+        assert_eq!(result.chars().count(), 10);
+    }
+
+    #[test]
+    fn test_truncate_at_line_boundary_under_limit() {
+        // Content within limit should be returned unchanged
+        let content = "short";
+        let result = truncate_at_line_boundary(content, 100);
+        assert_eq!(result, "short");
+        assert_eq!(result.chars().count(), 5);
+    }
+
+    #[test]
+    fn test_truncate_at_line_boundary_multi_byte_utf8() {
+        // Multi-byte UTF-8 characters before the cut; must not panic
+        let content: String = (0..30).map(|_| "\u{1F600}").collect(); // 30 emoji chars
+        let result = truncate_at_line_boundary(&content, 25);
+        // 25 chars from 30 should give 25 emoji chars (no newline, so char boundary fallback)
+        assert_eq!(result.chars().count(), 25);
+        // Every char should be the emoji
+        assert!(result.chars().all(|c| c == '\u{1F600}'));
     }
 }
