@@ -42,7 +42,7 @@ impl Renderable for ReposResult {
                 "- **{}** ({}) - {}",
                 repo.full_name(),
                 repo.language,
-                &repo.description
+                repo.description
             )?;
         }
         Ok(())

@@ -208,7 +208,7 @@ impl Renderable for RevertResult {
     }
 
     fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "## {}", &self.summary)?;
+        writeln!(w, "## {}", self.summary)?;
         writeln!(w)?;
 
         if !self.labels_removed.is_empty() {
