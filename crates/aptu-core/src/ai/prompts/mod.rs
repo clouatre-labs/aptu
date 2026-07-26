@@ -369,9 +369,9 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
                 prompt,
                 "Package: {} ({})\nOld: {} -> New: {}\nGitHub: {}\n",
                 sanitize_prompt_field(&dep.package_name),
-                &dep.registry,
-                &dep.old_version,
-                &dep.new_version,
+                dep.registry,
+                dep.old_version,
+                dep.new_version,
                 sanitize_prompt_field(&dep.github_url)
             );
             if !dep.body.is_empty() {
@@ -381,7 +381,7 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
                     sanitize_prompt_field(&dep.body)
                 );
             } else if !dep.fetch_note.is_empty() {
-                let _ = writeln!(prompt, "Note: {}\n", &dep.fetch_note);
+                let _ = writeln!(prompt, "Note: {}\n", dep.fetch_note);
             }
         }
         prompt.push_str("</dependency_release_notes>\n");
