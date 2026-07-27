@@ -62,7 +62,7 @@ regex = "1"
 percent-encoding = { workspace = true }
 
 # Base64 encoding/decoding
-base64 = "0.22"
+base64 = "0.23"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
