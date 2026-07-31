@@ -19,10 +19,8 @@ scope_boundary:
     - "crates/aptu-core/src/graph/cache.rs"
     - "crates/aptu-core/src/graph/query.rs"
     - "crates/aptu-core/src/ai/provider/review.rs"
-    - "crates/aptu-core/src/ai/review_context.rs"
     - "crates/aptu-core/src/config/review.rs"
     - "crates/aptu-core/src/config/mod.rs"
-    - "crates/aptu-core/src/config/loader.rs"
     - "crates/aptu-core/Cargo.toml"
     - "docs/CONFIGURATION.md"
   files_readonly:
@@ -118,13 +116,8 @@ on the diff, not the commit content alone.
    `crates/aptu-core/Cargo.toml` under a new `graph` feature (`graph = ["dep:petgraph",
    "dep:tree-sitter", "dep:tree-sitter-rust", "dep:bincode"]`), listed only under
    `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` alongside `tokio`,
-   `backon`, `octocrab`. The `graph` feature must not appear in `[features] default = [...]`;
-   it is opt-in only. This ensures the feature is never activated in WASM builds that
-   rely on `--no-default-features`. Follow the existing `ast-context` feature as the
-   template for how an optional, non-wasm capability is declared. Document the feature
-   flag and its effect in `docs/CONFIGURATION.md` alongside the `[graph]` config section
-   (see step 4), including how to enable it at build time (`--features graph`) and the
-   fact that it is excluded from the default binary distribution.
+   `backon`, `octocrab`. Follow the existing `ast-context` feature as the template for
+   how an optional, non-wasm capability is declared.
 
 2. **`aptu-core::graph` module.**
    - `mod.rs`: node/edge enums, `Visibility`, `pub type StructuralGraph = petgraph::graph::DiGraph<Node, Edge>`, re-exports.
@@ -133,24 +126,13 @@ on the diff, not the commit content alone.
      schema above. Non-Rust files are skipped for node extraction (no graph coverage
      claimed) but still get a `File` node so `Imports` edges can resolve. Any tree-sitter
      parse error or node it cannot classify is skipped with `tracing::warn!`, never a
-     panic or `Result::Err` that aborts the whole build. The builder interface is designed
-     for future multi-language extension: the dispatch point is a per-file language
-     detection step (by extension or `PrFile` metadata) that selects the appropriate
-     tree-sitter grammar. Adding Go, Python, TypeScript, or other languages supported by
-     the existing `aptu-core` AST context pipeline requires only a new grammar crate and a
-     matching visitor; no changes to the node/edge schema or the cache/query layers are
-     needed. The initial implementation ships Rust only; other languages are out of scope
-     for this SPEC.
+     panic or `Result::Err` that aborts the whole build.
    - `cache.rs`: `load_or_build(repo: &str, sha: &str, files: &[PrFile]) -> StructuralGraph`
      — checks `~/.local/share/aptu/graph/<repo>/<sha>.bin` (via `config::data_dir()` joined
      with `graph/<repo>/<sha>.bin`); on hit within `cache_ttl_hours`, deserializes with
      `bincode`; on miss, calls `builder::build_graph`, writes the result, and returns it.
      Cache path sanitizes `repo` (owner/name) to a filesystem-safe form consistent with
-     existing cache key handling in `aptu-core::cache`. The serialized payload must begin
-     with a `u32` format version field (current value: `1`); on deserialization, if the
-     stored version does not match the current constant, the cache file is discarded and
-     rebuilt. This allows future node/edge schema changes to invalidate stale cache files
-     automatically without requiring a manual cache purge.
+     existing cache key handling in `aptu-core::cache`.
    - `query.rs`: `blast_radius(graph: &StructuralGraph, seeds: &[NodeIndex], max_nodes: usize) -> StructuralGraph`
      — bounded BFS over `Calls`, `Implements`, `HasMethod`, `Tests` edges (both directions
      for `Calls`, so callers and callees of a modified function are included) starting
@@ -218,23 +200,6 @@ on the diff, not the commit content alone.
   commits. Mitigation: `cache_ttl_hours` bounds staleness exposure, and the cache value
   additionally stores a hash of the input file list so a `(repo, sha)` collision against
   a differently-scoped file set is detected and forces a rebuild.
-- **Memory usage on large repositories.** Building the graph requires holding all
-  parsed nodes and edges for every file in the changed-file set in memory
-  simultaneously. For repositories with large PR diffs touching many files, this can
-  be significant. Mitigation: `GraphConfig::max_nodes` caps the subgraph returned by
-  `blast_radius`; `CONFIGURATION.md` must document this field and recommend lowering
-  it for memory-constrained environments. The builder processes only files in the PR
-  diff, not the whole repository, which bounds the baseline allocation.
-  **Memory/context-depth trade-off.** `max_nodes` is the primary knob controlling this
-  trade-off: a higher value admits more of the blast-radius subgraph into the prompt
-  (greater context depth, better structural signal) at the cost of more memory during
-  the BFS traversal and a larger rendered text block that consumes prompt budget.
-  A lower value reduces both memory pressure and prompt consumption, but may omit
-  callers or callees that are relevant to the review. `CONFIGURATION.md` must document
-  this trade-off explicitly alongside the `max_nodes` default (`50_000`) and include a
-  recommendation: lower the value (e.g., `500`–`2_000`) for memory-constrained CI
-  environments or large monorepos, and raise it only when reviewing PRs where deep
-  call-chain context is required and prompt budget allows.
 - **WASM build regressions.** `petgraph` and `tree-sitter` both carry assumptions that
   may not hold under `wasm32-unknown-unknown` with `--no-default-features`.
   Mitigation: the `graph` feature is not part of `default`, the module is fully

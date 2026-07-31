@@ -46,15 +46,15 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 **Area:** Architecture
 **Finding:** `registry.rs` hardcodes a single model per provider; there is no routing logic that selects a cheaper or smaller model for low-complexity workloads. `estimate_pr_size()` exists in `provider/review.rs` but is used only to enforce prompt budget limits (truncation), not to select a model tier. This is Phase 1 of the `autonomous-coder.md` spec and is currently 0% implemented.
 **Evidence:** Grep of `registry.rs` confirms one hardcoded model per provider. Read of `provider/review.rs` confirms `estimate_pr_size()` call sites are limited to budget enforcement.
-**Recommendation:** Implement model-tier routing keyed on `estimate_pr_size()` (or an equivalent issue-size estimator for triage): route small/simple workloads to a lower-cost model tier (e.g. haiku-class) and larger/complex workloads to a higher-capability tier (e.g. sonnet-class). The integration point is `config/ai.rs:AiConfig::resolve_for_task()`, not `registry.rs`; `registry.rs` holds only static provider metadata with no per-request context to route on. `estimate_pr_size()` currently exists in two divergent implementations that must be reconciled before routing can rely on either. This affects the majority of calls and has direct, measurable cost impact independent of prompt-text changes in P1/P2.
-**Acceptance criteria:** `resolve_for_task` selects model by workload size for at least PR review; behavior is covered by a unit test asserting tier selection via `resolve_for_task` for a small and a large size input. `docs/spec/autonomous-coder.md` Phase 1 status updated to reflect implementation. The two divergent implementations of `estimate_pr_size()` must be reconciled into a single canonical version before routing logic is wired; see #1406 for scope.
+**Recommendation:** Implement model-tier routing keyed on `estimate_pr_size()` (or an equivalent issue-size estimator for triage): route small/simple workloads to a lower-cost model tier (e.g. haiku-class) and larger/complex workloads to a higher-capability tier (e.g. sonnet-class). This affects the majority of calls and has direct, measurable cost impact independent of prompt-text changes in P1/P2.
+**Acceptance criteria:** `registry.rs` or a new routing module selects model by workload size for at least PR review; behavior is covered by a unit test asserting tier selection for a small and a large `estimate_pr_size()` input. `docs/spec/autonomous-coder.md` Phase 1 status updated to reflect implementation.
 
 ---
 
 ### P4 — In-process structural graph not implemented
 **Severity:** Medium
 **Area:** Architecture
-**Finding:** Current ast_context/call_graph is already structured output from `aptu-coder-core` (a tree-sitter-backed analysis crate, v0.25.4): compact function signatures and caller chains capped and managed by `apply_budget_drops` in `review_context.rs`. The separate GitHub Contents API raw-content fallback (for oversized diffs) is a distinct code path. The gap is the absence of a queryable structural graph that can compute blast radius in a single pass across crates. External research on code-knowledge-graph approaches shows substantial token and tool-call reductions, and accuracy gains, for structurally similar workloads (issue resolution, code review).
+**Finding:** PR review context (AST and call-graph information) is currently assembled from raw strings returned by the GitHub Contents API rather than from a queryable in-process graph. External research on code-knowledge-graph approaches shows substantial token and tool-call reductions, and accuracy gains, for structurally similar workloads (issue resolution, code review).
 **Evidence:**
 - RepoGraph (ICLR 2025, arXiv:2410.14684): +32.8% relative resolve rate on SWE-bench Lite.
 - KGCompass (arXiv:2603.27277): 58.3% resolve rate, 10x fewer tokens, 2.1x fewer tool calls.
@@ -62,7 +62,7 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 - CodeGraph (tosea.ai): ~35% API cost reduction, ~70% fewer tool calls.
 - Neo4j was evaluated and rejected as the backing store (see Non-Findings). `petgraph` (pure Rust, `no_std`-compatible, WASM-compatible) combined with `tree-sitter` is identified as the viable path, consistent with aptu-core's existing `wasm32-unknown-unknown` compilation target and single-binary CLI constraint.
 - `autonomous-coder.md` section 11 quote: "We have a knowledge graph. We don't have to maintain files. We don't need an agent.md in your code. We have it in the graph database." — Siddhant Pardeshi, Blitzy.
-**Recommendation:** Design and prototype an in-process structural graph built with `petgraph` and `tree-sitter`. The new `graph` feature supplements, not replaces, the existing `ast-context`/`aptu-coder-core` pipeline; the GitHub Contents API raw-content fallback remains a separate code path. Scope as a SPEC document before implementation given the architectural surface area (review context budgets in `ReviewConfig`, multi-language AST support already present).
+**Recommendation:** Design and prototype an in-process structural graph built with `petgraph` and `tree-sitter`, replacing or supplementing the current GitHub Contents API string assembly for PR review context. Scope as a SPEC document before implementation given the architectural surface area (review context budgets in `ReviewConfig`, multi-language AST support already present).
 **Acceptance criteria:** A SPEC document exists describing the `petgraph` + `tree-sitter` integration, including data model, WASM compatibility plan, and interaction with existing `ReviewConfig` budgets (`max_prompt_chars`, `max_full_content_files`, `max_chars_per_file`, `max_diff_chars`, `max_patch_chars_per_file`). No code changes required to close this finding; a follow-on implementation issue is opened referencing the SPEC.
 
 ---
@@ -77,11 +77,9 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 
 ## Recommended issue grouping
 
-Tracking issues have been created for all findings.
-
 | Issue | Findings | Scope |
 |---|---|---|
-| #1406 | P3 | `feat(ai)`: implement model-tier routing (haiku/sonnet) via `estimate_pr_size()` |
-| #1407 | P1, P2 | `feat(prompts)`: minify schemas and move examples to user turn |
-| #1408 | P4 | `feat(review)`: in-process structural graph context via `petgraph` + `tree-sitter` |
-| #1409 | P1-P4 | `docs`: add petgraph integration SPEC document |
+| 1 | P3 | `feat(ai)`: implement model-tier routing (haiku/sonnet) via `estimate_pr_size()` |
+| 2 | P1, P2 | `feat(prompts)`: minify schemas and move examples to user turn |
+| 3 | P4 | `feat(review)`: in-process structural graph context via `petgraph` + `tree-sitter` |
+| 4 | P1-P4 | `docs`: add petgraph integration SPEC document |
