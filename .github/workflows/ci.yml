@@ -54,6 +54,7 @@ jobs:
               - '.github/workflows/**'
             docs:
               - 'docs/**'
+              - '*.md'
               - '.markdownlint.jsonc'
 
   commitlint:
@@ -330,7 +331,7 @@ jobs:
         with:
           bun-version: "1"
       - name: Run markdownlint
-        run: bunx markdownlint-cli2@0.23.1 'docs/**/*.md'
+        run: bunx markdownlint-cli2@0.23.1 "**/*.md" "#node_modules"
 
   ci-result:
     name: CI Result
