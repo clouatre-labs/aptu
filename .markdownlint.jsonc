@@ -12,7 +12,8 @@
   },
 
   // No horizontal rules (--- / *** / ___) in delivery documents
+  // style: "---" is deterministic; "consistent" silently allows HRs if used uniformly
   "MD035": {
-    "style": "consistent"
+    "style": "---"
   }
 }
