@@ -218,6 +218,13 @@ on the diff, not the commit content alone.
   commits. Mitigation: `cache_ttl_hours` bounds staleness exposure, and the cache value
   additionally stores a hash of the input file list so a `(repo, sha)` collision against
   a differently-scoped file set is detected and forces a rebuild.
+- **Memory usage on large repositories.** Building the graph requires holding all
+  parsed nodes and edges for every file in the changed-file set in memory
+  simultaneously. For repositories with large PR diffs touching many files, this can
+  be significant. Mitigation: `GraphConfig::max_nodes` caps the subgraph returned by
+  `blast_radius`; `CONFIGURATION.md` must document this field and recommend lowering
+  it for memory-constrained environments. The builder processes only files in the PR
+  diff, not the whole repository, which bounds the baseline allocation.
 - **WASM build regressions.** `petgraph` and `tree-sitter` both carry assumptions that
   may not hold under `wasm32-unknown-unknown` with `--no-default-features`.
   Mitigation: the `graph` feature is not part of `default`, the module is fully
