@@ -9,6 +9,8 @@ on:
       - 'Cargo.lock'
       - '.github/workflows/**'
       - 'tests/**'
+      - 'docs/**'
+      - '.markdownlint.jsonc'
   pull_request:
 
 concurrency:
@@ -33,6 +35,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       tests: ${{ steps.filter.outputs.tests }}
       workflows: ${{ steps.filter.outputs.workflows }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -49,6 +52,9 @@ jobs:
               - 'tests/**'
             workflows:
               - '.github/workflows/**'
+            docs:
+              - 'docs/**'
+              - '.markdownlint.jsonc'
 
   commitlint:
     name: Lint Commits
@@ -308,12 +314,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
+  lint-docs:
+    name: Lint Docs
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    needs: changes
+    timeout-minutes: 5
+    if: needs.changes.outputs.docs == 'true' || github.event_name != 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+      - name: Run markdownlint
+        run: bunx markdownlint-cli2@0.23.1 'docs/**/*.md'
+
   ci-result:
     name: CI Result
     runs-on: ubuntu-24.04-arm
     permissions: {}
     if: always()
-    needs: [commitlint, deny, check, test, build, integration, scan-self, zizmor, gitleaks, wasm-check]
+    needs: [commitlint, deny, check, test, build, integration, scan-self, zizmor, gitleaks, wasm-check, lint-docs]
     timeout-minutes: 2
     steps:
       - name: Verify all jobs passed or were skipped

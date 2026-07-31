@@ -1,0 +1,18 @@
+{
+  // Delivery document formatting rules for docs/**
+  // Only rules that catch regressions AI agents consistently introduce.
+
+  "default": false,
+
+  // Trailing spaces: require exactly 2 for hard line breaks, forbid all others
+  "MD009": {
+    "br_spaces": 2,
+    "list_item_empty_lines": false,
+    "strict": false
+  },
+
+  // No horizontal rules (--- / *** / ___) in delivery documents
+  "MD035": {
+    "style": "consistent"
+  }
+}
