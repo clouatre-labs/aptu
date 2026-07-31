@@ -133,7 +133,14 @@ on the diff, not the commit content alone.
      schema above. Non-Rust files are skipped for node extraction (no graph coverage
      claimed) but still get a `File` node so `Imports` edges can resolve. Any tree-sitter
      parse error or node it cannot classify is skipped with `tracing::warn!`, never a
-     panic or `Result::Err` that aborts the whole build.
+     panic or `Result::Err` that aborts the whole build. The builder interface is designed
+     for future multi-language extension: the dispatch point is a per-file language
+     detection step (by extension or `PrFile` metadata) that selects the appropriate
+     tree-sitter grammar. Adding Go, Python, TypeScript, or other languages supported by
+     the existing `aptu-core` AST context pipeline requires only a new grammar crate and a
+     matching visitor; no changes to the node/edge schema or the cache/query layers are
+     needed. The initial implementation ships Rust only; other languages are out of scope
+     for this SPEC.
    - `cache.rs`: `load_or_build(repo: &str, sha: &str, files: &[PrFile]) -> StructuralGraph`
      — checks `~/.local/share/aptu/graph/<repo>/<sha>.bin` (via `config::data_dir()` joined
      with `graph/<repo>/<sha>.bin`); on hit within `cache_ttl_hours`, deserializes with
