@@ -19,8 +19,10 @@ scope_boundary:
     - "crates/aptu-core/src/graph/cache.rs"
     - "crates/aptu-core/src/graph/query.rs"
     - "crates/aptu-core/src/ai/provider/review.rs"
+    - "crates/aptu-core/src/ai/review_context.rs"
     - "crates/aptu-core/src/config/review.rs"
     - "crates/aptu-core/src/config/mod.rs"
+    - "crates/aptu-core/src/config/loader.rs"
     - "crates/aptu-core/Cargo.toml"
     - "docs/CONFIGURATION.md"
   files_readonly:
