@@ -77,9 +77,11 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 
 ## Recommended issue grouping
 
-| Issue | Findings | Scope |
-|---|---|---|
-| 1 | P3 | `feat(ai)`: implement model-tier routing (haiku/sonnet) via `estimate_pr_size()` |
-| 2 | P1, P2 | `feat(prompts)`: minify schemas and move examples to user turn |
-| 3 | P4 | `feat(review)`: in-process structural graph context via `petgraph` + `tree-sitter` |
-| 4 | P1-P4 | `docs`: add petgraph integration SPEC document |
+Tracking issues have been created for all findings.
+
+| Issue | Findings | Scope | Tracking |
+|---|---|---|---|
+| 1 | P3 | `feat(ai)`: implement model-tier routing (haiku/sonnet) via `estimate_pr_size()` | #1406 |
+| 2 | P1, P2 | `feat(prompts)`: minify schemas and move examples to user turn | #1407 |
+| 3 | P4 | `feat(review)`: in-process structural graph context via `petgraph` + `tree-sitter` | #1408 |
+| 4 | P1-P4 | `docs`: add petgraph integration SPEC document | #1409 |

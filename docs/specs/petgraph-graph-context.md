@@ -118,8 +118,13 @@ on the diff, not the commit content alone.
    `crates/aptu-core/Cargo.toml` under a new `graph` feature (`graph = ["dep:petgraph",
    "dep:tree-sitter", "dep:tree-sitter-rust", "dep:bincode"]`), listed only under
    `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]` alongside `tokio`,
-   `backon`, `octocrab`. Follow the existing `ast-context` feature as the template for
-   how an optional, non-wasm capability is declared.
+   `backon`, `octocrab`. The `graph` feature must not appear in `[features] default = [...]`;
+   it is opt-in only. This ensures the feature is never activated in WASM builds that
+   rely on `--no-default-features`. Follow the existing `ast-context` feature as the
+   template for how an optional, non-wasm capability is declared. Document the feature
+   flag and its effect in `docs/CONFIGURATION.md` alongside the `[graph]` config section
+   (see step 4), including how to enable it at build time (`--features graph`) and the
+   fact that it is excluded from the default binary distribution.
 
 2. **`aptu-core::graph` module.**
    - `mod.rs`: node/edge enums, `Visibility`, `pub type StructuralGraph = petgraph::graph::DiGraph<Node, Edge>`, re-exports.
@@ -134,7 +139,11 @@ on the diff, not the commit content alone.
      with `graph/<repo>/<sha>.bin`); on hit within `cache_ttl_hours`, deserializes with
      `bincode`; on miss, calls `builder::build_graph`, writes the result, and returns it.
      Cache path sanitizes `repo` (owner/name) to a filesystem-safe form consistent with
-     existing cache key handling in `aptu-core::cache`.
+     existing cache key handling in `aptu-core::cache`. The serialized payload must begin
+     with a `u32` format version field (current value: `1`); on deserialization, if the
+     stored version does not match the current constant, the cache file is discarded and
+     rebuilt. This allows future node/edge schema changes to invalidate stale cache files
+     automatically without requiring a manual cache purge.
    - `query.rs`: `blast_radius(graph: &StructuralGraph, seeds: &[NodeIndex], max_nodes: usize) -> StructuralGraph`
      — bounded BFS over `Calls`, `Implements`, `HasMethod`, `Tests` edges (both directions
      for `Calls`, so callers and callees of a modified function are included) starting
