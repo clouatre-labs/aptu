@@ -225,6 +225,16 @@ on the diff, not the commit content alone.
   `blast_radius`; `CONFIGURATION.md` must document this field and recommend lowering
   it for memory-constrained environments. The builder processes only files in the PR
   diff, not the whole repository, which bounds the baseline allocation.
+  **Memory/context-depth trade-off.** `max_nodes` is the primary knob controlling this
+  trade-off: a higher value admits more of the blast-radius subgraph into the prompt
+  (greater context depth, better structural signal) at the cost of more memory during
+  the BFS traversal and a larger rendered text block that consumes prompt budget.
+  A lower value reduces both memory pressure and prompt consumption, but may omit
+  callers or callees that are relevant to the review. `CONFIGURATION.md` must document
+  this trade-off explicitly alongside the `max_nodes` default (`50_000`) and include a
+  recommendation: lower the value (e.g., `500`–`2_000`) for memory-constrained CI
+  environments or large monorepos, and raise it only when reviewing PRs where deep
+  call-chain context is required and prompt budget allows.
 - **WASM build regressions.** `petgraph` and `tree-sitter` both carry assumptions that
   may not hold under `wasm32-unknown-unknown` with `--no-default-features`.
   Mitigation: the `graph` feature is not part of `default`, the module is fully
