@@ -6,6 +6,9 @@ This document describes the project direction across three time horizons. Items 
 
 ## Recently Shipped
 
+- **Structural graph context for `pr review`** (#1420): petgraph BFS blast-radius from changed files, opt-in via `graph` Cargo feature, disk-cached by commit SHA
+- **Model-tier routing** (#1416): routes large PRs to a higher-capability model tier automatically based on estimated prompt size
+- **Prompt optimisation** (#1415): minified schemas, examples moved to user turn (~2.6k chars saved per call)
 - **PR creation automation** (#1130): `aptu pr create --diff <file>` applies a unified diff to a new branch, commits with optional DCO sign-off, and opens a pull request. Includes a security validation pipeline (size cap, path-traversal rejection, `SecurityScanner::scan_diff()` gate) and collision-resistant branch naming.
 - **File-based TTL cache eviction** (#1172): `[cache]` config now supports per-field TTL settings (`issue_ttl_minutes`, `repo_ttl_hours`, `file_eviction_days`); stale cache entries are automatically pruned on startup.
 

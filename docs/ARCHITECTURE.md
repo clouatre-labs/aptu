@@ -51,6 +51,7 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Gro
 - Implements unified `chat_completion()` interface
 - Manages provider-specific API endpoints and authentication
 - Handles rate limiting via `backon` retry strategy
+- Model-tier routing selects `small_model` or `large_model` based on estimated prompt size, enabling automatic escalation for large PRs
 
 ### PR Review Pipeline
 `aptu pr review` assembles the AI prompt in layers, each capped by `ReviewConfig`:
@@ -59,9 +60,10 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Gro
 2. Fetch full file content for changed files via GitHub Contents API (capped at `max_full_content_files`, `max_chars_per_file`)
 3. Build AST context: function signatures and imports for each changed file using `aptu-coder-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
 4. Build call-graph context: cross-file caller chains for changed functions
-5. Dependency enrichment: if the PR bumps dependencies, fetch upstream GitHub Release notes for up to `max_dep_packages` packages and include summaries in context (controlled by `ReviewConfig`)
-6. Enforce prompt budget (`max_prompt_chars`): drop sections in order (call graph, AST, full content, diff hunks) until budget is met
-7. Post inline review comments via GitHub REST API
+5. Build structural graph context: petgraph BFS blast-radius from changed files (opt-in via `graph` Cargo feature); disk-cached by commit SHA
+6. Dependency enrichment: if the PR bumps dependencies, fetch upstream GitHub Release notes for up to `max_dep_packages` packages and include summaries in context (controlled by `ReviewConfig`)
+7. Enforce prompt budget (`max_prompt_chars`): drop sections in order (structural graph, call graph, AST, full content, diff hunks) until budget is met
+8. Post inline review comments via GitHub REST API
 
 The `ReviewContext` struct centralises all enrichment decisions: AST context, call graph, instructions, dependency release notes, and budget enforcement are all managed there before the prompt is assembled. Repo-path is inferred from CWD when not explicitly supplied via `--repo-path`.
 
@@ -129,30 +131,7 @@ This means users can tune AI behavior without recompiling, and developers can au
 
 ## Configuration
 
-```
-~/.config/aptu/config.toml
-├── [user]
-│   └── default_repo = "owner/repo"
-├── [ai]
-│   ├── provider = "openrouter"
-│   └── model = "mistralai/mistral-small-2603"
-├── [ui]
-│   └── no_color = false
-├── [cache]
-│   ├── issue_ttl_minutes = 60
-│   ├── repo_ttl_hours = 24
-│   └── file_eviction_days = 7
-├── [review]
-│   ├── max_prompt_chars = 120000
-│   ├── max_full_content_files = 10
-│   ├── max_chars_per_file = 16000
-│   ├── max_diff_chars = 200000
-│   └── max_patch_chars_per_file = 10000
-└── [prompt]
-    ├── max_issue_body_bytes = 32768
-    ├── max_diff_bytes = 524288
-    └── max_commit_message_bytes = 4096
-```
+See [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/CONFIGURATION.md) for the full reference including all config sections, defaults, and environment variables.
 
 ## Testing Strategy
 

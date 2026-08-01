@@ -80,6 +80,8 @@ Cargo profiles defined in workspace `Cargo.toml`: `release` (size-optimized, LTO
 ### GitHub Integration
 - Inline PR review comments posted via GitHub REST API (`aptu-core::github::pulls::post_pr_review`)
 - PR review injects AST + call-graph context from GitHub Contents API; multi-language (Rust, Go, Python, TS, JS, C/C++, C#, Java)
+- Structural graph context (petgraph-backed BFS blast-radius, opt-in via `graph` Cargo feature); disk-cached by commit SHA
+- Model-tier routing selects `small_model` or `large_model` based on estimated prompt size
 - Review context budgets in `[review]` (`ReviewConfig`: `max_prompt_chars`, `max_full_content_files`, `max_chars_per_file`, `max_diff_chars` (200k), `max_patch_chars_per_file` (10k)); patches exceeding `max_patch_chars_per_file` are dropped entirely; `validate_consistency()` emits warnings for misconfigured `min_budget_for_call_graph`
 - GitHub OAuth device flow; credentials stored in OS keyring
 
