@@ -137,8 +137,7 @@ fn build_induced_subgraph(graph: &GraphDb, node_set: &HashSet<NodeIndex>) -> Gra
 /// nodes are omitted (they are structural, not behavioural).
 #[must_use]
 pub fn render_subgraph_text(subgraph: &GraphDb) -> String {
-    use std::collections::HashMap;
-    let mut lines: Vec<String> = Vec::new();
+    use std::collections::{BTreeMap, HashMap};
 
     // Build adjacency maps for calls and callers.
     let mut calls: HashMap<NodeIndex, Vec<String>> = HashMap::new();
@@ -163,6 +162,10 @@ pub fn render_subgraph_text(subgraph: &GraphDb) -> String {
         }
     }
 
+    // Group rendered lines by file path so the LLM sees co-located symbols
+    // together, reducing the need to mentally reconstruct file layout.
+    let mut by_file: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
     for idx in subgraph.node_indices() {
         let node = &subgraph[idx];
         let prefix = match node {
@@ -176,16 +179,34 @@ pub fn render_subgraph_text(subgraph: &GraphDb) -> String {
         let name = node.name();
         let mut parts = vec![format!("{prefix} {name}")];
         if let Some(c) = calls.get(&idx) {
-            parts.push(format!("[calls: {}]", c.join(", ")));
+            let mut sorted = c.clone();
+            sorted.sort();
+            parts.push(format!("[calls: {}]", sorted.join(", ")));
         }
         if let Some(c) = callers.get(&idx) {
-            parts.push(format!("[callers: {}]", c.join(", ")));
+            let mut sorted = c.clone();
+            sorted.sort();
+            parts.push(format!("[callers: {}]", sorted.join(", ")));
         }
-        lines.push(parts.join(" "));
+        by_file
+            .entry(node.path().to_string())
+            .or_default()
+            .push(parts.join(" "));
     }
 
-    lines.sort();
-    lines.join("\n")
+    // Emit file headers followed by sorted symbol lines within each file.
+    let mut out = String::new();
+    for (path, mut lines) in by_file {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str("// ");
+        out.push_str(&path);
+        out.push('\n');
+        lines.sort();
+        out.push_str(&lines.join("\n"));
+    }
+    out
 }
 
 #[cfg(test)]

@@ -93,6 +93,20 @@ impl Node {
             | Node::Impl { name, .. } => name,
         }
     }
+
+    /// Returns the file path associated with this node.
+    #[must_use]
+    pub fn path(&self) -> &str {
+        match self {
+            Node::File { path, .. }
+            | Node::Module { path, .. }
+            | Node::Function { path, .. }
+            | Node::Struct { path, .. }
+            | Node::Enum { path, .. }
+            | Node::Trait { path, .. }
+            | Node::Impl { path, .. } => path,
+        }
+    }
 }
 
 /// A directed edge between two nodes in the structural graph.
