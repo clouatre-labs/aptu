@@ -168,16 +168,6 @@ pub trait AiProvider: Send + Sync {
         self::create::create_issue(self, title, body, repo).await
     }
 
-    /// Estimates the initial size of a PR review prompt in characters.
-    #[must_use]
-    fn estimate_pr_size(
-        pr: &crate::ai::types::PrDetails,
-        ast_context: &str,
-        call_graph: &str,
-    ) -> usize {
-        self::review::estimate_pr_size(pr, ast_context, call_graph)
-    }
-
     /// Reviews a pull request using the provider's API.
     #[allow(unused_assignments)]
     async fn review_pr(

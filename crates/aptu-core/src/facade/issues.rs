@@ -115,7 +115,8 @@ pub async fn analyze_issue(
     }
 
     // Resolve task-specific provider and model
-    let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Triage);
+    let (provider_name, model_name) =
+        ai_config.resolve_for_task(TaskType::Triage, Some(issue.body.len()));
 
     // Use fallback chain if configured
     let ai_response = super::ai_client::try_with_fallback(
@@ -471,7 +472,7 @@ pub async fn format_issue(
     ai_config: &AiConfig,
 ) -> crate::Result<CreateIssueResponse> {
     // Resolve task-specific provider and model
-    let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Create);
+    let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Create, None);
 
     // Use fallback chain if configured
     super::ai_client::try_with_fallback(

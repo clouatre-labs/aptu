@@ -10,6 +10,11 @@ use std::path::PathBuf;
 use crate::ai::types::PrDetails;
 use crate::config::ReviewConfig;
 
+/// Estimated overhead for XML tags, section headers, and schema preamble added by
+/// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
+/// non-content characters when estimating total prompt size.
+pub(crate) const PROMPT_OVERHEAD_CHARS: usize = 1_000;
+
 /// Review context containing all enrichment data and configuration for PR analysis.
 ///
 /// This struct centralizes enrichment decisions and is passed to `build_pr_review_user_prompt()`
@@ -48,6 +53,8 @@ pub struct ReviewContext {
     pub budget_drops: Vec<String>,
     /// Final assembled prompt character count.
     pub prompt_chars_final: usize,
+    /// Estimated total character size of the PR review prompt before budget drops.
+    pub estimated_size: usize,
 }
 
 impl ReviewContext {
@@ -156,6 +163,7 @@ impl Default for ReviewContext {
             dep_enrichments_chars: 0,
             budget_drops: Vec::new(),
             prompt_chars_final: 0,
+            estimated_size: 0,
         }
     }
 }
@@ -201,7 +209,8 @@ pub async fn build_review_context(
     pr.dep_enrichments = enrich_deps(&pr.files, review_config).await;
 
     // Step 4: Estimate total chars and decide call_graph budget
-    let estimated_size = estimate_pr_size(&pr, &ast_context);
+    // (call_graph not yet built, pass empty string)
+    let estimated_size = estimate_pr_size(&pr, &ast_context, "");
     let max_prompt_chars = review_config.max_prompt_chars;
     let budget_remaining = max_prompt_chars.saturating_sub(estimated_size);
 
@@ -212,6 +221,9 @@ pub async fn build_review_context(
     } else {
         String::new()
     };
+
+    // Re-estimate with actual call_graph for accurate routing
+    let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph);
 
     // Step 6: Apply budget drop order
     let mut ast_context = ast_context;
@@ -256,6 +268,7 @@ pub async fn build_review_context(
         dep_enrichments_chars,
         budget_drops,
         prompt_chars_final: 0,
+        estimated_size: final_estimated_size,
     })
 }
 
@@ -316,10 +329,7 @@ fn apply_budget_drops(
     max_prompt_chars: usize,
     budget_drops: &mut Vec<String>,
 ) {
-    let mut estimated_size = estimate_pr_size(pr, ast_context);
-    if !call_graph.is_empty() {
-        estimated_size += call_graph.len();
-    }
+    let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph);
 
     // Drop call_graph if over budget (unless explicitly enabled)
     if estimated_size > max_prompt_chars && !deep {
@@ -453,7 +463,11 @@ fn drop_full_content_by_size(
 }
 
 /// Estimates the total character size of a PR review prompt.
-fn estimate_pr_size(pr: &PrDetails, ast_context: &str) -> usize {
+///
+/// Sums title, body, file metadata, patches, `full_content`, `dep_enrichments`,
+/// `ast_context`, `call_graph`, and overhead.
+#[must_use]
+pub(crate) fn estimate_pr_size(pr: &PrDetails, ast_context: &str, call_graph: &str) -> usize {
     let mut size = 0;
 
     // PR metadata
@@ -477,6 +491,12 @@ fn estimate_pr_size(pr: &PrDetails, ast_context: &str) -> usize {
 
     // Context
     size += ast_context.len();
+
+    // Call graph
+    size += call_graph.len();
+
+    // Overhead
+    size += PROMPT_OVERHEAD_CHARS;
 
     size
 }
@@ -703,9 +723,9 @@ mod tests {
         let mut call_graph = "b".repeat(300);
 
         // Budget tight enough that call_graph must be dropped first.
-        // Total without drops: ~500 patch + 500 full_content + 300 ast + 300 call_graph
-        //                     + "serde" dep body (~"dep_body" = 8 chars) + metadata ~50
-        // Set budget just above (ast + patch + full_content + metadata) to require call_graph drop.
+        // Total with all: patch(500) + full_content(500) + ast(300) + call_graph(300)
+        //                + metadata(~30) + PROMPT_OVERHEAD_CHARS(1000) = ~2630
+        // Set budget to force call_graph drop (not deep).
         let max_prompt_chars = 600;
 
         let mut drops = Vec::new();
@@ -735,8 +755,11 @@ mod tests {
         let mut ast_context = String::new();
         let mut call_graph = String::new();
 
-        // Budget: just under (patch + dep_body) to force dep drop but not patch drop
-        let max_prompt_chars = 250;
+        // Budget: just under (patch + dep_body + overhead) to force dep drop but not patch drop.
+        // Base estimate (without dep): patch(200) + metadata(~30) + PROMPT_OVERHEAD_CHARS(1000) = ~1230
+        // With dep: + package_name(6) + body(400) + github_url(~30) = ~1666
+        // Budget between 1230 and 1666 so dep is dropped but patch is retained.
+        let max_prompt_chars = 1400;
 
         let mut drops = Vec::new();
         apply_budget_drops(
@@ -944,5 +967,36 @@ mod tests {
         assert_eq!(result.chars().count(), 25);
         // Every char should be the emoji
         assert!(result.chars().all(|c| c == '\u{1F600}'));
+    }
+
+    #[test]
+    fn test_estimate_pr_size_includes_call_graph() {
+        // Verify estimate_pr_size includes call_graph chars and PROMPT_OVERHEAD_CHARS
+        let pr = make_pr_with_content(0, 0);
+        let ast_context = "";
+        let call_graph = "fn foo() -> bar\nfn baz() -> qux";
+        let size = estimate_pr_size(&pr, ast_context, call_graph);
+        let without_call_graph = estimate_pr_size(&pr, ast_context, "");
+        // Delta between with and without call_graph should be exactly call_graph.len()
+        assert_eq!(size - without_call_graph, call_graph.len());
+        // Total should include PROMPT_OVERHEAD_CHARS
+        assert!(size >= PROMPT_OVERHEAD_CHARS);
+    }
+
+    #[test]
+    fn test_build_review_context_estimated_size_pre_budget() {
+        // Verify estimate_pr_size accounts for call_graph + overhead before budget drops
+        // using a non-minimal PrDetails with patches and full_content
+        let pr = make_pr_with_content(50, 100);
+        let ast_context = "fn foo() {}";
+        let call_graph = "caller -> callee\nother -> thing";
+        let size = estimate_pr_size(&pr, ast_context, call_graph);
+        assert!(
+            size >= call_graph.len() + PROMPT_OVERHEAD_CHARS,
+            "estimated size {} should be >= call_graph.len() {} + overhead {}",
+            size,
+            call_graph.len(),
+            PROMPT_OVERHEAD_CHARS
+        );
     }
 }

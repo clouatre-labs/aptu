@@ -198,7 +198,8 @@ pub async fn analyze_pr(
     }
 
     // Resolve task-specific provider and model
-    let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Review);
+    let (provider_name, model_name) =
+        ai_config.resolve_for_task(TaskType::Review, Some(ctx.estimated_size));
 
     // Pre-AI prompt injection scan (advisory gate)
     let diff = reconstruct_diff_from_pr(&pr_details.files);
@@ -428,7 +429,7 @@ pub async fn label_pr(
     // If no labels found, try AI fallback
     if labels.is_empty() {
         // Resolve task-specific provider and model for Create task
-        let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Create);
+        let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Create, None);
 
         // Get API key from provider using the resolved provider name
         if let Some(api_key) = provider.ai_api_key(&provider_name) {

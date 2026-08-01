@@ -479,17 +479,20 @@ model = "gemini-3.1-flash-lite"
         let ai_config = AiConfig::default();
 
         // All tasks use global defaults (openrouter/mistralai/mistral-small-2603)
-        let (provider, model) = ai_config.resolve_for_task(super::super::ai::TaskType::Triage);
+        let (provider, model) =
+            ai_config.resolve_for_task(super::super::ai::TaskType::Triage, None);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, super::super::ai::DEFAULT_OPENROUTER_MODEL);
         assert!(ai_config.allow_paid_models);
 
-        let (provider, model) = ai_config.resolve_for_task(super::super::ai::TaskType::Review);
+        let (provider, model) =
+            ai_config.resolve_for_task(super::super::ai::TaskType::Review, None);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, super::super::ai::DEFAULT_OPENROUTER_MODEL);
         assert!(ai_config.allow_paid_models);
 
-        let (provider, model) = ai_config.resolve_for_task(super::super::ai::TaskType::Create);
+        let (provider, model) =
+            ai_config.resolve_for_task(super::super::ai::TaskType::Create, None);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, "mistralai/mistral-small-2603");
         assert!(ai_config.allow_paid_models);
@@ -517,20 +520,20 @@ model = "gemini-3.1-flash-lite"
         // Triage should use override
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Triage);
+            .resolve_for_task(super::super::ai::TaskType::Triage, None);
         assert_eq!(provider, "gemini");
         assert_eq!(model, super::super::ai::DEFAULT_GEMINI_MODEL);
 
         // Review and Create should use defaults
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Review);
+            .resolve_for_task(super::super::ai::TaskType::Review, None);
         assert_eq!(provider, "gemini");
         assert_eq!(model, super::super::ai::DEFAULT_GEMINI_MODEL);
 
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Create);
+            .resolve_for_task(super::super::ai::TaskType::Create, None);
         assert_eq!(provider, "gemini");
         assert_eq!(model, super::super::ai::DEFAULT_GEMINI_MODEL);
     }
@@ -557,20 +560,20 @@ provider = "openrouter"
         // Review should use provider override but default model
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Review);
+            .resolve_for_task(super::super::ai::TaskType::Review, None);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, super::super::ai::DEFAULT_GEMINI_MODEL);
 
         // Triage and Create should use defaults
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Triage);
+            .resolve_for_task(super::super::ai::TaskType::Triage, None);
         assert_eq!(provider, "gemini");
         assert_eq!(model, super::super::ai::DEFAULT_GEMINI_MODEL);
 
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Create);
+            .resolve_for_task(super::super::ai::TaskType::Create, None);
         assert_eq!(provider, "gemini");
         assert_eq!(model, super::super::ai::DEFAULT_GEMINI_MODEL);
     }
@@ -606,21 +609,21 @@ model = "gemini-3.1-flash-lite"
         // Triage
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Triage);
+            .resolve_for_task(super::super::ai::TaskType::Triage, None);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, super::super::ai::DEFAULT_OPENROUTER_MODEL);
 
         // Review
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Review);
+            .resolve_for_task(super::super::ai::TaskType::Review, None);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, "anthropic/claude-haiku-4.5");
 
         // Create
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Create);
+            .resolve_for_task(super::super::ai::TaskType::Create, None);
         assert_eq!(provider, "gemini");
         assert_eq!(model, super::super::ai::DEFAULT_GEMINI_MODEL);
     }
@@ -652,21 +655,21 @@ provider = "openrouter"
         // Triage: model override, provider from default
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Triage);
+            .resolve_for_task(super::super::ai::TaskType::Triage, None);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, super::super::ai::DEFAULT_OPENROUTER_MODEL);
 
         // Review: provider override, model from default
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Review);
+            .resolve_for_task(super::super::ai::TaskType::Review, None);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, super::super::ai::DEFAULT_OPENROUTER_MODEL);
 
         // Create: empty override, both from default
         let (provider, model) = app_config
             .ai
-            .resolve_for_task(super::super::ai::TaskType::Create);
+            .resolve_for_task(super::super::ai::TaskType::Create, None);
         assert_eq!(provider, "openrouter");
         assert_eq!(model, super::super::ai::DEFAULT_OPENROUTER_MODEL);
     }
@@ -846,5 +849,142 @@ model = "gemini-3.1-flash-lite"
             loaded.github.api_timeout_seconds,
             default_config.github.api_timeout_seconds
         );
+    }
+
+    #[test]
+    fn test_resolve_for_task_routing_small_model() {
+        // Both routing fields set, estimated_size < threshold => small_model returned
+        let config_str = r#"
+[ai]
+provider = "gemini"
+model = "gemini-3.1-flash-lite"
+
+[ai.tasks.review]
+small_model = "gemini-3.1-flash-lite"
+large_model = "gemini-3.1-flash-lite"
+routing_threshold_chars = 60000
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Review, Some(5000));
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-3.1-flash-lite");
+    }
+
+    #[test]
+    fn test_resolve_for_task_routing_large_model() {
+        // Both routing fields set, estimated_size >= threshold => large_model returned
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"
+
+[ai.tasks.review]
+small_model = "mistralai/mistral-small-2603"
+large_model = "anthropic/claude-sonnet-4.6"
+routing_threshold_chars = 60000
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Review, Some(70000));
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "anthropic/claude-sonnet-4.6");
+    }
+
+    #[test]
+    fn test_resolve_for_task_routing_single_field_fallback() {
+        // Only small_model set => warn fallback to self.model
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"
+
+[ai.tasks.review]
+small_model = "mistralai/mistral-small-2603"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Review, Some(5000));
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistralai/mistral-small-2603");
+    }
+
+    #[test]
+    fn test_resolve_for_task_routing_skipped_when_size_none() {
+        // Both routing fields set but estimated_size=None => falls back to self.model
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"
+
+[ai.tasks.review]
+small_model = "mistralai/mistral-small-2603"
+large_model = "anthropic/claude-sonnet-4.6"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Review, None);
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistralai/mistral-small-2603");
+    }
+
+    #[test]
+    fn test_resolve_for_task_model_override_bypasses_routing() {
+        // task_override.model set => returns directly regardless of routing fields
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"
+
+[ai.tasks.review]
+model = "anthropic/claude-haiku-4.5"
+small_model = "mistralai/mistral-small-2603"
+large_model = "anthropic/claude-sonnet-4.6"
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Review, Some(5000));
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "anthropic/claude-haiku-4.5");
     }
 }
