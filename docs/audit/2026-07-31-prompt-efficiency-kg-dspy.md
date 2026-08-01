@@ -1,12 +1,12 @@
 # Audit: Prompt Efficiency, Knowledge Graph, and DSPy — July 2026
 
-Date: 2026-07-31
-Data: `crates/aptu-core/src/ai/prompts/` (9 files, 10,390 bytes), `crates/aptu-core/src/ai/registry.rs`, `crates/aptu-core/src/ai/provider/review.rs`, `docs/spec/autonomous-coder.md`, cited external research (arXiv, deepwiki, tosea.ai)
-Method: Direct code reads of prompt files and provider/registry source; comparison against `autonomous-coder.md` spec sections 11 and 13a; external literature review of DSPy and code-knowledge-graph research
+Date: 2026-07-31  
+Data: `crates/aptu-core/src/ai/prompts/` (9 files, 10,390 bytes), `crates/aptu-core/src/ai/registry.rs`, `crates/aptu-core/src/ai/provider/review.rs`, `docs/spec/autonomous-coder.md`, cited external research (arXiv, deepwiki, tosea.ai)  
+Method: Direct code reads of prompt files and provider/registry source; comparison against `autonomous-coder.md` spec sections 11 and 13a; external literature review of DSPy and code-knowledge-graph research  
 
 ## Purpose
 
-Assess whether aptu's hand-written prompt set carries avoidable token cost, whether the AI provider layer routes calls to model tiers by workload size, and whether an in-process structural graph (as opposed to raw GitHub Contents API strings) would reduce PR-review token spend. Evaluate DSPy and Neo4j as candidate tools against these findings.
+Assess whether aptu's hand-written prompt set carries avoidable token cost, whether the AI provider layer routes calls to model tiers by workload size, and whether an in-process structural graph (as opposed to raw GitHub Contents API strings) would reduce PR-review token spend. Evaluate DSPy and Neo4j as candidate tools against these findings.  
 
 ## Summary
 
@@ -22,39 +22,33 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 ## Findings
 
 ### P1 — Schema prose descriptions duplicate guidelines
-**Severity:** High
-**Area:** Prompt efficiency
-**Finding:** `triage_schema.json` (1,008 bytes) and `pr_review_schema.json` (497 bytes) carry verbose prose field descriptions (e.g. "A 2-3 sentence summary of...") that restate content already present in the corresponding guidelines files (`triage_guidelines.md`, `pr_review_guidelines.md`). The schema is injected in the user turn on every call; the duplicated description text adds tokens with no new information for the model.
-**Evidence:** Direct read of `triage_schema.json` and `pr_review_schema.json` against `triage_guidelines.md` (2,233 bytes, 26 lines) and `pr_review_guidelines.md` (3,364 bytes, 43 lines). Estimated ~200 tokens wasted per call.
-**Recommendation:** Minify schema field descriptions to type/enum constraints only; keep prose explanation exclusively in the guidelines files.
+**Severity:** High  
+**Area:** Prompt efficiency  
+**Finding:** `triage_schema.json` (1,008 bytes) and `pr_review_schema.json` (497 bytes) carry verbose prose field descriptions (e.g. "A 2-3 sentence summary of...") that restate content already present in the corresponding guidelines files (`triage_guidelines.md`, `pr_review_guidelines.md`). The schema is injected in the user turn on every call; the duplicated description text adds tokens with no new information for the model.  
+**Evidence:** Direct read of `triage_schema.json` and `pr_review_schema.json` against `triage_guidelines.md` (2,233 bytes, 26 lines) and `pr_review_guidelines.md` (3,364 bytes, 43 lines). Estimated ~200 tokens wasted per call.  
+**Recommendation:** Minify schema field descriptions to type/enum constraints only; keep prose explanation exclusively in the guidelines files.  
 **Acceptance criteria:** Schema JSON files contain no prose duplicated verbatim or near-verbatim from guidelines files. `tests/prompt_lint.rs` passes. Token count of assembled prompt drops measurably for a representative triage and PR review call.
 
----
-
 ### P2 — Full JSON examples embedded in system prompt on every call
-**Severity:** High
-**Area:** Prompt efficiency
-**Finding:** `triage_guidelines.md` and `pr_review_guidelines.md` embed two full JSON examples (a happy-path case and an edge case) directly in the system prompt. These are sent unconditionally on every triage and PR review call, regardless of issue or PR complexity.
-**Evidence:** Direct read of `triage_guidelines.md` (2,233 bytes) and `pr_review_guidelines.md` (3,364 bytes), each containing two embedded JSON example blocks. Total triage system prompt is ~4,200 bytes (~1,050 tokens) before user content is added. Estimated ~150-300 tokens wasted per call.
-**Recommendation:** Move the two JSON examples out of the system prompt. Either place them in the user turn (loaded once per session rather than reconstructed) or gate inclusion behind a flag so they are sent only when the schema alone has proven insufficient in testing.
+**Severity:** High  
+**Area:** Prompt efficiency  
+**Finding:** `triage_guidelines.md` and `pr_review_guidelines.md` embed two full JSON examples (a happy-path case and an edge case) directly in the system prompt. These are sent unconditionally on every triage and PR review call, regardless of issue or PR complexity.  
+**Evidence:** Direct read of `triage_guidelines.md` (2,233 bytes) and `pr_review_guidelines.md` (3,364 bytes), each containing two embedded JSON example blocks. Total triage system prompt is ~4,200 bytes (~1,050 tokens) before user content is added. Estimated ~150-300 tokens wasted per call.  
+**Recommendation:** Move the two JSON examples out of the system prompt. Either place them in the user turn (loaded once per session rather than reconstructed) or gate inclusion behind a flag so they are sent only when the schema alone has proven insufficient in testing.  
 **Acceptance criteria:** System prompt for triage and PR review no longer contains inline JSON examples by default. `tests/prompt_lint.rs` updated and passing. System prompt byte count for both builders is reduced and documented in the PR description.
 
----
-
 ### P3 — Model-tier routing not implemented
-**Severity:** High
-**Area:** Architecture
-**Finding:** `registry.rs` hardcodes a single model per provider; there is no routing logic that selects a cheaper or smaller model for low-complexity workloads. `estimate_pr_size()` exists in `provider/review.rs` but is used only to enforce prompt budget limits (truncation), not to select a model tier. This is Phase 1 of the `autonomous-coder.md` spec and is currently 0% implemented.
-**Evidence:** Grep of `registry.rs` confirms one hardcoded model per provider. Read of `provider/review.rs` confirms `estimate_pr_size()` call sites are limited to budget enforcement.
-**Recommendation:** Implement model-tier routing keyed on `estimate_pr_size()` (or an equivalent issue-size estimator for triage): route small/simple workloads to a lower-cost model tier (e.g. haiku-class) and larger/complex workloads to a higher-capability tier (e.g. sonnet-class). The integration point is `config/ai.rs:AiConfig::resolve_for_task()`, not `registry.rs`; `registry.rs` holds only static provider metadata with no per-request context to route on. `estimate_pr_size()` currently exists in two divergent implementations that must be reconciled before routing can rely on either. This affects the majority of calls and has direct, measurable cost impact independent of prompt-text changes in P1/P2.
+**Severity:** High  
+**Area:** Architecture  
+**Finding:** `registry.rs` hardcodes a single model per provider; there is no routing logic that selects a cheaper or smaller model for low-complexity workloads. `estimate_pr_size()` exists in `provider/review.rs` but is used only to enforce prompt budget limits (truncation), not to select a model tier. This is Phase 1 of the `autonomous-coder.md` spec and is currently 0% implemented.  
+**Evidence:** Grep of `registry.rs` confirms one hardcoded model per provider. Read of `provider/review.rs` confirms `estimate_pr_size()` call sites are limited to budget enforcement.  
+**Recommendation:** Implement model-tier routing keyed on `estimate_pr_size()` (or an equivalent issue-size estimator for triage): route small/simple workloads to a lower-cost model tier (e.g. haiku-class) and larger/complex workloads to a higher-capability tier (e.g. sonnet-class). The integration point is `config/ai.rs:AiConfig::resolve_for_task()`, not `registry.rs`; `registry.rs` holds only static provider metadata with no per-request context to route on. `estimate_pr_size()` currently exists in two divergent implementations that must be reconciled before routing can rely on either. This affects the majority of calls and has direct, measurable cost impact independent of prompt-text changes in P1/P2.  
 **Acceptance criteria:** `resolve_for_task` selects model by workload size for at least PR review; behavior is covered by a unit test asserting tier selection via `resolve_for_task` for a small and a large size input. `docs/spec/autonomous-coder.md` Phase 1 status updated to reflect implementation. The two divergent implementations of `estimate_pr_size()` must be reconciled into a single canonical version before routing logic is wired; see #1406 for scope.
 
----
-
 ### P4 — In-process structural graph not implemented
-**Severity:** Medium
-**Area:** Architecture
-**Finding:** Current ast_context/call_graph is already structured output from `aptu-coder-core` (a tree-sitter-backed analysis crate, v0.25.4): compact function signatures and caller chains capped and managed by `apply_budget_drops` in `review_context.rs`. The separate GitHub Contents API raw-content fallback (for oversized diffs) is a distinct code path. The gap is the absence of a queryable structural graph that can compute blast radius in a single pass across crates. External research on code-knowledge-graph approaches shows substantial token and tool-call reductions, and accuracy gains, for structurally similar workloads (issue resolution, code review).
+**Severity:** Medium  
+**Area:** Architecture  
+**Finding:** Current ast_context/call_graph is already structured output from `aptu-coder-core` (a tree-sitter-backed analysis crate, v0.25.4): compact function signatures and caller chains capped and managed by `apply_budget_drops` in `review_context.rs`. The separate GitHub Contents API raw-content fallback (for oversized diffs) is a distinct code path. The gap is the absence of a queryable structural graph that can compute blast radius in a single pass across crates. External research on code-knowledge-graph approaches shows substantial token and tool-call reductions, and accuracy gains, for structurally similar workloads (issue resolution, code review).  
 **Evidence:**
 - RepoGraph (ICLR 2025, arXiv:2410.14684): +32.8% relative resolve rate on SWE-bench Lite.
 - KGCompass (arXiv:2603.27277): 58.3% resolve rate, 10x fewer tokens, 2.1x fewer tool calls.
@@ -62,10 +56,9 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 - CodeGraph (tosea.ai): ~35% API cost reduction, ~70% fewer tool calls.
 - Neo4j was evaluated and rejected as the backing store (see Non-Findings). `petgraph` (pure Rust, `no_std`-compatible, WASM-compatible) combined with `tree-sitter` is identified as the viable path, consistent with aptu-core's existing `wasm32-unknown-unknown` compilation target and single-binary CLI constraint.
 - `autonomous-coder.md` section 11 quote: "We have a knowledge graph. We don't have to maintain files. We don't need an agent.md in your code. We have it in the graph database." — Siddhant Pardeshi, Blitzy.
-**Recommendation:** Design and prototype an in-process structural graph built with `petgraph` and `tree-sitter`. The new `graph` feature supplements, not replaces, the existing `ast-context`/`aptu-coder-core` pipeline; the GitHub Contents API raw-content fallback remains a separate code path. Scope as a SPEC document before implementation given the architectural surface area (review context budgets in `ReviewConfig`, multi-language AST support already present).
-**Acceptance criteria:** A SPEC document exists describing the `petgraph` + `tree-sitter` integration, including data model, WASM compatibility plan, and interaction with existing `ReviewConfig` budgets (`max_prompt_chars`, `max_full_content_files`, `max_chars_per_file`, `max_diff_chars`, `max_patch_chars_per_file`). No code changes required to close this finding; a follow-on implementation issue is opened referencing the SPEC.
 
----
+**Recommendation:** Design and prototype an in-process structural graph built with `petgraph` and `tree-sitter`. The new `graph` feature supplements, not replaces, the existing `ast-context`/`aptu-coder-core` pipeline; the GitHub Contents API raw-content fallback remains a separate code path. Scope as a SPEC document before implementation given the architectural surface area (review context budgets in `ReviewConfig`, multi-language AST support already present).  
+**Acceptance criteria:** A SPEC document exists describing the `petgraph` + `tree-sitter` integration, including data model, WASM compatibility plan, and interaction with existing `ReviewConfig` budgets (`max_prompt_chars`, `max_full_content_files`, `max_chars_per_file`, `max_diff_chars`, `max_patch_chars_per_file`). No code changes required to close this finding; a follow-on implementation issue is opened referencing the SPEC.
 
 ## Non-Findings
 
@@ -77,7 +70,7 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 
 ## Recommended issue grouping
 
-Tracking issues have been created for all findings.
+Tracking issues have been created for all findings.  
 
 | Issue | Findings | Scope |
 |---|---|---|
