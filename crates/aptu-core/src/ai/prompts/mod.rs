@@ -108,6 +108,12 @@ const MAX_LABELS: usize = 20;
 const MAX_MILESTONES: usize = 10;
 const MAX_FILES: usize = 20;
 
+/// Appends JSON schema to the prompt with the shared preamble.
+fn append_schema(prompt: &mut String, schema: &str) {
+    prompt.push_str(SCHEMA_PREAMBLE);
+    prompt.push_str(schema);
+}
+
 /// Builds the user prompt for issue triage.
 #[must_use]
 pub fn build_user_prompt(issue: &IssueDetails) -> String {
@@ -219,8 +225,7 @@ pub fn build_user_prompt(issue: &IssueDetails) -> String {
     }
 
     prompt.push_str("</issue_content>");
-    prompt.push_str(SCHEMA_PREAMBLE);
-    prompt.push_str(TRIAGE_SCHEMA);
+    append_schema(&mut prompt, TRIAGE_SCHEMA);
     prompt.push_str("\n\nExample output:\n");
     prompt.push_str(TRIAGE_EXAMPLE);
 
@@ -410,8 +415,7 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     if !ctx.call_graph.is_empty() {
         prompt.push_str(&ctx.call_graph);
     }
-    prompt.push_str(SCHEMA_PREAMBLE);
-    prompt.push_str(PR_REVIEW_SCHEMA);
+    append_schema(&mut prompt, PR_REVIEW_SCHEMA);
     prompt.push_str("\n\nExample output:\n");
     prompt.push_str(PR_REVIEW_EXAMPLE);
 
@@ -456,8 +460,7 @@ pub fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]
     }
 
     prompt.push_str("</pull_request>");
-    prompt.push_str(SCHEMA_PREAMBLE);
-    prompt.push_str(PR_LABEL_SCHEMA);
+    append_schema(&mut prompt, PR_LABEL_SCHEMA);
     prompt.push_str("\n\nExample output:\n");
     prompt.push_str(PR_LABEL_EXAMPLE);
 
