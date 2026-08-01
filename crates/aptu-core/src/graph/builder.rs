@@ -391,7 +391,11 @@ mod tests {
             "expected 'another_fn'; got {fn_names:?}"
         );
         // 'UNKNOWN_PREFIX something' must not create a spurious node.
-        assert_eq!(fn_names.len(), 2, "expected exactly 2 function nodes; got {fn_names:?}");
+        assert_eq!(
+            fn_names.len(),
+            2,
+            "expected exactly 2 function nodes; got {fn_names:?}"
+        );
     }
 
     #[test]
