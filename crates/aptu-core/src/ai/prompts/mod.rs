@@ -18,20 +18,28 @@
 
 /// JSON schema for issue triage responses.
 pub const TRIAGE_SCHEMA: &str = include_str!("triage_schema.json");
-/// Guidelines and examples for issue triage system prompts.
+/// Guidelines for issue triage system prompts.
 pub const TRIAGE_GUIDELINES: &str = include_str!("triage_guidelines.md");
+/// Example output for issue triage user prompts.
+pub const TRIAGE_EXAMPLE: &str = include_str!("triage_example.md");
 /// JSON schema for issue creation responses.
 pub const CREATE_SCHEMA: &str = include_str!("create_schema.json");
-/// Guidelines and examples for issue creation system prompts.
+/// Guidelines for issue creation system prompts.
 pub const CREATE_GUIDELINES: &str = include_str!("create_guidelines.md");
+/// Example output for issue creation user prompts.
+pub const CREATE_EXAMPLE: &str = include_str!("create_example.md");
 /// JSON schema for PR review responses.
 pub const PR_REVIEW_SCHEMA: &str = include_str!("pr_review_schema.json");
-/// Guidelines and examples for PR review system prompts.
+/// Guidelines for PR review system prompts.
 pub const PR_REVIEW_GUIDELINES: &str = include_str!("pr_review_guidelines.md");
+/// Example output for PR review user prompts.
+pub const PR_REVIEW_EXAMPLE: &str = include_str!("pr_review_example.md");
 /// JSON schema for PR label suggestion responses.
 pub const PR_LABEL_SCHEMA: &str = include_str!("pr_label_schema.json");
-/// Guidelines and examples for PR label suggestion system prompts.
+/// Guidelines for PR label suggestion system prompts.
 pub const PR_LABEL_GUIDELINES: &str = include_str!("pr_label_guidelines.md");
+/// Example output for PR label suggestion user prompts.
+pub const PR_LABEL_EXAMPLE: &str = include_str!("pr_label_example.md");
 /// Best-practices context injected into all system prompts (tooling recommendations).
 pub const TOOLING_CONTEXT: &str = include_str!("tooling_context.md");
 
@@ -213,6 +221,8 @@ pub fn build_user_prompt(issue: &IssueDetails) -> String {
     prompt.push_str("</issue_content>");
     prompt.push_str(SCHEMA_PREAMBLE);
     prompt.push_str(TRIAGE_SCHEMA);
+    prompt.push_str("\n\nExample output:\n");
+    prompt.push_str(TRIAGE_EXAMPLE);
 
     prompt
 }
@@ -222,9 +232,16 @@ pub fn build_user_prompt(issue: &IssueDetails) -> String {
 pub fn build_create_user_prompt(title: &str, body: &str, _repo: &str) -> String {
     let sanitized_title = sanitize_prompt_field(title);
     let sanitized_body = sanitize_prompt_field(body);
-    format!(
-        "Please format this GitHub issue:\n\nTitle: {sanitized_title}\n\nBody:\n{sanitized_body}{SCHEMA_PREAMBLE}{CREATE_SCHEMA}"
-    )
+    let mut prompt = String::new();
+    let _ = write!(
+        prompt,
+        "Please format this GitHub issue:\n\nTitle: {sanitized_title}\n\nBody:\n{sanitized_body}"
+    );
+    prompt.push_str(SCHEMA_PREAMBLE);
+    prompt.push_str(CREATE_SCHEMA);
+    prompt.push_str("\n\nExample output:\n");
+    prompt.push_str(CREATE_EXAMPLE);
+    prompt
 }
 
 /// Builds the user prompt for PR review.
@@ -395,6 +412,8 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     }
     prompt.push_str(SCHEMA_PREAMBLE);
     prompt.push_str(PR_REVIEW_SCHEMA);
+    prompt.push_str("\n\nExample output:\n");
+    prompt.push_str(PR_REVIEW_EXAMPLE);
 
     prompt
 }
@@ -439,6 +458,8 @@ pub fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]
     prompt.push_str("</pull_request>");
     prompt.push_str(SCHEMA_PREAMBLE);
     prompt.push_str(PR_LABEL_SCHEMA);
+    prompt.push_str("\n\nExample output:\n");
+    prompt.push_str(PR_LABEL_EXAMPLE);
 
     prompt
 }
@@ -451,12 +472,9 @@ mod tests {
     #[test]
     fn test_build_system_prompt_contains_json_schema() {
         let system_prompt = build_triage_system_prompt("");
-        // Schema description strings are unique to the schema file and must NOT appear in the
+        // "estimated_loc" is a schema-only field name that must NOT appear in the
         // system prompt after moving schema injection to the user turn.
-        assert!(
-            !system_prompt
-                .contains("A 2-3 sentence summary of what the issue is about and its impact")
-        );
+        assert!(!system_prompt.contains("estimated_loc"));
 
         // Schema MUST appear in the user prompt
         let issue = IssueDetails::builder()
@@ -470,11 +488,10 @@ mod tests {
             .url("https://github.com/test/repo/issues/1".to_string())
             .build();
         let user_prompt = build_user_prompt(&issue);
-        assert!(
-            user_prompt
-                .contains("A 2-3 sentence summary of what the issue is about and its impact")
-        );
-        assert!(user_prompt.contains("suggested_labels"));
+        assert!(user_prompt.contains("estimated_loc"));
+        assert!(user_prompt.contains("complexity"));
+        // Injected triage example is present in the user prompt
+        assert!(user_prompt.contains("User requests dark mode with a settings toggle"));
     }
 
     #[test]
@@ -539,18 +556,15 @@ mod tests {
     #[test]
     fn test_build_create_system_prompt_contains_json_schema() {
         let system_prompt = build_create_system_prompt("");
-        // Schema description strings are unique to the schema file and must NOT appear in system prompt.
-        assert!(
-            !system_prompt
-                .contains("Well-formatted issue title following conventional commit style")
-        );
+        // Schema example values are unique to the schema file and must NOT appear in system prompt.
+        assert!(!system_prompt.contains("label1"));
 
         // Schema MUST appear in the user prompt
         let user_prompt = build_create_user_prompt("My title", "My body", "test/repo");
-        assert!(
-            user_prompt.contains("Well-formatted issue title following conventional commit style")
-        );
-        assert!(user_prompt.contains("formatted_body"));
+        assert!(user_prompt.contains("label1"));
+        assert!(user_prompt.contains("formatted_title"));
+        // Injected create example is present in the user prompt
+        assert!(user_prompt.contains("app crashes on login on Android"));
     }
 
     #[test]
@@ -607,6 +621,8 @@ mod tests {
             build_pr_label_user_prompt("feat: add thing", "body", &["src/lib.rs".to_string()]);
         assert!(user_prompt.contains("label1"));
         assert!(user_prompt.contains("suggested_labels"));
+        // Injected pr_label example is present in the user prompt
+        assert!(user_prompt.contains("auth"));
     }
 
     #[test]

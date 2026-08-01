@@ -1,5 +1,5 @@
 {
-  "summary": "A 2-3 sentence summary of what the PR does and its impact",
+  "summary": "",
   "verdict": "approve|request_changes|comment",
   "strengths": ["strength1", "strength2"],
   "concerns": ["concern1", "concern2"],
@@ -7,7 +7,7 @@
     {
       "file": "path/to/file.rs",
       "line": 42,
-      "comment": "Specific feedback about this line",
+      "comment": "",
       "severity": "info|suggestion|warning|issue",
       "suggested_code": null
     }

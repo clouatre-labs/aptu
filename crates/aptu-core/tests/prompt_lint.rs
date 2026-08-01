@@ -97,11 +97,11 @@ fn system_prompts_have_persona_directive() {
 }
 
 #[test]
-fn system_prompts_have_examples_section() {
+fn system_prompts_do_not_have_examples_section() {
     for (name, prompt) in all_system_prompts() {
         assert!(
-            prompt.contains("## Examples"),
-            "prompt '{name}' missing ## Examples section"
+            !prompt.contains("## Examples"),
+            "prompt '{name}' still contains ## Examples section (moved to user turn)"
         );
     }
 }
