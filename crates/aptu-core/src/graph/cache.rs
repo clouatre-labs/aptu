@@ -184,6 +184,8 @@ fn persist_graph(path: &PathBuf, graph: &GraphDb) {
             error = %e,
             "graph cache: failed to write temp file"
         );
+        // Best-effort cleanup of any partially-written temp file; ignore error.
+        let _ = std::fs::remove_file(&tmp_path);
         return;
     }
     if let Err(e) = std::fs::rename(&tmp_path, path) {

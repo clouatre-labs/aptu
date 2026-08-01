@@ -358,6 +358,43 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_ast_context_skips_unrecognised_lines() {
+        // Arrange: valid lines mixed with unrecognised prefixes and blank lines.
+        // Documents the dependency on the aptu-coder-core compact_signature format.
+        // If that format changes, this test will fail and alert maintainers.
+        let ast = make_ast_context(&[
+            "## src/lib.rs",
+            "  fn valid_fn() -> () :1-5",
+            "",
+            "  UNKNOWN_PREFIX something",
+            "  struct Foo :7-12",
+            "  fn another_fn(x: u32) -> u32 :20-30",
+        ]);
+
+        // Act: unrecognised lines must be silently skipped.
+        let graph = parse_ast_context_string(&ast);
+
+        // Assert: only the two recognised Function nodes were added.
+        let fn_names: Vec<&str> = graph
+            .node_weights()
+            .filter_map(|n| match n {
+                Node::Function { name, .. } => Some(name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            fn_names.contains(&"valid_fn"),
+            "expected 'valid_fn'; got {fn_names:?}"
+        );
+        assert!(
+            fn_names.contains(&"another_fn"),
+            "expected 'another_fn'; got {fn_names:?}"
+        );
+        // 'UNKNOWN_PREFIX something' must not create a spurious node.
+        assert_eq!(fn_names.len(), 2, "expected exactly 2 function nodes; got {fn_names:?}");
+    }
+
+    #[test]
     fn test_parse_call_graph_empty_returns_unchanged_graph() {
         // Arrange
         let mut graph = GraphDb::new();
