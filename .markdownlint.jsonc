@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aptu Contributors
+// SPDX-License-Identifier: Apache-2.0
 {
   // Delivery document formatting rules for docs/**
   // Only rules that catch regressions AI agents consistently introduce.

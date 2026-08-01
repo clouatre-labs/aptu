@@ -18,36 +18,4 @@ Some PR content (patches, file content, description) may be truncated due to siz
 
 When file content is truncated at a line boundary, the last visible line may be syntactically incomplete by construction. Do not flag this incomplete line as an error or syntax issue -- it is only incomplete because the remainder of the line follows in truncated content.
 
-## Examples
-
-### Example 1 (happy path)
-Input: PR adds a retry helper with tests.
-Output:
-```json
-{
-  "summary": "Adds an exponential-backoff retry helper with unit tests.",
-  "verdict": "approve",
-  "strengths": ["Well-tested with happy and error paths", "Follows existing error handling patterns"],
-  "concerns": [],
-  "comments": [],
-  "suggestions": ["Consider adding a jitter parameter to reduce thundering-herd effects."],
-  "disclaimer": null
-}
-```
-
-### Example 2 (edge case - missing error handling)
-Input: PR adds a file parser that uses unwrap().
-Output:
-```json
-{
-  "summary": "Adds a CSV parser but uses unwrap() on file reads.",
-  "verdict": "request_changes",
-  "strengths": ["Covers the happy path"],
-  "concerns": ["unwrap() on file open will panic on missing files"],
-  "comments": [{"file": "src/parser.rs", "line": 42, "severity": "high", "comment": "Replace unwrap() with proper error propagation using ?", "suggested_code": "        let file = File::open(path)?;\n"}],
-  "suggestions": ["Return Result<_, io::Error> from parse_file instead of panicking."],
-  "disclaimer": null
-}
-```
-
 Remember: respond ONLY with valid JSON matching the schema above.
