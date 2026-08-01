@@ -2,6 +2,7 @@
 
 Date: 2026-07-31  
 Data: `crates/aptu-core/src/ai/prompts/` (9 files, 10,390 bytes), `crates/aptu-core/src/ai/registry.rs`, `crates/aptu-core/src/ai/provider/review.rs`, `docs/spec/autonomous-coder.md`, cited external research (arXiv, deepwiki, tosea.ai)  
+Issues: #1406, #1407, #1408  
 Method: Direct code reads of prompt files and provider/registry source; comparison against `autonomous-coder.md` spec sections 11 and 13a; external literature review of DSPy and code-knowledge-graph research  
 
 ## Purpose
@@ -57,8 +58,8 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 - Neo4j was evaluated and rejected as the backing store (see Non-Findings). `petgraph` (pure Rust, `no_std`-compatible, WASM-compatible) combined with `tree-sitter` is identified as the viable path, consistent with aptu-core's existing `wasm32-unknown-unknown` compilation target and single-binary CLI constraint.
 - `autonomous-coder.md` section 11 quote: "We have a knowledge graph. We don't have to maintain files. We don't need an agent.md in your code. We have it in the graph database." — Siddhant Pardeshi, Blitzy.
 
-**Recommendation:** Design and prototype an in-process structural graph built with `petgraph` and `tree-sitter`. The new `graph` feature supplements, not replaces, the existing `ast-context`/`aptu-coder-core` pipeline; the GitHub Contents API raw-content fallback remains a separate code path. Scope as a SPEC document before implementation given the architectural surface area (review context budgets in `ReviewConfig`, multi-language AST support already present).  
-**Acceptance criteria:** A SPEC document exists describing the `petgraph` + `tree-sitter` integration, including data model, WASM compatibility plan, and interaction with existing `ReviewConfig` budgets (`max_prompt_chars`, `max_full_content_files`, `max_chars_per_file`, `max_diff_chars`, `max_patch_chars_per_file`). No code changes required to close this finding; a follow-on implementation issue is opened referencing the SPEC.
+**Recommendation:** Design and prototype an in-process structural graph built with `petgraph` and `tree-sitter`. The new `graph` feature supplements, not replaces, the existing `ast-context`/`aptu-coder-core` pipeline; the GitHub Contents API raw-content fallback remains a separate code path.  
+**Acceptance criteria:** Implementation issue #1408 exists describing the `petgraph` + `tree-sitter` integration, including data model, WASM compatibility plan, and interaction with existing `ReviewConfig` budgets (`max_prompt_chars`, `max_full_content_files`, `max_chars_per_file`, `max_diff_chars`, `max_patch_chars_per_file`).
 
 ## Non-Findings
 
@@ -77,4 +78,3 @@ Tracking issues have been created for all findings.
 | #1406 | P3 | `feat(ai)`: implement model-tier routing (haiku/sonnet) via `estimate_pr_size()` |
 | #1407 | P1, P2 | `feat(prompts)`: minify schemas and move examples to user turn |
 | #1408 | P4 | `feat(review)`: in-process structural graph context via `petgraph` + `tree-sitter` |
-| #1409 | P1-P4 | `docs`: add petgraph integration SPEC document |
