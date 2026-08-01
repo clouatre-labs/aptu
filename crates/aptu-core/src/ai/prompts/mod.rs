@@ -415,6 +415,10 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     if !ctx.call_graph.is_empty() {
         prompt.push_str(&ctx.call_graph);
     }
+    if !ctx.graph_context.is_empty() {
+        prompt.push_str("\n\n## Structural Graph Context\n");
+        prompt.push_str(&ctx.graph_context);
+    }
     append_schema(&mut prompt, PR_REVIEW_SCHEMA);
     prompt.push_str("\n\nExample output:\n");
     prompt.push_str(PR_REVIEW_EXAMPLE);

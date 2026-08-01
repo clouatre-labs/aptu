@@ -290,7 +290,24 @@ Setting it above half of `max_prompt_chars` means call graph will only be built 
 The prefix section "When the assembled prompt exceeds..." describes how call graph is the first section dropped,
 so a value that rarely enables call graph is typically acceptable.
 
-When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest files first), diff hunks (largest first). The system prompt and PR metadata are never dropped.
+When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, structural graph context, AST context, dependency enrichments, diff patches (largest first), full file content (largest first). The system prompt and PR metadata are never dropped.
+
+## Structural Graph Configuration
+
+Controls the petgraph-backed in-process call graph built from tree-sitter parsing of PR-changed files. The graph computes a bounded blast-radius subgraph around modified symbols and injects it into the PR review prompt. This feature is opt-in and disabled by default.
+
+```toml
+[graph]
+enabled = false           # Enable structural graph context injection (default: false)
+cache_ttl_hours = 24      # Hours before a cached graph is rebuilt for the same commit SHA (default: 24)
+max_nodes = 50000         # Maximum nodes in the blast-radius subgraph injected into the prompt (default: 50 000)
+```
+
+The graph is cached on disk at `~/.local/share/aptu/graph/<owner>/<repo>/<sha>.bin`, keyed by repository and commit SHA. A cache hit is logged and avoids re-parsing on repeated reviews of the same commit.
+
+`max_nodes` caps the subgraph size injected into the prompt. Larger values produce richer context but increase prompt size; the `apply_budget_drops` pipeline will drop the graph section before AST context if the prompt budget is exceeded.
+
+Only Rust files (`.rs`) are parsed for symbol and call-edge extraction in the initial release. Non-Rust files receive a `File` node only and do not contribute call edges.
 
 ## Cache Configuration
 
