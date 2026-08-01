@@ -2,7 +2,7 @@
 
 //! PR review: review a pull request using the AI provider.
 //!
-//! Provides `review_pr`, `estimate_pr_size`, and prompt builder helpers.
+//! Provides `review_pr` and prompt builder helpers.
 
 use anyhow::Result;
 use tracing::{debug, instrument};
@@ -10,40 +10,10 @@ use tracing::{debug, instrument};
 use super::http::send_and_parse;
 use super::parse::provider_response_format;
 use crate::ai::provider::AiProvider;
-use crate::ai::types::{ChatCompletionRequest, ChatMessage, PrDetails, PrReviewResponse};
+use crate::ai::types::{ChatCompletionRequest, ChatMessage, PrReviewResponse};
 use crate::history::AiStats;
 
 use crate::ai::prompts::build_pr_review_system_prompt;
-
-/// Estimated overhead for XML tags, section headers, and schema preamble added by
-/// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
-/// non-content characters when estimating total prompt size.
-const PROMPT_OVERHEAD_CHARS: usize = 1_000;
-
-/// Estimates the initial size of a PR review prompt in characters.
-///
-/// Sums title, body, file metadata, patches, `full_content`, `dep_enrichments`,
-/// `ast_context`, `call_graph`, and overhead.
-#[must_use]
-pub(super) fn estimate_pr_size(pr: &PrDetails, ast_context: &str, call_graph: &str) -> usize {
-    pr.title.len()
-        + pr.body.len()
-        + pr.files
-            .iter()
-            .map(|f| f.patch.as_ref().map_or(0, String::len))
-            .sum::<usize>()
-        + pr.files
-            .iter()
-            .map(|f| f.full_content.as_ref().map_or(0, String::len))
-            .sum::<usize>()
-        + pr.dep_enrichments
-            .iter()
-            .map(|d| d.body.len() + d.package_name.len() + d.github_url.len())
-            .sum::<usize>()
-        + ast_context.len()
-        + call_graph.len()
-        + PROMPT_OVERHEAD_CHARS
-}
 
 /// Builds the system prompt for PR review.
 #[must_use]

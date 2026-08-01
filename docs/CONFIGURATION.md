@@ -40,14 +40,57 @@ All task-specific overrides are optional. If not specified, the default `provide
 - **`[ai.tasks.triage]`**: Configuration for issue triage operations
   - `provider`: Optional provider override
   - `model`: Optional model override
+  - `small_model`: Optional model for small prompts (used with `large_model` for routing)
+  - `large_model`: Optional model for large prompts (used with `small_model` for routing)
+  - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 60000 for review)
 
 - **`[ai.tasks.review]`**: Configuration for code review operations
   - `provider`: Optional provider override
   - `model`: Optional model override
+  - `small_model`: Optional model for small prompts (used with `large_model` for routing)
+  - `large_model`: Optional model for large prompts (used with `small_model` for routing)
+  - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 60000 for review)
 
 - **`[ai.tasks.create]`**: Configuration for code creation operations
   - `provider`: Optional provider override
   - `model`: Optional model override
+  - `small_model`: Optional model for small prompts (used with `large_model` for routing)
+  - `large_model`: Optional model for large prompts (used with `small_model` for routing)
+  - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 60000 for review)
+
+### Model-Tier Routing
+
+When `small_model` and `large_model` are both configured for a task, aptu automatically routes between them based on the estimated prompt size. This lets you use a fast, cheap model for small requests and a more capable model for complex ones.
+
+The routing decision uses the `routing_threshold_chars` value (default: 60000 for review). If the estimated prompt size is below the threshold, `small_model` is used; otherwise `large_model` is used.
+
+If `model` is explicitly set in the task override, it bypasses routing entirely.
+
+**Gemini example:**
+
+```toml
+[ai]
+provider = "gemini"
+model = "gemini-3.1-flash-lite"  # default
+
+[ai.tasks.review]
+small_model = "gemini-3.1-flash-lite"      # fast for small PRs
+large_model = "gemini-3.1-flash-lite"      # same model for large PRs
+routing_threshold_chars = 60000
+```
+
+**OpenRouter example:**
+
+```toml
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"  # default
+
+[ai.tasks.review]
+small_model = "mistralai/mistral-small-2603"  # fast and cheap for small PRs
+large_model = "anthropic/claude-sonnet-4.6"   # more capable for large PRs
+routing_threshold_chars = 60000
+```
 
 ## AI Provider Fallback Chain
 

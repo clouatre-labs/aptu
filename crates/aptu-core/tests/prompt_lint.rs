@@ -210,6 +210,7 @@ fn all_user_prompts_contain_schema() {
         dep_enrichments_chars: 0,
         budget_drops: Vec::new(),
         prompt_chars_final: 0,
+        estimated_size: 0,
     };
     let pr_review_user = aptu_core::ai::prompts::build_pr_review_user_prompt(&mut ctx);
     assert!(
