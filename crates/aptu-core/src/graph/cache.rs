@@ -174,12 +174,27 @@ fn persist_graph(path: &PathBuf, graph: &GraphDb) {
         tracing::warn!(path = %path.display(), "graph cache: encode failed, skipping write");
         return;
     };
-    if let Err(e) = std::fs::write(path, &bytes) {
+
+    // Atomic write: write to a sibling temp file then rename to prevent partial
+    // file corruption if the process crashes during the write.
+    let tmp_path = path.with_extension("tmp");
+    if let Err(e) = std::fs::write(&tmp_path, &bytes) {
         tracing::warn!(
-            path = %path.display(),
+            path = %tmp_path.display(),
             error = %e,
-            "graph cache: failed to write cache file"
+            "graph cache: failed to write temp file"
         );
+        return;
+    }
+    if let Err(e) = std::fs::rename(&tmp_path, path) {
+        tracing::warn!(
+            src = %tmp_path.display(),
+            dst = %path.display(),
+            error = %e,
+            "graph cache: failed to rename temp file to cache path"
+        );
+        // Best-effort cleanup; ignore error.
+        let _ = std::fs::remove_file(&tmp_path);
     }
 }
 

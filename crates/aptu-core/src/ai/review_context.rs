@@ -327,17 +327,18 @@ async fn enrich_deps(
     .await
 }
 
-/// Applies budget drop order: `call_graph` -> `ast_context` -> `dep_enrichments` -> patches -> `full_content`.
+/// Applies budget drop order: `call_graph` -> `graph_context` -> `ast_context` -> `dep_enrichments` -> patches -> `full_content`.
 /// Enforces the prompt budget by dropping enrichment sections in priority order.
 ///
 /// When the assembled prompt exceeds `max_prompt_chars`, sections are cleared in
 /// the following order (lowest-priority dropped first):
 ///
 /// 1. `call_graph` -- dropped first unless `deep` is explicitly set
-/// 2. `ast_context` -- dropped second
-/// 3. `dep_enrichments` -- dropped third
-/// 4. file patches -- dropped largest-first
-/// 5. file `full_content` -- dropped largest-first as last resort
+/// 2. `graph_context` -- dropped second (petgraph blast-radius subgraph; added in #1408)
+/// 3. `ast_context` -- dropped third
+/// 4. `dep_enrichments` -- dropped fourth
+/// 5. file patches -- dropped largest-first
+/// 6. file `full_content` -- dropped largest-first as last resort
 ///
 /// Each drop is logged at `WARN` level with the section name and character count.
 /// The function never returns an error; sections that cannot fit are silently cleared.
@@ -365,13 +366,13 @@ fn apply_budget_drops(
         budget_drops.push("call_graph".to_string());
     }
 
-    // Drop graph_context second (same priority tier as ast_context, dropped before it)
-    // Updated in #1408 to include graph_context drop tier between call_graph and ast_context.
+    // Drop graph_context second (priority tier 2: between call_graph and ast_context; added in #1408).
     if estimated_size > max_prompt_chars {
         tracing::warn!(
             section = "graph_context",
+            priority_tier = 2,
             chars = graph_context.len(),
-            "Dropping section: prompt budget exceeded"
+            "Dropping section: prompt budget exceeded (graph_context tier)"
         );
         let dropped_chars = graph_context.len();
         graph_context.clear();
