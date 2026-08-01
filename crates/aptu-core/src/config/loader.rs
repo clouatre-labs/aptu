@@ -197,6 +197,9 @@ pub struct AppConfig {
     /// PR review prompt settings.
     #[serde(default)]
     pub review: ReviewConfig,
+    /// Structural graph settings for PR review context.
+    #[serde(default)]
+    pub graph: crate::config::GraphConfig,
     /// Prompt injection defence settings.
     #[serde(default)]
     pub prompt: PromptConfig,
@@ -834,6 +837,23 @@ model = "gemini-3.1-flash-lite"
             app_config.review.max_chars_per_file, review_config.max_chars_per_file,
             "AppConfig review defaults should match ReviewConfig defaults"
         );
+    }
+
+    #[test]
+    fn test_graph_config_deserializes_from_toml_with_defaults() {
+        // Arrange: TOML with an empty [graph] section (all fields missing)
+        let toml_str = "[graph]\n";
+
+        // Act
+        let app_config: AppConfig = toml::from_str(toml_str).unwrap();
+
+        // Assert: defaults are applied for all missing fields
+        assert!(
+            !app_config.graph.enabled,
+            "graph should default to disabled"
+        );
+        assert_eq!(app_config.graph.cache_ttl_hours, 24);
+        assert_eq!(app_config.graph.max_nodes, 50_000);
     }
 
     #[test]

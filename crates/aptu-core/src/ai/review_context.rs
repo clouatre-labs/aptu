@@ -55,6 +55,10 @@ pub struct ReviewContext {
     pub prompt_chars_final: usize,
     /// Estimated total character size of the PR review prompt before budget drops.
     pub estimated_size: usize,
+    /// Structural graph subgraph text for prompt injection (empty when graph feature is disabled).
+    pub graph_context: String,
+    /// Whether the structural graph was loaded from the on-disk cache (false when feature is off).
+    pub graph_cache_hit: bool,
 }
 
 impl ReviewContext {
@@ -164,6 +168,8 @@ impl Default for ReviewContext {
             budget_drops: Vec::new(),
             prompt_chars_final: 0,
             estimated_size: 0,
+            graph_context: String::new(),
+            graph_cache_hit: false,
         }
     }
 }
@@ -192,6 +198,7 @@ pub async fn build_review_context(
     repo_path: Option<String>,
     deep: bool,
     review_config: &ReviewConfig,
+    graph_config: &crate::config::GraphConfig,
 ) -> crate::Result<ReviewContext> {
     // Step 1: Resolve repo_path (explicit or inferred from CWD)
     #[cfg(not(target_arch = "wasm32"))]
@@ -209,8 +216,8 @@ pub async fn build_review_context(
     pr.dep_enrichments = enrich_deps(&pr.files, review_config).await;
 
     // Step 4: Estimate total chars and decide call_graph budget
-    // (call_graph not yet built, pass empty string)
-    let estimated_size = estimate_pr_size(&pr, &ast_context, "");
+    // (call_graph and graph_context not yet built, pass empty strings)
+    let estimated_size = estimate_pr_size(&pr, &ast_context, "", "");
     let max_prompt_chars = review_config.max_prompt_chars;
     let budget_remaining = max_prompt_chars.saturating_sub(estimated_size);
 
@@ -222,8 +229,12 @@ pub async fn build_review_context(
         String::new()
     };
 
-    // Re-estimate with actual call_graph for accurate routing
-    let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph);
+    // Re-estimate with actual call_graph for accurate routing (graph_context still empty here)
+    let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph, "");
+
+    // Step 5b: Build structural graph context if enabled
+    let (mut graph_context, graph_cache_hit) =
+        build_ctx_graph(graph_config, repo_path_ref.as_deref(), &pr).await;
 
     // Step 6: Apply budget drop order
     let mut ast_context = ast_context;
@@ -232,6 +243,7 @@ pub async fn build_review_context(
         &mut pr,
         &mut ast_context,
         &mut call_graph,
+        &mut graph_context,
         deep,
         max_prompt_chars,
         &mut budget_drops,
@@ -269,6 +281,8 @@ pub async fn build_review_context(
         budget_drops,
         prompt_chars_final: 0,
         estimated_size: final_estimated_size,
+        graph_context,
+        graph_cache_hit,
     })
 }
 
@@ -325,11 +339,12 @@ fn apply_budget_drops(
     pr: &mut PrDetails,
     ast_context: &mut String,
     call_graph: &mut String,
+    graph_context: &mut String,
     deep: bool,
     max_prompt_chars: usize,
     budget_drops: &mut Vec<String>,
 ) {
-    let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph);
+    let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph, graph_context);
 
     // Drop call_graph if over budget (unless explicitly enabled)
     if estimated_size > max_prompt_chars && !deep {
@@ -342,6 +357,20 @@ fn apply_budget_drops(
         call_graph.clear();
         estimated_size -= dropped_chars;
         budget_drops.push("call_graph".to_string());
+    }
+
+    // Drop graph_context second (same priority tier as ast_context, dropped before it)
+    // Updated in #1408 to include graph_context drop tier between call_graph and ast_context.
+    if estimated_size > max_prompt_chars {
+        tracing::warn!(
+            section = "graph_context",
+            chars = graph_context.len(),
+            "Dropping section: prompt budget exceeded"
+        );
+        let dropped_chars = graph_context.len();
+        graph_context.clear();
+        estimated_size -= dropped_chars;
+        budget_drops.push("graph_context".to_string());
     }
 
     // Drop ast_context if still over budget
@@ -467,7 +496,12 @@ fn drop_full_content_by_size(
 /// Sums title, body, file metadata, patches, `full_content`, `dep_enrichments`,
 /// `ast_context`, `call_graph`, and overhead.
 #[must_use]
-pub(crate) fn estimate_pr_size(pr: &PrDetails, ast_context: &str, call_graph: &str) -> usize {
+pub(crate) fn estimate_pr_size(
+    pr: &PrDetails,
+    ast_context: &str,
+    call_graph: &str,
+    graph_context: &str,
+) -> usize {
     let mut size = 0;
 
     // PR metadata
@@ -494,6 +528,9 @@ pub(crate) fn estimate_pr_size(pr: &PrDetails, ast_context: &str, call_graph: &s
 
     // Call graph
     size += call_graph.len();
+
+    // Structural graph context
+    size += graph_context.len();
 
     // Overhead
     size += PROMPT_OVERHEAD_CHARS;
@@ -539,6 +576,72 @@ async fn build_ctx_call_graph(
     {
         let _ = (path, files);
         String::new()
+    }
+}
+
+/// Builds structural graph context from PR-changed files when the `graph` feature is enabled.
+///
+/// Returns `(rendered_text, cache_hit)`. Returns empty string and `false` when the
+/// feature is off, when `graph_config.enabled` is false, or when `repo_path` is absent.
+#[allow(clippy::unused_async)]
+async fn build_ctx_graph(
+    graph_config: &crate::config::GraphConfig,
+    repo_path: Option<&str>,
+    pr: &PrDetails,
+) -> (String, bool) {
+    #[cfg(feature = "graph")]
+    {
+        if !graph_config.enabled {
+            return (String::new(), false);
+        }
+        let Some(repo_path_str) = repo_path else {
+            return (String::new(), false);
+        };
+        let sha = pr.head_sha.clone();
+        let file_tuples: Vec<(std::path::PathBuf, String)> = pr
+            .files
+            .iter()
+            .filter_map(|f| {
+                f.full_content
+                    .as_deref()
+                    .map(|c| (std::path::PathBuf::from(&f.filename), c.to_owned()))
+            })
+            .collect();
+        let file_refs: Vec<(&std::path::Path, &str)> = file_tuples
+            .iter()
+            .map(|(p, c)| (p.as_path(), c.as_str()))
+            .collect();
+        let parts: Vec<&str> = repo_path_str.split('/').collect();
+        let (owner, repo_name) = if parts.len() >= 2 {
+            (parts[parts.len() - 2], parts[parts.len() - 1])
+        } else {
+            ("unknown", repo_path_str)
+        };
+        let (mut graph, cache_hit) =
+            crate::graph::cache::load_or_build(owner, repo_name, &sha, &file_refs).await;
+        let modified_symbols: Vec<String> = pr
+            .files
+            .iter()
+            .filter(|f| f.patch.as_deref().is_some_and(|p| !p.is_empty()))
+            .map(|f| {
+                std::path::Path::new(&f.filename)
+                    .file_stem()
+                    .map_or_else(|| f.filename.clone(), |s| s.to_string_lossy().into_owned())
+            })
+            .collect();
+        let symbol_refs: Vec<&str> = modified_symbols.iter().map(String::as_str).collect();
+        let modified_nodes = crate::graph::query::add_modifies_edges(&mut graph, &symbol_refs);
+        let subgraph =
+            crate::graph::query::blast_radius(&graph, &modified_nodes, graph_config.max_nodes);
+        (
+            crate::graph::query::render_subgraph_text(&subgraph),
+            cache_hit,
+        )
+    }
+    #[cfg(not(feature = "graph"))]
+    {
+        let _ = (graph_config, repo_path, pr);
+        (String::new(), false)
     }
 }
 
@@ -729,10 +832,15 @@ mod tests {
         let max_prompt_chars = 600;
 
         let mut drops = Vec::new();
+        let mut graph_context = String::new();
+        // Updated in #1408: apply_budget_drops now takes graph_context as a new drop tier
+        // between call_graph and ast_context. Priority order:
+        // call_graph -> graph_context -> ast_context -> dep_enrichments -> patches -> full_content
         apply_budget_drops(
             &mut pr,
             &mut ast_context,
             &mut call_graph,
+            &mut graph_context,
             false,
             max_prompt_chars,
             &mut drops,
@@ -762,10 +870,12 @@ mod tests {
         let max_prompt_chars = 1400;
 
         let mut drops = Vec::new();
+        let mut graph_context = String::new();
         apply_budget_drops(
             &mut pr,
             &mut ast_context,
             &mut call_graph,
+            &mut graph_context,
             false,
             max_prompt_chars,
             &mut drops,
@@ -975,8 +1085,8 @@ mod tests {
         let pr = make_pr_with_content(0, 0);
         let ast_context = "";
         let call_graph = "fn foo() -> bar\nfn baz() -> qux";
-        let size = estimate_pr_size(&pr, ast_context, call_graph);
-        let without_call_graph = estimate_pr_size(&pr, ast_context, "");
+        let size = estimate_pr_size(&pr, ast_context, call_graph, "");
+        let without_call_graph = estimate_pr_size(&pr, ast_context, "", "");
         // Delta between with and without call_graph should be exactly call_graph.len()
         assert_eq!(size - without_call_graph, call_graph.len());
         // Total should include PROMPT_OVERHEAD_CHARS
@@ -990,7 +1100,7 @@ mod tests {
         let pr = make_pr_with_content(50, 100);
         let ast_context = "fn foo() {}";
         let call_graph = "caller -> callee\nother -> thing";
-        let size = estimate_pr_size(&pr, ast_context, call_graph);
+        let size = estimate_pr_size(&pr, ast_context, call_graph, "");
         assert!(
             size >= call_graph.len() + PROMPT_OVERHEAD_CHARS,
             "estimated size {} should be >= call_graph.len() {} + overhead {}",
