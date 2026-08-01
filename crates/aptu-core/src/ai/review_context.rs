@@ -392,24 +392,7 @@ fn apply_budget_drops(
         budget_drops.push("ast_context".to_string());
     }
 
-    // Drop dep_enrichments if still over budget
-    if estimated_size > max_prompt_chars {
-        let dropped_chars: usize = pr
-            .dep_enrichments
-            .iter()
-            .map(|d| d.body.len() + d.package_name.len() + d.github_url.len())
-            .sum();
-        if dropped_chars > 0 {
-            tracing::warn!(
-                section = "dep_enrichments",
-                chars = dropped_chars,
-                "Dropping section: prompt budget exceeded"
-            );
-            pr.dep_enrichments.clear();
-            estimated_size -= dropped_chars;
-            budget_drops.push("dep_enrichments".to_string());
-        }
-    }
+    drop_dep_enrichments_by_size(pr, &mut estimated_size, max_prompt_chars, budget_drops);
 
     drop_patches_by_size(
         &mut pr.files,
@@ -423,6 +406,33 @@ fn apply_budget_drops(
         max_prompt_chars,
         budget_drops,
     );
+}
+
+/// Drops `dep_enrichments` if the prompt is still over budget.
+fn drop_dep_enrichments_by_size(
+    pr: &mut PrDetails,
+    estimated_size: &mut usize,
+    max_prompt_chars: usize,
+    budget_drops: &mut Vec<String>,
+) {
+    if *estimated_size <= max_prompt_chars {
+        return;
+    }
+    let dropped_chars: usize = pr
+        .dep_enrichments
+        .iter()
+        .map(|d| d.body.len() + d.package_name.len() + d.github_url.len())
+        .sum();
+    if dropped_chars > 0 {
+        tracing::warn!(
+            section = "dep_enrichments",
+            chars = dropped_chars,
+            "Dropping section: prompt budget exceeded"
+        );
+        pr.dep_enrichments.clear();
+        *estimated_size -= dropped_chars;
+        budget_drops.push("dep_enrichments".to_string());
+    }
 }
 
 /// Drops file patches in descending size order until under budget.
