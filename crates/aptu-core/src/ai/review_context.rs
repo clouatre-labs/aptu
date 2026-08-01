@@ -616,7 +616,7 @@ async fn build_ctx_graph(
         );
         let function_names: Vec<String> = extract_function_names_from_ast(&graph);
         let fn_refs: Vec<&str> = function_names.iter().map(String::as_str).collect();
-        let modified_nodes = crate::graph::query::add_modifies_edges(&mut graph, &fn_refs);
+        let modified_nodes = crate::graph::query::find_modified_nodes(&mut graph, &fn_refs);
         let subgraph =
             crate::graph::query::blast_radius(&graph, &modified_nodes, graph_config.max_nodes);
         (

@@ -14,13 +14,11 @@ use petgraph::visit::EdgeRef as _;
 
 use super::{Edge, GraphDb, Node};
 
-/// Adds ephemeral `Modifies` edges from the set of modified symbol names to their
-/// nodes in the graph. Returns the node indices of all matched nodes.
+/// Finds nodes matching the given symbol names and returns their indices. No edges are added.
 ///
 /// A symbol matches if its `Node::name()` exactly equals one of `modified_symbols`.
-/// The `Modifies` edges are not cached and must be stripped before serialisation.
 #[must_use]
-pub fn add_modifies_edges(graph: &mut GraphDb, modified_symbols: &[&str]) -> Vec<NodeIndex> {
+pub fn find_modified_nodes(graph: &mut GraphDb, modified_symbols: &[&str]) -> Vec<NodeIndex> {
     let symbol_set: HashSet<&str> = modified_symbols.iter().copied().collect();
 
     // Collect matching node indices (avoid borrow issues by collecting first).
@@ -285,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_modifies_edges_matches_named_nodes() {
+    fn test_find_modified_nodes_matches_named_nodes() {
         // Arrange
         let mut graph = GraphDb::new();
         graph.add_node(Node::Function {
@@ -300,7 +298,7 @@ mod tests {
         });
 
         // Act
-        let matched = add_modifies_edges(&mut graph, &["foo"]);
+        let matched = find_modified_nodes(&mut graph, &["foo"]);
 
         // Assert: exactly one node matched and no edges were added.
         assert_eq!(matched.len(), 1);
