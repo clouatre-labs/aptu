@@ -41,8 +41,6 @@ pub fn parse_ast_context_string(ast: &str) -> GraphDb {
     let mut graph = GraphDb::new();
     // Maps file path → NodeIndex for Imports-edge lookups.
     let mut file_nodes: HashMap<String, NodeIndex> = HashMap::new();
-    // Maps function name → NodeIndex for call-graph cross-referencing.
-    let mut function_nodes: HashMap<String, NodeIndex> = HashMap::new();
 
     let mut current_file: Option<NodeIndex> = None;
     let mut current_file_path = String::new();
@@ -102,7 +100,6 @@ pub fn parse_ast_context_string(ast: &str) -> GraphDb {
             if let Some(file_idx) = current_file {
                 graph.add_edge(file_idx, fn_idx, Edge::Contains);
             }
-            function_nodes.entry(clean_name).or_insert(fn_idx);
             continue;
         }
 
@@ -119,12 +116,6 @@ pub fn parse_ast_context_string(ast: &str) -> GraphDb {
             }
         }
     }
-
-    // Expose function_nodes via a special no-op so callers can use
-    // `parse_call_graph_string` with the same graph.
-    // Store function index map in graph via a side-channel: we don't need this
-    // here since parse_call_graph_string gets its own pass over node_indices.
-    let _ = function_nodes;
 
     graph
 }

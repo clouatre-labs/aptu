@@ -45,17 +45,16 @@ pub fn strip_modifies_edges(graph: &GraphDb) -> GraphDb {
 /// Encodes `graph` into the on-disk cache byte format.
 ///
 /// Strips `Modifies` edges, then prepends the 4-byte `FORMAT_VERSION` header
-/// to the bincode-encoded payload.
+/// to the bincode-encoded payload. Returns `None` if bincode serialization fails.
 #[must_use]
-pub fn encode_graph(graph: &GraphDb) -> Vec<u8> {
+pub fn encode_graph(graph: &GraphDb) -> Option<Vec<u8>> {
     let stripped = strip_modifies_edges(graph);
-    let payload =
-        bincode::serde::encode_to_vec(&stripped, bincode::config::standard()).unwrap_or_default();
+    let payload = bincode::serde::encode_to_vec(&stripped, bincode::config::standard()).ok()?;
 
     let mut bytes = Vec::with_capacity(4 + payload.len());
     bytes.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
     bytes.extend_from_slice(&payload);
-    bytes
+    Some(bytes)
 }
 
 /// Decodes a graph from on-disk cache bytes.
@@ -86,6 +85,7 @@ pub fn decode_graph(bytes: &[u8]) -> Option<GraphDb> {
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn load_or_build(
+    owner: &str,
     repo: &str,
     sha: &str,
     ast: &str,
@@ -93,7 +93,7 @@ pub fn load_or_build(
     cfg: &GraphConfig,
 ) -> (GraphDb, bool) {
     // Try cache first.
-    let path = cache_path_from_repo_str(repo, sha);
+    let path = cache_path(owner, repo, sha);
     if let Ok(Some(cached)) = try_load_cached(&path, cfg) {
         return (cached, true);
     }
@@ -112,6 +112,7 @@ pub fn load_or_build(
 #[cfg(target_arch = "wasm32")]
 #[must_use]
 pub fn load_or_build(
+    _owner: &str,
     _repo: &str,
     _sha: &str,
     ast: &str,
@@ -121,16 +122,6 @@ pub fn load_or_build(
     let mut graph = super::builder::parse_ast_context_string(ast);
     super::builder::parse_call_graph_string(call_graph, &mut graph);
     (graph, false)
-}
-
-/// Parses a `"owner/repo"` string into a cache path.
-fn cache_path_from_repo_str(repo: &str, sha: &str) -> PathBuf {
-    // repo is expected to be "owner/repo" format.
-    if let Some((owner, repo_name)) = repo.split_once('/') {
-        cache_path(owner, repo_name, sha)
-    } else {
-        cache_path("unknown", repo, sha)
-    }
 }
 
 /// Tries to load a cached graph from `path`.
@@ -179,7 +170,10 @@ fn persist_graph(path: &PathBuf, graph: &GraphDb) {
         return;
     }
 
-    let bytes = encode_graph(graph);
+    let Some(bytes) = encode_graph(graph) else {
+        tracing::warn!(path = %path.display(), "graph cache: encode failed, skipping write");
+        return;
+    };
     if let Err(e) = std::fs::write(path, &bytes) {
         tracing::warn!(
             path = %path.display(),
@@ -209,7 +203,7 @@ mod tests {
         });
         graph.add_edge(n1, n2, Edge::Calls);
 
-        let bytes = encode_graph(&graph);
+        let bytes = encode_graph(&graph).expect("encode must succeed");
         let decoded = decode_graph(&bytes).expect("should decode successfully");
 
         assert_eq!(
@@ -242,7 +236,7 @@ mod tests {
         });
 
         // Encode, then corrupt the version byte.
-        let mut bytes = encode_graph(&graph);
+        let mut bytes = encode_graph(&graph).expect("encode must succeed");
         bytes[0] = 0xFF; // Wrong version.
 
         let result = decode_graph(&bytes);

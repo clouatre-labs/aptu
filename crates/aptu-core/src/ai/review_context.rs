@@ -605,16 +605,16 @@ async fn build_ctx_graph(
         let Some(_repo_path_str) = repo_path else {
             return (String::new(), false);
         };
-        let repo_qualifier = format!("{}/{}", pr.owner, pr.repo);
         let sha = pr.head_sha.clone();
         let (mut graph, cache_hit) = crate::graph::cache::load_or_build(
-            &repo_qualifier,
+            &pr.owner,
+            &pr.repo,
             &sha,
             ast_context,
             call_graph,
             graph_config,
         );
-        let function_names: Vec<String> = extract_function_names_from_ast(ast_context);
+        let function_names: Vec<String> = extract_function_names_from_ast(&graph);
         let fn_refs: Vec<&str> = function_names.iter().map(String::as_str).collect();
         let modified_nodes = crate::graph::query::add_modifies_edges(&mut graph, &fn_refs);
         let subgraph =
@@ -631,15 +631,21 @@ async fn build_ctx_graph(
     }
 }
 
-/// Extracts function names from the rendered `<ast_context>` string.
+/// Extracts function names from the graph's node weights.
 ///
-/// Matches lines of the form `"  fn func_name(...)"` and returns the function names.
-/// Returns an empty vec if no matches are found.
+/// Filters for `Node::Function` variants and returns their names.
+/// Returns an empty vec if no function nodes are found.
 #[cfg(feature = "graph")]
-fn extract_function_names_from_ast(ast_context: &str) -> Vec<String> {
-    let re = regex::Regex::new(r"  fn ([a-zA-Z_][a-zA-Z0-9_]*)\(?").unwrap();
-    re.captures_iter(ast_context)
-        .map(|cap| cap[1].to_string())
+fn extract_function_names_from_ast(graph: &crate::graph::GraphDb) -> Vec<String> {
+    graph
+        .node_weights()
+        .filter_map(|node| {
+            if let crate::graph::Node::Function { name, .. } = node {
+                Some(name.clone())
+            } else {
+                None
+            }
+        })
         .collect()
 }
 

@@ -32,19 +32,6 @@ pub fn add_modifies_edges(graph: &mut GraphDb, modified_symbols: &[&str]) -> Vec
         })
         .collect();
 
-    // Add a sentinel source node that emits Modifies edges to each matched node.
-    // This keeps the ephemeral edges structurally separate from static edges.
-    // If there are no matched nodes, skip adding the sentinel.
-    if !matched.is_empty() {
-        let sentinel = graph.add_node(Node::File {
-            name: "<diff>".to_string(),
-            path: String::new(),
-        });
-        for &node in &matched {
-            graph.add_edge(sentinel, node, Edge::Modifies);
-        }
-    }
-
     matched
 }
 
@@ -315,12 +302,8 @@ mod tests {
         // Act
         let matched = add_modifies_edges(&mut graph, &["foo"]);
 
-        // Assert: exactly one node matched.
+        // Assert: exactly one node matched and no edges were added.
         assert_eq!(matched.len(), 1);
-        // A Modifies edge must be present.
-        let has_modifies = graph
-            .edge_indices()
-            .any(|e| matches!(graph.edge_weight(e), Some(Edge::Modifies)));
-        assert!(has_modifies, "Modifies edge must be added for matched node");
+        assert_eq!(graph.edge_count(), 0, "no sentinel edges should be added");
     }
 }
