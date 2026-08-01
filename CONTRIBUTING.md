@@ -68,6 +68,8 @@ cargo clippy     # Lint
 cargo build      # Build binary
 ```
 
+The `--features graph` flag enables the optional petgraph-backed structural graph context for `pr review`. It is not required for standard contributions.
+
 ### Good First Issues
 
 New contributors are encouraged to start with issues labelled
@@ -187,6 +189,7 @@ Bug fixes must include a regression test that reproduces the reported behavior b
 - Use `cargo fmt`
 - Address clippy warnings
 - Write tests for new features
+- Markdown files are linted via `.markdownlint.jsonc` (enforces MD009 and MD035 rules; CI gate: markdownlint-cli2)
 
 ## GitHub API Strategy
 
