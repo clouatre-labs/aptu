@@ -1,43 +1,38 @@
----
-title: "Add petgraph-based in-process structural graph context to pr review"
-intent: "aptu pr review injects a bounded, cached call/dependency subgraph for modified symbols into the AI prompt, improving structural grounding without breaking the WASM build."
-acceptance_criteria:
-  - "cargo build succeeds with default features and with --features graph"
-  - "cargo check -p aptu-core --target wasm32-unknown-unknown --no-default-features succeeds (graph module fully cfg-gated out)"
-  - "aptu-core::graph module exists with builder.rs, cache.rs, query.rs, mod.rs implementing the node/edge schema defined below"
-  - "Graph cache file is written to ~/.local/share/aptu/graph/<repo>/<sha>.bin using bincode, keyed by commit SHA"
-  - "provider/review.rs injects the blast-radius subgraph into ReviewContext via the existing ast_context/call_graph string fields, subject to ReviewConfig::max_prompt_chars"
-  - "[graph] config section is parsed from ~/.config/aptu/config.toml with enabled, cache_ttl_hours, max_nodes fields and documented in docs/CONFIGURATION.md"
-  - "Unit tests cover: graph builder round-trip on a fixture Rust file, blast-radius BFS on a synthetic 3-node graph, cache hit and cache miss paths"
-  - "Integration test: a fixture PR touching one function with two known callers produces a subgraph containing exactly those two callers"
-  - "cargo clippy -- -D warnings and cargo fmt --check pass on all new and modified files"
-  - "No panics on malformed or macro-heavy Rust input; unparseable nodes are skipped with a tracing::warn"
-scope_boundary:
-  files_owned:
-    - "crates/aptu-core/src/graph/mod.rs"
-    - "crates/aptu-core/src/graph/builder.rs"
-    - "crates/aptu-core/src/graph/cache.rs"
-    - "crates/aptu-core/src/graph/query.rs"
-    - "crates/aptu-core/src/ai/provider/review.rs"
-    - "crates/aptu-core/src/ai/review_context.rs"
-    - "crates/aptu-core/src/config/review.rs"
-    - "crates/aptu-core/src/config/mod.rs"
-    - "crates/aptu-core/src/config/loader.rs"
-    - "crates/aptu-core/Cargo.toml"
-    - "docs/CONFIGURATION.md"
-  files_readonly:
-    - "crates/aptu-core/src/ai/prompts/mod.rs"
-    - "crates/aptu-core/src/ai/prompts/pr_review_guidelines.md"
-    - "crates/aptu-cli/"
-complexity_signal: sonnet
-line_budget: 500
-dependencies: []
-checkpoints:
-  - after: 3
-    reviewers: [coder-review, coder-qa]
-  - after: 6
-    reviewers: [coder-review, coder-qa]
----
+# Spec: Add petgraph-based in-process structural graph context to PR review
+
+**Intent:** `aptu pr review` injects a bounded, cached call/dependency subgraph for modified symbols into the AI prompt, improving structural grounding without breaking the WASM build.  
+**Complexity:** sonnet  
+**Line budget:** 500  
+**Dependencies:** none  
+
+## Scope
+
+**Files owned (writable):**
+
+- `crates/aptu-core/src/graph/mod.rs`
+- `crates/aptu-core/src/graph/builder.rs`
+- `crates/aptu-core/src/graph/cache.rs`
+- `crates/aptu-core/src/graph/query.rs`
+- `crates/aptu-core/src/ai/provider/review.rs`
+- `crates/aptu-core/src/ai/review_context.rs`
+- `crates/aptu-core/src/config/review.rs`
+- `crates/aptu-core/src/config/mod.rs`
+- `crates/aptu-core/src/config/loader.rs`
+- `crates/aptu-core/Cargo.toml`
+- `docs/CONFIGURATION.md`
+
+**Files read-only:**
+
+- `crates/aptu-core/src/ai/prompts/mod.rs`
+- `crates/aptu-core/src/ai/prompts/pr_review_guidelines.md`
+- `crates/aptu-cli/`
+
+## Checkpoints
+
+| After step | Reviewers |
+|---|---|
+| 3 | coder-review, coder-qa |
+| 6 | coder-review, coder-qa |
 
 ## Purpose
 
@@ -128,7 +123,7 @@ on the diff, not the commit content alone.
 
 2. **`aptu-core::graph` module.**
    - `mod.rs`: node/edge enums, `Visibility`, `pub type StructuralGraph = petgraph::graph::DiGraph<Node, Edge>`, re-exports.
-   - `builder.rs`: `build_graph(files: &[PrFile]) -> StructuralGraph` — parses each file's
+   - `builder.rs`: `build_graph(files: &[PrFile]) -> StructuralGraph` -- parses each file's
      content with `tree-sitter-rust`, walks the AST, and inserts nodes/edges per the
      schema above. Non-Rust files are skipped for node extraction (no graph coverage
      claimed) but still get a `File` node so `Imports` edges can resolve. Any tree-sitter
@@ -140,9 +135,9 @@ on the diff, not the commit content alone.
      the existing `aptu-core` AST context pipeline requires only a new grammar crate and a
      matching visitor; no changes to the node/edge schema or the cache/query layers are
      needed. The initial implementation ships Rust only; other languages are out of scope
-     for this SPEC.
+     for this spec.
    - `cache.rs`: `load_or_build(repo: &str, sha: &str, files: &[PrFile]) -> StructuralGraph`
-     — checks `~/.local/share/aptu/graph/<repo>/<sha>.bin` (via `config::data_dir()` joined
+     -- checks `~/.local/share/aptu/graph/<repo>/<sha>.bin` (via `config::data_dir()` joined
      with `graph/<repo>/<sha>.bin`); on hit within `cache_ttl_hours`, deserializes with
      `bincode`; on miss, calls `builder::build_graph`, writes the result, and returns it.
      Cache path sanitizes `repo` (owner/name) to a filesystem-safe form consistent with
@@ -152,7 +147,7 @@ on the diff, not the commit content alone.
      rebuilt. This allows future node/edge schema changes to invalidate stale cache files
      automatically without requiring a manual cache purge.
    - `query.rs`: `blast_radius(graph: &StructuralGraph, seeds: &[NodeIndex], max_nodes: usize) -> StructuralGraph`
-     — bounded BFS over `Calls`, `Implements`, `HasMethod`, `Tests` edges (both directions
+     -- bounded BFS over `Calls`, `Implements`, `HasMethod`, `Tests` edges (both directions
      for `Calls`, so callers and callees of a modified function are included) starting
      from nodes touched by `Modifies` edges, capped at `max_nodes`; also
      `render_subgraph_text(sub: &StructuralGraph) -> String` producing the structured text
@@ -225,16 +220,13 @@ on the diff, not the commit content alone.
   `blast_radius`; `CONFIGURATION.md` must document this field and recommend lowering
   it for memory-constrained environments. The builder processes only files in the PR
   diff, not the whole repository, which bounds the baseline allocation.
-  **Memory/context-depth trade-off.** `max_nodes` is the primary knob controlling this
-  trade-off: a higher value admits more of the blast-radius subgraph into the prompt
-  (greater context depth, better structural signal) at the cost of more memory during
-  the BFS traversal and a larger rendered text block that consumes prompt budget.
-  A lower value reduces both memory pressure and prompt consumption, but may omit
-  callers or callees that are relevant to the review. `CONFIGURATION.md` must document
-  this trade-off explicitly alongside the `max_nodes` default (`50_000`) and include a
-  recommendation: lower the value (e.g., `500`–`2_000`) for memory-constrained CI
-  environments or large monorepos, and raise it only when reviewing PRs where deep
-  call-chain context is required and prompt budget allows.
+  `max_nodes` is the primary knob controlling the memory/context-depth trade-off: a
+  higher value admits more of the blast-radius subgraph into the prompt at the cost of
+  more memory during BFS and a larger rendered text block that consumes prompt budget.
+  `CONFIGURATION.md` must document this trade-off alongside the `max_nodes` default
+  (`50_000`) and include a recommendation: lower the value (e.g., `500`-`2_000`) for
+  memory-constrained CI environments or large monorepos, and raise it only when
+  reviewing PRs where deep call-chain context is required and prompt budget allows.
 - **WASM build regressions.** `petgraph` and `tree-sitter` both carry assumptions that
   may not hold under `wasm32-unknown-unknown` with `--no-default-features`.
   Mitigation: the `graph` feature is not part of `default`, the module is fully
@@ -249,19 +241,16 @@ on the diff, not the commit content alone.
 
 ## Acceptance Criteria
 
-See YAML front matter for the authoritative, verifiable list. Summary:
-
-- Builds cleanly with default features and with `graph` enabled; WASM check passes with
-  the graph module excluded.
-- `aptu-core::graph` implements the schema above with builder, cache, and query
-  submodules.
-- Cache files land at `~/.local/share/aptu/graph/<repo>/<sha>.bin`, `bincode`-encoded.
-- `provider/review.rs` injects a bounded blast-radius subgraph into the existing
-  `ast_context`/`call_graph` prompt fields, respecting `ReviewConfig::max_prompt_chars`.
-- `[graph]` config section is parsed and documented with its three fields and defaults.
-- Unit and integration tests per Implementation Steps 5 and 6 pass under `cargo test`.
-- `cargo clippy -- -D warnings` and `cargo fmt --check` pass.
-- No panics on malformed input; parse failures degrade to skipped nodes with a warning.
+- `cargo build` succeeds with default features and with `--features graph`.
+- `cargo check -p aptu-core --target wasm32-unknown-unknown --no-default-features` succeeds (graph module fully cfg-gated out).
+- `aptu-core::graph` module exists with `builder.rs`, `cache.rs`, `query.rs`, `mod.rs` implementing the node/edge schema defined above.
+- Graph cache file is written to `~/.local/share/aptu/graph/<repo>/<sha>.bin` using bincode, keyed by commit SHA.
+- `provider/review.rs` injects the blast-radius subgraph into `ReviewContext` via the existing `ast_context`/`call_graph` string fields, subject to `ReviewConfig::max_prompt_chars`.
+- `[graph]` config section is parsed from `~/.config/aptu/config.toml` with `enabled`, `cache_ttl_hours`, `max_nodes` fields and documented in `docs/CONFIGURATION.md`.
+- Unit tests cover: graph builder round-trip on a fixture Rust file, blast-radius BFS on a synthetic 3-node graph, cache hit and cache miss paths.
+- Integration test: a fixture PR touching one function with two known callers produces a subgraph containing exactly those two callers.
+- `cargo clippy -- -D warnings` and `cargo fmt --check` pass on all new and modified files.
+- No panics on malformed or macro-heavy Rust input; unparseable nodes are skipped with a `tracing::warn`.
 
 ## Dependencies
 
