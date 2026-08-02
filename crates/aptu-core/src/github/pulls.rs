@@ -717,6 +717,50 @@ pub async fn delete_pr_review_comment(
     }
 }
 
+/// Updates the body of an existing PR review comment.
+///
+/// Used when a duplicate comment is detected but its body differs from the
+/// previously posted version; the existing comment is `PATCH`ed in place rather
+/// than posting a new one.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails. 404 errors (comment not found)
+/// are treated as success (idempotent).
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, comment_id = comment_id))]
+pub async fn update_pr_review_comment(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    comment_id: u64,
+    body: &str,
+) -> Result<()> {
+    debug!("Updating PR review comment");
+
+    let route = format!("/repos/{owner}/{repo}/pulls/comments/{comment_id}");
+    let payload = serde_json::json!({ "body": body });
+    let result: std::result::Result<serde_json::Value, _> =
+        client.patch(&route, Some(&payload)).await;
+
+    match result {
+        Ok(_) => {
+            debug!("PR review comment updated successfully");
+            Ok(())
+        }
+        Err(e)
+            if let octocrab::Error::GitHub { source, .. } = &e
+                && source.status_code.as_u16() == 404 =>
+        {
+            debug!("PR review comment not found (404); treating as success");
+            Ok(())
+        }
+        Err(e) => {
+            Err(e).with_context(|| format!("Failed to update PR review comment #{comment_id}"))
+        }
+    }
+}
+
 /// Extract labels from PR metadata (title and file paths).
 ///
 /// Parses conventional commit prefix from PR title and maps file paths to scope labels.

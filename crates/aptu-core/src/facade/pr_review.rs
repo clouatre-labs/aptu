@@ -14,7 +14,9 @@ use crate::error::AptuError;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::create_client_from_provider;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::github::pulls::{fetch_pr_details, post_pr_review as gh_post_pr_review};
+use crate::github::pulls::{
+    fetch_pr_details, post_pr_review as gh_post_pr_review, update_pr_review_comment,
+};
 use crate::sanitize::sanitise_user_field;
 use crate::security::SecurityScanner;
 
@@ -287,6 +289,55 @@ pub async fn analyze_pr(
     crate::facade::wasm_unsupported!("analyze_pr");
 }
 
+/// Decision returned by [`dedup_outcome`] for how to handle an outgoing inline comment
+/// against the dedup map of existing bot-authored comments.
+#[derive(Debug)]
+enum DedupOutcome {
+    /// No existing comment with the same key; the comment should be posted.
+    Post,
+    /// Existing comment body matches; skip the comment.
+    Skip,
+    /// Existing comment body differs; update it in place with the given body.
+    Update {
+        comment_id: u64,
+        rendered_body: String,
+    },
+}
+
+/// Pure helper shared by [`post_pr_review`] and its tests: given the dedup map
+/// and an outgoing comment, determines whether to post, skip, or update.
+///
+/// Comments with `line = None` always return `Post` (general PR comments are never
+/// inline duplicates). The map key is `(path, line, side, commit_id)` with `side`
+/// hardcoded to `"RIGHT"` to match the outgoing comment construction.
+fn dedup_outcome(
+    dedup: &std::collections::HashMap<(String, u64, String, String), (u64, String)>,
+    comment: &PrReviewComment,
+    commit_id: &str,
+) -> DedupOutcome {
+    let Some(line) = comment.line.map(u64::from) else {
+        return DedupOutcome::Post;
+    };
+    let key = (
+        comment.file.clone(),
+        line,
+        "RIGHT".to_string(),
+        commit_id.to_string(),
+    );
+    let Some((existing_id, existing_body)) = dedup.get(&key) else {
+        return DedupOutcome::Post;
+    };
+    let rendered = crate::triage::render_pr_review_comment_body(comment);
+    if rendered == *existing_body {
+        DedupOutcome::Skip
+    } else {
+        DedupOutcome::Update {
+            comment_id: *existing_id,
+            rendered_body: rendered,
+        }
+    }
+}
+
 /// Posts a PR review to GitHub.
 ///
 /// This function abstracts the credential resolution and API client creation,
@@ -337,45 +388,56 @@ pub async fn post_pr_review(
     // Create GitHub client from provider
     let client = create_client_from_provider(provider)?;
 
-    // Build dedup set from existing bot-authored review comments keyed on (path, line, side, commit_id).
+    // Build dedup map from existing bot-authored review comments keyed on (path, line, side, commit_id).
     // Comments with line=None (general PR comments) are not inline duplicates, so they are excluded
-    // from the dedup set (they will never match an inline comment which always has a line).
-    let dedup: std::collections::HashSet<(String, u64, String, String)> = existing_comments
-        .iter()
-        .filter_map(|c| {
-            let line = c.line?;
-            let side = c.side.clone().unwrap_or_else(|| "RIGHT".to_string());
-            Some((c.path.clone(), line, side, c.commit_id.clone()))
-        })
-        .collect();
+    // from the dedup map (they will never match an inline comment which always has a line).
+    // The map value is (comment id, body) so a duplicate can be updated in place when the
+    // rendered body differs from what was previously posted.
+    let mut dedup: std::collections::HashMap<(String, u64, String, String), (u64, String)> =
+        std::collections::HashMap::new();
+    for c in existing_comments {
+        let Some(line) = c.line else { continue };
+        let side = c.side.clone().unwrap_or_else(|| "RIGHT".to_string());
+        dedup.insert(
+            (c.path.clone(), line, side, c.commit_id.clone()),
+            (c.id, c.body.clone()),
+        );
+    }
 
     // Filter out outgoing comments that match an existing bot-authored comment.
-    // General PR comments (line=None) are never checked against the dedup set.
-    let filtered: Vec<PrReviewComment> = comments
-        .iter()
-        .filter(|c| {
-            let Some(line) = c.line.map(u64::from) else {
-                // line=None outgoing comments are never duplicates
-                return true;
-            };
-            let key = (
-                c.file.clone(),
-                line,
-                "RIGHT".to_string(),
-                commit_id.to_string(),
-            );
-            if dedup.contains(&key) {
+    // General PR comments (line=None) are never checked against the dedup map.
+    let mut filtered: Vec<PrReviewComment> = Vec::new();
+    for c in comments {
+        match dedup_outcome(&dedup, c, commit_id) {
+            DedupOutcome::Post => {
+                filtered.push(c.clone());
+            }
+            DedupOutcome::Skip => {
                 debug!(
                     path = %c.file,
                     line = ?c.line,
-                    "Skipping duplicate inline comment (already posted by bot)"
+                    "Skipping duplicate inline comment (body unchanged)"
                 );
-                return false;
             }
-            true
-        })
-        .cloned()
-        .collect();
+            DedupOutcome::Update {
+                comment_id,
+                rendered_body,
+            } => {
+                debug!(
+                    path = %c.file,
+                    line = ?c.line,
+                    comment_id = comment_id,
+                    "Updating duplicate inline comment with revised body"
+                );
+                if let Err(e) =
+                    update_pr_review_comment(&client, &owner, &repo, comment_id, &rendered_body)
+                        .await
+                {
+                    debug!(error = %e, "Failed to update duplicate inline comment; skipping");
+                }
+            }
+        }
+    }
 
     // Post the review
     gh_post_pr_review(
@@ -546,7 +608,7 @@ pub async fn label_pr(
 
 #[cfg(test)]
 mod tests {
-    use super::analyze_pr;
+    use super::{DedupOutcome, analyze_pr, dedup_outcome};
     use crate::ai::types::{
         CommentSeverity, PrDetails, PrFile, PrReviewComment, PrReviewCommentDetails,
     };
@@ -554,7 +616,6 @@ mod tests {
     use crate::config::AiConfig;
     use crate::error::AptuError;
     use secrecy::SecretString;
-    use std::collections::HashSet;
 
     struct MockProvider;
     impl TokenProvider for MockProvider {
@@ -654,17 +715,21 @@ mod tests {
         );
     }
 
-    // Mirrors the dedup key construction in post_pr_review: only comments with a
+    // Mirrors the dedup map construction in post_pr_review: only comments with a
     // line produce a key; line=None general PR comments are never inline duplicates.
+    // The value is (comment id, body) so duplicate handling can compare bodies.
     fn make_dedup_set(
         comments: &[PrReviewCommentDetails],
-    ) -> HashSet<(String, u64, String, String)> {
+    ) -> std::collections::HashMap<(String, u64, String, String), (u64, String)> {
         comments
             .iter()
             .filter_map(|c| {
                 let line = c.line?;
                 let side = c.side.clone().unwrap_or_else(|| "RIGHT".to_string());
-                Some((c.path.clone(), line, side, c.commit_id.clone()))
+                Some((
+                    (c.path.clone(), line, side, c.commit_id.clone()),
+                    (c.id, c.body.clone()),
+                ))
             })
             .collect()
     }
@@ -699,10 +764,16 @@ mod tests {
             "abc123".to_string(),
         );
 
-        // Assert: duplicate key is present
+        // Assert: duplicate key is present, mapped to the correct comment id and body
         assert!(
-            dedup.contains(&key),
-            "dedup set must contain the duplicate key"
+            dedup.contains_key(&key),
+            "dedup map must contain the duplicate key"
+        );
+        let (id, body) = dedup.get(&key).unwrap();
+        assert_eq!(*id, 1, "must map to the existing comment id");
+        assert_eq!(
+            body, "Existing feedback",
+            "must map to the existing comment body"
         );
     }
 
@@ -720,13 +791,13 @@ mod tests {
         }];
         let dedup = make_dedup_set(&existing);
         assert!(
-            !dedup.contains(&(
+            !dedup.contains_key(&(
                 "src/new.rs".to_string(),
                 10,
                 "RIGHT".to_string(),
                 "abc123".to_string()
             )),
-            "dedup set must NOT contain a different path"
+            "dedup map must NOT contain a different path"
         );
 
         // Sub-case 2: empty existing comments produce an empty dedup set
@@ -764,11 +835,84 @@ mod tests {
         // line=None incoming comment bypasses the dedup guard entirely.
         assert!(
             dedup.is_empty(),
-            "dedup set must be empty when existing comments all have line=None"
+            "dedup map must be empty when existing comments all have line=None"
         );
         assert!(
             incoming.line.is_none(),
             "line=None incoming comment must bypass the dedup check"
+        );
+    }
+
+    #[test]
+    fn test_dedup_updates_differing_body() {
+        // Arrange: existing comment with body "Existing feedback" on (src/lib.rs, 10, RIGHT, abc123)
+        let existing = vec![PrReviewCommentDetails {
+            id: 42,
+            author: "aptu[bot]".to_string(),
+            body: "Existing feedback".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: Some(10),
+            side: Some("RIGHT".to_string()),
+            commit_id: "abc123".to_string(),
+        }];
+        let dedup = make_dedup_set(&existing);
+
+        let incoming = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "Revised feedback".to_string(),
+            severity: CommentSeverity::Suggestion,
+            suggested_code: None,
+        };
+
+        // Act: call dedup_outcome to determine the handling
+        let outcome = dedup_outcome(&dedup, &incoming, "abc123");
+
+        // Assert: key present with differing body -> Update with existing comment id
+        match outcome {
+            DedupOutcome::Update {
+                comment_id,
+                rendered_body,
+            } => {
+                assert_eq!(comment_id, 42, "must use the existing comment id");
+                assert!(
+                    rendered_body.contains("Revised feedback"),
+                    "rendered body must contain the new comment text"
+                );
+            }
+            other => panic!("Expected Update outcome, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_dedup_skips_identical_body() {
+        // Arrange: existing comment with body "Same feedback" on (src/lib.rs, 10, RIGHT, abc123)
+        let existing = vec![PrReviewCommentDetails {
+            id: 7,
+            author: "aptu[bot]".to_string(),
+            body: "Same feedback".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: Some(10),
+            side: Some("RIGHT".to_string()),
+            commit_id: "abc123".to_string(),
+        }];
+        let dedup = make_dedup_set(&existing);
+
+        let incoming = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "Same feedback".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        };
+
+        // Act: call dedup_outcome to determine the handling
+        let outcome = dedup_outcome(&dedup, &incoming, "abc123");
+
+        // Assert: key present with identical body -> Skip
+        assert!(
+            matches!(outcome, DedupOutcome::Skip),
+            "Expected Skip outcome, got {outcome:?}"
         );
     }
 }
