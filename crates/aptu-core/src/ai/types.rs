@@ -439,6 +439,18 @@ pub struct PrReviewCommentDetails {
     pub author: String,
     /// Comment body.
     pub body: String,
+    /// File path the comment applies to.
+    #[serde(default)]
+    pub path: String,
+    /// Line number in the file.
+    #[serde(default)]
+    pub line: Option<u64>,
+    /// Side of the diff (LEFT or RIGHT).
+    #[serde(default)]
+    pub side: Option<String>,
+    /// Commit SHA the comment was made on.
+    #[serde(default)]
+    pub commit_id: String,
 }
 
 /// Severity level for PR review comments.

@@ -419,6 +419,27 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         prompt.push_str("\n\n## Structural Graph Context\n");
         prompt.push_str(&ctx.graph_context);
     }
+
+    // Inject existing bot review comments so the AI can avoid restating prior feedback.
+    if !ctx.pr.review_comments.is_empty() {
+        prompt.push_str("\n<existing_review_comments>\n");
+        for comment in &ctx.pr.review_comments {
+            let path = sanitize_prompt_field(&comment.path);
+            let line = comment
+                .line
+                .map_or_else(|| "none".to_string(), |l| l.to_string());
+            let side = comment.side.as_deref().unwrap_or("RIGHT");
+            let body = sanitize_prompt_field(&comment.body);
+            let _ = writeln!(
+                prompt,
+                "<comment path=\"{path}\" line=\"{line}\" side=\"{side}\">{body}</comment>"
+            );
+        }
+        prompt.push_str(
+            "Do not repeat or rephrase feedback already present in <existing_review_comments>.\n</existing_review_comments>\n",
+        );
+    }
+
     append_schema(&mut prompt, PR_REVIEW_SCHEMA);
     prompt.push_str("\n\nExample output:\n");
     prompt.push_str(PR_REVIEW_EXAMPLE);
@@ -473,7 +494,7 @@ pub fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]
 
 #[cfg(test)]
 mod tests {
-    use super::super::types::IssueDetails;
+    use super::super::types::{IssueDetails, PrDetails, PrReviewCommentDetails};
     use super::*;
 
     #[test]
@@ -1015,6 +1036,111 @@ mod tests {
         assert!(
             prompt.contains(&"y".repeat(CAP)),
             "prompt must contain the full patch"
+        );
+    }
+
+    // Shared helper: builds a minimal ReviewContext for testing prompt injection.
+    // All fields are hardcoded except review_comments, which callers vary.
+    fn make_test_pr(
+        review_comments: Vec<PrReviewCommentDetails>,
+        number: u64,
+    ) -> super::super::review_context::ReviewContext {
+        use super::super::types::PrFile;
+
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 0,
+            patch: Some("+small_patch".to_string()),
+            patch_truncated: false,
+            full_content: None,
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: format!("https://github.com/test/repo/pull/{number}"),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments,
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        super::super::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            max_patch_chars_per_file: 10_000,
+            max_diff_chars: 200_000,
+            max_chars_per_file: 100,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_existing_review_comments_injected_into_prompt() {
+        // Arrange: PR with a prior bot-authored inline comment
+        let comments = vec![PrReviewCommentDetails {
+            id: 1,
+            author: "aptu[bot]".to_string(),
+            body: "Use a const instead of a magic number.".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: Some(10),
+            side: Some("RIGHT".to_string()),
+            commit_id: "abc123".to_string(),
+        }];
+        let mut ctx = make_test_pr(comments, 7);
+
+        // Act: build the prompt
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: XML block present with comment details and dedup instruction
+        assert!(
+            prompt.contains("<existing_review_comments>"),
+            "existing_review_comments block must be present when review_comments is non-empty"
+        );
+        assert!(
+            prompt.contains("path=\"src/lib.rs\""),
+            "comment path must be included in the XML block"
+        );
+        assert!(
+            prompt.contains("line=\"10\""),
+            "comment line must be included in the XML block"
+        );
+        assert!(
+            prompt.contains("Use a const instead of a magic number."),
+            "comment body must be included in the XML block"
+        );
+        assert!(
+            prompt.contains("Do not repeat or rephrase feedback already present"),
+            "dedup instruction must be present"
+        );
+    }
+
+    #[test]
+    fn test_existing_review_comments_omitted_when_empty() {
+        // Arrange: PR with no prior review comments
+        let mut ctx = make_test_pr(vec![], 8);
+
+        // Act: build the prompt
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: no existing_review_comments block
+        assert!(
+            !prompt.contains("<existing_review_comments>"),
+            "existing_review_comments block must be omitted when review_comments is empty"
         );
     }
 }

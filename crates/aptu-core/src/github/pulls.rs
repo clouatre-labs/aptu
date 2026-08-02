@@ -265,6 +265,71 @@ pub async fn fetch_pr_details(
         .map(|l| l.name.clone())
         .collect();
 
+    // Fetch existing review comments (with pagination, per_page=100, max 300 items)
+    // so the AI prompt can avoid restating feedback the bot already posted.
+    let mut review_comments: Vec<crate::ai::types::PrReviewCommentDetails> = Vec::new();
+    let bot_login = match client.current().user().await {
+        Ok(user) => user.login,
+        Err(e) => {
+            tracing::warn!("Failed to resolve bot login; skipping review comment fetch: {e}");
+            String::new()
+        }
+    };
+    if !bot_login.is_empty() {
+        let mut page = client
+            .pulls(owner, repo)
+            .list_comments(Some(number))
+            .per_page(100)
+            .send()
+            .await
+            .with_context(|| format!("Failed to fetch review comments for PR #{number}"))?;
+
+        loop {
+            review_comments.extend(page.items.into_iter().filter_map(|c| {
+                let author = c.user.as_ref().map(|u| u.login.clone()).unwrap_or_default();
+                if author != bot_login {
+                    return None;
+                }
+                Some(crate::ai::types::PrReviewCommentDetails {
+                    id: c.id.0,
+                    author,
+                    body: c.body.clone(),
+                    path: c.path,
+                    line: c.line,
+                    side: c.side,
+                    commit_id: c.commit_id,
+                })
+            }));
+
+            // Cap at 300 to mirror the list_files limit; PRs with more existing comments
+            // are uncommon and the prompt budget would discard most entries anyway.
+            if review_comments.len() >= 300 {
+                tracing::warn!(
+                    "PR #{} has reached 300-comment cap; stopping pagination",
+                    number
+                );
+                review_comments.truncate(300);
+                break;
+            }
+
+            match client
+                .get_page::<octocrab::models::pulls::Comment>(&page.next)
+                .await
+            {
+                Ok(Some(next_page)) => page = next_page,
+                Ok(None) => break,
+                Err(e) => {
+                    tracing::warn!("Error fetching next page of review comments: {}", e);
+                    break;
+                }
+            }
+        }
+    }
+    debug!(
+        review_comments = review_comments.len(),
+        "Existing review comments fetched"
+    );
+
     let details = PrDetails {
         owner: owner.to_string(),
         repo: repo.to_string(),
@@ -281,7 +346,7 @@ pub async fn fetch_pr_details(
             .map(std::string::ToString::to_string)
             .unwrap_or_default(),
         labels,
-        review_comments: Vec::new(),
+        review_comments,
         instructions: None,
         dep_enrichments: Vec::new(),
     };
@@ -1529,5 +1594,39 @@ mod tests {
         // - test_pr_file_oversized_patch_detection
         // - test_pr_file_dedup_guard_full_content_present
         // - test_pr_file_contents_api_fallback_flow
+    }
+
+    #[test]
+    fn test_review_comments_maps_fields_correctly() {
+        use crate::ai::types::PrReviewCommentDetails;
+
+        let bot = PrReviewCommentDetails {
+            id: 42,
+            author: "aptu[bot]".to_string(),
+            body: "suggestion".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: Some(15),
+            side: Some("RIGHT".to_string()),
+            commit_id: "abc123".to_string(),
+        };
+        let human = PrReviewCommentDetails {
+            id: 99,
+            author: "human-user".to_string(),
+            body: "looks good".to_string(),
+            path: "src/main.rs".to_string(),
+            line: Some(30),
+            side: Some("LEFT".to_string()),
+            commit_id: "def456".to_string(),
+        };
+
+        let kept: Vec<_> = vec![bot, human]
+            .into_iter()
+            .filter(|c| c.author == "aptu[bot]")
+            .collect();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].path, "src/lib.rs");
+        assert_eq!(kept[0].line, Some(15));
+        assert_eq!(kept[0].side, Some("RIGHT".to_string()));
+        assert_eq!(kept[0].commit_id, "abc123");
     }
 }

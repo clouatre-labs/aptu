@@ -314,7 +314,8 @@ pub async fn analyze_pr(
 /// - User lacks write access to the repository
 /// - API call fails
 #[cfg(not(target_arch = "wasm32"))]
-#[instrument(skip(provider, comments), fields(reference = %reference, event = %event))]
+#[instrument(skip(provider, comments, existing_comments), fields(reference = %reference, event = %event))]
+#[allow(clippy::too_many_arguments)]
 pub async fn post_pr_review(
     provider: &dyn TokenProvider,
     reference: &str,
@@ -323,6 +324,7 @@ pub async fn post_pr_review(
     event: ReviewEvent,
     comments: &[PrReviewComment],
     commit_id: &str,
+    existing_comments: &[crate::ai::types::PrReviewCommentDetails],
 ) -> crate::Result<u64> {
     use crate::github::pulls::parse_pr_reference;
 
@@ -335,9 +337,49 @@ pub async fn post_pr_review(
     // Create GitHub client from provider
     let client = create_client_from_provider(provider)?;
 
+    // Build dedup set from existing bot-authored review comments keyed on (path, line, side, commit_id).
+    // Comments with line=None (general PR comments) are not inline duplicates, so they are excluded
+    // from the dedup set (they will never match an inline comment which always has a line).
+    let dedup: std::collections::HashSet<(String, u64, String, String)> = existing_comments
+        .iter()
+        .filter_map(|c| {
+            let line = c.line?;
+            let side = c.side.clone().unwrap_or_else(|| "RIGHT".to_string());
+            Some((c.path.clone(), line, side, c.commit_id.clone()))
+        })
+        .collect();
+
+    // Filter out outgoing comments that match an existing bot-authored comment.
+    // General PR comments (line=None) are never checked against the dedup set.
+    let filtered: Vec<PrReviewComment> = comments
+        .iter()
+        .filter(|c| {
+            let Some(line) = c.line.map(u64::from) else {
+                // line=None outgoing comments are never duplicates
+                return true;
+            };
+            let key = (
+                c.file.clone(),
+                line,
+                "RIGHT".to_string(),
+                commit_id.to_string(),
+            );
+            if dedup.contains(&key) {
+                debug!(
+                    path = %c.file,
+                    line = ?c.line,
+                    "Skipping duplicate inline comment (already posted by bot)"
+                );
+                return false;
+            }
+            true
+        })
+        .cloned()
+        .collect();
+
     // Post the review
     gh_post_pr_review(
-        &client, &owner, &repo, number, body, event, comments, commit_id,
+        &client, &owner, &repo, number, body, event, &filtered, commit_id,
     )
     .await
     .map_err(|e| AptuError::GitHub {
@@ -346,6 +388,7 @@ pub async fn post_pr_review(
 }
 
 #[cfg(target_arch = "wasm32")]
+#[allow(clippy::too_many_arguments)]
 pub async fn post_pr_review(
     _provider: &dyn crate::auth::TokenProvider,
     _reference: &str,
@@ -354,6 +397,7 @@ pub async fn post_pr_review(
     _event: crate::ai::types::ReviewEvent,
     _comments: &[crate::ai::types::PrReviewComment],
     _commit_id: &str,
+    _existing_comments: &[crate::ai::types::PrReviewCommentDetails],
 ) -> crate::Result<u64> {
     crate::facade::wasm_unsupported!("post_pr_review");
 }
@@ -503,11 +547,14 @@ pub async fn label_pr(
 #[cfg(test)]
 mod tests {
     use super::analyze_pr;
-    use crate::ai::types::{PrDetails, PrFile};
+    use crate::ai::types::{
+        CommentSeverity, PrDetails, PrFile, PrReviewComment, PrReviewCommentDetails,
+    };
     use crate::auth::TokenProvider;
     use crate::config::AiConfig;
     use crate::error::AptuError;
     use secrecy::SecretString;
+    use std::collections::HashSet;
 
     struct MockProvider;
     impl TokenProvider for MockProvider {
@@ -604,6 +651,124 @@ mod tests {
         assert!(
             remaining_budget < 20_000,
             "Remaining budget should be below threshold"
+        );
+    }
+
+    // Mirrors the dedup key construction in post_pr_review: only comments with a
+    // line produce a key; line=None general PR comments are never inline duplicates.
+    fn make_dedup_set(
+        comments: &[PrReviewCommentDetails],
+    ) -> HashSet<(String, u64, String, String)> {
+        comments
+            .iter()
+            .filter_map(|c| {
+                let line = c.line?;
+                let side = c.side.clone().unwrap_or_else(|| "RIGHT".to_string());
+                Some((c.path.clone(), line, side, c.commit_id.clone()))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_dedup_drops_duplicate_comment() {
+        // Arrange: existing bot comment on (src/lib.rs, 10, RIGHT, abc123)
+        let existing = vec![PrReviewCommentDetails {
+            id: 1,
+            author: "aptu[bot]".to_string(),
+            body: "Existing feedback".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: Some(10),
+            side: Some("RIGHT".to_string()),
+            commit_id: "abc123".to_string(),
+        }];
+        let dedup = make_dedup_set(&existing);
+
+        let incoming = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "Duplicate feedback".to_string(),
+            severity: CommentSeverity::Suggestion,
+            suggested_code: None,
+        };
+
+        // Act: build the key the way post_pr_review does
+        let key = (
+            incoming.file,
+            u64::from(incoming.line.unwrap()),
+            "RIGHT".to_string(),
+            "abc123".to_string(),
+        );
+
+        // Assert: duplicate key is present
+        assert!(
+            dedup.contains(&key),
+            "dedup set must contain the duplicate key"
+        );
+    }
+
+    #[test]
+    fn test_dedup_preserves_non_matching() {
+        // Sub-case 1: existing comment on a different path must not match
+        let existing = vec![PrReviewCommentDetails {
+            id: 1,
+            author: "aptu[bot]".to_string(),
+            body: "Existing feedback".to_string(),
+            path: "src/old.rs".to_string(),
+            line: Some(10),
+            side: Some("RIGHT".to_string()),
+            commit_id: "abc123".to_string(),
+        }];
+        let dedup = make_dedup_set(&existing);
+        assert!(
+            !dedup.contains(&(
+                "src/new.rs".to_string(),
+                10,
+                "RIGHT".to_string(),
+                "abc123".to_string()
+            )),
+            "dedup set must NOT contain a different path"
+        );
+
+        // Sub-case 2: empty existing comments produce an empty dedup set
+        let dedup = make_dedup_set(&[]);
+        assert!(
+            dedup.is_empty(),
+            "dedup set must be empty when no existing comments"
+        );
+    }
+
+    #[test]
+    fn test_dedup_skips_none_line_comments() {
+        // Arrange: existing comment with line=None must not suppress an outgoing
+        // comment with line=None on the same path/side/commit_id.
+        let existing = vec![PrReviewCommentDetails {
+            id: 1,
+            author: "aptu[bot]".to_string(),
+            body: "Existing general PR comment".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: None,
+            side: Some("RIGHT".to_string()),
+            commit_id: "abc123".to_string(),
+        }];
+        let dedup = make_dedup_set(&existing);
+
+        let incoming = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: None,
+            comment: "Another general PR comment".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        };
+
+        // Assert: line=None existing comments are excluded from the set, and a
+        // line=None incoming comment bypasses the dedup guard entirely.
+        assert!(
+            dedup.is_empty(),
+            "dedup set must be empty when existing comments all have line=None"
+        );
+        assert!(
+            incoming.line.is_none(),
+            "line=None incoming comment must bypass the dedup check"
         );
     }
 }

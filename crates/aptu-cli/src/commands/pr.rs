@@ -158,6 +158,7 @@ pub async fn post(
             event,
             &analyze_result.review.comments,
             &analyze_result.pr_details.head_sha,
+            &analyze_result.pr_details.review_comments,
         )
         .await?;
 
