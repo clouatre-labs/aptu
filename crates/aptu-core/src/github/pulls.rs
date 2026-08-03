@@ -664,16 +664,33 @@ pub async fn post_pr_review(
         id: u64,
     }
 
-    let response: ReviewResponse = client.post(route, Some(&payload)).await.with_context(|| {
-        format!(
-            "Failed to post review to PR #{number} in {owner}/{repo}. \
-                 Check that you have write access to the repository."
-        )
-    })?;
-
-    debug!(review_id = response.id, "PR review posted successfully");
-
-    Ok(response.id)
+    match client.post::<_, ReviewResponse>(route, Some(&payload)).await {
+        Ok(response) => {
+            debug!(review_id = response.id, "PR review posted successfully");
+            Ok(response.id)
+        }
+        Err(octocrab::Error::GitHub { source, .. }) => {
+            tracing::warn!(
+                status = source.status_code.as_u16(),
+                github_message = %source.message,
+                "Failed to post review to PR"
+            );
+            Err(anyhow::anyhow!(
+                "Failed to post review to PR #{number} in {owner}/{repo}. \
+                 GitHub API returned HTTP {}: {}. \
+                 Check that you have write access to the repository.",
+                source.status_code.as_u16(),
+                source.message,
+            ))
+        }
+        Err(e) => {
+            Err(e).with_context(|| {
+                format!(
+                    "Failed to post review to PR #{number} in {owner}/{repo}. Check that you have write access to the repository."
+                )
+            })
+        }
+    }
 }
 
 /// Deletes a PR review comment.
@@ -713,6 +730,50 @@ pub async fn delete_pr_review_comment(
         }
         Err(e) => {
             Err(e).with_context(|| format!("Failed to delete PR review comment #{comment_id}"))
+        }
+    }
+}
+
+/// Updates the body of an existing PR review comment.
+///
+/// Used when a duplicate comment is detected but its body differs from the
+/// previously posted version; the existing comment is `PATCH`ed in place rather
+/// than posting a new one.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails. 404 errors (comment not found)
+/// are treated as success (idempotent).
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, comment_id = comment_id))]
+pub async fn update_pr_review_comment(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    comment_id: u64,
+    body: &str,
+) -> Result<()> {
+    debug!("Updating PR review comment");
+
+    let route = format!("/repos/{owner}/{repo}/pulls/comments/{comment_id}");
+    let payload = serde_json::json!({ "body": body });
+    let result: std::result::Result<serde_json::Value, _> =
+        client.patch(&route, Some(&payload)).await;
+
+    match result {
+        Ok(_) => {
+            debug!("PR review comment updated successfully");
+            Ok(())
+        }
+        Err(e)
+            if let octocrab::Error::GitHub { source, .. } = &e
+                && source.status_code.as_u16() == 404 =>
+        {
+            debug!("PR review comment not found (404); treating as success");
+            Ok(())
+        }
+        Err(e) => {
+            Err(e).with_context(|| format!("Failed to update PR review comment #{comment_id}"))
         }
     }
 }
