@@ -13,9 +13,7 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 | `.github/workflows/build-and-attest.yml` | push/PR | Build release binaries and attest provenance | SLSA Level 3 provenance attestation for every build |
 | `.github/workflows/reuse.yml` | push/PR | REUSE SPDX compliance check | Apache-2.0 license attribution is machine-verifiable |
 | `.github/workflows/scorecard.yml` | schedule weekly, push main | OpenSSF Scorecard security posture analysis | Tracks supply-chain security best practices over time |
-| `.github/workflows/codeql.yml` | push/PR, schedule | CodeQL static analysis for security vulnerabilities | Automated SAST; catches common vulnerability patterns |
 | `.github/workflows/issue-triage.yml` | issue opened/labeled | Auto-triage and label new issues | Reduces maintainer triage overhead |
-| `.github/workflows/pr-triage.yml` | PR opened/labeled | Auto-label and route PRs by changed paths | Reduces maintainer triage overhead |
 
 ---
 
@@ -92,7 +90,7 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 ## Versioning and Release Conventions
 
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, etc.).
-- PR titles must match the Conventional Commits format (enforced by `pr-triage.yml`).
+- PR titles must match the Conventional Commits format (enforced by `pr-review.yml`).
 - Release tags use the format `vMAJOR.MINOR.PATCH` and must be GPG-signed annotated tags (`git tag -s`).
 - Version numbers are bumped in `Cargo.toml` workspace manifests and committed before the tag is pushed.
 - GitHub Releases are created by `release.yml` automatically on tag push.

@@ -342,7 +342,6 @@ max_commit_message_bytes = 4096   # 4 KiB   — individual commit messages
 When a field exceeds its limit:
 
 - **CLI** (`aptu issue triage`, `aptu pr review`): exits non-zero with a diagnostic message.
-- **MCP server**: returns a `ToolExecutionError` so the model can self-correct.
 
 Note: `aptu scan-security` performs local pattern matching and does not invoke AI; these limits do not apply to it.
 
