@@ -664,16 +664,33 @@ pub async fn post_pr_review(
         id: u64,
     }
 
-    let response: ReviewResponse = client.post(route, Some(&payload)).await.with_context(|| {
-        format!(
-            "Failed to post review to PR #{number} in {owner}/{repo}. \
-                 Check that you have write access to the repository."
-        )
-    })?;
-
-    debug!(review_id = response.id, "PR review posted successfully");
-
-    Ok(response.id)
+    match client.post::<_, ReviewResponse>(route, Some(&payload)).await {
+        Ok(response) => {
+            debug!(review_id = response.id, "PR review posted successfully");
+            Ok(response.id)
+        }
+        Err(octocrab::Error::GitHub { source, .. }) => {
+            tracing::warn!(
+                status = source.status_code.as_u16(),
+                github_message = %source.message,
+                "Failed to post review to PR"
+            );
+            Err(anyhow::anyhow!(
+                "Failed to post review to PR #{number} in {owner}/{repo}. \
+                 GitHub API returned HTTP {}: {}. \
+                 Check that you have write access to the repository.",
+                source.status_code.as_u16(),
+                source.message,
+            ))
+        }
+        Err(e) => {
+            Err(e).with_context(|| {
+                format!(
+                    "Failed to post review to PR #{number} in {owner}/{repo}. Check that you have write access to the repository."
+                )
+            })
+        }
+    }
 }
 
 /// Deletes a PR review comment.
