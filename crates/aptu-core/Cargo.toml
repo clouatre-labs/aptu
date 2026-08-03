@@ -39,7 +39,7 @@ aptu-coder-core = { version = "0.26.1", optional = true }
 # Graph analysis for PR review context (petgraph is pure Rust, WASM-safe)
 petgraph = { version = "0.8", features = ["serde-1"], optional = true }
 # Binary serialization for graph cache
-bincode = { version = "2", features = ["serde"], optional = true }
+bincode = { version = "3", features = ["serde"], optional = true }
 
 # History
 chrono = { workspace = true }
