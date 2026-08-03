@@ -59,9 +59,6 @@ Optional config: `[review] instructions_file = "path/to/file"` and `action.yml` 
 
 Implementation: one Contents API call with PR head SHA, no checkout. Cap at 4,000 chars (matches Copilot's enforced limit). Fail silently if neither file exists. Strip YAML frontmatter before injecting.
 
-**Remove aptu-mcp crate** (#1229)
-The MCP server is a thin adapter (2,376 lines, 4 files) with zero business logic beyond parameter marshaling. Confirmed: `server.rs` delegates every tool call directly to `aptu_core::facade::*`. Removing it eliminates `rmcp` dependency upgrades, separate Homebrew formula, and binary build targets. Not a one-way door -- the facade API remains clean.
-
 ### P2 -- Cost Reduction
 
 **Prompt caching for system prompt and repo context** (#1230)
@@ -115,7 +112,7 @@ Patterns audited and not adopted:
 
 - **iOS App** (Phase 2 in SPEC.md): not aligned with GitHub Actions / App focus.
 - **Gamification / Leaderboards** (Phase 3 in SPEC.md): deferred; requires platform and user base first.
-- **MCP Server** (`aptu-mcp`): removed (see #1229).
+- **MCP Server** (`aptu-mcp`): removed (see #1232).
 
 These remain in SPEC.md for historical context.
 
@@ -132,6 +129,5 @@ These remain in SPEC.md for historical context.
 | #1226 | Add cache_read_tokens / cache_write_tokens to UsageInfo | P1 |
 | #1227 | Relevance gate for docs-only / dep-bump PRs | P1 |
 | #1228 | Read AGENTS.md and .github/instructions/pr-review.md | P1 |
-| #1229 | Remove aptu-mcp crate | P1 |
 | #1230 | Prompt caching (Gemini / Anthropic) | P2 |
 | #94 | GitHub App | P94 |

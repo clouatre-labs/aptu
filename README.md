@@ -64,7 +64,7 @@ cargo install aptu-cli
 ```bash
 aptu auth login            # Authenticate with GitHub
 aptu repo list             # List curated repositories
-aptu issue list block/goose          # Browse issues
+aptu issue list --repo block/goose          # Browse issues
 aptu issue triage block/goose#123    # Triage with AI
 aptu issue triage block/goose#123 --dry-run  # Preview
 aptu history               # View your contributions
@@ -141,7 +141,6 @@ OpenRouter exposes pricing data for each model. Models with zero prompt and comp
 
 ## Security
 
-- **OpenSSF Best Practices Silver** - Fewer than 1% of open source projects reach this level
 - **SLSA Level 3** - Provenance attestations for all releases
 - **REUSE/SPDX** - License compliance for all files
 - **Signed Commits** - GPG-signed commits required

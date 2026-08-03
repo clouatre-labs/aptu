@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<!-- SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors -->
+<!-- SPDX-FileCopyrightText: 2026 Aptu Contributors -->
 
 # AI Policy
 

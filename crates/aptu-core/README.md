@@ -105,17 +105,7 @@ See [docs/BENCHMARKS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/BE
 
 **Q: The install examples use `"*"` -- what version should I pin in production?**
 
-The `"*"` wildcard in documentation examples means "any version" and is used so the docs stay accurate across releases. For production use or library dependencies, always pin to a specific version:
-
-```toml
-[dependencies]
-aptu-core = "0.4"            # semver-compatible: accepts patch and minor updates
-# or for exact pinning:
-aptu-core = "=0.4.0"         # exact: only this release
-```
-
-Check [crates.io/crates/aptu-core](https://crates.io/crates/aptu-core) for the latest published version.
-`aptu-core` follows [Semantic Versioning](https://semver.org): patch releases are bug-fixes only; minor releases may add new APIs but remain backward-compatible with existing usage.
+The `"*"` wildcard in documentation examples means "any version" and is used so the docs stay accurate across releases. For production use, check [crates.io/crates/aptu-core](https://crates.io/crates/aptu-core) for the current version and pin to it. `aptu-core` follows [Semantic Versioning](https://semver.org): patch releases are bug-fixes only; minor releases may add APIs but remain backward-compatible.
 
 ## Support
 
