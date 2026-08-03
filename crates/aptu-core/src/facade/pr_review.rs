@@ -308,22 +308,17 @@ enum DedupOutcome {
 /// and an outgoing comment, determines whether to post, skip, or update.
 ///
 /// Comments with `line = None` always return `Post` (general PR comments are never
-/// inline duplicates). The map key is `(path, line, side, commit_id)` with `side`
-/// hardcoded to `"RIGHT"` to match the outgoing comment construction.
+/// inline duplicates). The map key is `(path, line, side)` -- `commit_id` is
+/// intentionally excluded so the dedup survives re-pushes (existing comments retain
+/// their original SHA; only the key shape must be stable across pushes).
 fn dedup_outcome(
-    dedup: &std::collections::HashMap<(String, u64, String, String), (u64, String)>,
+    dedup: &std::collections::HashMap<(String, u64, String), (u64, String)>,
     comment: &PrReviewComment,
-    commit_id: &str,
 ) -> DedupOutcome {
     let Some(line) = comment.line.map(u64::from) else {
         return DedupOutcome::Post;
     };
-    let key = (
-        comment.file.clone(),
-        line,
-        "RIGHT".to_string(),
-        commit_id.to_string(),
-    );
+    let key = (comment.file.clone(), line, "RIGHT".to_string());
     let Some((existing_id, existing_body)) = dedup.get(&key) else {
         return DedupOutcome::Post;
     };
@@ -388,27 +383,24 @@ pub async fn post_pr_review(
     // Create GitHub client from provider
     let client = create_client_from_provider(provider)?;
 
-    // Build dedup map from existing bot-authored review comments keyed on (path, line, side, commit_id).
+    // Build dedup map from existing bot-authored review comments keyed on (path, line, side).
     // Comments with line=None (general PR comments) are not inline duplicates, so they are excluded
     // from the dedup map (they will never match an inline comment which always has a line).
     // The map value is (comment id, body) so a duplicate can be updated in place when the
     // rendered body differs from what was previously posted.
-    let mut dedup: std::collections::HashMap<(String, u64, String, String), (u64, String)> =
+    let mut dedup: std::collections::HashMap<(String, u64, String), (u64, String)> =
         std::collections::HashMap::new();
     for c in existing_comments {
         let Some(line) = c.line else { continue };
         let side = c.side.clone().unwrap_or_else(|| "RIGHT".to_string());
-        dedup.insert(
-            (c.path.clone(), line, side, c.commit_id.clone()),
-            (c.id, c.body.clone()),
-        );
+        dedup.insert((c.path.clone(), line, side), (c.id, c.body.clone()));
     }
 
     // Filter out outgoing comments that match an existing bot-authored comment.
     // General PR comments (line=None) are never checked against the dedup map.
     let mut filtered: Vec<PrReviewComment> = Vec::new();
     for c in comments {
-        match dedup_outcome(&dedup, c, commit_id) {
+        match dedup_outcome(&dedup, c) {
             DedupOutcome::Post => {
                 filtered.push(c.clone());
             }
@@ -720,16 +712,13 @@ mod tests {
     // The value is (comment id, body) so duplicate handling can compare bodies.
     fn make_dedup_set(
         comments: &[PrReviewCommentDetails],
-    ) -> std::collections::HashMap<(String, u64, String, String), (u64, String)> {
+    ) -> std::collections::HashMap<(String, u64, String), (u64, String)> {
         comments
             .iter()
             .filter_map(|c| {
                 let line = c.line?;
                 let side = c.side.clone().unwrap_or_else(|| "RIGHT".to_string());
-                Some((
-                    (c.path.clone(), line, side, c.commit_id.clone()),
-                    (c.id, c.body.clone()),
-                ))
+                Some(((c.path.clone(), line, side), (c.id, c.body.clone())))
             })
             .collect()
     }
@@ -761,7 +750,6 @@ mod tests {
             incoming.file,
             u64::from(incoming.line.unwrap()),
             "RIGHT".to_string(),
-            "abc123".to_string(),
         );
 
         // Assert: duplicate key is present, mapped to the correct comment id and body
@@ -791,12 +779,7 @@ mod tests {
         }];
         let dedup = make_dedup_set(&existing);
         assert!(
-            !dedup.contains_key(&(
-                "src/new.rs".to_string(),
-                10,
-                "RIGHT".to_string(),
-                "abc123".to_string()
-            )),
+            !dedup.contains_key(&("src/new.rs".to_string(), 10, "RIGHT".to_string(),)),
             "dedup map must NOT contain a different path"
         );
 
@@ -866,7 +849,7 @@ mod tests {
         };
 
         // Act: call dedup_outcome to determine the handling
-        let outcome = dedup_outcome(&dedup, &incoming, "abc123");
+        let outcome = dedup_outcome(&dedup, &incoming);
 
         // Assert: key present with differing body -> Update with existing comment id
         match outcome {
@@ -907,7 +890,7 @@ mod tests {
         };
 
         // Act: call dedup_outcome to determine the handling
-        let outcome = dedup_outcome(&dedup, &incoming, "abc123");
+        let outcome = dedup_outcome(&dedup, &incoming);
 
         // Assert: key present with identical body -> Skip
         assert!(
