@@ -5,6 +5,7 @@
 //! Provides helpers to detect retryable errors and configure exponential backoff
 //! with jitter for HTTP requests and other transient operations.
 
+#[cfg(not(target_arch = "wasm32"))]
 use backon::ExponentialBuilder;
 
 /// Determines if an HTTP status code is retryable.
@@ -112,9 +113,12 @@ pub(crate) fn is_retryable_anyhow(e: &anyhow::Error) -> bool {
 /// - Max times: 3 (total of 3 attempts)
 /// - Jitter: enabled
 ///
+/// Returns an `ExponentialBuilder` with exponential backoff configuration.
+///
 /// # Returns
 ///
 /// An `ExponentialBuilder` configured for retry operations
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub(crate) fn retry_backoff() -> ExponentialBuilder {
     ExponentialBuilder::default()
