@@ -90,7 +90,7 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 ## Versioning and Release Conventions
 
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, etc.).
-- PR titles must match the Conventional Commits format (enforced by `pr-review.yml`).
+- PR titles must match the Conventional Commits format (enforced by the `commitlint` job in `ci.yml`).
 - Release tags use the format `vMAJOR.MINOR.PATCH` and must be GPG-signed annotated tags (`git tag -s`).
 - Version numbers are bumped in `Cargo.toml` workspace manifests and committed before the tag is pushed.
 - GitHub Releases are created by `release.yml` automatically on tag push.
