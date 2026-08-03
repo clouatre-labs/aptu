@@ -3,7 +3,7 @@
 //! On-disk cache for structural graphs, keyed by repository and commit SHA.
 //!
 //! Cache format: 4 raw bytes for `FORMAT_VERSION` (little-endian `u32`)
-//! followed by a bincode-encoded [`super::GraphDb`] payload. `Modifies` edges
+//! followed by a postcard-encoded [`super::GraphDb`] payload. `Modifies` edges
 //! are ephemeral (derived from the current diff) and are always stripped
 //! before serialization; they never appear in a cached graph.
 //!
@@ -17,7 +17,7 @@ use super::{Edge, GraphDb};
 use crate::config::GraphConfig;
 
 /// Cache format version. Bump when the encoding changes in an incompatible way.
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 
 /// Returns the on-disk cache path for a given repository and commit SHA.
 ///
@@ -45,11 +45,11 @@ pub fn strip_modifies_edges(graph: &GraphDb) -> GraphDb {
 /// Encodes `graph` into the on-disk cache byte format.
 ///
 /// Strips `Modifies` edges, then prepends the 4-byte `FORMAT_VERSION` header
-/// to the bincode-encoded payload. Returns `None` if bincode serialization fails.
+/// to the postcard-encoded payload. Returns `None` if postcard serialization fails.
 #[must_use]
 pub fn encode_graph(graph: &GraphDb) -> Option<Vec<u8>> {
     let stripped = strip_modifies_edges(graph);
-    let payload = bincode::serde::encode_to_vec(&stripped, bincode::config::standard()).ok()?;
+    let payload = postcard::to_allocvec(&stripped).ok()?;
 
     let mut bytes = Vec::with_capacity(4 + payload.len());
     bytes.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
@@ -60,7 +60,7 @@ pub fn encode_graph(graph: &GraphDb) -> Option<Vec<u8>> {
 /// Decodes a graph from on-disk cache bytes.
 ///
 /// Returns `None` (cache miss) if the bytes are too short, the format
-/// version does not match [`FORMAT_VERSION`], or bincode decoding fails.
+/// version does not match [`FORMAT_VERSION`], or postcard decoding fails.
 #[must_use]
 pub fn decode_graph(bytes: &[u8]) -> Option<GraphDb> {
     if bytes.len() < 4 {
@@ -70,8 +70,7 @@ pub fn decode_graph(bytes: &[u8]) -> Option<GraphDb> {
     if version != FORMAT_VERSION {
         return None;
     }
-    let (graph, _len): (GraphDb, usize) =
-        bincode::serde::decode_from_slice(&bytes[4..], bincode::config::standard()).ok()?;
+    let graph: GraphDb = postcard::from_bytes(&bytes[4..]).ok()?;
     Some(graph)
 }
 
