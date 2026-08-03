@@ -41,6 +41,12 @@ When reviewing `.github/workflows/` changes:
   to a CWE or OWASP reference for each rule; flag rules that omit `helpUri`.
 - Do not comment on code style that `cargo fmt` or `cargo clippy` would catch automatically;
   those are enforced by CI.
+- Inline comment dedup map key is `(path, line, side, commit_id)`; `line=None` comments are
+  excluded from the map; PATCH-update on changed body must be preserved; do not suggest
+  collapsing skip and update into a single code path.
+- New code in `graph/` or `review_context.rs` requiring OS I/O must carry both
+  `#[cfg(feature = "graph")]` and `#[cfg(not(target_arch = "wasm32"))]`; flag missing gates.
+- Graph cache uses postcard (not bincode, not serde_json); do not suggest swapping serializers.
 
 ## General
 
