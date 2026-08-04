@@ -6,9 +6,23 @@
 //! and CWD inference into a single `ReviewContext` struct and `build_review_context()` function.
 
 use std::path::PathBuf;
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 use crate::ai::types::PrDetails;
 use crate::config::ReviewConfig;
+
+/// Regex to extract symbol names from unified-diff added lines.
+/// Matches `fn`/`async fn`, `struct`, `enum`, `trait`, and `impl` declarations,
+/// stripping any visibility prefix (including `pub(crate)`, `pub(super)`, etc.).
+/// Capture group 2 is the keyword, capture group 3 is the symbol name.
+static SYMBOL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^\+(\s*)(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(fn|struct|enum|trait|impl)\s+([a-zA-Z_]\w*)",
+    )
+    .expect("valid SYMBOL_RE")
+});
 
 /// Estimated overhead for XML tags, section headers, and schema preamble added by
 /// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
@@ -688,89 +702,37 @@ fn derive_modified_symbols(files: &[crate::ai::types::PrFile]) -> Vec<String> {
             continue;
         };
 
-        // Parse each line of the patch for hunk headers and symbol definitions
+        // Parse each line of the patch for symbol definitions
         for line in patch.lines() {
-            // Hunk header: @@ -a,b +c,d @@ optional context
-            if let Some(hunk_header) = line.strip_prefix("@@") {
-                // Extract the new-file line range from +c,d
-                if let Some(plus_part) = hunk_header.split('+').nth(1) {
-                    let start_line: usize = plus_part
-                        .split(',')
-                        .next()
-                        .and_then(|s| s.trim().parse().ok())
-                        .unwrap_or(0);
-                    // We don't need the range length for symbol extraction;
-                    // we just use the hunk start as context for matching below.
-                    let _ = start_line;
-                }
+            // Skip hunk headers, removed lines, and file-header lines
+            if line.starts_with("@@") || line.starts_with('-') || line.starts_with("+++") {
                 continue;
             }
 
-            // Added lines start with '+' (but not '+++' which is the file header)
-            if let Some(content) = line.strip_prefix('+') {
-                if content.starts_with('+') {
-                    continue; // skip '+++' file header lines
-                }
-                // Match symbol definitions: fn, struct, enum, trait, impl
-                let trimmed = content.trim();
-                if let Some(name) = trimmed
-                    .strip_prefix("fn ")
-                    .or_else(|| trimmed.strip_prefix("pub fn "))
-                {
-                    let sym = name.split('(').next().unwrap_or("").trim().to_string();
-                    if !sym.is_empty() && !symbols.contains(&sym) {
-                        symbols.push(sym);
+            // Match added lines with symbol declarations using regex
+            if let Some(caps) = SYMBOL_RE.captures(line) {
+                let keyword = caps.get(2).map_or("", |m| m.as_str());
+                let name = caps.get(3).map_or("", |m| m.as_str()).to_string();
+
+                let sym = if keyword == "impl" {
+                    // For "impl Trait for Type", extract the type name after "for"
+                    let trimmed = line.strip_prefix('+').unwrap_or("").trim();
+                    let after_impl = trimmed.strip_prefix("impl ").unwrap_or("");
+                    if let Some(for_pos) = after_impl.find(" for ") {
+                        after_impl[for_pos + 5..]
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or("")
+                            .to_string()
+                    } else {
+                        name
                     }
-                } else if let Some(name) = trimmed
-                    .strip_prefix("struct ")
-                    .or_else(|| trimmed.strip_prefix("pub struct "))
-                {
-                    let sym = name
-                        .split_whitespace()
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .to_string();
-                    if !sym.is_empty() && !symbols.contains(&sym) {
-                        symbols.push(sym);
-                    }
-                } else if let Some(name) = trimmed
-                    .strip_prefix("enum ")
-                    .or_else(|| trimmed.strip_prefix("pub enum "))
-                {
-                    let sym = name
-                        .split_whitespace()
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .to_string();
-                    if !sym.is_empty() && !symbols.contains(&sym) {
-                        symbols.push(sym);
-                    }
-                } else if let Some(name) = trimmed
-                    .strip_prefix("trait ")
-                    .or_else(|| trimmed.strip_prefix("pub trait "))
-                {
-                    let sym = name
-                        .split_whitespace()
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .to_string();
-                    if !sym.is_empty() && !symbols.contains(&sym) {
-                        symbols.push(sym);
-                    }
-                } else if let Some(name) = trimmed.strip_prefix("impl ") {
-                    // impl blocks: extract the type name after 'impl' or 'impl Trait for'
-                    let sym = name
-                        .split_whitespace()
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .to_string();
-                    if !sym.is_empty() && !symbols.contains(&sym) {
-                        symbols.push(sym);
-                    }
+                } else {
+                    name
+                };
+
+                if !sym.is_empty() && !symbols.contains(&sym) {
+                    symbols.push(sym);
                 }
             }
         }
@@ -1381,6 +1343,153 @@ mod tests {
         assert!(
             symbols.contains(&"renamed_fn".to_string()),
             "should extract fn from renamed file"
+        );
+    }
+
+    #[test]
+    fn test_modified_symbols_async_fn() {
+        // Arrange: patch with async fn declarations
+        let patch = "\
+@@ -1,3 +1,6 @@
+ fn sync_fn() {}
++async fn fetch_data() -> Result<()> {
++    Ok(())
++}
++pub async fn handle_request() -> String {
++    String::new()
++}
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 2,
+            deletions: 0,
+        }];
+
+        // Act
+        let mut symbols = derive_modified_symbols(&files);
+        symbols.sort();
+
+        // Assert
+        assert!(
+            symbols.contains(&"fetch_data".to_string()),
+            "should extract async fn name"
+        );
+        assert!(
+            symbols.contains(&"handle_request".to_string()),
+            "should extract pub async fn name"
+        );
+    }
+
+    #[test]
+    fn test_modified_symbols_pub_visibility() {
+        // Arrange: patch with pub(crate) and pub(super) visibility
+        let patch = "\
+@@ -1,3 +1,5 @@
+ fn existing() {}
++pub(crate) fn internal_fn() -> i32 { 42 }
++pub(super) fn super_fn() -> bool { true }
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 2,
+            deletions: 0,
+        }];
+
+        // Act
+        let mut symbols = derive_modified_symbols(&files);
+        symbols.sort();
+
+        // Assert
+        assert!(
+            symbols.contains(&"internal_fn".to_string()),
+            "should extract fn with pub(crate) visibility"
+        );
+        assert!(
+            symbols.contains(&"super_fn".to_string()),
+            "should extract fn with pub(super) visibility"
+        );
+    }
+
+    #[test]
+    fn test_modified_symbols_generic_fn() {
+        // Arrange: patch with generic function signatures
+        let patch = "\
+@@ -1,3 +1,5 @@
+ fn existing() {}
++fn generic_fn<T: Debug>(x: T) -> String { format!(\"{:?}\", x) }
++fn multi_bound_fn<T: Clone + Debug, U: Display>(a: T, b: U) {}
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 2,
+            deletions: 0,
+        }];
+
+        // Act
+        let mut symbols = derive_modified_symbols(&files);
+        symbols.sort();
+
+        // Assert
+        assert!(
+            symbols.contains(&"generic_fn".to_string()),
+            "should extract generic fn name without generic params"
+        );
+        assert!(
+            symbols.contains(&"multi_bound_fn".to_string()),
+            "should extract multi-bound generic fn name"
+        );
+    }
+
+    #[test]
+    fn test_modified_symbols_tuple_unit_structs() {
+        // Arrange: patch with tuple struct and unit struct definitions
+        let patch = "\
+@@ -1,3 +1,6 @@
+ fn existing() {}
++struct Point(i32, i32);
++struct Unit;
++pub struct Named {
++    field: i32,
++}
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 3,
+            deletions: 0,
+        }];
+
+        // Act
+        let mut symbols = derive_modified_symbols(&files);
+        symbols.sort();
+
+        // Assert
+        assert!(
+            symbols.contains(&"Point".to_string()),
+            "should extract tuple struct name"
+        );
+        assert!(
+            symbols.contains(&"Unit".to_string()),
+            "should extract unit struct name"
+        );
+        assert!(
+            symbols.contains(&"Named".to_string()),
+            "should extract named struct name"
         );
     }
 }
