@@ -5,7 +5,7 @@ Config file: `~/.config/aptu/config.toml`
 ```toml
 [ai]
 provider = "gemini"  # or "cerebras", "groq", "openrouter", "zai", "zenmux"
-model = "gemini-3.1-flash-lite"
+model = "<model>"
 allow_paid_models = true  # default: allows paid OpenRouter models
 
 [ui]
@@ -19,18 +19,18 @@ Configure different AI models for different operations (triage, review, create) 
 ```toml
 [ai]
 provider = "openrouter"
-model = "mistralai/mistral-small-2603"  # default model for all tasks
+model = "<model>"  # default model for all tasks
 
 # Override models for specific tasks
 [ai.tasks.triage]
-model = "mistralai/mistral-small-2603"  # fast and cheap for triage
+model = "<model>"  # fast and cheap for triage
 
 [ai.tasks.review]
 provider = "openrouter"
-model = "anthropic/claude-haiku-4.5"  # balanced for review
+model = "<model>"  # balanced for review
 
 [ai.tasks.create]
-model = "anthropic/claude-sonnet-4.6"  # more capable for code creation
+model = "<model>"  # more capable for code creation
 ```
 
 All task-specific overrides are optional. If not specified, the default `provider` and `model` are used.
@@ -71,11 +71,11 @@ If `model` is explicitly set in the task override, it bypasses routing entirely.
 ```toml
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite"  # default
+model = "<model>"  # default
 
 [ai.tasks.review]
-small_model = "gemini-3.1-flash-lite"      # fast for small PRs
-large_model = "gemini-3.1-flash-lite"      # same model for large PRs
+small_model = "<model>"      # fast for small PRs
+large_model = "<model>"      # same model for large PRs
 routing_threshold_chars = 60000
 ```
 
@@ -84,11 +84,11 @@ routing_threshold_chars = 60000
 ```toml
 [ai]
 provider = "openrouter"
-model = "mistralai/mistral-small-2603"  # default
+model = "<model>"  # default
 
 [ai.tasks.review]
-small_model = "mistralai/mistral-small-2603"  # fast and cheap for small PRs
-large_model = "anthropic/claude-sonnet-4.6"   # more capable for large PRs
+small_model = "<model>"  # fast for small PRs
+large_model = "<model>"  # capable for large PRs
 routing_threshold_chars = 60000
 ```
 
@@ -99,7 +99,7 @@ Configure a fallback chain to automatically try alternative providers when the p
 ```toml
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite"
+model = "<model>"
 
 # Fallback chain: try these providers in order if primary fails
 [ai.fallback]
@@ -111,12 +111,12 @@ Each fallback entry can optionally override the model for that specific provider
 ```toml
 [ai]
 provider = "gemini"
-model = "gemini-3.1-flash-lite"
+model = "<model>"
 
 [ai.fallback]
 chain = [
-  { provider = "cerebras", model = "qwen-3-32b" },
-  { provider = "groq", model = "llama-3.3-70b-versatile" }
+  { provider = "cerebras", model = "<model>" },
+  { provider = "groq", model = "<model>" }
 ]
 ```
 
@@ -139,7 +139,7 @@ When the primary provider fails with a non-retryable error (after retry exhausti
 Override the configured provider and model with global flags:
 
 ```bash
-aptu --provider openrouter --model mistralai/mistral-small-2603 issue triage owner/repo#123
+aptu --provider openrouter --model <model> issue triage owner/repo#123
 ```
 
 Flags can be used independently (`--model` alone uses configured provider). CLI flags take precedence over config file.
@@ -161,7 +161,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```toml
    [ai]
    provider = "anthropic"
-   model = "claude-haiku-4-5"
+   model = "<model>"
    ```
 
 **Claude OAuth:** Aptu also reads `~/.claude/credentials.json` (written by the Claude desktop app or `claude` CLI) as an alternative to setting `ANTHROPIC_API_KEY`. If that file exists and contains a valid OAuth token, it is used automatically; no config change is needed.
@@ -179,7 +179,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```toml
    [ai]
    provider = "cerebras"
-   model = "qwen-3-32b"
+   model = "<model>"
    ```
 
 **Free Tier:** Available with Cerebras API account
@@ -200,7 +200,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 Use `aptu models list --provider gemini` to discover current model IDs.
 
-**Free Tier:** 15 requests/minute, 1M+ tokens/day, 1M token context window
+**Free Tier:** Available with Google AI Studio account
 
 ### Groq
 
@@ -213,7 +213,7 @@ Use `aptu models list --provider gemini` to discover current model IDs.
    ```toml
    [ai]
    provider = "groq"
-   model = "llama-3.3-70b-versatile"
+   model = "<model>"
    ```
 
 **Free Tier:** Generous rate limits, fast inference with Groq's LPU technology
@@ -229,7 +229,7 @@ Use `aptu models list --provider gemini` to discover current model IDs.
    ```toml
    [ai]
    provider = "openrouter"
-   model = "mistralai/mistral-small-2603"
+   model = "<model>"
    ```
 
 **Free Models:** Look for models with `:free` suffix on OpenRouter
@@ -245,10 +245,10 @@ Use `aptu models list --provider gemini` to discover current model IDs.
    ```toml
    [ai]
    provider = "zai"
-   model = "glm-4.5-air"
+   model = "<model>"
    ```
 
-**Budget Tier:** glm-4.5-air with 128K context window (pricing subject to change; see Z.AI documentation)
+**Budget Tier:** See Z.AI documentation for current pricing and limits
 
 ### ZenMux
 
@@ -261,10 +261,10 @@ Use `aptu models list --provider gemini` to discover current model IDs.
    ```toml
    [ai]
    provider = "zenmux"
-   model = "x-ai/grok-code-fast-1"
+   model = "<model>"
    ```
 
-**Free Tier:** x-ai/grok-code-fast-1 with 256K context window
+**Free Tier:** Available with ZenMux account; see ZenMux documentation for current models and limits
 
 ## PR Review Limits
 
@@ -275,8 +275,8 @@ Control how much context `aptu pr review` fetches and injects into the AI prompt
 max_prompt_chars = 120000          # Total prompt character budget (default: 120 000)
 max_full_content_files = 10        # Max files fetched in full via GitHub Contents API (default: 10)
 max_chars_per_file = 16000         # Max chars of full file content per file (default: 16 000)
-max_diff_chars = 200000            # Max total diff characters across all files in the prompt (default: 200 000) — added in 0.10
-max_patch_chars_per_file = 10000   # Max chars per individual file patch; patches exceeding this are dropped entirely (default: 10 000) — added in 0.10
+max_diff_chars = 200000            # Max total diff characters across all files in the prompt (default: 200 000)
+max_patch_chars_per_file = 10000   # Max chars per individual file patch; patches exceeding this are dropped entirely (default: 10 000)
 max_instructions_chars = 1500      # Max chars of instructions file content included in review prompt (default: 1 500)
 min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
 max_dep_packages = 3               # Max dependency bump packages for which upstream release notes are fetched (default: 3)
@@ -391,7 +391,7 @@ Add a `custom_guidance` field to `~/.config/aptu/config.toml`. The text is appen
 ```toml
 [ai]
 provider = "openrouter"
-model = "mistralai/mistral-small-2603"
+model = "<model>"
 custom_guidance = "Always respond in French. Prefer concise labels."
 ```
 

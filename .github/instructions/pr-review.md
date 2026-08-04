@@ -25,7 +25,7 @@ When reviewing `.github/workflows/` changes:
   Behavior flags, Issue triage, PR review, Scan security, PR queue, Routing); flag inputs added
   outside their section.
 - The `provider` and `model` inputs default to empty string (CLI resolves to openrouter /
-  mistralai/mistral-small-2603); do not flag missing defaults as a bug.
+  the configured default model); do not flag missing defaults as a bug.
 
 ## Rust crates
 
