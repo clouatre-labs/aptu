@@ -39,6 +39,8 @@ jobs:
     permissions:
       contents: read
     if: github.event_name != 'workflow_dispatch'
+    outputs:
+      commit_sha: ${{ steps.resolve-commit.outputs.commit_sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -47,6 +49,7 @@ jobs:
           fetch-tags: true
 
       - name: Verify tag is signed
+        id: resolve-commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -76,6 +79,11 @@ jobs:
           fi
 
           echo "Tag $TAG is signed and verified by GitHub"
+
+          # Resolve the commit SHA by dereferencing the annotated tag object.
+          COMMIT_SHA="$(jq -r '.object.sha' <<< "$TAG_OBJ_JSON")"
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
 
   create-release:
     name: Create Release
@@ -166,7 +174,7 @@ jobs:
 
   update-marketplace-tag:
     name: Update Marketplace Floating Tag
-    needs: create-release
+    needs: [create-release, verify-tag-signature]
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-24.04-arm
     permissions:
@@ -175,23 +183,12 @@ jobs:
       - name: Move floating minor tag to current release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ needs.verify-tag-signature.outputs.commit_sha }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
-          # Resolve the commit SHA by dereferencing the annotated tag object.
-          # GITHUB_SHA is the tag object SHA for annotated tags, not the commit SHA.
-          # The refs API only accepts commit SHAs, so we must dereference here.
-          REF_JSON="$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG")"
-          TAG_TYPE="$(jq -r '.object.type' <<< "$REF_JSON")"
-          TAG_OBJECT_SHA="$(jq -r '.object.sha' <<< "$REF_JSON")"
-          if [[ "$TAG_TYPE" == "tag" ]]; then
-            # Annotated tag: dereference to the commit
-            COMMIT_SHA="$(gh api "repos/${{ github.repository }}/git/tags/$TAG_OBJECT_SHA" --jq '.object.sha')"
-          else
-            # Lightweight tag: the ref points directly to the commit
-            COMMIT_SHA="$TAG_OBJECT_SHA"
-          fi
           # Derive floating minor tag: v0.3.1 -> v0.3, v1.0.0 -> v1.0
+
           MINOR_TAG="${TAG%.*}"
           if [[ ! "$MINOR_TAG" =~ ^v[0-9]+\.[0-9]+$ ]]; then
             echo "ERROR: derived floating tag '$MINOR_TAG' from '$TAG' is not a valid vX.Y tag; aborting"

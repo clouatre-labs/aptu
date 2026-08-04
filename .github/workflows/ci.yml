@@ -131,6 +131,7 @@ jobs:
         with:
           shared-key: "aptu"
           cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check formatting
         run: cargo fmt --check
       - name: Run Clippy lints
@@ -266,6 +267,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
+      security-events: write
     needs: [changes, build]
     timeout-minutes: 5
     if: needs.changes.outputs.code == 'true' && needs.build.result == 'success' && github.actor != 'renovate[bot]'
@@ -281,6 +283,15 @@ jobs:
         run: chmod +x target/ci/aptu
       - name: Run security scan
         run: ./target/ci/aptu scan-security crates/ --fail-on critical,high --exclude crates/aptu-core/src/security --exclude crates/aptu-core/tests --exclude crates/aptu-core/benches --exclude crates/aptu-core/src/facade --output github-annotations
+      - name: Generate SARIF report
+        continue-on-error: true
+        run: ./target/ci/aptu scan-security crates/ --exclude crates/aptu-core/src/security --exclude crates/aptu-core/tests --exclude crates/aptu-core/benches --exclude crates/aptu-core/src/facade --output sarif > findings.sarif
+      - name: Upload SARIF report
+        if: always()
+        uses: github/codeql-action/upload-sarif@18420e3271f74589575af831a523c833acda327f # codeql-bundle-v2.26.2
+        with:
+          sarif_file: findings.sarif
+          category: aptu-scan-security
 
   zizmor:
     name: zizmor
