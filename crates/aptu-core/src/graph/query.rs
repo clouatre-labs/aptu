@@ -144,28 +144,28 @@ fn build_induced_subgraph(graph: &GraphDb, node_set: &HashSet<NodeIndex>) -> Gra
 /// nodes are omitted (they are structural, not behavioural).
 #[must_use]
 pub fn render_subgraph_text(subgraph: &GraphDb) -> String {
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
 
     // Build adjacency maps for calls and callers.
-    let mut calls: HashMap<NodeIndex, Vec<String>> = HashMap::new();
-    let mut callers: HashMap<NodeIndex, Vec<String>> = HashMap::new();
+    let mut calls: HashMap<NodeIndex, BTreeSet<String>> = HashMap::new();
+    let mut callers: HashMap<NodeIndex, BTreeSet<String>> = HashMap::new();
 
     for edge_ref in subgraph.edge_references() {
         if matches!(edge_ref.weight(), Edge::Calls) {
             calls
                 .entry(edge_ref.source())
                 .or_default()
-                .push(subgraph[edge_ref.target()].name().to_string());
+                .insert(subgraph[edge_ref.target()].name().to_string());
             callers
                 .entry(edge_ref.target())
                 .or_default()
-                .push(subgraph[edge_ref.source()].name().to_string());
+                .insert(subgraph[edge_ref.source()].name().to_string());
         }
         if matches!(edge_ref.weight(), Edge::HasMethod | Edge::Implements) {
             calls
                 .entry(edge_ref.source())
                 .or_default()
-                .push(subgraph[edge_ref.target()].name().to_string());
+                .insert(subgraph[edge_ref.target()].name().to_string());
         }
     }
 
@@ -186,14 +186,16 @@ pub fn render_subgraph_text(subgraph: &GraphDb) -> String {
         let name = node.name();
         let mut parts = vec![format!("{prefix} {name}")];
         if let Some(c) = calls.get(&idx) {
-            let mut sorted = c.clone();
-            sorted.sort();
-            parts.push(format!("[calls: {}]", sorted.join(", ")));
+            parts.push(format!(
+                "[calls: {}]",
+                c.iter().map(String::as_str).collect::<Vec<_>>().join(", ")
+            ));
         }
         if let Some(c) = callers.get(&idx) {
-            let mut sorted = c.clone();
-            sorted.sort();
-            parts.push(format!("[callers: {}]", sorted.join(", ")));
+            parts.push(format!(
+                "[callers: {}]",
+                c.iter().map(String::as_str).collect::<Vec<_>>().join(", ")
+            ));
         }
         by_file
             .entry(node.path().to_string())
@@ -367,6 +369,19 @@ mod tests {
         assert!(text.contains("fn target"), "must render target function");
         // Must contain at least one caller annotation.
         assert!(text.contains("[callers:"), "must render callers annotation");
+    }
+
+    #[test]
+    fn test_render_subgraph_text_returns_empty_string_for_empty_graph() {
+        // Arrange: an empty GraphDb with no edges and no nodes.
+        let graph = super::GraphDb::default();
+        let sub = blast_radius(&graph, &[], 100, 10);
+
+        // Act
+        let text = render_subgraph_text(&sub);
+
+        // Assert: empty string, no leading newline.
+        assert!(text.is_empty(), "empty graph must produce empty string");
     }
 
     #[test]
