@@ -71,7 +71,7 @@ The `ReviewContext` struct centralises all enrichment decisions: AST context, ca
 
 `apply_patch_and_push` drives the full patch-to-PR pipeline:
 
-1. Git version gate (>= 2.39.2, CVE-2023-23946)
+1. Git version gate (minimum version enforced at runtime)
 2. Patch validation: 50 MB size cap, path-traversal rejection, symlink-mode rejection
 3. Security scan via `SecurityScanner::scan_diff()` (bypassable with `--force`)
 4. Dry-run apply check (`git apply --check`) before any branch is created
@@ -153,7 +153,7 @@ See [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs
 ## Rust Edition & Tooling
 
 - **Edition**: Rust 2024
-- **MSRV**: 1.96.0
+- **MSRV**: see `rust-toolchain.toml`
 - **Linting**: Clippy with pedantic warnings
 - **Formatting**: Rustfmt
 - **Auditing**: Cargo-deny for vulnerabilities and license compliance

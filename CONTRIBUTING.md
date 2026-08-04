@@ -16,7 +16,7 @@ Not a coder? You can still help Aptu grow:
 
 ### Prerequisites
 
-- **Rust 1.96.0** (authoritative source: rust-toolchain.toml) - Automatically managed via `rust-toolchain.toml` (when bumping the toolchain, also update the MSRV string in this file and `docs/ARCHITECTURE.md`)
+- **Rust** - Automatically managed via `rust-toolchain.toml`
 - **Just** - Task runner for common commands
 
 Install Just:
@@ -263,12 +263,12 @@ Configure a GPG key for signing commits and tags:
 1. Update version in `Cargo.toml`
 2. Commit: `git commit -S -s -m "chore: bump version to X.Y.Z"`
 3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"` -- must be a GPG-signed annotated tag; a lightweight tag (`git tag vX.Y.Z`) will be rejected by the `verify-tag-signature` gate and no assets will be built. Verify before pushing: `git tag -v vX.Y.Z`
-4. **First release of a new minor version only** (e.g. `v0.9.0`, `v1.0.0`): pre-create the
+4. **First release of a new minor version only** (e.g. `vX.Y.0`, `vX.0.0`): pre-create the
    floating tag before pushing, otherwise the release workflow fails (the `Release Tag Protection`
    ruleset blocks `GITHUB_TOKEN` from creating new `refs/tags/v*` refs via POST, but allows
    updating existing ones via PATCH):
    ```bash
-   # Replace vX.Y with the new minor version (e.g. v0.9).
+   # Replace vX.Y with the new minor version.
    # Only run this for the first release of a new minor; the tag must not exist yet.
    # Verify first (exits non-zero if the tag is absent; pipe to /dev/null to suppress output):
    #   gh api repos/clouatre-labs/aptu/git/ref/tags/vX.Y > /dev/null 2>&1 && echo "tag exists" || echo "tag absent -- safe to POST"
@@ -340,7 +340,7 @@ If a release tag was pushed but the workflow failed before assets were uploaded 
 gh workflow run release.yml -f tag_name=vX.Y.Z -f dry_run=false -f version=X.Y.Z
 ```
 
-Or via the GitHub UI: Actions -> Release -> Run workflow -> set `tag_name` to the existing tag (e.g. `v0.8.5`), `dry_run` to `false`.
+Or via the GitHub UI: Actions -> Release -> Run workflow -> set `tag_name` to the existing tag (e.g. `vX.Y.Z`), `dry_run` to `false`.
 
 This skips `verify-tag-signature`, targets the existing release object, builds and uploads all assets, and skips publish, Homebrew, and the floating-tag update (none of which are needed for asset recovery). Crates.io publish must be done separately if not already completed.
 
