@@ -74,21 +74,21 @@ pub fn decode_graph(bytes: &[u8]) -> Option<GraphDb> {
     Some(graph)
 }
 
-/// Loads a cached graph from disk, or builds and caches a new one from the
-/// rendered context strings.
+/// Loads a cached graph from disk, or persists the provided graph to cache.
 ///
-/// Returns `(graph, cache_hit)`. On any cache read failure (missing file,
-/// version mismatch, decode error), falls through to building a new graph.
+/// Returns `(graph, cache_hit)`. On cache hit, the provided `graph` is dropped
+/// and the cached version is returned. On cache miss, the provided `graph` is
+/// persisted to disk and returned.
 ///
-/// On WASM targets, this always builds a new graph (no disk I/O).
+/// On WASM targets, this always returns the provided graph with `cache_hit = false`
+/// (no disk I/O).
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn load_or_build(
     owner: &str,
     repo: &str,
     sha: &str,
-    ast: &str,
-    call_graph: &str,
+    graph: GraphDb,
     cfg: &GraphConfig,
 ) -> (GraphDb, bool) {
     // Try cache first.
@@ -97,29 +97,22 @@ pub fn load_or_build(
         return (cached, true);
     }
 
-    // Build from scratch.
-    let mut graph = super::builder::parse_ast_context_string(ast);
-    super::builder::parse_call_graph_string(call_graph, &mut graph);
-
     // Persist to cache.
     persist_graph(&path, &graph);
 
     (graph, false)
 }
 
-/// WASM fallback: always build from scratch, no disk I/O.
+/// WASM fallback: always return provided graph, no disk I/O.
 #[cfg(target_arch = "wasm32")]
 #[must_use]
 pub fn load_or_build(
     _owner: &str,
     _repo: &str,
     _sha: &str,
-    ast: &str,
-    call_graph: &str,
+    graph: GraphDb,
     _cfg: &GraphConfig,
 ) -> (GraphDb, bool) {
-    let mut graph = super::builder::parse_ast_context_string(ast);
-    super::builder::parse_call_graph_string(call_graph, &mut graph);
     (graph, false)
 }
 

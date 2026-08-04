@@ -10,6 +10,23 @@ use std::path::PathBuf;
 use crate::ai::types::PrDetails;
 use crate::config::ReviewConfig;
 
+#[cfg(all(feature = "ast-context", feature = "graph"))]
+use regex::Regex;
+#[cfg(all(feature = "ast-context", feature = "graph"))]
+use std::sync::LazyLock;
+
+/// Regex to extract symbol names from unified-diff added lines.
+/// Matches `fn`/`async fn`, `struct`, `enum`, `trait`, and `impl` declarations,
+/// stripping any visibility prefix (including `pub(crate)`, `pub(super)`, etc.).
+/// Capture group 2 is the keyword, capture group 3 is the symbol name.
+#[cfg(all(feature = "ast-context", feature = "graph"))]
+static SYMBOL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^\+(\s*)(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(fn|struct|enum|trait|impl)\s+([a-zA-Z_]\w*)",
+    )
+    .expect("valid SYMBOL_RE")
+});
+
 /// Estimated overhead for XML tags, section headers, and schema preamble added by
 /// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
 /// non-content characters when estimating total prompt size.
@@ -210,7 +227,17 @@ pub async fn build_review_context(
         .map(|p| p.to_string_lossy().into_owned());
 
     // Step 2: Build AST context if repo_path resolved
-    let ast_context = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
+    // When `ast-context` feature is enabled, build_ctx_ast returns AstContextOutput
+    // (which carries both the text string and the structural GraphDb).
+    // When disabled, it returns a plain String.
+    #[cfg(feature = "ast-context")]
+    let ast_output = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
+    #[cfg(feature = "ast-context")]
+    let ast_context = ast_output.text.clone();
+    #[cfg(not(feature = "ast-context"))]
+    let ast_output = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
+    #[cfg(not(feature = "ast-context"))]
+    let ast_context = ast_output.clone();
 
     // Step 3: Enrich with dependency release notes
     pr.dep_enrichments = enrich_deps(&pr.files, review_config).await;
@@ -233,14 +260,8 @@ pub async fn build_review_context(
     let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph, "");
 
     // Step 5b: Build structural graph context if enabled
-    let (mut graph_context, graph_cache_hit) = build_ctx_graph(
-        graph_config,
-        repo_path_ref.as_deref(),
-        &pr,
-        &ast_context,
-        &call_graph,
-    )
-    .await;
+    let (mut graph_context, graph_cache_hit) =
+        build_ctx_graph(graph_config, repo_path_ref.as_deref(), &pr, &ast_output).await;
 
     // Step 6: Apply budget drop order
     let mut ast_context = ast_context;
@@ -556,20 +577,27 @@ pub(crate) fn estimate_pr_size(
 }
 
 /// Builds AST context for changed files.
+///
+/// Returns an [`AstContextOutput`] containing the text string and (when the `graph`
+/// feature is also enabled) the structural [`GraphDb`] built from the same analysis.
 #[allow(clippy::unused_async)]
-async fn build_ctx_ast(repo_path: Option<&str>, files: &[crate::ai::types::PrFile]) -> String {
+#[cfg(feature = "ast-context")]
+async fn build_ctx_ast(
+    repo_path: Option<&str>,
+    files: &[crate::ai::types::PrFile],
+) -> crate::ast_context::AstContextOutput {
     let Some(path) = repo_path else {
-        return String::new();
+        return crate::ast_context::AstContextOutput::new(String::new());
     };
-    #[cfg(feature = "ast-context")]
-    {
-        return crate::ast_context::build_ast_context(path, files).await;
-    }
-    #[cfg(not(feature = "ast-context"))]
-    {
-        let _ = (path, files);
-        String::new()
-    }
+    crate::ast_context::build_ast_context(path, files).await
+}
+
+/// Builds AST context for changed files (stub when `ast-context` feature is off).
+#[allow(clippy::unused_async)]
+#[cfg(not(feature = "ast-context"))]
+async fn build_ctx_ast(repo_path: Option<&str>, files: &[crate::ai::types::PrFile]) -> String {
+    let _ = (repo_path, files);
+    String::new()
 }
 
 /// Builds call-graph context for changed files.
@@ -596,17 +624,21 @@ async fn build_ctx_call_graph(
     }
 }
 
-/// Builds structural graph context from PR-changed files when the `graph` feature is enabled.
+/// Builds structural graph context from PR-changed files when both `ast-context` and
+/// `graph` features are enabled.
+///
+/// Accepts a pre-built [`AstContextOutput`] containing the structural graph from
+/// `ast_context.rs`, and passes it to `cache::load_or_build` for caching.
 ///
 /// Returns `(rendered_text, cache_hit)`. Returns empty string and `false` when the
 /// feature is off, when `graph_config.enabled` is false, or when `repo_path` is absent.
 #[allow(clippy::unused_async)]
+#[cfg(feature = "ast-context")]
 async fn build_ctx_graph(
     graph_config: &crate::config::GraphConfig,
     repo_path: Option<&str>,
     pr: &PrDetails,
-    ast_context: &str,
-    call_graph: &str,
+    ast_output: &crate::ast_context::AstContextOutput,
 ) -> (String, bool) {
     #[cfg(feature = "graph")]
     {
@@ -621,11 +653,10 @@ async fn build_ctx_graph(
             &pr.owner,
             &pr.repo,
             &sha,
-            ast_context,
-            call_graph,
+            ast_output.graph.clone(),
             graph_config,
         );
-        let function_names: Vec<String> = extract_function_names_from_ast(&graph);
+        let function_names: Vec<String> = derive_modified_symbols(&pr.files);
         let fn_refs: Vec<&str> = function_names.iter().map(String::as_str).collect();
         let modified_nodes = crate::graph::query::find_modified_nodes(&mut graph, &fn_refs);
         let subgraph =
@@ -637,27 +668,80 @@ async fn build_ctx_graph(
     }
     #[cfg(not(feature = "graph"))]
     {
-        let _ = (graph_config, repo_path, pr, ast_context, call_graph);
+        let _ = (graph_config, repo_path, pr, ast_output);
         (String::new(), false)
     }
 }
 
-/// Extracts function names from the graph's node weights.
+/// Stub when `ast-context` feature is off: graph context always empty.
+#[allow(clippy::unused_async)]
+#[cfg(not(feature = "ast-context"))]
+async fn build_ctx_graph(
+    graph_config: &crate::config::GraphConfig,
+    repo_path: Option<&str>,
+    pr: &PrDetails,
+    _ast_text: &str,
+) -> (String, bool) {
+    let _ = (graph_config, repo_path, pr);
+    (String::new(), false)
+}
+
+/// Derives modified symbol names from PR file patches by parsing diff hunks.
 ///
-/// Filters for `Node::Function` variants and returns their names.
-/// Returns an empty vec if no function nodes are found.
-#[cfg(feature = "graph")]
-fn extract_function_names_from_ast(graph: &crate::graph::GraphDb) -> Vec<String> {
-    graph
-        .node_weights()
-        .filter_map(|node| {
-            if let crate::graph::Node::Function { name, .. } = node {
-                Some(name.clone())
-            } else {
-                None
+/// Iterates `pr.files`, parses each patch string for `@@` hunk headers to get
+/// changed line ranges, then matches added/changed lines against
+/// `fn`/`struct`/`enum`/`trait`/`impl` name patterns to extract symbol names.
+///
+/// Handles:
+/// - `patch = None` -> empty `Vec`
+/// - `patch_truncated = true` -> partial set (uses what's available)
+/// - Renamed files (status field) -> treated same as modified for extraction
+#[cfg(all(feature = "ast-context", feature = "graph"))]
+fn derive_modified_symbols(files: &[crate::ai::types::PrFile]) -> Vec<String> {
+    let mut symbols: Vec<String> = Vec::new();
+
+    for file in files {
+        let Some(patch) = &file.patch else {
+            continue;
+        };
+
+        // Parse each line of the patch for symbol definitions
+        for line in patch.lines() {
+            // Skip hunk headers, removed lines, and file-header lines
+            if line.starts_with("@@") || line.starts_with('-') || line.starts_with("+++") {
+                continue;
             }
-        })
-        .collect()
+
+            // Match added lines with symbol declarations using regex
+            if let Some(caps) = SYMBOL_RE.captures(line) {
+                let keyword = caps.get(2).map_or("", |m| m.as_str());
+                let name = caps.get(3).map_or("", |m| m.as_str()).to_string();
+
+                let sym = if keyword == "impl" {
+                    // For "impl Trait for Type", extract the type name after "for"
+                    let trimmed = line.strip_prefix('+').unwrap_or("").trim();
+                    let after_impl = trimmed.strip_prefix("impl ").unwrap_or("");
+                    if let Some(for_pos) = after_impl.find(" for ") {
+                        after_impl[for_pos + 5..]
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or("")
+                            .to_string()
+                    } else {
+                        name
+                    }
+                } else {
+                    name
+                };
+
+                if !sym.is_empty() && !symbols.contains(&sym) {
+                    symbols.push(sym);
+                }
+            }
+        }
+    }
+
+    symbols
 }
 
 /// Infers the repository path from the current working directory.
@@ -1122,6 +1206,301 @@ mod tests {
             size,
             call_graph.len(),
             PROMPT_OVERHEAD_CHARS
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // derive_modified_symbols tests
+    // -----------------------------------------------------------------------
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_patch_none_yields_empty() {
+        // Arrange: file with no patch
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: None,
+            patch_truncated: false,
+            full_content: None,
+            additions: 0,
+            deletions: 0,
+        }];
+
+        // Act
+        let symbols = derive_modified_symbols(&files);
+
+        // Assert
+        assert!(symbols.is_empty(), "patch=None should yield empty symbols");
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_extracts_from_hunk_lines() {
+        // Arrange: patch with fn, struct, and enum definitions in added lines
+        let patch = "\
+@@ -1,5 +1,10 @@
+ fn existing_fn() {}
++fn new_fn() -> Result<()> {
++    Ok(())
++}
++pub struct NewStruct {
++    field: i32,
++}
++pub enum NewEnum {
++    VariantA,
++}
++impl NewStruct {
++    fn method(&self) {}
++}
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 5,
+            deletions: 0,
+        }];
+
+        // Act
+        let mut symbols = derive_modified_symbols(&files);
+        symbols.sort();
+
+        // Assert
+        assert!(
+            symbols.contains(&"new_fn".to_string()),
+            "should extract fn name"
+        );
+        assert!(
+            symbols.contains(&"NewStruct".to_string()),
+            "should extract struct name"
+        );
+        assert!(
+            symbols.contains(&"NewEnum".to_string()),
+            "should extract enum name"
+        );
+        // 'impl' block: the type after 'impl' is extracted
+        assert!(
+            symbols.contains(&"NewStruct".to_string()),
+            "impl target should be extracted"
+        );
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_patch_truncated_yields_partial() {
+        // Arrange: truncated patch (patch_truncated=true) with some definitions
+        let patch = "\
+@@ -1,5 +1,8 @@
+ fn existing_fn() {}
++fn visible_fn() {}
++pub struct VisibleStruct {
++    field: i32,
++}
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: true,
+            full_content: None,
+            additions: 3,
+            deletions: 0,
+        }];
+
+        // Act
+        let symbols = derive_modified_symbols(&files);
+
+        // Assert: partial set from available patch content
+        assert!(
+            symbols.contains(&"visible_fn".to_string()),
+            "should extract fn from truncated patch"
+        );
+        assert!(
+            symbols.contains(&"VisibleStruct".to_string()),
+            "should extract struct from truncated patch"
+        );
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_renamed_file_treated_as_modified() {
+        // Arrange: renamed file with a function definition
+        let patch = "\
+@@ -1,1 +1,1 @@
+-fn old_name() {}
++fn renamed_fn() {}
+";
+        let files = vec![PrFile {
+            filename: "src/renamed.rs".to_string(),
+            status: "renamed".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 1,
+            deletions: 1,
+        }];
+
+        // Act
+        let symbols = derive_modified_symbols(&files);
+
+        // Assert: renamed files are treated same as modified
+        assert!(
+            symbols.contains(&"renamed_fn".to_string()),
+            "should extract fn from renamed file"
+        );
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_async_fn() {
+        // Arrange: patch with async fn declarations
+        let patch = "\
+@@ -1,3 +1,6 @@
+ fn sync_fn() {}
++async fn fetch_data() -> Result<()> {
++    Ok(())
++}
++pub async fn handle_request() -> String {
++    String::new()
++}
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 2,
+            deletions: 0,
+        }];
+
+        // Act
+        let mut symbols = derive_modified_symbols(&files);
+        symbols.sort();
+
+        // Assert
+        assert!(
+            symbols.contains(&"fetch_data".to_string()),
+            "should extract async fn name"
+        );
+        assert!(
+            symbols.contains(&"handle_request".to_string()),
+            "should extract pub async fn name"
+        );
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_pub_visibility() {
+        // Arrange: patch with pub(crate) and pub(super) visibility
+        let patch = "\
+@@ -1,3 +1,5 @@
+ fn existing() {}
++pub(crate) fn internal_fn() -> i32 { 42 }
++pub(super) fn super_fn() -> bool { true }
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 2,
+            deletions: 0,
+        }];
+
+        // Act
+        let mut symbols = derive_modified_symbols(&files);
+        symbols.sort();
+
+        // Assert
+        assert!(
+            symbols.contains(&"internal_fn".to_string()),
+            "should extract fn with pub(crate) visibility"
+        );
+        assert!(
+            symbols.contains(&"super_fn".to_string()),
+            "should extract fn with pub(super) visibility"
+        );
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_generic_fn() {
+        // Arrange: patch with generic function signatures
+        let patch = "\
+@@ -1,3 +1,5 @@
+ fn existing() {}
++fn generic_fn<T: Debug>(x: T) -> String { format!(\"{:?}\", x) }
++fn multi_bound_fn<T: Clone + Debug, U: Display>(a: T, b: U) {}
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 2,
+            deletions: 0,
+        }];
+
+        // Act
+        let mut symbols = derive_modified_symbols(&files);
+        symbols.sort();
+
+        // Assert
+        assert!(
+            symbols.contains(&"generic_fn".to_string()),
+            "should extract generic fn name without generic params"
+        );
+        assert!(
+            symbols.contains(&"multi_bound_fn".to_string()),
+            "should extract multi-bound generic fn name"
+        );
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_tuple_unit_structs() {
+        // Arrange: patch with tuple struct and unit struct definitions
+        let patch = "\
+@@ -1,3 +1,6 @@
+ fn existing() {}
++struct Point(i32, i32);
++struct Unit;
++pub struct Named {
++    field: i32,
++}
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 3,
+            deletions: 0,
+        }];
+
+        // Act
+        let mut symbols = derive_modified_symbols(&files);
+        symbols.sort();
+
+        // Assert
+        assert!(
+            symbols.contains(&"Point".to_string()),
+            "should extract tuple struct name"
+        );
+        assert!(
+            symbols.contains(&"Unit".to_string()),
+            "should extract unit struct name"
+        );
+        assert!(
+            symbols.contains(&"Named".to_string()),
+            "should extract named struct name"
         );
     }
 }
