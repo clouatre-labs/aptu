@@ -41,10 +41,17 @@ pub fn find_modified_nodes(graph: &mut GraphDb, modified_symbols: &[&str]) -> Ve
 /// [`Edge::Modifies`] are excluded.
 ///
 /// The returned graph contains at most `max_nodes` nodes (including the seed
-/// nodes). Traversal stops as soon as the cap is reached.
+/// nodes). Traversal stops as soon as the cap is reached. `max_depth` caps the
+/// number of hop levels traversed from the seed nodes; whichever limit
+/// (`max_nodes` or `max_depth`) triggers first stops the BFS.
 #[must_use]
-pub fn blast_radius(graph: &GraphDb, modified_nodes: &[NodeIndex], max_nodes: usize) -> GraphDb {
-    if modified_nodes.is_empty() || max_nodes == 0 {
+pub fn blast_radius(
+    graph: &GraphDb,
+    modified_nodes: &[NodeIndex],
+    max_nodes: usize,
+    max_depth: usize,
+) -> GraphDb {
+    if modified_nodes.is_empty() || max_nodes == 0 || max_depth == 0 {
         return GraphDb::new();
     }
 
@@ -56,15 +63,15 @@ pub fn blast_radius(graph: &GraphDb, modified_nodes: &[NodeIndex], max_nodes: us
     };
 
     let mut visited: HashSet<NodeIndex> = HashSet::new();
-    let mut queue: VecDeque<NodeIndex> = VecDeque::new();
+    let mut queue: VecDeque<(NodeIndex, usize)> = VecDeque::new();
 
     for &node in modified_nodes {
         if graph.node_weight(node).is_some() && visited.insert(node) {
-            queue.push_back(node);
+            queue.push_back((node, 0));
         }
     }
 
-    while let Some(current) = queue.pop_front() {
+    while let Some((current, depth)) = queue.pop_front() {
         if visited.len() >= max_nodes {
             break;
         }
@@ -73,8 +80,8 @@ pub fn blast_radius(graph: &GraphDb, modified_nodes: &[NodeIndex], max_nodes: us
         for edge_ref in graph.edges_directed(current, Direction::Outgoing) {
             if relevant_edges(edge_ref.weight()) {
                 let target = edge_ref.target();
-                if visited.len() < max_nodes && visited.insert(target) {
-                    queue.push_back(target);
+                if depth < max_depth && visited.len() < max_nodes && visited.insert(target) {
+                    queue.push_back((target, depth + 1));
                 }
             }
         }
@@ -83,8 +90,8 @@ pub fn blast_radius(graph: &GraphDb, modified_nodes: &[NodeIndex], max_nodes: us
         for edge_ref in graph.edges_directed(current, Direction::Incoming) {
             if relevant_edges(edge_ref.weight()) {
                 let source = edge_ref.source();
-                if visited.len() < max_nodes && visited.insert(source) {
-                    queue.push_back(source);
+                if depth < max_depth && visited.len() < max_nodes && visited.insert(source) {
+                    queue.push_back((source, depth + 1));
                 }
             }
         }
@@ -241,7 +248,7 @@ mod tests {
         let (graph, target, caller_a, caller_b) = two_caller_graph();
 
         // Act
-        let sub = blast_radius(&graph, &[target], 100);
+        let sub = blast_radius(&graph, &[target], 100, 10);
 
         // Assert: all three nodes are in the subgraph.
         let names: Vec<&str> = sub.node_weights().map(|n| n.name()).collect();
@@ -271,7 +278,7 @@ mod tests {
         }
 
         // Act: cap at 3 nodes.
-        let sub = blast_radius(&graph, &[root], 3);
+        let sub = blast_radius(&graph, &[root], 3, 10);
 
         // Assert: at most 3 nodes in the subgraph.
         assert!(
@@ -284,7 +291,66 @@ mod tests {
     #[test]
     fn test_blast_radius_empty_when_max_nodes_zero() {
         let (graph, target, _, _) = two_caller_graph();
-        let sub = blast_radius(&graph, &[target], 0);
+        let sub = blast_radius(&graph, &[target], 0, 10);
+        assert_eq!(sub.node_count(), 0);
+    }
+
+    #[test]
+    fn test_blast_radius_depth_cap_stops_at_max_depth() {
+        // Arrange: a fan-out graph: center with 5 callers, each of which has 5
+        // callers-of-callers (depth-2 nodes).
+        let mut graph = GraphDb::new();
+        let center = graph.add_node(Node::Function {
+            name: "center".to_string(),
+            path: "".to_string(),
+            visibility: "pub".to_string(),
+        });
+        let mut depth1 = Vec::new();
+        for i in 0..5 {
+            let caller = graph.add_node(Node::Function {
+                name: format!("caller{i}"),
+                path: "".to_string(),
+                visibility: "pub".to_string(),
+            });
+            graph.add_edge(caller, center, Edge::Calls);
+            depth1.push(caller);
+        }
+        for (i, &d1) in depth1.iter().enumerate() {
+            let caller2 = graph.add_node(Node::Function {
+                name: format!("caller2_{i}"),
+                path: "".to_string(),
+                visibility: "pub".to_string(),
+            });
+            graph.add_edge(caller2, d1, Edge::Calls);
+        }
+
+        // Act: cap depth at 1, so depth-2 nodes must be absent.
+        let sub = blast_radius(&graph, &[center], 100, 1);
+
+        // Assert: center and depth-1 callers present; depth-2 nodes absent.
+        let names: Vec<String> = sub.node_weights().map(|n| n.name().to_string()).collect();
+        assert!(
+            names.contains(&"center".to_string()),
+            "center must be present"
+        );
+        for i in 0..5 {
+            assert!(
+                names.contains(&format!("caller{i}")),
+                "caller{i} must be present"
+            );
+        }
+        for i in 0..5 {
+            assert!(
+                !names.contains(&format!("caller2_{i}")),
+                "caller2_{i} must be absent at depth 2"
+            );
+        }
+    }
+
+    #[test]
+    fn test_blast_radius_max_depth_zero_returns_empty() {
+        let (graph, target, _, _) = two_caller_graph();
+        let sub = blast_radius(&graph, &[target], 100, 0);
         assert_eq!(sub.node_count(), 0);
     }
 
@@ -292,7 +358,7 @@ mod tests {
     fn test_render_subgraph_text_contains_function_with_caller() {
         // Arrange: two-caller graph.
         let (graph, target, _caller_a, _caller_b) = two_caller_graph();
-        let sub = blast_radius(&graph, &[target], 100);
+        let sub = blast_radius(&graph, &[target], 100, 10);
 
         // Act
         let text = render_subgraph_text(&sub);

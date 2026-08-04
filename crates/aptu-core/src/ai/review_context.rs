@@ -659,8 +659,12 @@ async fn build_ctx_graph(
         let function_names: Vec<String> = derive_modified_symbols(&pr.files);
         let fn_refs: Vec<&str> = function_names.iter().map(String::as_str).collect();
         let modified_nodes = crate::graph::query::find_modified_nodes(&mut graph, &fn_refs);
-        let subgraph =
-            crate::graph::query::blast_radius(&graph, &modified_nodes, graph_config.max_nodes);
+        let subgraph = crate::graph::query::blast_radius(
+            &graph,
+            &modified_nodes,
+            graph_config.max_nodes,
+            graph_config.max_depth,
+        );
         (
             crate::graph::query::render_subgraph_text(&subgraph),
             cache_hit,

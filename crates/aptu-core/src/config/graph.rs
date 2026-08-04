@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 ///   repositories with frequent commits.
 /// - `max_nodes`: 50,000 nodes caps the blast-radius subgraph and cache size
 ///   for very large repositories.
+/// - `max_depth`: 4 hops caps the blast-radius BFS traversal depth.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct GraphConfig {
@@ -27,6 +28,9 @@ pub struct GraphConfig {
     /// Maximum number of nodes in the blast-radius subgraph (default: `50_000`).
     #[serde(default = "default_max_nodes")]
     pub max_nodes: usize,
+    /// Maximum BFS hop depth from a modified node in the blast-radius subgraph (default: `4`).
+    #[serde(default = "default_max_depth")]
+    pub max_depth: usize,
 }
 
 fn default_enabled() -> bool {
@@ -41,12 +45,17 @@ fn default_max_nodes() -> usize {
     50_000
 }
 
+fn default_max_depth() -> usize {
+    4
+}
+
 impl Default for GraphConfig {
     fn default() -> Self {
         Self {
             enabled: default_enabled(),
             cache_ttl_hours: default_cache_ttl_hours(),
             max_nodes: default_max_nodes(),
+            max_depth: default_max_depth(),
         }
     }
 }
@@ -63,6 +72,13 @@ impl GraphConfig {
         if self.enabled && self.max_nodes == 0 {
             warnings.push(
                 "max_nodes is 0 while graph is enabled: blast-radius subgraph will always be empty"
+                    .to_string(),
+            );
+        }
+
+        if self.enabled && self.max_depth == 0 {
+            warnings.push(
+                "max_depth is 0 while graph is enabled: blast-radius subgraph will always be empty"
                     .to_string(),
             );
         }
