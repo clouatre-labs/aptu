@@ -90,6 +90,11 @@ impl ConfigSource for TomlConfigSource {
             tracing::warn!("{}", warning);
         }
 
+        // Validate graph configuration consistency at load time (non-fatal warnings).
+        for warning in app_config.graph.validate_consistency() {
+            tracing::warn!("{}", warning);
+        }
+
         Ok(app_config)
     }
 }
