@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025 Agentic AI Foundation
 
 //! AST context injection for PR reviews.
 //!
@@ -34,6 +35,44 @@ use std::fmt::Write as _;
 #[cfg(feature = "ast-context")]
 use aptu_coder_core::{analyze_file, analyze_focused, language_for_extension};
 
+/// Result of building AST context, including both the text string and the
+/// structural graph built from the same analysis data.
+#[derive(Debug)]
+pub(crate) struct AstContextOutput {
+    /// Text representation of AST context (for prompt injection).
+    pub text: String,
+    /// Structural graph built from the same analysis data.
+    /// Only present when both `ast-context` and `graph` features are enabled.
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    pub graph: crate::graph::GraphDb,
+}
+
+impl AstContextOutput {
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    pub(crate) fn new(text: String) -> Self {
+        Self {
+            text,
+            graph: crate::graph::GraphDb::default(),
+        }
+    }
+
+    #[cfg(not(all(feature = "ast-context", feature = "graph")))]
+    pub(crate) fn new(text: String) -> Self {
+        Self { text }
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    fn with_graph(text: String, graph: crate::graph::GraphDb) -> Self {
+        Self { text, graph }
+    }
+}
+
+impl Default for AstContextOutput {
+    fn default() -> Self {
+        Self::new(String::new())
+    }
+}
+
 // `str::floor_char_boundary` is available in std but remains behind the
 // `str_internals` nightly feature gate on stable Rust. This local
 // implementation provides the equivalent behavior on stable.
@@ -58,7 +97,8 @@ fn floor_char_boundary(s: &str, max: usize) -> usize {
 ///
 /// Returns empty string if `repo_path` is invalid or no files have analysis results.
 /// Output is capped at 2000 characters.
-pub async fn build_ast_context(repo_path: &str, files: &[PrFile]) -> String {
+#[allow(private_interfaces)]
+pub async fn build_ast_context(repo_path: &str, files: &[PrFile]) -> AstContextOutput {
     let repo_path = repo_path.to_string();
     let files: Vec<PrFile> = files.to_vec();
 
@@ -66,22 +106,30 @@ pub async fn build_ast_context(repo_path: &str, files: &[PrFile]) -> String {
         Ok(result) => result,
         Err(e) => {
             tracing::warn!("build_ast_context: blocking task panicked: {e}");
-            String::new()
+            AstContextOutput::new(String::new())
         }
     }
 }
 
 #[cfg(not(feature = "ast-context"))]
-fn build_ast_context_sync(_repo_path: &str, _files: &[PrFile]) -> String {
-    String::new()
+fn build_ast_context_sync(_repo_path: &str, _files: &[PrFile]) -> AstContextOutput {
+    AstContextOutput::new(String::new())
 }
 
 #[cfg(feature = "ast-context")]
-fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
+#[allow(clippy::too_many_lines)]
+fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput {
     // CAP is a soft ceiling: the closing XML tag is appended after truncation,
     // so actual maximum output length is CAP + len(closing_tag).
     const CAP: usize = 2000;
     let mut output = String::from("\n<ast_context>\n");
+
+    // Accumulate analysis data for graph building
+    #[cfg(feature = "graph")]
+    let mut analysis_pairs: Vec<(std::path::PathBuf, aptu_coder_core::SemanticAnalysis)> =
+        Vec::new();
+    #[cfg(feature = "graph")]
+    let mut impl_traits: Vec<aptu_coder_core::ImplTraitInfo> = Vec::new();
 
     for file in files {
         let ext = Path::new(&file.filename)
@@ -112,6 +160,13 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
                     break;
                 }
                 output.push_str(&file_block);
+
+                // Accumulate for graph building
+                #[cfg(feature = "graph")]
+                {
+                    analysis_pairs.push((full_path.clone(), analysis.semantic.clone()));
+                    impl_traits.extend(analysis.semantic.impl_traits.clone());
+                }
             }
             Err(e) => {
                 debug!("ast_context: skipping {}: {}", file.filename, e);
@@ -122,7 +177,7 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
 
     // If nothing was added (only the wrapper tags), return empty
     if output == "\n<ast_context>\n</ast_context>\n" {
-        return String::new();
+        return AstContextOutput::new(String::new());
     }
 
     // Enforce cap on the full output
@@ -132,7 +187,53 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> String {
         output.push_str("\n</ast_context>\n");
     }
 
-    output
+    // Build structural graph from accumulated analysis data (no second analyze_file pass).
+    #[cfg(feature = "graph")]
+    {
+        if analysis_pairs.is_empty() {
+            return AstContextOutput::with_graph(output, crate::graph::GraphDb::new());
+        }
+
+        match aptu_coder_core::graph::CallGraph::build_from_results(
+            analysis_pairs.clone(),
+            &impl_traits,
+            false,
+        ) {
+            Ok(call_graph) => {
+                // Reuse the already-accumulated (path, semantic) pairs -- no second analyze_file.
+                let mut merged = crate::graph::GraphDb::new();
+                for (full_path, semantic) in &analysis_pairs {
+                    let rel_name = full_path.file_name().map_or_else(
+                        || full_path.to_string_lossy().into_owned(),
+                        |n| n.to_string_lossy().into_owned(),
+                    );
+                    let file_graph = crate::graph::builder::build_from_analysis(
+                        &rel_name,
+                        semantic,
+                        &call_graph,
+                    );
+                    // Merge into combined graph.
+                    let node_map: Vec<_> = file_graph
+                        .node_indices()
+                        .map(|idx| merged.add_node(file_graph[idx].clone()))
+                        .collect();
+                    for edge_idx in file_graph.edge_indices() {
+                        let (src, dst) = file_graph.edge_endpoints(edge_idx).unwrap();
+                        let weight = *file_graph.edge_weight(edge_idx).unwrap();
+                        merged.add_edge(node_map[src.index()], node_map[dst.index()], weight);
+                    }
+                }
+                AstContextOutput::with_graph(output, merged)
+            }
+            Err(e) => {
+                tracing::warn!("ast_context: CallGraph::build_from_results failed: {e}");
+                AstContextOutput::with_graph(output, crate::graph::GraphDb::new())
+            }
+        }
+    }
+
+    #[cfg(not(feature = "graph"))]
+    AstContextOutput::new(output)
 }
 
 /// Build cross-file call graph context for the changed files.
@@ -267,7 +368,10 @@ mod tests {
     async fn test_build_ast_context_missing_path_returns_empty() {
         let files = vec![make_pr_file("src/main.rs")];
         let result = build_ast_context("/nonexistent/path/xyz", &files).await;
-        assert!(result.is_empty(), "expected empty for missing repo path");
+        assert!(
+            result.text.is_empty(),
+            "expected empty for missing repo path"
+        );
     }
 
     #[tokio::test]
@@ -276,7 +380,7 @@ mod tests {
         let files = vec![make_pr_file("src/ast_context.rs")];
         let result = build_ast_context(&repo_path, &files).await;
         // Verify it doesn't panic and respects the cap
-        assert!(result.len() <= 2200, "output should be near cap");
+        assert!(result.text.len() <= 2200, "output should be near cap");
     }
 
     #[tokio::test]
@@ -286,7 +390,7 @@ mod tests {
             .collect();
         let result = build_ast_context(".", &files).await;
         assert!(
-            result.len() <= 2200,
+            result.text.len() <= 2200,
             "output must be capped near 2000 chars"
         );
     }
@@ -297,7 +401,7 @@ mod tests {
         let result = build_ast_context(".", &files).await;
         // Python file should be processed by language_for_extension (happy path)
         assert!(
-            result.is_empty() || result.contains("<ast_context>"),
+            result.text.is_empty() || result.text.contains("<ast_context>"),
             "Python file should be included in AST context"
         );
     }
@@ -308,7 +412,7 @@ mod tests {
         let result = build_ast_context(".", &files).await;
         // TypeScript file should be processed by language_for_extension
         assert!(
-            result.is_empty() || result.contains("<ast_context>"),
+            result.text.is_empty() || result.text.contains("<ast_context>"),
             "TypeScript file should be included in AST context"
         );
     }
@@ -320,12 +424,12 @@ mod tests {
         // Markdown is supported in aptu-coder-core >= 0.22.0 (tree-sitter-md)
         #[cfg(feature = "ast-context")]
         assert!(
-            result.contains("<ast_context>"),
+            result.text.contains("<ast_context>"),
             "Markdown file should produce an <ast_context> block; got: {result:?}"
         );
         #[cfg(not(feature = "ast-context"))]
         assert!(
-            result.is_empty(),
+            result.text.is_empty(),
             "without ast-context feature, build_ast_context returns empty"
         );
     }

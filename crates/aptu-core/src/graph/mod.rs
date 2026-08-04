@@ -3,16 +3,16 @@
 //! Structural call graph for PR review context.
 //!
 //! Builds a petgraph-backed directed graph of source-code symbols (functions,
-//! structs, enums, traits, impls) by parsing the rendered `<ast_context>` and
-//! `<call_graph>` strings already produced by `crate::ast_context`, caches the
-//! result on disk keyed by repository and commit SHA, and computes a bounded
-//! blast-radius subgraph around modified symbols for prompt injection.
+//! modules) directly from the typed `SemanticAnalysis` and `CallGraph` structs
+//! produced by `aptu-coder-core`, caches the result on disk keyed by
+//! repository and commit SHA, and computes a bounded blast-radius subgraph
+//! around modified symbols for prompt injection.
 
 pub mod builder;
 pub mod cache;
 pub mod query;
 
-pub use builder::{parse_ast_context_string, parse_call_graph_string};
+pub use builder::build_from_analysis;
 pub use query::blast_radius;
 
 use serde::{Deserialize, Serialize};
