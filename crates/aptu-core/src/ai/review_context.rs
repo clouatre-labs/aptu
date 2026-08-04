@@ -679,7 +679,7 @@ async fn build_ctx_graph(
 /// - `patch = None` -> empty `Vec`
 /// - `patch_truncated = true` -> partial set (uses what's available)
 /// - Renamed files (status field) -> treated same as modified for extraction
-#[cfg(feature = "graph")]
+#[cfg(all(feature = "ast-context", feature = "graph"))]
 fn derive_modified_symbols(files: &[crate::ai::types::PrFile]) -> Vec<String> {
     let mut symbols: Vec<String> = Vec::new();
 

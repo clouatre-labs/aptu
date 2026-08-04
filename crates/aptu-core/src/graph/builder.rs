@@ -17,6 +17,9 @@ use petgraph::graph::NodeIndex;
 
 use super::{Edge, GraphDb, Node};
 
+#[cfg(all(feature = "ast-context", feature = "graph"))]
+use aptu_coder_core::{SemanticAnalysis, graph::CallGraph};
+
 /// Builds a [`GraphDb`] from typed aptu-coder-core analysis structs.
 ///
 /// Emits:
@@ -36,8 +39,8 @@ use super::{Edge, GraphDb, Node};
 #[must_use]
 pub fn build_from_analysis(
     path: &str,
-    semantic: &aptu_coder_core::SemanticAnalysis,
-    call_graph: &aptu_coder_core::graph::CallGraph,
+    semantic: &SemanticAnalysis,
+    call_graph: &CallGraph,
 ) -> GraphDb {
     let mut graph = GraphDb::new();
 
