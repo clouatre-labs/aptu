@@ -2,22 +2,48 @@
 
 //! On-disk cache for structural graphs, keyed by repository and commit SHA.
 //!
-//! Cache format: 4 raw bytes for `FORMAT_VERSION` (little-endian `u32`)
-//! followed by a postcard-encoded [`super::GraphDb`] payload. `Modifies` edges
-//! are ephemeral (derived from the current diff) and are always stripped
-//! before serialization; they never appear in a cached graph.
+//! Cache format: 8 raw bytes of header followed by a postcard-encoded
+//! [`super::GraphDb`] payload. The header is two little-endian `u32`s:
+//! `FORMAT_VERSION` (bytes 0..4) then `schema_hash` (bytes 4..8), a
+//! compile-time FNV-1a hash over the `Node`/`Edge` variant names used to
+//! invalidate stale caches when the schema changes. `Modifies` edges are
+//! ephemeral (derived from the current diff) and are always removed before
+//! serialization; they never appear in a cached graph.
 //!
-//! Only the actual file I/O (`load_or_build`) is gated to non-WASM targets.
-//! Path construction and byte encode/decode are pure functions usable on any
-//! target.
+//! Only the actual file I/O (`load_or_build`, `persist_graph`) is gated to
+//! non-WASM targets. Path construction and byte encode/decode are pure
+//! functions usable on any target.
 
+use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 
 use super::{Edge, GraphDb};
 use crate::config::GraphConfig;
 
 /// Cache format version. Bump when the encoding changes in an incompatible way.
-const FORMAT_VERSION: u32 = 2;
+const FORMAT_VERSION: u32 = 3;
+
+/// Compile-time FNV-1a hash over the `Node`/`Edge` variant names.
+///
+/// Any change to the set (or order) of `Node`/`Edge` variant names must be
+/// reflected in [`SCHEMA_STRING`] so that stale cached graphs are invalidated
+/// by [`decode_graph`] rather than postcard mis-decoding.
+const SCHEMA_STRING: &str = "File|Module|Function|Struct|Enum|Trait|Impl|Contains|Calls|Imports|Implements|HasMethod|Modifies|Tests";
+
+/// Computes the compile-time FNV-1a hash of [`SCHEMA_STRING`].
+#[must_use]
+pub const fn schema_hash() -> u32 {
+    let bytes = SCHEMA_STRING.as_bytes();
+    let mut hash: u32 = 0x811c_9dc5;
+    let mut i = 0;
+    while i < bytes.len() {
+        hash ^= bytes[i] as u32;
+        hash = hash.wrapping_mul(0x0100_0193);
+        i += 1;
+    }
+    hash
+}
 
 /// Returns the on-disk cache path for a given repository and commit SHA.
 ///
@@ -31,28 +57,30 @@ pub fn cache_path(owner: &str, repo: &str, sha: &str) -> PathBuf {
         .join(format!("{sha}.bin"))
 }
 
-/// Strips `Modifies` edges from `graph`, returning a new graph without them.
-///
-/// `Modifies` edges are ephemeral (derived from the PR diff at review time)
-/// and must never be persisted to the cache.
-#[must_use]
-pub fn strip_modifies_edges(graph: &GraphDb) -> GraphDb {
-    let mut filtered = graph.clone();
-    filtered.retain_edges(|g, edge_idx| !matches!(g.edge_weight(edge_idx), Some(Edge::Modifies)));
-    filtered
-}
-
 /// Encodes `graph` into the on-disk cache byte format.
 ///
-/// Strips `Modifies` edges, then prepends the 4-byte `FORMAT_VERSION` header
-/// to the postcard-encoded payload. Returns `None` if postcard serialization fails.
+/// Removes `Modifies` edges by rebuilding a filtered graph (single O(N+E) pass
+/// over nodes and edges), then prepends the 8-byte header (`FORMAT_VERSION`
+/// followed by `schema_hash`) to the postcard-encoded payload. Returns `None`
+/// if postcard serialization fails.
 #[must_use]
 pub fn encode_graph(graph: &GraphDb) -> Option<Vec<u8>> {
-    let stripped = strip_modifies_edges(graph);
-    let payload = postcard::to_allocvec(&stripped).ok()?;
+    let mut filtered = GraphDb::new();
+    for idx in graph.node_indices() {
+        filtered.add_node(graph[idx].clone());
+    }
+    for idx in graph.edge_indices() {
+        let (a, b) = graph.edge_endpoints(idx)?;
+        if !matches!(graph[idx], Edge::Modifies) {
+            filtered.add_edge(a, b, graph[idx]);
+        }
+    }
 
-    let mut bytes = Vec::with_capacity(4 + payload.len());
+    let payload = postcard::to_allocvec(&filtered).ok()?;
+
+    let mut bytes = Vec::with_capacity(8 + payload.len());
     bytes.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
+    bytes.extend_from_slice(&schema_hash().to_le_bytes());
     bytes.extend_from_slice(&payload);
     Some(bytes)
 }
@@ -60,17 +88,22 @@ pub fn encode_graph(graph: &GraphDb) -> Option<Vec<u8>> {
 /// Decodes a graph from on-disk cache bytes.
 ///
 /// Returns `None` (cache miss) if the bytes are too short, the format
-/// version does not match [`FORMAT_VERSION`], or postcard decoding fails.
+/// version does not match [`FORMAT_VERSION`], the `schema_hash` does not
+/// match [`schema_hash`], or postcard decoding fails.
 #[must_use]
 pub fn decode_graph(bytes: &[u8]) -> Option<GraphDb> {
-    if bytes.len() < 4 {
+    if bytes.len() < 8 {
         return None;
     }
     let version = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
     if version != FORMAT_VERSION {
         return None;
     }
-    let graph: GraphDb = postcard::from_bytes(&bytes[4..]).ok()?;
+    let hash = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+    if hash != schema_hash() {
+        return None;
+    }
+    let graph: GraphDb = postcard::from_bytes(&bytes[8..]).ok()?;
     Some(graph)
 }
 
@@ -167,35 +200,52 @@ fn persist_graph(path: &PathBuf, graph: &GraphDb) {
         return;
     };
 
-    // Atomic write: write to a sibling temp file then rename to prevent partial
-    // file corruption if the process crashes during the write.
-    let tmp_path = path.with_extension("tmp");
-    if let Err(e) = std::fs::write(&tmp_path, &bytes) {
+    // Atomic write: write to a uniquely-named sibling temp file then rename to
+    // prevent partial file corruption if the process crashes during the write
+    // and avoid races between concurrent writers.
+    let parent = path.parent().unwrap_or(Path::new("."));
+    let mut tmp = match tempfile::Builder::new().tempfile_in(parent) {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(
+                path = %parent.display(),
+                error = %e,
+                "graph cache: failed to create temp file"
+            );
+            return;
+        }
+    };
+    if let Err(e) = tmp.write_all(&bytes) {
         tracing::warn!(
-            path = %tmp_path.display(),
+            path = %tmp.path().display(),
             error = %e,
             "graph cache: failed to write temp file"
         );
-        // Best-effort cleanup of any partially-written temp file; ignore error.
-        let _ = std::fs::remove_file(&tmp_path);
         return;
     }
-    if let Err(e) = std::fs::rename(&tmp_path, path) {
+    if let Err(e) = tmp.flush() {
         tracing::warn!(
-            src = %tmp_path.display(),
+            path = %tmp.path().display(),
+            error = %e,
+            "graph cache: failed to flush temp file"
+        );
+        return;
+    }
+    if let Err(e) = std::fs::rename(tmp.path(), path) {
+        tracing::warn!(
+            src = %tmp.path().display(),
             dst = %path.display(),
             error = %e,
             "graph cache: failed to rename temp file to cache path"
         );
-        // Best-effort cleanup; ignore error.
-        let _ = std::fs::remove_file(&tmp_path);
+        return;
     }
+    drop(tmp);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn test_round_trip_serialize_deserialize() {
@@ -259,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn test_strip_modifies_edges() {
+    fn test_encode_decode_excludes_modifies_edges() {
         let mut graph = GraphDb::new();
         let n1 = graph.add_node(super::super::Node::Function {
             name: "foo".to_string(),
@@ -274,13 +324,64 @@ mod tests {
         graph.add_edge(n1, n2, Edge::Calls);
         graph.add_edge(n1, n2, Edge::Modifies);
 
-        let stripped = strip_modifies_edges(&graph);
-        // Only the Calls edge should remain.
-        let has_modifies = stripped
+        let bytes = encode_graph(&graph).expect("encode must succeed");
+        let decoded = decode_graph(&bytes).expect("should decode successfully");
+
+        assert_eq!(decoded.edge_count(), 1, "only Calls edge should remain");
+        let has_modifies = decoded
             .edge_indices()
-            .any(|idx| matches!(stripped.edge_weight(idx), Some(Edge::Modifies)));
-        assert!(!has_modifies, "Modifies edges should be stripped");
-        assert_eq!(stripped.edge_count(), 1, "only Calls edge should remain");
+            .any(|idx| matches!(decoded.edge_weight(idx), Some(Edge::Modifies)));
+        assert!(!has_modifies, "Modifies edges should be excluded");
+    }
+
+    #[test]
+    fn test_schema_hash_changes_on_variant_change() {
+        // Static assertion: the hash is a deterministic FNV-1a of SCHEMA_STRING.
+        // If the Node/Edge variant-name string changes, this value must change
+        // (and the stale-cache invalidation in decode_graph would trigger).
+        assert_eq!(schema_hash(), 0x01dd_744b);
+        assert_ne!(schema_hash(), 0, "schema hash must be non-zero");
+    }
+
+    #[test]
+    fn test_persist_graph_concurrent_writes_no_corruption() {
+        let path =
+            std::env::temp_dir().join(format!("aptu_cache_concurrent_{}.bin", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+
+        let p1 = path.clone();
+        let handle1 = std::thread::spawn(move || {
+            let mut g = GraphDb::new();
+            let n = g.add_node(super::super::Node::Function {
+                name: "one".to_string(),
+                path: "src/a.rs".to_string(),
+                visibility: "pub".to_string(),
+            });
+            g.add_edge(n, n, Edge::Calls);
+            persist_graph(&p1, &g);
+        });
+        let p2 = path.clone();
+        let handle2 = std::thread::spawn(move || {
+            let mut g = GraphDb::new();
+            let n = g.add_node(super::super::Node::Function {
+                name: "two".to_string(),
+                path: "src/b.rs".to_string(),
+                visibility: "pub".to_string(),
+            });
+            g.add_edge(n, n, Edge::Calls);
+            persist_graph(&p2, &g);
+        });
+
+        handle1.join().expect("thread 1 must not panic");
+        handle2.join().expect("thread 2 must not panic");
+
+        // The file must be a valid, fully-decodable graph (no partial write).
+        let bytes = std::fs::read(&path).expect("cache file must exist");
+        let decoded = decode_graph(&bytes).expect("cache file must decode without corruption");
+        assert_eq!(decoded.node_count(), 1, "decoded graph must have one node");
+        assert_eq!(decoded.edge_count(), 1, "decoded graph must have one edge");
+
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

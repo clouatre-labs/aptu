@@ -82,6 +82,7 @@ windows-native-keyring-store = { version = "1" }
 tokio = { version = "1", features = ["full"] }
 backon = { version = "1", default-features = false, features = ["tokio-sleep"] }
 octocrab = { workspace = true }
+tempfile = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync", "io-util"] }
@@ -90,7 +91,6 @@ uuid = { version = "1", features = ["v4", "serde", "js"] }
 [dev-dependencies]
 criterion = { workspace = true }
 serial_test = { workspace = true }
-tempfile = { workspace = true }
 
 [[bench]]
 name = "security_scan"
