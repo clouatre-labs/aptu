@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "aptu-cli"
-version = "0.10.7"
+version = "0.10.8"
 dependencies = [
  "anyhow",
  "aptu-core",
@@ -165,15 +165,17 @@ dependencies = [
 
 [[package]]
 name = "aptu-coder-core"
-version = "0.26.1"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c2ffbcdf36fc1d96039600c6a6ed4bde440a3fbc90aaf94e4995e7c1d85d74e"
+checksum = "ff9d1519ce98b295b624df30f91e8217b1f38b33d7c3f43c980537d5040863ee"
 dependencies = [
  "base64 0.23.0",
  "blake3",
  "fs2",
  "ignore",
  "lru",
+ "petgraph",
+ "postcard",
  "rayon",
  "regex",
  "schemars",
@@ -202,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "aptu-core"
-version = "0.10.7"
+version = "0.10.8"
 dependencies = [
  "anyhow",
  "apple-native-keyring-store",
