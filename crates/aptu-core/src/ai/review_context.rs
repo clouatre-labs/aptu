@@ -6,17 +6,20 @@
 //! and CWD inference into a single `ReviewContext` struct and `build_review_context()` function.
 
 use std::path::PathBuf;
-use std::sync::LazyLock;
-
-use regex::Regex;
 
 use crate::ai::types::PrDetails;
 use crate::config::ReviewConfig;
+
+#[cfg(all(feature = "ast-context", feature = "graph"))]
+use regex::Regex;
+#[cfg(all(feature = "ast-context", feature = "graph"))]
+use std::sync::LazyLock;
 
 /// Regex to extract symbol names from unified-diff added lines.
 /// Matches `fn`/`async fn`, `struct`, `enum`, `trait`, and `impl` declarations,
 /// stripping any visibility prefix (including `pub(crate)`, `pub(super)`, etc.).
 /// Capture group 2 is the keyword, capture group 3 is the symbol name.
+#[cfg(all(feature = "ast-context", feature = "graph"))]
 static SYMBOL_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^\+(\s*)(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(fn|struct|enum|trait|impl)\s+([a-zA-Z_]\w*)",
@@ -1210,6 +1213,7 @@ mod tests {
     // derive_modified_symbols tests
     // -----------------------------------------------------------------------
 
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
     #[test]
     fn test_modified_symbols_patch_none_yields_empty() {
         // Arrange: file with no patch
@@ -1230,6 +1234,7 @@ mod tests {
         assert!(symbols.is_empty(), "patch=None should yield empty symbols");
     }
 
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
     #[test]
     fn test_modified_symbols_extracts_from_hunk_lines() {
         // Arrange: patch with fn, struct, and enum definitions in added lines
@@ -1283,6 +1288,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
     #[test]
     fn test_modified_symbols_patch_truncated_yields_partial() {
         // Arrange: truncated patch (patch_truncated=true) with some definitions
@@ -1318,6 +1324,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
     #[test]
     fn test_modified_symbols_renamed_file_treated_as_modified() {
         // Arrange: renamed file with a function definition
@@ -1346,6 +1353,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
     #[test]
     fn test_modified_symbols_async_fn() {
         // Arrange: patch with async fn declarations
@@ -1384,6 +1392,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
     #[test]
     fn test_modified_symbols_pub_visibility() {
         // Arrange: patch with pub(crate) and pub(super) visibility
@@ -1418,6 +1427,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
     #[test]
     fn test_modified_symbols_generic_fn() {
         // Arrange: patch with generic function signatures
@@ -1452,6 +1462,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
     #[test]
     fn test_modified_symbols_tuple_unit_structs() {
         // Arrange: patch with tuple struct and unit struct definitions
