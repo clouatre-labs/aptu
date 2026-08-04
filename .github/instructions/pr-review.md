@@ -47,6 +47,7 @@ When reviewing `.github/workflows/` changes:
 - New code in `graph/` or `review_context.rs` requiring OS I/O must carry both
   `#[cfg(feature = "graph")]` and `#[cfg(not(target_arch = "wasm32"))]`; flag missing gates.
 - Graph cache uses postcard (not bincode, not serde_json); do not suggest swapping serializers.
+- Both `ReviewConfig::validate_consistency()` and `GraphConfig::validate_consistency()` are called once at config load time (`config/loader.rs`); do not flag them as unused or suggest moving the call to individual use sites.
 
 ## General
 
