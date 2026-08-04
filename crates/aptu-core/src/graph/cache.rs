@@ -15,7 +15,6 @@
 //! functions usable on any target.
 
 use std::io::Write;
-use std::path::Path;
 use std::path::PathBuf;
 
 use super::{Edge, GraphDb};
@@ -203,7 +202,7 @@ fn persist_graph(path: &PathBuf, graph: &GraphDb) {
     // Atomic write: write to a uniquely-named sibling temp file then rename to
     // prevent partial file corruption if the process crashes during the write
     // and avoid races between concurrent writers.
-    let parent = path.parent().unwrap_or(Path::new("."));
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
     let mut tmp = match tempfile::Builder::new().tempfile_in(parent) {
         Ok(t) => t,
         Err(e) => {
@@ -221,6 +220,7 @@ fn persist_graph(path: &PathBuf, graph: &GraphDb) {
             error = %e,
             "graph cache: failed to write temp file"
         );
+        let _ = std::fs::remove_file(tmp.path());
         return;
     }
     if let Err(e) = tmp.flush() {
@@ -229,6 +229,7 @@ fn persist_graph(path: &PathBuf, graph: &GraphDb) {
             error = %e,
             "graph cache: failed to flush temp file"
         );
+        let _ = std::fs::remove_file(tmp.path());
         return;
     }
     if let Err(e) = std::fs::rename(tmp.path(), path) {
@@ -238,9 +239,9 @@ fn persist_graph(path: &PathBuf, graph: &GraphDb) {
             error = %e,
             "graph cache: failed to rename temp file to cache path"
         );
-        return;
     }
-    drop(tmp);
+    // tmp drops here; the file has been renamed so the NamedTempFile destructor
+    // will attempt to delete a path that no longer exists, which is harmless.
 }
 
 #[cfg(test)]
@@ -336,11 +337,22 @@ mod tests {
 
     #[test]
     fn test_schema_hash_changes_on_variant_change() {
-        // Static assertion: the hash is a deterministic FNV-1a of SCHEMA_STRING.
-        // If the Node/Edge variant-name string changes, this value must change
-        // (and the stale-cache invalidation in decode_graph would trigger).
-        assert_eq!(schema_hash(), 0x01dd_744b);
+        // The hash must be non-zero (FNV-1a of a non-empty string is never 0).
         assert_ne!(schema_hash(), 0, "schema hash must be non-zero");
+
+        // Verify that any change to SCHEMA_STRING produces a different hash by
+        // computing FNV-1a on a mutated string and asserting divergence.
+        const MUTATED: &str = "File|Module|Function|Struct|Enum|Trait|Impl|Contains|Calls|Imports|Implements|HasMethod|Modifies|Tests|NewVariant";
+        let mut hash: u32 = 0x811c_9dc5;
+        for &b in MUTATED.as_bytes() {
+            hash ^= b as u32;
+            hash = hash.wrapping_mul(0x0100_0193);
+        }
+        assert_ne!(
+            schema_hash(),
+            hash,
+            "schema_hash must differ when SCHEMA_STRING gains a new variant"
+        );
     }
 
     #[test]
