@@ -59,8 +59,8 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Gro
 1. Fetch PR diff and metadata via Octocrab
 2. Fetch full file content for changed files via GitHub Contents API (capped at `max_full_content_files`, `max_chars_per_file`)
 3. Build AST context: function signatures and imports for each changed file using `aptu-coder-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
-4. Build call-graph context: cross-file caller chains for changed functions
-5. Build structural graph context: petgraph BFS blast-radius from changed files (opt-in via `graph` Cargo feature); disk-cached by commit SHA
+4. Build call-graph context: cross-file caller chains for changed functions; modified symbols are derived from PR diff hunks (declaration lines matching `fn`/`async fn`, `struct`, `enum`, `trait`, `impl` via a `SYMBOL_RE` static regex), not from the full graph; callers residing only in files the PR does not touch are intentionally excluded
+5. Build structural graph context: `build_from_analysis()` constructs a `GraphDb` directly from typed `SemanticAnalysis` and `CallGraph` structs (the text-format parsers `parse_ast_context_string` and `parse_call_graph_string` were removed); `blast_radius()` runs a depth-capped (via `GraphConfig.max_depth`) and node-capped BFS from modified symbols (opt-in via `graph` Cargo feature); disk-cached by commit SHA with atomic writes and a schema-versioned header that auto-invalidates stale cache files on upgrade
 6. Dependency enrichment: if the PR bumps dependencies, fetch upstream GitHub Release notes for up to `max_dep_packages` packages and include summaries in context (controlled by `ReviewConfig`)
 7. Enforce prompt budget (`max_prompt_chars`): drop sections in order (structural graph, call graph, AST, full content, diff hunks) until budget is met
 8. Post inline review comments via GitHub REST API
@@ -95,6 +95,15 @@ Returns the branch name that was pushed, or a `PatchError` variant on any failur
 | `revert.rs` | `revert_issue()`, `revert_pr()` |
 
 Each function accepts a `&dyn TokenProvider` for credential resolution. Functions that require OS I/O (keyring, filesystem, process spawning) are `#[cfg(not(target_arch = "wasm32"))]`-gated; the `wasm_unsupported!` macro in `facade/mod.rs` provides uniform stub bodies for the wasm32 target.
+
+### AstContextOutput
+
+`AstContextOutput` (in `ast_context.rs`) is returned by the AST context builder instead of a plain string. It carries:
+
+- `text: String` -- the rendered AST summary for prompt injection
+- `graph: GraphDb` -- the structural call graph built from the same analysis pass (only present when both the `ast-context` and `graph` Cargo features are enabled)
+
+Building the `GraphDb` from the `SemanticAnalysis` and `CallGraph` structs retained during the AST pass means the graph is constructed once without a second parse or a text-format round-trip.
 
 ### Prompt System
 
