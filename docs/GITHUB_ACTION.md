@@ -342,4 +342,4 @@ To scan only changed files, pass a diff file via `scan-security-diff` instead:
           scan-security-diff: /tmp/changes.diff
 ```
 
-The scan step outputs SARIF and is non-blocking. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md) for the canonical `scan.yml` workflow and CI self-audit gate pattern.
+The scan step outputs SARIF and is non-blocking. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md) for the workflow example and CI self-audit gate pattern.

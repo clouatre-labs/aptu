@@ -44,7 +44,7 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 
 ### Security
 - `aptu scan-security <path>` -- local pattern matching only; no AI call; each `PatternDefinition` carries `remediation` and `authority_url` (CWE/OWASP)
-- SARIF output (`--output sarif`) populates `tool.driver.rules[]` with CWE `helpUri`; upload via `scan.yml`
+- SARIF output (`--sarif-output <PATH>`) populates `tool.driver.rules[]` with CWE `helpUri`; uploaded to GitHub Code Scanning via the `scan-self` job in `ci.yml`
 - CI self-audit gate: `scan-self` job runs `--fail-on critical,high --output github-annotations` on every push/PR
 - `PromptConfig` byte caps (`max_issue_body_bytes=32768`, `max_diff_bytes=131072`, `max_commit_message_bytes=4096`) are prompt-injection guards; CLI exits non-zero on breach
 
@@ -53,7 +53,7 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 - Structural graph context (petgraph-backed BFS blast-radius, depth-capped via `GraphConfig.max_depth` (default: 4 hops), opt-in via `graph` Cargo feature); disk-cached by commit SHA using postcard serialization with atomic tempfile-then-rename writes and a schema-hash header that auto-invalidates stale cache entries on upgrade; `GraphConfig::validate_consistency()` runs at config load time alongside `ReviewConfig::validate_consistency()` and warns when the graph is enabled with `max_depth = 0` or `max_nodes = 0`
 - Model-tier routing selects `small_model` or `large_model` based on estimated prompt size
 - Review context budgets in `[review]` (`ReviewConfig`): `max_diff_chars` 200k, `max_patch_chars_per_file` 10k; patches exceeding the per-file limit are dropped; `ReviewConfig::validate_consistency()` warns on misconfigured `min_budget_for_call_graph`; `GraphConfig::validate_consistency()` warns on zero `max_depth` or `max_nodes` when graph is enabled; both run at `AppConfig` load time
-- Inline comment dedup keys on `(path, line, side, commit_id)`; `line=None` comments excluded from map; unchanged body skipped; changed body PATCH-updated in place
+- Inline comment dedup keys on `(path, line, side)`; `line=None` comments excluded from map; unchanged body skipped; changed body PATCH-updated in place
 - GitHub OAuth device flow; credentials stored in OS keyring; no `GITHUB_TOKEN` env var needed
 
 ### Prompts & Schemas
