@@ -5,7 +5,7 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use aptu_core::{AppConfig, Finding, PatternEngine, SarifReport, SecurityScanner};
 use walkdir::WalkDir;
 
@@ -19,6 +19,10 @@ const DIFF_SIZE_LIMIT: usize = 5_242_880;
 /// When `diff` is provided, reads a unified diff from a file path or stdin (`-`),
 /// enforces a 5 MiB size limit, and calls `scanner.scan_diff()`.
 /// When `path` is provided, walks the file or directory and calls `scanner.scan_file()`.
+///
+/// Findings are emitted in the requested `output_format`. When `sarif_output` is
+/// provided, a SARIF report is additionally written to that file (before the
+/// `--fail-on` exit evaluation) so the report survives a non-zero exit.
 #[allow(clippy::unused_async)]
 pub async fn run_scan_security_command(
     path: Option<PathBuf>,
@@ -26,6 +30,7 @@ pub async fn run_scan_security_command(
     fail_on: Vec<String>,
     exclude: Vec<String>,
     output_format: OutputFormat,
+    sarif_output: Option<PathBuf>,
     _config: &AppConfig,
 ) -> Result<()> {
     let scanner = SecurityScanner::default();
@@ -96,7 +101,9 @@ pub async fn run_scan_security_command(
         }
     }
 
-    emit_output(output_format, &findings)?;
+    // Emit findings in the requested format; SARIF report file is written
+    // before the --fail-on evaluation below so the report survives a non-zero exit.
+    emit_output(output_format, sarif_output, &findings)?;
 
     // Exit 1 if any finding severity matches --fail-on list
     if !fail_on.is_empty() {
@@ -114,16 +121,33 @@ pub async fn run_scan_security_command(
     Ok(())
 }
 
-/// Emit findings in the requested output format.
-fn emit_output(output_format: OutputFormat, findings: &[Finding]) -> Result<()> {
+/// Emit findings in the requested output format and write a SARIF report
+/// to `sarif_output` if provided.
+fn emit_output(
+    output_format: OutputFormat,
+    sarif_output: Option<PathBuf>,
+    findings: &[Finding],
+) -> Result<()> {
+    // Build the SARIF report exactly once, whether it is the requested
+    // output format or only written to the `sarif_output` file.
+    let sarif_json = if matches!(output_format, OutputFormat::Sarif) || sarif_output.is_some() {
+        let engine = PatternEngine::from_embedded_json()?;
+        let patterns = engine.definitions();
+        let report = SarifReport::with_rules(findings.to_vec(), &patterns);
+        Some(
+            serde_json::to_string_pretty(&report)
+                .map_err(|e| anyhow::anyhow!("Failed to serialize SARIF: {e}"))?,
+        )
+    } else {
+        None
+    };
+
     match output_format {
         OutputFormat::Sarif => {
-            let engine = PatternEngine::from_embedded_json()?;
-            let patterns = engine.definitions();
-            let report = SarifReport::with_rules(findings.to_vec(), &patterns);
-            let json = serde_json::to_string_pretty(&report)
-                .map_err(|e| anyhow::anyhow!("Failed to serialize SARIF: {e}"))?;
-            println!("{json}");
+            // Guaranteed present because output_format is Sarif.
+            if let Some(json) = &sarif_json {
+                println!("{json}");
+            }
         }
         OutputFormat::GithubAnnotations => {
             for f in findings {
@@ -161,5 +185,17 @@ fn emit_output(output_format: OutputFormat, findings: &[Finding]) -> Result<()> 
             }
         }
     }
+
+    // Write the SARIF report to the requested file (before --fail-on evaluation).
+    if let Some(sarif_path) = sarif_output {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(json) = &sarif_json {
+            std::fs::write(&sarif_path, json)
+                .with_context(|| format!("failed to write SARIF to {}", sarif_path.display()))?;
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = sarif_path;
+    }
+
     Ok(())
 }

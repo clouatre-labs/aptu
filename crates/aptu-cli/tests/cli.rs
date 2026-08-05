@@ -486,3 +486,98 @@ fn scan_security_conflicts_path_and_diff() {
         "expected non-zero exit when both path and --diff are provided"
     );
 }
+
+#[test]
+fn scan_security_sarif_output_writes_valid_sarif() {
+    // Arrange: write a temp file with a unified diff containing a hardcoded API key pattern
+    let diff_content = concat!(
+        "diff --git a/config.py b/config.py\n",
+        "--- a/config.py\n",
+        "+++ b/config.py\n",
+        "@@ -1,2 +1,3 @@\n",
+        " # config\n",
+        "+api_key = \"abcdefghij1234567890xyz\"\n",
+        " pass\n"
+    );
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    use std::io::Write;
+    write!(tmp, "{diff_content}").unwrap();
+
+    let sarif_output = tempfile::NamedTempFile::new().unwrap();
+
+    // Act: run with --output github-annotations and --sarif-output
+    let output = cargo_bin_cmd!("aptu")
+        .arg("scan-security")
+        .arg("--diff")
+        .arg(tmp.path())
+        .arg("--output")
+        .arg("github-annotations")
+        .arg("--sarif-output")
+        .arg(sarif_output.path())
+        .output()
+        .unwrap();
+
+    // Assert: exit 0
+    assert!(output.status.success(), "expected exit 0");
+
+    // Assert: SARIF file contains valid SARIF 2.1.0 JSON
+    let sarif_content = std::fs::read_to_string(sarif_output.path()).unwrap();
+    let sarif_parsed: serde_json::Value =
+        serde_json::from_str(&sarif_content).expect("SARIF output must be valid JSON");
+    assert_eq!(sarif_parsed["version"], "2.1.0");
+    assert!(
+        sarif_parsed["runs"].is_array(),
+        "expected runs array in SARIF output"
+    );
+}
+
+#[test]
+fn scan_security_sarif_output_written_before_fail_on_exit() {
+    // Arrange: write a diff with a finding that will trigger --fail-on
+    let diff_content = concat!(
+        "diff --git a/config.py b/config.py\n",
+        "--- a/config.py\n",
+        "+++ b/config.py\n",
+        "@@ -1,2 +1,3 @@\n",
+        " # config\n",
+        "+api_key = \"abcdefghij1234567890xyz\"\n",
+        " pass\n"
+    );
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    use std::io::Write;
+    write!(tmp, "{diff_content}").unwrap();
+
+    let sarif_output = tempfile::NamedTempFile::new().unwrap();
+
+    // Act: run with --sarif-output and --fail-on critical,high
+    let output = cargo_bin_cmd!("aptu")
+        .arg("scan-security")
+        .arg("--diff")
+        .arg(tmp.path())
+        .arg("--output")
+        .arg("github-annotations")
+        .arg("--sarif-output")
+        .arg(sarif_output.path())
+        .arg("--fail-on")
+        .arg("critical,high")
+        .output()
+        .unwrap();
+
+    // Assert: non-zero exit due to --fail-on
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit due to --fail-on"
+    );
+
+    // Assert: SARIF file is written before the non-zero exit
+    let sarif_content = std::fs::read_to_string(sarif_output.path()).unwrap();
+    let sarif_parsed: serde_json::Value =
+        serde_json::from_str(&sarif_content).expect("SARIF must be valid JSON");
+    assert_eq!(sarif_parsed["version"], "2.1.0");
+    assert!(
+        sarif_parsed["runs"][0]["results"]
+            .as_array()
+            .map_or(false, |r| !r.is_empty()),
+        "expected at least one SARIF result"
+    );
+}

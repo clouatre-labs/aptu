@@ -1087,17 +1087,6 @@ pub async fn run(
     config: &AppConfig,
     inferred_repo: Option<String>,
 ) -> Result<()> {
-    // Validate that SARIF/GitHub Annotations output is only used with scan-security
-    if matches!(
-        ctx.format,
-        OutputFormat::Sarif | OutputFormat::GithubAnnotations
-    ) && !matches!(command, Commands::ScanSecurity { .. })
-    {
-        anyhow::bail!(
-            "--output sarif and --output github-annotations are only supported with the scan-security command"
-        );
-    }
-
     match command {
         Commands::Auth(auth_cmd) => run_auth_command(auth_cmd, &ctx, config).await,
         Commands::Repo(repo_cmd) => run_repo_command(repo_cmd, ctx).await,
@@ -1117,9 +1106,16 @@ pub async fn run(
             diff,
             fail_on,
             exclude,
+            sarif_output,
         } => {
             scan_security::run_scan_security_command(
-                path, diff, fail_on, exclude, ctx.format, config,
+                path,
+                diff,
+                fail_on,
+                exclude,
+                ctx.format,
+                sarif_output,
+                config,
             )
             .await
         }
@@ -1189,24 +1185,5 @@ mod tests {
         // Assert
         let output = String::from_utf8(buf).unwrap();
         assert!(output.contains("Added repository: owner/name (Rust)"));
-    }
-
-    // UX-008: sarif format rejected on non-scan command (edge case)
-    #[test]
-    fn test_sarif_format_rejected_on_non_scan() {
-        // Arrange: context with Sarif format
-        let ctx = OutputContext::from_cli(OutputFormat::Sarif, false);
-
-        // Assert: guard condition holds for non-scan commands
-        let is_sarif = matches!(
-            ctx.format,
-            OutputFormat::Sarif | OutputFormat::GithubAnnotations
-        );
-        // Simulate non-scan command via a bool (ScanSecurity match is the only exclusion)
-        let is_scan = false;
-        assert!(
-            is_sarif && !is_scan,
-            "guard should reject sarif on non-scan"
-        );
     }
 }

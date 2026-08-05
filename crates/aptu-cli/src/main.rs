@@ -26,9 +26,12 @@ use crate::cli::{Cli, OutputContext};
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut cli = Cli::parse();
-    logging::init_logging(cli.output, cli.verbose);
 
-    let output_ctx = OutputContext::from_cli(cli.output, cli.verbose);
+    // Resolve primary output format for OutputContext and logging
+    let primary_format = cli.output;
+    logging::init_logging(primary_format, cli.verbose);
+
+    let output_ctx = OutputContext::from_cli(primary_format, cli.verbose);
 
     // Initialize keyring store
     #[cfg(feature = "keyring")]
