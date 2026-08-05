@@ -13,11 +13,11 @@ Use `aptu scan-security` to scan a directory or file for security issues:
 # Scan a directory, print text summary
 aptu scan-security ./crates
 
-# Output SARIF 2.1.0 for GitHub Code Scanning
-aptu scan-security . --output sarif > findings.sarif
+# Write SARIF 2.1.0 to a file for GitHub Code Scanning
+aptu scan-security . --sarif-output findings.sarif
 
-# Emit GitHub Actions inline annotations
-aptu scan-security . --output github-annotations
+# Emit GitHub Actions inline annotations and write SARIF simultaneously
+aptu scan-security . --output github-annotations --sarif-output findings.sarif
 
 # Fail CI on critical or high findings
 aptu scan-security crates/ --fail-on critical,high
@@ -33,7 +33,8 @@ git diff HEAD~1 | aptu scan-security --diff -
 
 | Flag | Description |
 |------|-------------|
-| `--output sarif\|github-annotations\|json\|text` | Output format (default: `text`) |
+| `--output github-annotations\|json\|text` | Output format (default: `text`) |
+| `--sarif-output <PATH>` | Write SARIF 2.1.0 to this file path (independent of `--output`) |
 | `--fail-on <severities>` | Exit non-zero when any finding matches; comma-separated list: `critical`, `high`, `medium`, `low` |
 | `--exclude <prefix>` | Suppress findings under paths matching this prefix; repeatable |
 | `--diff <path>` | Read a unified diff from stdin (use `-`) or a file path and scan only the changed lines; useful for incremental CI scans |
@@ -42,26 +43,18 @@ git diff HEAD~1 | aptu scan-security --diff -
 
 Upload SARIF results to enable Code Scanning alerts and inline diff annotations in your repository.
 
-### Workflow (`scan.yml`)
+### Workflow example
 
-Create `.github/workflows/scan.yml`:
+Download aptu and scan in a workflow job:
 
 ```yaml
-name: Scan
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
   scan:
     name: Security Scan
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -82,11 +75,9 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run security scan
-        # || true ensures the SARIF file is always written so upload-sarif
-        # never skips. To gate the workflow on findings, add --fail-on and
-        # remove || true, or add a separate blocking job using the CI
-        # self-audit gate pattern below.
-        run: aptu scan-security . --output sarif > findings.sarif || true
+        # --sarif-output writes the SARIF file independently of --output.
+        # || true ensures the upload step always runs even when findings are present.
+        run: aptu scan-security . --sarif-output findings.sarif || true
 
       - name: Upload SARIF report
         uses: github/codeql-action/upload-sarif@0daab03d71ff584ef619d027a3fd9146679c5d84 # v3.35.3
@@ -97,7 +88,7 @@ jobs:
 
 ## CI self-audit gate
 
-Add a required CI job that fails on critical or high findings in your source tree:
+Add a required CI job that fails on critical or high findings and uploads SARIF:
 
 ```yaml
 scan-self:
@@ -105,6 +96,7 @@ scan-self:
   runs-on: ubuntu-24.04
   permissions:
     contents: read
+    security-events: write
   steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
     - name: Build aptu
@@ -112,9 +104,16 @@ scan-self:
     - name: Scan source
       run: >
         ./target/ci/aptu scan-security crates/
+        --output github-annotations
+        --sarif-output findings.sarif
         --fail-on critical,high
         --exclude crates/aptu-core/src/security
-        --output github-annotations
+    - name: Upload SARIF report
+      if: always()
+      uses: github/codeql-action/upload-sarif@0daab03d71ff584ef619d027a3fd9146679c5d84 # v3.35.3
+      with:
+        sarif_file: findings.sarif
+        category: aptu-scan-security
 ```
 
 Use `--exclude` to suppress known-safe test fixtures and the security pattern definitions themselves.

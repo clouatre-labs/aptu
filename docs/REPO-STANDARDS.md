@@ -9,11 +9,12 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 | File | Trigger | Purpose | Rationale |
 |------|---------|---------|-----------|
 | `.github/workflows/ci.yml` | push/PR (src, tests, workflows) | Build, test, lint, security scan | Fast feedback on every change; path filters skip docs-only pushes |
-| `.github/workflows/release.yml` | push `v*.*.*` tag, workflow_dispatch | Build release binaries, attest provenance, publish to GitHub Releases, Homebrew, Snap | Single pipeline owns the full release lifecycle |
-| `.github/workflows/build-and-attest.yml` | push/PR | Build release binaries and attest provenance | SLSA Level 3 provenance attestation for every build |
+| `.github/workflows/release.yml` | push `v*.*.*` tag, workflow_dispatch | Build release binaries, attest provenance, publish to GitHub Releases, Homebrew, and crates.io | Single pipeline owns the full release lifecycle |
+| `.github/workflows/build-and-attest.yml` | workflow_call (from release.yml) | Build release binaries and attest provenance | SLSA Level 3 provenance attestation; reusable workflow isolation satisfies SLSA v1.0 Build Level 3 |
 | `.github/workflows/reuse.yml` | push/PR | REUSE SPDX compliance check | Apache-2.0 license attribution is machine-verifiable |
 | `.github/workflows/scorecard.yml` | schedule weekly, push main | OpenSSF Scorecard security posture analysis | Tracks supply-chain security best practices over time |
-| `.github/workflows/issue-triage.yml` | issue opened/labeled | Auto-triage and label new issues | Reduces maintainer triage overhead |
+| `.github/workflows/issue-triage.yml` | issue opened | Auto-triage and label new issues | Reduces maintainer triage overhead |
+| `.github/workflows/pr-review.yml` | pull_request (opened, synchronize), workflow_dispatch | AI PR review and labeling; path-filtered to code changes | Advisory review on every code-touching PR |
 
 ---
 
