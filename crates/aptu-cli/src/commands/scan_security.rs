@@ -182,14 +182,10 @@ fn emit_output(
         let json = serde_json::to_string_pretty(&report)
             .map_err(|e| anyhow::anyhow!("Failed to serialize SARIF: {e}"))?;
         #[cfg(not(target_arch = "wasm32"))]
-        {
-            std::fs::write(&sarif_path, &json)
-                .with_context(|| format!("failed to write SARIF to {}", sarif_path.display()))?;
-        }
+        std::fs::write(&sarif_path, &json)
+            .with_context(|| format!("failed to write SARIF to {}", sarif_path.display()))?;
         #[cfg(target_arch = "wasm32")]
-        {
-            let _ = (sarif_path, json); // suppress unused variable warnings on wasm32
-        }
+        let _ = sarif_path;
     }
 
     Ok(())
