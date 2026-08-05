@@ -167,9 +167,10 @@ pub fn parse_date_to_rfc3339(date_str: &str) -> anyhow::Result<String> {
 #[command(version, about, long_about = None)]
 #[command(arg_required_else_help = true)]
 pub struct Cli {
-    /// Output format (text, json, yaml)
-    #[arg(long, short = 'o', global = true, default_value = "text", value_enum)]
-    pub output: OutputFormat,
+    /// Output format (text, json, yaml, sarif, github-annotations). May be specified
+    /// multiple times or as a comma-delimited list (e.g., `--output json,sarif`).
+    #[arg(long, short = 'o', global = true, value_enum, value_delimiter = ',', default_values_t = vec![OutputFormat::Text])]
+    pub output: Vec<OutputFormat>,
 
     /// Enable verbose output
     #[arg(long, short = 'v', global = true)]

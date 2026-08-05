@@ -26,9 +26,12 @@ use crate::cli::{Cli, OutputContext};
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut cli = Cli::parse();
-    logging::init_logging(cli.output, cli.verbose);
 
-    let output_ctx = OutputContext::from_cli(cli.output, cli.verbose);
+    // Resolve primary output format (first in list) for OutputContext and logging
+    let primary_format = cli.output.first().copied().unwrap_or_default();
+    logging::init_logging(primary_format, cli.verbose);
+
+    let output_ctx = OutputContext::from_cli(primary_format, cli.verbose);
 
     // Initialize keyring store
     #[cfg(feature = "keyring")]
@@ -83,7 +86,15 @@ async fn main() -> Result<()> {
         debug!("Overriding AI model to: {model}");
     }
 
-    let result = match commands::run(cli.command, output_ctx, &config, cli.inferred_repo).await {
+    let result = match commands::run(
+        cli.command,
+        output_ctx,
+        &config,
+        cli.inferred_repo,
+        cli.output,
+    )
+    .await
+    {
         Ok(()) => Ok(()),
         Err(ref e) if e.is::<errors::ScanFindingsExit>() => {
             std::process::exit(1);

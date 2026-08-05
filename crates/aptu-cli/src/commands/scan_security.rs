@@ -5,7 +5,7 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use aptu_core::{AppConfig, Finding, PatternEngine, SarifReport, SecurityScanner};
 use walkdir::WalkDir;
 
@@ -19,13 +19,17 @@ const DIFF_SIZE_LIMIT: usize = 5_242_880;
 /// When `diff` is provided, reads a unified diff from a file path or stdin (`-`),
 /// enforces a 5 MiB size limit, and calls `scanner.scan_diff()`.
 /// When `path` is provided, walks the file or directory and calls `scanner.scan_file()`.
+///
+/// Supports multiple output formats. When `output_formats` has more than one element
+/// and includes `Sarif`, the SARIF report is written to `./findings.sarif` instead of
+/// stdout to avoid corrupting the stream.
 #[allow(clippy::unused_async)]
 pub async fn run_scan_security_command(
     path: Option<PathBuf>,
     diff: Option<PathBuf>,
     fail_on: Vec<String>,
     exclude: Vec<String>,
-    output_format: OutputFormat,
+    output_formats: Vec<OutputFormat>,
     _config: &AppConfig,
 ) -> Result<()> {
     let scanner = SecurityScanner::default();
@@ -96,7 +100,21 @@ pub async fn run_scan_security_command(
         }
     }
 
-    emit_output(output_format, &findings)?;
+    // Emit findings in each requested format
+    // Build PatternEngine once if Sarif is in the output formats
+    let needs_sarif = output_formats
+        .iter()
+        .any(|f| matches!(f, OutputFormat::Sarif));
+    let engine = if needs_sarif {
+        Some(PatternEngine::from_embedded_json()?)
+    } else {
+        None
+    };
+
+    let is_multi = output_formats.len() > 1;
+    for format in &output_formats {
+        emit_output(*format, &findings, engine.as_ref(), is_multi)?;
+    }
 
     // Exit 1 if any finding severity matches --fail-on list
     if !fail_on.is_empty() {
@@ -115,15 +133,28 @@ pub async fn run_scan_security_command(
 }
 
 /// Emit findings in the requested output format.
-fn emit_output(output_format: OutputFormat, findings: &[Finding]) -> Result<()> {
+///
+/// When `sarif_to_file` is true and the format is `Sarif`, the report is written
+/// to `./findings.sarif` instead of stdout.
+fn emit_output(
+    output_format: OutputFormat,
+    findings: &[Finding],
+    engine: Option<&PatternEngine>,
+    sarif_to_file: bool,
+) -> Result<()> {
     match output_format {
         OutputFormat::Sarif => {
-            let engine = PatternEngine::from_embedded_json()?;
+            let engine = engine.context("PatternEngine required for SARIF output")?;
             let patterns = engine.definitions();
             let report = SarifReport::with_rules(findings.to_vec(), &patterns);
             let json = serde_json::to_string_pretty(&report)
                 .map_err(|e| anyhow::anyhow!("Failed to serialize SARIF: {e}"))?;
-            println!("{json}");
+            if sarif_to_file {
+                std::fs::write("./findings.sarif", &json)
+                    .map_err(|e| anyhow::anyhow!("Failed to write findings.sarif: {e}"))?;
+            } else {
+                println!("{json}");
+            }
         }
         OutputFormat::GithubAnnotations => {
             for f in findings {

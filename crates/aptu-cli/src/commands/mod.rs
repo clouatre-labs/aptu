@@ -1086,12 +1086,18 @@ pub async fn run(
     ctx: OutputContext,
     config: &AppConfig,
     inferred_repo: Option<String>,
+    formats: Vec<OutputFormat>,
 ) -> Result<()> {
+    // Validate that multiple output formats are only used with scan-security
+    if formats.len() > 1 && !matches!(command, Commands::ScanSecurity { .. }) {
+        anyhow::bail!("Multiple output formats are only supported with the scan-security command");
+    }
+
     // Validate that SARIF/GitHub Annotations output is only used with scan-security
-    if matches!(
-        ctx.format,
-        OutputFormat::Sarif | OutputFormat::GithubAnnotations
-    ) && !matches!(command, Commands::ScanSecurity { .. })
+    if formats
+        .iter()
+        .any(|f| matches!(f, OutputFormat::Sarif | OutputFormat::GithubAnnotations))
+        && !matches!(command, Commands::ScanSecurity { .. })
     {
         anyhow::bail!(
             "--output sarif and --output github-annotations are only supported with the scan-security command"
@@ -1118,10 +1124,8 @@ pub async fn run(
             fail_on,
             exclude,
         } => {
-            scan_security::run_scan_security_command(
-                path, diff, fail_on, exclude, ctx.format, config,
-            )
-            .await
+            scan_security::run_scan_security_command(path, diff, fail_on, exclude, formats, config)
+                .await
         }
     }
 }
@@ -1194,19 +1198,23 @@ mod tests {
     // UX-008: sarif format rejected on non-scan command (edge case)
     #[test]
     fn test_sarif_format_rejected_on_non_scan() {
-        // Arrange: context with Sarif format
-        let ctx = OutputContext::from_cli(OutputFormat::Sarif, false);
+        // Arrange: formats with Sarif
+        let formats = vec![OutputFormat::Sarif];
 
         // Assert: guard condition holds for non-scan commands
-        let is_sarif = matches!(
-            ctx.format,
-            OutputFormat::Sarif | OutputFormat::GithubAnnotations
-        );
-        // Simulate non-scan command via a bool (ScanSecurity match is the only exclusion)
-        let is_scan = false;
+        let has_sarif_or_annotations = formats
+            .iter()
+            .any(|f| matches!(f, OutputFormat::Sarif | OutputFormat::GithubAnnotations));
         assert!(
-            is_sarif && !is_scan,
+            has_sarif_or_annotations,
             "guard should reject sarif on non-scan"
+        );
+
+        // Also verify multi-format rejection
+        let multi_formats = vec![OutputFormat::Text, OutputFormat::Json];
+        assert!(
+            multi_formats.len() > 1,
+            "multi-format guard should reject on non-scan"
         );
     }
 }

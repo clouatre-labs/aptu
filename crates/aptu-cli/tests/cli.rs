@@ -486,3 +486,206 @@ fn scan_security_conflicts_path_and_diff() {
         "expected non-zero exit when both path and --diff are provided"
     );
 }
+
+#[test]
+fn scan_security_multi_format_github_annotations_and_sarif() {
+    // Arrange: write a temp file with a unified diff containing a hardcoded API key pattern
+    let diff_content = concat!(
+        "diff --git a/config.py b/config.py\n",
+        "--- a/config.py\n",
+        "+++ b/config.py\n",
+        "@@ -1,2 +1,3 @@\n",
+        " # config\n",
+        "+api_key = \"abcdefghij1234567890xyz\"\n",
+        " pass\n"
+    );
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    use std::io::Write;
+    write!(tmp, "{diff_content}").unwrap();
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let sarif_path = temp_dir.path().join("findings.sarif");
+
+    // Act: run with both --output github-annotations and --output sarif
+    let output = cargo_bin_cmd!("aptu")
+        .arg("scan-security")
+        .arg("--diff")
+        .arg(tmp.path())
+        .arg("--output")
+        .arg("github-annotations")
+        .arg("--output")
+        .arg("sarif")
+        .current_dir(temp_dir.path())
+        .output()
+        .unwrap();
+
+    // Assert: annotations on stdout
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("::error file="),
+        "expected GitHub annotations on stdout"
+    );
+    assert!(
+        stdout.contains("hardcoded-api-key"),
+        "expected hardcoded-api-key in annotations"
+    );
+
+    // Assert: SARIF file written to ./findings.sarif
+    assert!(
+        sarif_path.exists(),
+        "expected findings.sarif to be written at {:?}",
+        sarif_path
+    );
+    let sarif_content = std::fs::read_to_string(&sarif_path).unwrap();
+    let sarif_parsed: serde_json::Value =
+        serde_json::from_str(&sarif_content).expect("SARIF output must be valid JSON");
+    assert!(
+        sarif_parsed["$schema"]
+            .as_str()
+            .map_or(false, |s| s.contains("sarif-schema-2.1.0")),
+        "expected SARIF schema reference"
+    );
+    assert!(
+        sarif_parsed["runs"][0]["results"]
+            .as_array()
+            .map_or(false, |r| !r.is_empty()),
+        "expected at least one SARIF result"
+    );
+}
+
+#[test]
+fn scan_security_multi_format_comma_delimited() {
+    // Arrange: same diff, use comma-delimited --output
+    let diff_content = concat!(
+        "diff --git a/config.py b/config.py\n",
+        "--- a/config.py\n",
+        "+++ b/config.py\n",
+        "@@ -1,2 +1,3 @@\n",
+        " # config\n",
+        "+api_key = \"abcdefghij1234567890xyz\"\n",
+        " pass\n"
+    );
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    use std::io::Write;
+    write!(tmp, "{diff_content}").unwrap();
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let sarif_path = temp_dir.path().join("findings.sarif");
+
+    // Act: use comma-delimited --output sarif,github-annotations
+    let output = cargo_bin_cmd!("aptu")
+        .arg("scan-security")
+        .arg("--diff")
+        .arg(tmp.path())
+        .arg("--output")
+        .arg("sarif,github-annotations")
+        .current_dir(temp_dir.path())
+        .output()
+        .unwrap();
+
+    // Assert: annotations on stdout
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("::error file="),
+        "expected GitHub annotations on stdout from comma-delimited format"
+    );
+    assert!(
+        stdout.contains("hardcoded-api-key"),
+        "expected hardcoded-api-key in annotations"
+    );
+
+    // Assert: SARIF file written
+    assert!(
+        sarif_path.exists(),
+        "expected findings.sarif to be written from comma-delimited format at {:?}",
+        sarif_path
+    );
+    let sarif_content = std::fs::read_to_string(&sarif_path).unwrap();
+    let sarif_parsed: serde_json::Value =
+        serde_json::from_str(&sarif_content).expect("SARIF must be valid JSON");
+    assert!(
+        sarif_parsed["$schema"]
+            .as_str()
+            .map_or(false, |s| s.contains("sarif-schema-2.1.0")),
+        "expected SARIF schema reference"
+    );
+}
+
+#[test]
+fn scan_security_multi_format_rejected_on_non_scan() {
+    // Act: try --output json,sarif on a non-scan command (repo list)
+    let output = cargo_bin_cmd!("aptu")
+        .arg("--output")
+        .arg("json,sarif")
+        .arg("repo")
+        .arg("list")
+        .output()
+        .unwrap();
+
+    // Assert: non-zero exit with clear error message
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit for multi-format on non-scan command"
+    );
+    assert!(
+        stderr
+            .contains("Multiple output formats are only supported with the scan-security command"),
+        "expected clear error message about multi-format restriction; got: {stderr}"
+    );
+}
+
+#[test]
+fn scan_security_sarif_written_before_fail_on_exit() {
+    // Arrange: write a diff with a finding that will trigger --fail-on
+    let diff_content = concat!(
+        "diff --git a/config.py b/config.py\n",
+        "--- a/config.py\n",
+        "+++ b/config.py\n",
+        "@@ -1,2 +1,3 @@\n",
+        " # config\n",
+        "+api_key = \"abcdefghij1234567890xyz\"\n",
+        " pass\n"
+    );
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    use std::io::Write;
+    write!(tmp, "{diff_content}").unwrap();
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let sarif_path = temp_dir.path().join("findings.sarif");
+
+    // Act: run with two formats so SARIF goes to file, and --fail-on triggers exit
+    let output = cargo_bin_cmd!("aptu")
+        .arg("scan-security")
+        .arg("--diff")
+        .arg(tmp.path())
+        .arg("--output")
+        .arg("github-annotations")
+        .arg("--output")
+        .arg("sarif")
+        .arg("--fail-on")
+        .arg("critical,high")
+        .current_dir(temp_dir.path())
+        .output()
+        .unwrap();
+
+    // Assert: SARIF file is written before the non-zero exit
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit due to --fail-on"
+    );
+    assert!(
+        sarif_path.exists(),
+        "expected findings.sarif to be written before fail-on exit at {:?}",
+        sarif_path
+    );
+    let sarif_content = std::fs::read_to_string(&sarif_path).unwrap();
+    let sarif_parsed: serde_json::Value =
+        serde_json::from_str(&sarif_content).expect("SARIF must be valid JSON");
+    assert!(
+        sarif_parsed["runs"][0]["results"]
+            .as_array()
+            .map_or(false, |r| !r.is_empty()),
+        "expected at least one SARIF result"
+    );
+}
