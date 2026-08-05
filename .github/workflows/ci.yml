@@ -283,7 +283,7 @@ jobs:
         run: chmod +x target/ci/aptu
       - name: Run security scan and generate SARIF
         if: always()
-        run: ./target/ci/aptu scan-security crates/ --output github-annotations --output sarif --fail-on critical,high --exclude crates/aptu-core/src/security --exclude crates/aptu-core/tests --exclude crates/aptu-core/benches --exclude crates/aptu-core/src/facade
+        run: ./target/ci/aptu scan-security crates/ --output github-annotations --sarif-output findings.sarif --fail-on critical,high --exclude crates/aptu-core/src/security --exclude crates/aptu-core/tests --exclude crates/aptu-core/benches --exclude crates/aptu-core/src/facade
       - name: Upload SARIF report
         if: always()
         uses: github/codeql-action/upload-sarif@18420e3271f74589575af831a523c833acda327f # codeql-bundle-v2.26.2

@@ -20,16 +20,17 @@ const DIFF_SIZE_LIMIT: usize = 5_242_880;
 /// enforces a 5 MiB size limit, and calls `scanner.scan_diff()`.
 /// When `path` is provided, walks the file or directory and calls `scanner.scan_file()`.
 ///
-/// Supports multiple output formats. When `output_formats` has more than one element
-/// and includes `Sarif`, the SARIF report is written to `./findings.sarif` instead of
-/// stdout to avoid corrupting the stream.
+/// Findings are emitted in the requested `output_format`. When `sarif_output` is
+/// provided, a SARIF report is additionally written to that file (before the
+/// `--fail-on` exit evaluation) so the report survives a non-zero exit.
 #[allow(clippy::unused_async)]
 pub async fn run_scan_security_command(
     path: Option<PathBuf>,
     diff: Option<PathBuf>,
     fail_on: Vec<String>,
     exclude: Vec<String>,
-    output_formats: Vec<OutputFormat>,
+    output_format: OutputFormat,
+    sarif_output: Option<PathBuf>,
     _config: &AppConfig,
 ) -> Result<()> {
     let scanner = SecurityScanner::default();
@@ -100,21 +101,9 @@ pub async fn run_scan_security_command(
         }
     }
 
-    // Emit findings in each requested format
-    // Build PatternEngine once if Sarif is in the output formats
-    let needs_sarif = output_formats
-        .iter()
-        .any(|f| matches!(f, OutputFormat::Sarif));
-    let engine = if needs_sarif {
-        Some(PatternEngine::from_embedded_json()?)
-    } else {
-        None
-    };
-
-    let is_multi = output_formats.len() > 1;
-    for format in &output_formats {
-        emit_output(*format, &findings, engine.as_ref(), is_multi)?;
-    }
+    // Emit findings in the requested format; SARIF report file is written
+    // before the --fail-on evaluation below so the report survives a non-zero exit.
+    emit_output(output_format, sarif_output, &findings)?;
 
     // Exit 1 if any finding severity matches --fail-on list
     if !fail_on.is_empty() {
@@ -132,29 +121,21 @@ pub async fn run_scan_security_command(
     Ok(())
 }
 
-/// Emit findings in the requested output format.
-///
-/// When `sarif_to_file` is true and the format is `Sarif`, the report is written
-/// to `./findings.sarif` instead of stdout.
+/// Emit findings in the requested output format and write a SARIF report
+/// to `sarif_output` if provided.
 fn emit_output(
     output_format: OutputFormat,
+    sarif_output: Option<PathBuf>,
     findings: &[Finding],
-    engine: Option<&PatternEngine>,
-    sarif_to_file: bool,
 ) -> Result<()> {
     match output_format {
         OutputFormat::Sarif => {
-            let engine = engine.context("PatternEngine required for SARIF output")?;
+            let engine = PatternEngine::from_embedded_json()?;
             let patterns = engine.definitions();
             let report = SarifReport::with_rules(findings.to_vec(), &patterns);
             let json = serde_json::to_string_pretty(&report)
                 .map_err(|e| anyhow::anyhow!("Failed to serialize SARIF: {e}"))?;
-            if sarif_to_file {
-                std::fs::write("./findings.sarif", &json)
-                    .map_err(|e| anyhow::anyhow!("Failed to write findings.sarif: {e}"))?;
-            } else {
-                println!("{json}");
-            }
+            println!("{json}");
         }
         OutputFormat::GithubAnnotations => {
             for f in findings {
@@ -192,5 +173,24 @@ fn emit_output(
             }
         }
     }
+
+    // Write the SARIF report to the requested file (before --fail-on evaluation).
+    if let Some(sarif_path) = sarif_output {
+        let engine = PatternEngine::from_embedded_json()?;
+        let patterns = engine.definitions();
+        let report = SarifReport::with_rules(findings.to_vec(), &patterns);
+        let json = serde_json::to_string_pretty(&report)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize SARIF: {e}"))?;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::fs::write(&sarif_path, &json)
+                .with_context(|| format!("failed to write SARIF to {}", sarif_path.display()))?;
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (sarif_path, json); // suppress unused variable warnings on wasm32
+        }
+    }
+
     Ok(())
 }

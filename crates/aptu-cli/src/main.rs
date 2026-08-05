@@ -21,14 +21,14 @@ use aptu_core::utils;
 use clap::Parser;
 use tracing::{debug, info};
 
-use crate::cli::{Cli, OutputContext};
+use crate::cli::{Cli, Commands, OutputContext};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut cli = Cli::parse();
 
-    // Resolve primary output format (first in list) for OutputContext and logging
-    let primary_format = cli.output.first().copied().unwrap_or_default();
+    // Resolve primary output format for OutputContext and logging
+    let primary_format = cli.output;
     logging::init_logging(primary_format, cli.verbose);
 
     let output_ctx = OutputContext::from_cli(primary_format, cli.verbose);
@@ -86,12 +86,19 @@ async fn main() -> Result<()> {
         debug!("Overriding AI model to: {model}");
     }
 
+    // Extract sarif_output from the ScanSecurity subcommand (scoped to scan-security only)
+    let sarif_output = match &cli.command {
+        Commands::ScanSecurity { sarif_output, .. } => sarif_output.clone(),
+        _ => None,
+    };
+
     let result = match commands::run(
         cli.command,
         output_ctx,
         &config,
         cli.inferred_repo,
         cli.output,
+        sarif_output,
     )
     .await
     {

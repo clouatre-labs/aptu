@@ -1086,24 +1086,9 @@ pub async fn run(
     ctx: OutputContext,
     config: &AppConfig,
     inferred_repo: Option<String>,
-    formats: Vec<OutputFormat>,
+    format: OutputFormat,
+    sarif_output: Option<std::path::PathBuf>,
 ) -> Result<()> {
-    // Validate that multiple output formats are only used with scan-security
-    if formats.len() > 1 && !matches!(command, Commands::ScanSecurity { .. }) {
-        anyhow::bail!("Multiple output formats are only supported with the scan-security command");
-    }
-
-    // Validate that SARIF/GitHub Annotations output is only used with scan-security
-    if formats
-        .iter()
-        .any(|f| matches!(f, OutputFormat::Sarif | OutputFormat::GithubAnnotations))
-        && !matches!(command, Commands::ScanSecurity { .. })
-    {
-        anyhow::bail!(
-            "--output sarif and --output github-annotations are only supported with the scan-security command"
-        );
-    }
-
     match command {
         Commands::Auth(auth_cmd) => run_auth_command(auth_cmd, &ctx, config).await,
         Commands::Repo(repo_cmd) => run_repo_command(repo_cmd, ctx).await,
@@ -1123,9 +1108,18 @@ pub async fn run(
             diff,
             fail_on,
             exclude,
+            sarif_output: cmd_sarif_output,
         } => {
-            scan_security::run_scan_security_command(path, diff, fail_on, exclude, formats, config)
-                .await
+            scan_security::run_scan_security_command(
+                path,
+                diff,
+                fail_on,
+                exclude,
+                format,
+                sarif_output.or(cmd_sarif_output),
+                config,
+            )
+            .await
         }
     }
 }
@@ -1193,28 +1187,5 @@ mod tests {
         // Assert
         let output = String::from_utf8(buf).unwrap();
         assert!(output.contains("Added repository: owner/name (Rust)"));
-    }
-
-    // UX-008: sarif format rejected on non-scan command (edge case)
-    #[test]
-    fn test_sarif_format_rejected_on_non_scan() {
-        // Arrange: formats with Sarif
-        let formats = vec![OutputFormat::Sarif];
-
-        // Assert: guard condition holds for non-scan commands
-        let has_sarif_or_annotations = formats
-            .iter()
-            .any(|f| matches!(f, OutputFormat::Sarif | OutputFormat::GithubAnnotations));
-        assert!(
-            has_sarif_or_annotations,
-            "guard should reject sarif on non-scan"
-        );
-
-        // Also verify multi-format rejection
-        let multi_formats = vec![OutputFormat::Text, OutputFormat::Json];
-        assert!(
-            multi_formats.len() > 1,
-            "multi-format guard should reject on non-scan"
-        );
     }
 }

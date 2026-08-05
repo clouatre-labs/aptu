@@ -167,10 +167,9 @@ pub fn parse_date_to_rfc3339(date_str: &str) -> anyhow::Result<String> {
 #[command(version, about, long_about = None)]
 #[command(arg_required_else_help = true)]
 pub struct Cli {
-    /// Output format (text, json, yaml, sarif, github-annotations). May be specified
-    /// multiple times or as a comma-delimited list (e.g., `--output json,sarif`).
-    #[arg(long, short = 'o', global = true, value_enum, value_delimiter = ',', default_values_t = vec![OutputFormat::Text])]
-    pub output: Vec<OutputFormat>,
+    /// Output format (text, json, yaml, sarif, github-annotations)
+    #[arg(long, short = 'o', global = true, value_enum, default_value = "text")]
+    pub output: OutputFormat,
 
     /// Enable verbose output
     #[arg(long, short = 'v', global = true)]
@@ -237,6 +236,9 @@ pub enum Commands {
         /// Exclude paths matching this prefix (repeatable)
         #[arg(long)]
         exclude: Vec<String>,
+        /// Write SARIF output to this file
+        #[arg(long, value_name = "PATH")]
+        sarif_output: Option<std::path::PathBuf>,
     },
 }
 
