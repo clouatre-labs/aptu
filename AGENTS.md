@@ -46,7 +46,7 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 - `aptu scan-security <path>` -- local pattern matching only; no AI call; each `PatternDefinition` carries `remediation` and `authority_url` (CWE/OWASP)
 - SARIF output (`--sarif-output <PATH>`) populates `tool.driver.rules[]` with CWE `helpUri`; uploaded to GitHub Code Scanning via the `scan-self` job in `ci.yml`
 - CI self-audit gate: `scan-self` job runs `--fail-on critical,high --output github-annotations` on every push/PR
-- `PromptConfig` byte caps (`max_issue_body_bytes=32768`, `max_diff_bytes=131072`, `max_commit_message_bytes=4096`) are prompt-injection guards; CLI exits non-zero on breach
+- `PromptConfig` byte caps (`max_issue_body_bytes=32768`, `max_diff_bytes=524288`, `max_commit_message_bytes=4096`) are prompt-injection guards; CLI exits non-zero on breach
 
 ### GitHub Integration
 - PR review injects AST + call-graph context from GitHub Contents API; multi-language (Rust, Go, Python, TS, JS, C/C++, C#, Java)
