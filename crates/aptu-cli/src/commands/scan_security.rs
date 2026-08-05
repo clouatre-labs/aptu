@@ -128,14 +128,26 @@ fn emit_output(
     sarif_output: Option<PathBuf>,
     findings: &[Finding],
 ) -> Result<()> {
+    // Build the SARIF report exactly once, whether it is the requested
+    // output format or only written to the `sarif_output` file.
+    let sarif_json = if matches!(output_format, OutputFormat::Sarif) || sarif_output.is_some() {
+        let engine = PatternEngine::from_embedded_json()?;
+        let patterns = engine.definitions();
+        let report = SarifReport::with_rules(findings.to_vec(), &patterns);
+        Some(
+            serde_json::to_string_pretty(&report)
+                .map_err(|e| anyhow::anyhow!("Failed to serialize SARIF: {e}"))?,
+        )
+    } else {
+        None
+    };
+
     match output_format {
         OutputFormat::Sarif => {
-            let engine = PatternEngine::from_embedded_json()?;
-            let patterns = engine.definitions();
-            let report = SarifReport::with_rules(findings.to_vec(), &patterns);
-            let json = serde_json::to_string_pretty(&report)
-                .map_err(|e| anyhow::anyhow!("Failed to serialize SARIF: {e}"))?;
-            println!("{json}");
+            // Guaranteed present because output_format is Sarif.
+            if let Some(json) = &sarif_json {
+                println!("{json}");
+            }
         }
         OutputFormat::GithubAnnotations => {
             for f in findings {
@@ -176,14 +188,11 @@ fn emit_output(
 
     // Write the SARIF report to the requested file (before --fail-on evaluation).
     if let Some(sarif_path) = sarif_output {
-        let engine = PatternEngine::from_embedded_json()?;
-        let patterns = engine.definitions();
-        let report = SarifReport::with_rules(findings.to_vec(), &patterns);
-        let json = serde_json::to_string_pretty(&report)
-            .map_err(|e| anyhow::anyhow!("Failed to serialize SARIF: {e}"))?;
         #[cfg(not(target_arch = "wasm32"))]
-        std::fs::write(&sarif_path, &json)
-            .with_context(|| format!("failed to write SARIF to {}", sarif_path.display()))?;
+        if let Some(json) = &sarif_json {
+            std::fs::write(&sarif_path, json)
+                .with_context(|| format!("failed to write SARIF to {}", sarif_path.display()))?;
+        }
         #[cfg(target_arch = "wasm32")]
         let _ = sarif_path;
     }

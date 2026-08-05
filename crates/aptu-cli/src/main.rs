@@ -21,7 +21,7 @@ use aptu_core::utils;
 use clap::Parser;
 use tracing::{debug, info};
 
-use crate::cli::{Cli, Commands, OutputContext};
+use crate::cli::{Cli, OutputContext};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -86,22 +86,7 @@ async fn main() -> Result<()> {
         debug!("Overriding AI model to: {model}");
     }
 
-    // Extract sarif_output from the ScanSecurity subcommand (scoped to scan-security only)
-    let sarif_output = match &cli.command {
-        Commands::ScanSecurity { sarif_output, .. } => sarif_output.clone(),
-        _ => None,
-    };
-
-    let result = match commands::run(
-        cli.command,
-        output_ctx,
-        &config,
-        cli.inferred_repo,
-        cli.output,
-        sarif_output,
-    )
-    .await
-    {
+    let result = match commands::run(cli.command, output_ctx, &config, cli.inferred_repo).await {
         Ok(()) => Ok(()),
         Err(ref e) if e.is::<errors::ScanFindingsExit>() => {
             std::process::exit(1);

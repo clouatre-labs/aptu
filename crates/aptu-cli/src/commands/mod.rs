@@ -1086,8 +1086,6 @@ pub async fn run(
     ctx: OutputContext,
     config: &AppConfig,
     inferred_repo: Option<String>,
-    format: OutputFormat,
-    sarif_output: Option<std::path::PathBuf>,
 ) -> Result<()> {
     match command {
         Commands::Auth(auth_cmd) => run_auth_command(auth_cmd, &ctx, config).await,
@@ -1108,15 +1106,15 @@ pub async fn run(
             diff,
             fail_on,
             exclude,
-            sarif_output: cmd_sarif_output,
+            sarif_output,
         } => {
             scan_security::run_scan_security_command(
                 path,
                 diff,
                 fail_on,
                 exclude,
-                format,
-                sarif_output.or(cmd_sarif_output),
+                ctx.format,
+                sarif_output,
                 config,
             )
             .await
