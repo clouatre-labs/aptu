@@ -22,7 +22,7 @@ aptu-core = { path = "crates/aptu-core", version = "0.10.0" }
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
-reqwest = { version = "=0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde-saphyr = "0.0.29"
@@ -33,7 +33,7 @@ hex = "0.4"
 walkdir = "2"
 
 # GitHub
-octocrab = { version = "0.54", default-features = false, features = ["follow-redirect", "retry", "rustls", "timeout", "tracing", "default-client", "rustls-ring", "jwt-rust-crypto"] }
+octocrab = { version = "0.54", default-features = false, features = ["follow-redirect", "retry", "rustls", "timeout", "tracing", "default-client", "rustls-ring", "jwt-aws-lc-rs"] }
 secrecy = "0.10"
 zeroize = "1.8"
 
@@ -63,7 +63,6 @@ uuid = { version = "1", features = ["v4", "serde"] }
 schemars = { version = "1.0" }
 
 # Dev dependencies
-tokio-test = "0.4"
 assert_cmd = "2"
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 regex = "1"
