@@ -79,17 +79,10 @@ impl PatternEngine {
         for (line_num, line) in content.lines().enumerate() {
             for compiled in &self.patterns {
                 // Skip if pattern has file extension filter and doesn't match
-                if !compiled.definition.file_extensions.is_empty() {
-                    if let Some(ext) = &file_ext {
-                        if !compiled.definition.file_extensions.contains(ext) {
-                            continue;
-                        }
-                    } else {
-                        continue;
-                    }
-                }
-
-                if let Some(mat) = compiled.regex.find(line) {
+                if (compiled.definition.file_extensions.is_empty()
+                    || matches!(&file_ext, Some(ext) if compiled.definition.file_extensions.contains(ext)))
+                    && let Some(mat) = compiled.regex.find(line)
+                {
                     tracing::debug!(
                         pattern_id = %compiled.definition.id,
                         file = %file_path,

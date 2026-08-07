@@ -86,21 +86,23 @@ async fn main() -> Result<()> {
         debug!("Overriding AI model to: {model}");
     }
 
-    let result = match commands::run(cli.command, output_ctx, &config, cli.inferred_repo).await {
-        Ok(()) => Ok(()),
-        Err(ref e) if e.is::<errors::ScanFindingsExit>() => {
-            std::process::exit(1);
-        }
+    let exit_code = match commands::run(cli.command, output_ctx, &config, cli.inferred_repo).await {
+        Ok(()) => 0,
+        Err(ref e) if e.is::<errors::ScanFindingsExit>() => 1,
         Err(e) => {
             let formatted = errors::format_error(&e);
             eprintln!("Error: {formatted}");
-            Err(e)
+            1
         }
     };
 
-    // Tear down keyring store
+    // Tear down keyring store before exiting so credential cleanup always runs.
     #[cfg(feature = "keyring")]
     aptu_core::github::keyring_deinit();
 
-    result
+    if exit_code != 0 {
+        std::process::exit(exit_code);
+    }
+
+    Ok(())
 }

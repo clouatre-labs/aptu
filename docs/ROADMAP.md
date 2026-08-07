@@ -4,6 +4,14 @@ _Near-Term (next 3-6 months) | Medium-Term (6-18 months) | Long-Term (18+ months
 
 This document describes the project direction across three time horizons. Items are based on open issues, the project specification, and known user needs. Dates are approximate and depend on maintainer availability.
 
+## Design Principles
+
+- **Simple by default, configurable by exception.** Smart defaults that work without any config file.
+- **The cheapest AI call is the one you skip.** Gate before calling; trim before sending.
+- **Metrics are first-class.** Every run emits structured JSONL. You cannot optimize what you cannot measure.
+- **Standard file formats.** AGENTS.md, SARIF, JSONL -- not invented-here schemas.
+- **Low maintenance surface.** Fewer crates, fewer features, less to break.
+
 ## Recently Shipped
 
 - **Structural graph context for `pr review`** (#1420): petgraph BFS blast-radius from changed files, opt-in via `graph` Cargo feature, disk-cached by commit SHA
@@ -61,3 +69,39 @@ The following are explicitly out of scope for the foreseeable future:
 - Proprietary model integrations that require closed SDKs
 - Automatic merge or code modification; Aptu is advisory only
 - Daemon, persistent web dashboard, or TUI; Aptu is a CLI and library, not a server
+
+## Patterns Adopted from aptu-coder
+
+`~/git/clouatre-labs/aptu-coder` was audited for transferable patterns (May 2026). Selected adoptions:
+
+- **Channel-based JSONL observability** (`metrics.rs`): fire metric events into unbounded channel at return; background writer appends to JSONL. Zero blocking on hot path. Applied to the JSONL token-usage artifact (P1, #1225).
+- **Path-heuristic relevance filtering** (`test_detection.rs`): skip or deprioritize files by path pattern without parsing. Applied to the docs-only / dependency-bump relevance gate (P1, #1227) and future test-file deprioritization in review.
+- **Output-size enforcement** (`output_size` test, `SIZE_LIMIT` constant): enforce token budget at test time, not only at runtime. Worth adopting in `provider.rs` tests.
+- **Graceful degradation via `lock_or_recover`** (`cache.rs`): on poisoned mutex, clear and continue rather than panic. Applicable to aptu's disk cache layer.
+
+Patterns audited and not adopted:
+
+- Summary-first cursor-paginated output: aptu is a CLI/Action, not an MCP server; streaming pagination does not apply to single-run AI calls.
+- Per-language AST extractors: aptu already has its own AST context pipeline in `provider.rs`.
+
+## Removed from Roadmap
+
+- **iOS App** (Phase 2 in SPEC.md): not aligned with GitHub Actions / App focus.
+- **Gamification / Leaderboards** (Phase 3 in SPEC.md): deferred; requires platform and user base first.
+- **MCP Server** (`aptu-mcp`): removed (see #1232).
+
+These remain in SPEC.md for historical context.
+
+## Issue Index
+
+| # | Title | P |
+|---|---|---|
+| #1222 | Fix PR file pagination (>30 files silently dropped) | P0 |
+| #1223 | Detect and recover from GitHub-truncated patches | P0 |
+| #1224 | Add explicit model guidance on truncated content | P0 |
+| #1225 | JSONL token-usage artifact + GITHUB_STEP_SUMMARY | P1 |
+| #1226 | Add cache_read_tokens / cache_write_tokens to UsageInfo | P1 |
+| #1227 | Relevance gate for docs-only / dep-bump PRs | P1 |
+| #1228 | Read AGENTS.md and .github/instructions/pr-review.md | P1 |
+| #1230 | Prompt caching (Gemini / Anthropic) | P2 |
+| #94 | GitHub App | P94 |

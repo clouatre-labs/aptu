@@ -69,7 +69,8 @@ pub async fn run_scan_security_command(
         findings.extend(scanner.scan_diff(&content));
     } else {
         // Walk mode: path is guaranteed present by Clap (required_unless_present = "diff")
-        let scan_path = path.expect("path required when --diff is not provided");
+        let scan_path = path
+            .ok_or_else(|| anyhow::anyhow!("internal: path required when --diff not provided"))?;
 
         for entry in WalkDir::new(&scan_path)
             .follow_links(false)
@@ -193,9 +194,38 @@ fn emit_output(
             std::fs::write(&sarif_path, json)
                 .with_context(|| format!("failed to write SARIF to {}", sarif_path.display()))?;
         }
-        #[cfg(target_arch = "wasm32")]
-        let _ = sarif_path;
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The walk-mode path is guaranteed present by Clap (`required_unless_present`),
+    /// so this branch is outside Clap validation. Caller-facing None must still
+    /// surface as an error rather than a panic.
+    #[tokio::test]
+    async fn run_scan_security_errors_when_path_and_diff_missing() {
+        // Arrange / Act: no diff and no path supplied
+        let result = run_scan_security_command(
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            OutputFormat::Text,
+            None,
+            &AppConfig::default(),
+        )
+        .await;
+
+        // Assert
+        let err = result.expect_err("expected an error when both path and diff are missing");
+        assert!(
+            err.to_string()
+                .contains("path required when --diff not provided"),
+            "unexpected error: {err}"
+        );
+    }
 }

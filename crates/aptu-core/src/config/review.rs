@@ -81,8 +81,7 @@ mod tests {
         let warnings = config.validate_consistency();
         assert!(
             warnings.is_empty(),
-            "default config should produce no warnings: {:?}",
-            warnings
+            "default config should produce no warnings: {warnings:?}"
         );
     }
 

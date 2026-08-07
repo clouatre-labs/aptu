@@ -62,7 +62,10 @@ just clean        # Remove build artifacts
 If you prefer not to use Just:
 
 ```bash
-cargo test       # Run tests
+# Tests run via nextest; install with: cargo install cargo-nextest (or use cargo-binstall)
+cargo nextest run --workspace   # Run tests
+# Also run the graph-feature (ast-context) test suite:
+cargo nextest run -p aptu-core --features ast-context
 cargo fmt        # Format code
 cargo clippy     # Lint
 cargo build      # Build binary
@@ -92,7 +95,7 @@ If you are unsure where to start, leave a comment on the issue and the maintaine
 ```bash
 cargo fmt --check
 cargo clippy -- -D warnings
-cargo test
+cargo nextest run --workspace
 ```
 
 ## Fuzzing
@@ -173,7 +176,7 @@ This adds `Signed-off-by: Your Name <email>` to your commit, certifying you agre
 
 ## Pull Request Checklist
 
-- [ ] Tests pass (`cargo test`)
+- [ ] Tests pass (`cargo nextest run --workspace`)
 - [ ] No clippy warnings (`cargo clippy -- -D warnings`)
 - [ ] Code formatted (`cargo fmt`)
 - [ ] Commits signed off (`git commit -s`)

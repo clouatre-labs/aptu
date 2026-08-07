@@ -370,6 +370,7 @@ fn test_history_json_output_structure() {
 
 #[test]
 fn scan_security_diff_file_json() {
+    use std::io::Write;
     // Arrange: write a temp file with a unified diff containing a hardcoded API key pattern
     let diff_content = concat!(
         "diff --git a/config.py b/config.py\n",
@@ -381,7 +382,6 @@ fn scan_security_diff_file_json() {
         " pass\n"
     );
     let mut tmp = tempfile::NamedTempFile::new().unwrap();
-    use std::io::Write;
     write!(tmp, "{diff_content}").unwrap();
 
     // Act
@@ -442,11 +442,12 @@ fn scan_security_diff_stdin() {
 
 #[test]
 fn scan_security_diff_oversize_error() {
+    use std::io::Write;
+
     // Arrange: write a file larger than 5 MiB
     let mut tmp = tempfile::NamedTempFile::new().unwrap();
-    use std::io::Write;
     let chunk = b"x".repeat(1024);
-    for _ in 0..(5 * 1024 + 1) {
+    for _ in 0..=(5 * 1024) {
         tmp.write_all(&chunk).unwrap();
     }
     tmp.flush().unwrap();
@@ -489,6 +490,8 @@ fn scan_security_conflicts_path_and_diff() {
 
 #[test]
 fn scan_security_sarif_output_writes_valid_sarif() {
+    use std::io::Write;
+
     // Arrange: write a temp file with a unified diff containing a hardcoded API key pattern
     let diff_content = concat!(
         "diff --git a/config.py b/config.py\n",
@@ -500,7 +503,6 @@ fn scan_security_sarif_output_writes_valid_sarif() {
         " pass\n"
     );
     let mut tmp = tempfile::NamedTempFile::new().unwrap();
-    use std::io::Write;
     write!(tmp, "{diff_content}").unwrap();
 
     let sarif_output = tempfile::NamedTempFile::new().unwrap();
@@ -533,6 +535,8 @@ fn scan_security_sarif_output_writes_valid_sarif() {
 
 #[test]
 fn scan_security_sarif_output_written_before_fail_on_exit() {
+    use std::io::Write;
+
     // Arrange: write a diff with a finding that will trigger --fail-on
     let diff_content = concat!(
         "diff --git a/config.py b/config.py\n",
@@ -544,7 +548,6 @@ fn scan_security_sarif_output_written_before_fail_on_exit() {
         " pass\n"
     );
     let mut tmp = tempfile::NamedTempFile::new().unwrap();
-    use std::io::Write;
     write!(tmp, "{diff_content}").unwrap();
 
     let sarif_output = tempfile::NamedTempFile::new().unwrap();
@@ -577,7 +580,7 @@ fn scan_security_sarif_output_written_before_fail_on_exit() {
     assert!(
         sarif_parsed["runs"][0]["results"]
             .as_array()
-            .map_or(false, |r| !r.is_empty()),
+            .is_some_and(|r| !r.is_empty()),
         "expected at least one SARIF result"
     );
 }
