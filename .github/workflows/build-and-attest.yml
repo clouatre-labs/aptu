@@ -67,9 +67,9 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # 1.97.1
         with:
-          toolchain: stable
+          toolchain: "1.97.1"
           targets: ${{ inputs.target }}
       - name: Install cross-compilation tools
         if: ${{ inputs.cross }}

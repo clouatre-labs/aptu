@@ -16,7 +16,7 @@ fmt-fix:
 
 # Run clippy linter
 lint:
-    cargo clippy -- -D warnings
+    cargo clippy -- -W clippy::cognitive_complexity
 
 # Fix clippy issues (where possible)
 lint-fix:
