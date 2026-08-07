@@ -222,7 +222,7 @@ pub fn config_dir() -> PathBuf {
         return PathBuf::from(xdg_config).join("aptu");
     }
     dirs::home_dir()
-        .expect("Could not determine home directory - is HOME set?")
+        .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
         .join("aptu")
 }
@@ -239,7 +239,7 @@ pub fn data_dir() -> PathBuf {
         return PathBuf::from(xdg_data).join("aptu");
     }
     dirs::home_dir()
-        .expect("Could not determine home directory - is HOME set?")
+        .unwrap_or_else(|| PathBuf::from("."))
         .join(".local")
         .join("share")
         .join("aptu")

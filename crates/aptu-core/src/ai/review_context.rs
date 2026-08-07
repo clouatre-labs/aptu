@@ -649,26 +649,42 @@ async fn build_ctx_graph(
             return (String::new(), false);
         };
         let sha = pr.head_sha.clone();
-        let (mut graph, cache_hit) = crate::graph::cache::load_or_build(
-            &pr.owner,
-            &pr.repo,
-            &sha,
-            ast_output.graph.clone(),
-            graph_config,
-        );
+        let owner_str = pr.owner.clone();
+        let repo_str = pr.repo.clone();
+        let graph_config_owned = graph_config.clone();
+        let graph_owned = ast_output.graph.clone();
         let function_names: Vec<String> = derive_modified_symbols(&pr.files);
-        let fn_refs: Vec<&str> = function_names.iter().map(String::as_str).collect();
-        let modified_nodes = crate::graph::query::find_modified_nodes(&mut graph, &fn_refs);
-        let subgraph = crate::graph::query::blast_radius(
-            &graph,
-            &modified_nodes,
-            graph_config.max_nodes,
-            graph_config.max_depth,
-        );
-        (
-            crate::graph::query::render_subgraph_text(&subgraph),
-            cache_hit,
-        )
+
+        let spawn_result = tokio::task::spawn_blocking(move || {
+            let (mut graph, cache_hit) = crate::graph::cache::load_or_build(
+                &owner_str,
+                &repo_str,
+                &sha,
+                graph_owned,
+                &graph_config_owned,
+            );
+            let fn_refs: Vec<&str> = function_names.iter().map(String::as_str).collect();
+            let modified_nodes = crate::graph::query::find_modified_nodes(&mut graph, &fn_refs);
+            let subgraph = crate::graph::query::blast_radius(
+                &graph,
+                &modified_nodes,
+                graph_config_owned.max_nodes,
+                graph_config_owned.max_depth,
+            );
+            (
+                crate::graph::query::render_subgraph_text(&subgraph),
+                cache_hit,
+            )
+        })
+        .await;
+
+        match spawn_result {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("graph cache spawn_blocking panicked: {e}");
+                (String::new(), false)
+            }
+        }
     }
     #[cfg(not(feature = "graph"))]
     {
