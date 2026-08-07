@@ -20,6 +20,9 @@ use crate::github::pulls::{
 use crate::sanitize::sanitise_user_field;
 use crate::security::SecurityScanner;
 
+/// Default review comment side used for GitHub PR review comments.
+pub(crate) const DEFAULT_COMMENT_SIDE: &str = "RIGHT";
+
 /// Fetches PR details for review without AI analysis.
 ///
 /// This function handles credential resolution and GitHub API calls,
@@ -318,7 +321,7 @@ fn dedup_outcome(
     let Some(line) = comment.line.map(u64::from) else {
         return DedupOutcome::Post;
     };
-    let key = (comment.file.clone(), line, "RIGHT".to_string());
+    let key = (comment.file.clone(), line, DEFAULT_COMMENT_SIDE.to_string());
     let Some((existing_id, existing_body)) = dedup.get(&key) else {
         return DedupOutcome::Post;
     };
@@ -392,7 +395,10 @@ pub async fn post_pr_review(
         std::collections::HashMap::new();
     for c in existing_comments {
         let Some(line) = c.line else { continue };
-        let side = c.side.clone().unwrap_or_else(|| "RIGHT".to_string());
+        let side = c
+            .side
+            .clone()
+            .unwrap_or_else(|| DEFAULT_COMMENT_SIDE.to_string());
         dedup.insert((c.path.clone(), line, side), (c.id, c.body.clone()));
     }
 
@@ -600,7 +606,7 @@ pub async fn label_pr(
 
 #[cfg(test)]
 mod tests {
-    use super::{DedupOutcome, analyze_pr, dedup_outcome};
+    use super::{DEFAULT_COMMENT_SIDE, DedupOutcome, analyze_pr, dedup_outcome};
     use crate::ai::types::{
         CommentSeverity, PrDetails, PrFile, PrReviewComment, PrReviewCommentDetails,
     };
@@ -717,7 +723,10 @@ mod tests {
             .iter()
             .filter_map(|c| {
                 let line = c.line?;
-                let side = c.side.clone().unwrap_or_else(|| "RIGHT".to_string());
+                let side = c
+                    .side
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_COMMENT_SIDE.to_string());
                 Some(((c.path.clone(), line, side), (c.id, c.body.clone())))
             })
             .collect()
@@ -732,7 +741,7 @@ mod tests {
             body: "Existing feedback".to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
-            side: Some("RIGHT".to_string()),
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
         }];
         let dedup = make_dedup_set(&existing);
@@ -749,7 +758,7 @@ mod tests {
         let key = (
             incoming.file,
             u64::from(incoming.line.unwrap()),
-            "RIGHT".to_string(),
+            DEFAULT_COMMENT_SIDE.to_string(),
         );
 
         // Assert: duplicate key is present, mapped to the correct comment id and body
@@ -774,12 +783,16 @@ mod tests {
             body: "Existing feedback".to_string(),
             path: "src/old.rs".to_string(),
             line: Some(10),
-            side: Some("RIGHT".to_string()),
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
         }];
         let dedup = make_dedup_set(&existing);
         assert!(
-            !dedup.contains_key(&("src/new.rs".to_string(), 10, "RIGHT".to_string(),)),
+            !dedup.contains_key(&(
+                "src/new.rs".to_string(),
+                10,
+                DEFAULT_COMMENT_SIDE.to_string(),
+            )),
             "dedup map must NOT contain a different path"
         );
 
@@ -801,7 +814,7 @@ mod tests {
             body: "Existing general PR comment".to_string(),
             path: "src/lib.rs".to_string(),
             line: None,
-            side: Some("RIGHT".to_string()),
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
         }];
         let dedup = make_dedup_set(&existing);
@@ -835,7 +848,7 @@ mod tests {
             body: "Existing feedback".to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
-            side: Some("RIGHT".to_string()),
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
         }];
         let dedup = make_dedup_set(&existing);
@@ -876,7 +889,7 @@ mod tests {
             body: "Same feedback".to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
-            side: Some("RIGHT".to_string()),
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
         }];
         let dedup = make_dedup_set(&existing);

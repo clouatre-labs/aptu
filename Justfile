@@ -24,7 +24,8 @@ lint-fix:
 
 # Run unit tests
 test:
-    cargo test --lib
+    cargo nextest run --workspace --no-fail-fast
+    cargo nextest run -p aptu-core --no-fail-fast --features ast-context
 
 # Run integration tests (requires bats and release binary)
 integration: build-release

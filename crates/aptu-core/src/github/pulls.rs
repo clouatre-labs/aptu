@@ -1667,7 +1667,7 @@ mod tests {
             body: "suggestion".to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(15),
-            side: Some("RIGHT".to_string()),
+            side: Some(crate::facade::pr_review::DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
         };
         let human = PrReviewCommentDetails {
@@ -1687,7 +1687,10 @@ mod tests {
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].path, "src/lib.rs");
         assert_eq!(kept[0].line, Some(15));
-        assert_eq!(kept[0].side, Some("RIGHT".to_string()));
+        assert_eq!(
+            kept[0].side,
+            Some(crate::facade::pr_review::DEFAULT_COMMENT_SIDE.to_string())
+        );
         assert_eq!(kept[0].commit_id, "abc123");
     }
 }

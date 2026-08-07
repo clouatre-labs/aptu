@@ -172,7 +172,7 @@ pub async fn validate_and_fetch_metadata(owner: &str, name: &str) -> crate::Resu
     let language = repo
         .language
         .map_or_else(|| "Unknown".to_string(), |v| v.to_string());
-    let description = repo.description.map_or_else(String::new, |v| v.clone());
+    let description = repo.description.unwrap_or_default();
 
     Ok(CuratedRepo {
         owner: owner.to_string(),

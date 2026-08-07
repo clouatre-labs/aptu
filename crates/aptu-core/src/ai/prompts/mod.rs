@@ -428,7 +428,10 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
             let line = comment
                 .line
                 .map_or_else(|| "none".to_string(), |l| l.to_string());
-            let side = comment.side.as_deref().unwrap_or("RIGHT");
+            let side = comment
+                .side
+                .as_deref()
+                .unwrap_or(crate::facade::pr_review::DEFAULT_COMMENT_SIDE);
             let body = sanitize_prompt_field(&comment.body);
             let _ = writeln!(
                 prompt,
@@ -1098,7 +1101,7 @@ mod tests {
             body: "Use a const instead of a magic number.".to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
-            side: Some("RIGHT".to_string()),
+            side: Some(crate::facade::pr_review::DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
         }];
         let mut ctx = make_test_pr(comments, 7);
