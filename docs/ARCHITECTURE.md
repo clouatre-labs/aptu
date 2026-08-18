@@ -2,7 +2,7 @@
 
 ## Overview
 
-Aptu is a Rust CLI application for AI-assisted GitHub issue triage and PR review. The architecture follows a layered design with clear separation of concerns: CLI interface, domain logic, external integrations, and secure credential management.
+Aptu is an AI-powered issue-triage and PR-review harness for GitHub. The architecture follows a layered design with clear separation of concerns: CLI interface, GitHub App webhook dispatch, domain logic, external integrations, and secure credential management.
 
 ## Crate Structure
 
@@ -20,23 +20,25 @@ aptu/
 ## Data Flow
 
 ```
-User Input (CLI)
-       |
-[aptu-cli] Parse args, validate input
-       |
-[aptu-core] Execute domain logic (triage, review, create)
-       |
-       +-- [github/] Fetch issues, post comments, apply labels
-       +-- [ai/] Generate AI suggestions via provider
-       |
-[System Keychain] Retrieve tokens securely
-       |
+User Input (CLI)          GitHub Webhook (App)
+       |                         |
+[aptu-cli] Parse args    [Cloudflare Worker] Validate HMAC,
+       |                  check .github/aptu.yml, dispatch
+[aptu-core] Execute      repository_dispatch event
+       |                         |
+       +-- [github/]     [Central Workflow] aptu[bot] runs
+       +-- [ai/]         triage/review/scan logic
+       |                         |
+[System Keychain]         [aptu-core] shared library
+       |                         |
 External APIs (GitHub, AI Provider)
        |
 Format & Display Output
 ```
 
 A typical aptu invocation follows this path: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a prompt with AST and call-graph context; the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
+
+The GitHub App path: a Cloudflare Worker receives webhook events, validates HMAC signatures, reads `.github/aptu.yml` from the repository, and dispatches `repository_dispatch` events to a central workflow. The central workflow runs the same `aptu-core` triage, review, and scan logic as the CLI, posting results as the `aptu[bot]` GitHub App user.
 
 ## Key Abstractions
 

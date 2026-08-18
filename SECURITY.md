@@ -31,6 +31,25 @@ Claude OAuth tokens are read from `~/.claude/credentials.json` if present. Aptu 
 
 The `APTU_CONTEXT_FILE` output contains code snippets from the reviewed PR diff and AST context. It does not include prompt text, AI responses, credentials, or personal data. Treat it with the same access controls as the PR diff itself.
 
+## Hosted App Operational Security
+
+The `aptu-dev` GitHub App runs on Cloudflare Workers with a central GitHub Actions workflow for triage and review execution.
+
+### Incident Ownership
+
+The app operator (clouatre-labs) is responsible for:
+- Monitoring webhook delivery and worker health
+- Responding to availability incidents within the SLA defined above
+- Notifying affected installations of any security-relevant changes
+
+### Webhook Secret Rotation
+
+The webhook secret used for HMAC-SHA256 signature validation is rotated on a regular schedule and immediately upon any suspected compromise. Rotation is performed via Wrangler secret update; the new secret is applied to the GitHub App configuration simultaneously to avoid delivery interruptions.
+
+### Repository Secret Handling
+
+External installations supply AI API keys as repository secrets. The central workflow reads these secrets at runtime via the `secrets` context and never logs, stores, or forwards them. Secret names are validated against `^[A-Z0-9_]+$` before resolution. The workflow uses `secrets: inherit` only for the specific secret named in `.github/aptu.yml`.
+
 ## Supply Chain Security
 
 ### OpenSSF Best Practices

@@ -2,6 +2,8 @@
 
 Config file: `~/.config/aptu/config.toml`
 
+> **Note:** Model names in examples are illustrative and may not reflect current defaults or available models. Use `aptu models list` to discover currently available models from your configured providers.
+
 ```toml
 [ai]
 provider = "gemini"  # or "cerebras", "groq", "openrouter", "zai", "zenmux"

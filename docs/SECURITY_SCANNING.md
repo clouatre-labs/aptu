@@ -133,6 +133,25 @@ When output is SARIF, these fields populate `tool.driver.rules[]`:
 
 This enables IDE integrations and code scanning UIs to surface actionable guidance alongside each finding.
 
+## App-Managed Scanning
+
+When using the `aptu-dev` GitHub App, security scanning can be enabled declaratively in `.github/aptu.yml`:
+
+```yaml
+scan:
+  enabled: true
+  fail-on: critical,high
+```
+
+When `scan.enabled: true`, the app automatically runs `aptu scan-security` on every PR push event (`opened`, `synchronize`, `reopened`). The scan workflow:
+
+1. Checks out the PR head commit
+2. Runs `aptu scan-security` with the configured `fail-on` severities
+3. Uploads SARIF results to GitHub Code Scanning
+4. Posts a commit status (`aptu/scan-security`) reflecting the scan outcome
+
+The `aptu-scan-security` repository dispatch event can also be triggered manually for ad-hoc scans. See [docs/GITHUB_ACTION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_ACTION.md#app-managed-security-scanning) for the full app configuration schema.
+
 ## Privacy
 
 Scanning uses local pattern matching only. Source code never leaves your machine.

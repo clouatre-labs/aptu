@@ -247,6 +247,8 @@ These protections ensure code quality and maintain a clean history. Make sure yo
 
 Releases are automated via GitHub Actions. Maintainers with push access:
 
+> **Note:** These instructions reflect the release workflow as of the last documentation update. Always verify against the current CI workflow (`release.yml`) before executing release steps, as automation details may change.
+
 ### GPG Setup
 
 Configure a GPG key for signing commits and tags:

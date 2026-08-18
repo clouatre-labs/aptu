@@ -28,11 +28,17 @@ review:
   enabled: true
 ai:
   provider: gemini
-  model: gemini-3.1-flash-lite
+  model: your-model-id
   api-key-secret: GEMINI_API_KEY
 ```
 
 Allowlisted organizations (including `clouatre-labs`) run on the app operator's shared credentials with no `ai` block required. External installs must supply their own provider, model, and API key secret in the `ai` block, or the webhook returns `403 Forbidden`.
+
+**Mention commands:** Comment `@aptu triage` on an issue or `@aptu review` on a PR to trigger the app manually. The app responds with a reaction to confirm receipt.
+
+**Automatic security scanning:** When `scan.enabled: true` is set in `.github/aptu.yml`, the app runs `aptu scan-security` on every PR push event, uploads SARIF results to GitHub Code Scanning, and posts a commit status. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md#app-managed-scanning).
+
+**Quotas:** The app enforces per-installation and global rate limits. When a quota is exceeded, the webhook returns `429 Too Many Requests` with a `Retry-After` header.
 
 See [docs/GITHUB_ACTION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_ACTION.md#aptu-dev-github-app) for the full configuration schema.
 
@@ -132,7 +138,7 @@ Auto-triage new issues with AI using any supported provider.
 
 ```yaml
 - name: AI issue triage and PR review
-  uses: clouatre-labs/aptu@83226816caaec41ee93af5e1ca7c974b76de35ba  # v0.10.9
+  uses: clouatre-labs/aptu@83226816caaec41ee93af5e1ca7c974b76de35ba  # v0.10.10
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
