@@ -133,7 +133,7 @@ fn render_dry_run_markdown_table(w: &mut dyn Write, result: &BulkTriageResult) -
 
     let mut table = Table::new();
     table
-        .load_preset(ASCII_MARKDOWN)
+        .load_style(ASCII_MARKDOWN)
         .set_header(vec!["Issue", "Title", "Labels", "Milestone"]);
 
     for triage_result in dry_runs {
