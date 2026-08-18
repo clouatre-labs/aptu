@@ -224,6 +224,13 @@ inputs:
       Leave empty to use scan-path directory scan.
     required: false
     default: ''
+  fail-on:
+    description: >
+      Comma-separated severities (critical,high,medium,low) that fail the security
+      scan step. When set, the scan blocks the workflow on findings at or above the
+      threshold. Leave empty to keep the scan non-blocking (advisory only).
+    required: false
+    default: ''
 
   # --- PR queue ---
   pr-queue:
@@ -571,7 +578,7 @@ runs:
 
     - name: Run aptu scan-security
       if: inputs.scan-path != '' || inputs.scan-security-diff != ''
-      continue-on-error: true
+      continue-on-error: ${{ inputs.fail-on == '' }}
       shell: bash
       env:
         REPO: ${{ github.repository }}
@@ -586,15 +593,28 @@ runs:
         DRY_RUN: ${{ inputs.dry-run }}
         SCAN_DIFF: ${{ inputs.scan-security-diff }}
         SCAN_PATH: ${{ inputs.scan-path }}
+        FAIL_ON: ${{ inputs.fail-on }}
       run: |
         set -e
-        if [[ -n "$SCAN_DIFF" ]]; then
-          echo "Running: aptu scan-security --diff $SCAN_DIFF --output github-annotations --sarif-output findings.sarif"
-          aptu scan-security --diff "$SCAN_DIFF" --output github-annotations --sarif-output findings.sarif
-        else
-          echo "Running: aptu scan-security $SCAN_PATH --output github-annotations --sarif-output findings.sarif"
-          aptu scan-security "$SCAN_PATH" --output github-annotations --sarif-output findings.sarif
+        FAIL_ON_ARGS=()
+        if [[ -n "$FAIL_ON" ]]; then
+          FAIL_ON_ARGS+=(--fail-on "$FAIL_ON")
         fi
+        if [[ -n "$SCAN_DIFF" ]]; then
+          echo "Running: aptu scan-security --diff $SCAN_DIFF --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]}"
+          aptu scan-security --diff "$SCAN_DIFF" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}"
+        else
+          echo "Running: aptu scan-security $SCAN_PATH --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]}"
+          aptu scan-security "$SCAN_PATH" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}"
+        fi
+
+    - name: Upload SARIF report
+      if: always() && hashFiles('findings.sarif') != ''
+      uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+      with:
+        sarif_file: findings.sarif
+        category: aptu-scan-security
+        token: ${{ inputs.github-token || github.token }}
 
     - name: Run aptu pr queue
       if: inputs.pr-queue == 'true'
