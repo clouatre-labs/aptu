@@ -6,12 +6,45 @@
 //! reducing API costs and noise from known false positives.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use super::Finding;
+
+fn path_matches_prefix(file_path: &str, prefix: &str) -> bool {
+    let file_components: Vec<Component<'_>> = Path::new(file_path)
+        .components()
+        .filter(|component| !matches!(component, Component::CurDir))
+        .collect();
+    let prefix_components: Vec<Component<'_>> = Path::new(prefix).components().collect();
+
+    if prefix_components.is_empty() || file_components.is_empty() {
+        return false;
+    }
+
+    // Relative paths must start with the prefix.
+    if file_components.len() >= prefix_components.len()
+        && file_components[..prefix_components.len()]
+            .iter()
+            .zip(&prefix_components)
+            .all(|(file_component, prefix_component)| file_component == prefix_component)
+    {
+        return true;
+    }
+
+    // Absolute paths may contain the prefix at any depth.
+    matches!(file_components.first(), Some(Component::RootDir))
+        && file_components
+            .windows(prefix_components.len())
+            .any(|window| {
+                window
+                    .iter()
+                    .zip(&prefix_components)
+                    .all(|(file_component, prefix_component)| file_component == prefix_component)
+            })
+}
 
 /// Security configuration for ignore rules.
 ///
@@ -44,6 +77,13 @@ impl Default for SecurityConfig {
                 "benches/".to_string(),
                 "fixtures/".to_string(),
                 "vendor/".to_string(),
+                "generated/".to_string(),
+                "docs/".to_string(),
+                "build/".to_string(),
+                "target/".to_string(),
+                "dist/".to_string(),
+                "out/".to_string(),
+                ".next/".to_string(),
             ],
         }
     }
@@ -86,7 +126,7 @@ impl SecurityConfig {
     pub fn should_ignore_path(&self, file_path: &str) -> bool {
         self.ignore_paths
             .iter()
-            .any(|prefix| file_path.starts_with(prefix))
+            .any(|prefix| path_matches_prefix(file_path, prefix))
     }
 
     /// Load configuration from `~/.config/aptu/security.toml`.
@@ -163,7 +203,7 @@ impl SecurityConfig {
 
         // Check file path prefixes
         for prefix in &self.ignore_paths {
-            if finding.file_path.starts_with(prefix) {
+            if path_matches_prefix(&finding.file_path, prefix) {
                 return true;
             }
         }
@@ -181,12 +221,23 @@ mod tests {
     fn test_security_config_default_has_sensible_paths() {
         let config = SecurityConfig::default();
         assert!(config.ignore_patterns.is_empty());
-        assert_eq!(config.ignore_paths.len(), 5);
+        assert_eq!(config.ignore_paths.len(), 12);
         assert!(config.ignore_paths.contains(&"tests/".to_string()));
         assert!(config.ignore_paths.contains(&"test/".to_string()));
         assert!(config.ignore_paths.contains(&"benches/".to_string()));
         assert!(config.ignore_paths.contains(&"fixtures/".to_string()));
         assert!(config.ignore_paths.contains(&"vendor/".to_string()));
+        for prefix in [
+            "generated/",
+            "docs/",
+            "build/",
+            "target/",
+            "dist/",
+            "out/",
+            ".next/",
+        ] {
+            assert!(config.should_ignore_path(&format!("./{prefix}file.rs")));
+        }
     }
 
     #[test]
@@ -202,7 +253,7 @@ mod tests {
         // with_defaults is deprecated but should still work
         let config = SecurityConfig::with_defaults();
         assert!(config.ignore_patterns.is_empty());
-        assert_eq!(config.ignore_paths.len(), 5);
+        assert_eq!(config.ignore_paths.len(), 12);
     }
 
     #[test]
@@ -317,6 +368,22 @@ mod tests {
     }
 
     #[test]
+    fn test_path_matches_prefix_component_matching() {
+        // ./ prefix is normalized away (CurDir component skipped)
+        assert!(path_matches_prefix("./tests/foo.rs", "tests/"));
+        // Direct component match
+        assert!(path_matches_prefix("tests/foo.rs", "tests/"));
+        // Absolute path matches prefix at any depth
+        assert!(path_matches_prefix("/absolute/path/tests/foo.rs", "tests/"));
+        // Different first component must not match
+        assert!(!path_matches_prefix("src/main.rs", "tests/"));
+        // Path deeper than prefix still matches
+        assert!(path_matches_prefix("generated/sub/deep.rs", "generated/"));
+        // Nested same-name component in a relative path must not match
+        assert!(!path_matches_prefix("src/tests/foo.rs", "tests/"));
+    }
+
+    #[test]
     fn test_config_serialization() {
         let config = SecurityConfig {
             ignore_patterns: vec!["pattern1".to_string(), "pattern2".to_string()],
@@ -336,7 +403,7 @@ mod tests {
         let config = SecurityConfig::load_from_path(&path).expect("load default");
         // When file doesn't exist, should return sensible defaults
         assert!(config.ignore_patterns.is_empty());
-        assert_eq!(config.ignore_paths.len(), 5);
+        assert_eq!(config.ignore_paths.len(), 12);
     }
 
     #[test]
