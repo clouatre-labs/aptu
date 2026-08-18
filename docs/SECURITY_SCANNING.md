@@ -135,7 +135,7 @@ This enables IDE integrations and code scanning UIs to surface actionable guidan
 
 ## App-Managed Scanning
 
-When using the `aptu-dev` GitHub App, security scanning can be enabled declaratively in `.github/aptu.yml`:
+When using the `aptu-dev` GitHub App, security scanning can be enabled declaratively in `.github/aptu.yml`. Scanning is local pattern matching only and does not require an `ai` block:
 
 ```yaml
 scan:

@@ -202,19 +202,24 @@ review:
   instructions-file: .github/instructions/pr-review.md
   # Optional: skip dispatch if PR already has any of these labels
   skip-labeled: false
+  # Optional: glob patterns for PR review dispatch
+  paths:
+    - "src/**"
+    - "crates/**"
+    - "!**/*.md"
 
-# Required for external installs (orgs not in the app operator's allowlist)
-# External installs must supply their own AI API credentials
+# AI provider credentials (all three fields required when present)
 ai:
-  provider: gemini
-  model: your-model-id
+  provider: openrouter
+  model: google/gemma-4-26b-a4b-it
   # Name of a repository secret containing the API key (must match ^[A-Z0-9_]+$)
-  api-key-secret: GEMINI_API_KEY
+  api-key-secret: OPENROUTER_API_KEY
 
-# Optional: glob patterns; PR review dispatch is skipped if all changed files match
-path_filters:
-  - src/data/blog/**
-  - public/audio/**
+# Security scanning (runs without an ai block)
+scan:
+  enabled: true
+  fail-on: critical,high
+  path: src/
 ```
 
 ### Configuration Fields
@@ -226,41 +231,35 @@ path_filters:
 | `review.enabled` | No | boolean | Enable automatic PR review (default: `false`). |
 | `review.instructions-file` | No | string | Path to custom PR review instructions within this repository (e.g., `.github/instructions/pr-review.md`). |
 | `review.skip-labeled` | No | boolean | Skip PR review dispatch if PR has any labels (default: `false`). |
-| `ai.provider` | See note | string | AI provider (`openai`, `anthropic`, `gemini`, `openrouter`, `bedrock`). Required for external installs. |
-| `ai.model` | See note | string | Model identifier for your configured AI provider. Required for external installs. |
-| `ai.api-key-secret` | See note | string | Name of a repository secret containing the API key. Must match `^[A-Z0-9_]+$`. Required for external installs. |
-| `path_filters` | No | string[] | Glob patterns. PR review dispatch is skipped if all changed files match any pattern. |
-| `scan.enabled` | No | boolean | Enable automatic security scanning on PR push events (default: `false`). |
+| `review.paths` | No | string[] | Glob patterns for PR review dispatch. Use `!`-prefixed patterns for exclusions. |
+| `ai.provider` | See note | string | AI provider (`openai`, `anthropic`, `gemini`, `openrouter`, `bedrock`). All three `ai` fields are required when the `ai` block is present. |
+| `ai.model` | See note | string | Model identifier for your configured AI provider. All three `ai` fields are required when the `ai` block is present. |
+| `ai.api-key-secret` | See note | string | Name of a repository secret containing the API key. Must match `^[A-Z0-9_]+$`. All three `ai` fields are required when the `ai` block is present. |
+| `scan.enabled` | No | boolean | Enable automatic security scanning on PR push events (default: `false`). Scanning is local pattern matching only and does not require an `ai` block. |
 | `scan.fail-on` | No | string | Comma-separated severities that fail the scan (`critical`, `high`, `medium`, `low`). |
+| `scan.path` | No | string | Root directory to scan (default: `.`). |
 
-### Tiering Model
+### Configuration Requirements
 
-The app distinguishes between two categories of installations:
+All installations must supply an `ai` block with `provider`, `model`, and `api-key-secret` in `.github/aptu.yml`:
 
-**Allowlisted Installs** (clouatre-labs organization and other approved accounts):
-- The app operator supplies shared AI credentials
-- `.github/aptu.yml` does not require an `ai` block
-- Triage and review are available immediately after installing the app
-
-**External Installs**:
-- You must supply your own AI API credentials
-- `.github/aptu.yml` must include an `ai` block with `provider`, `model`, and `api-key-secret`
-- The `api-key-secret` must be the exact name of a repository secret in your repository containing a valid API key for the specified provider
-- If `ai` is missing, the webhook returns `403 Forbidden` with a diagnostic body explaining the requirement
+- The `api-key-secret` must be the exact name of a repository secret containing a valid API key for the specified provider
+- If the `ai` block is missing or incomplete, the webhook returns `403 Forbidden` with a diagnostic body explaining the requirement
+- Security scanning via `scan.enabled: true` does not require an `ai` block (local pattern matching only)
 
 ### Dispatch Behavior
 
 The app dispatches on the following events:
 
 - **Issue Triage**: when an issue is opened (if `triage.enabled: true`)
-- **PR Review**: when a PR is opened, updated, or reopened (if `review.enabled: true` and `skip-labeled` is not true, and not all changed files match `path_filters`)
+- **PR Review**: when a PR is opened, updated, or reopened (if `review.enabled: true` and `skip-labeled` is not true, and not all changed files match `review.paths`)
 
 Dispatch is skipped (returns `204 No Content`) in these cases:
 
 - `triage.enabled: false` or `review.enabled: false`
-- PR review: all changed files match a pattern in `path_filters`
+- PR review: all changed files match a pattern in `review.paths`
 - PR review: `skip-labeled: true` and the PR has at least one label
-- External install missing `ai` block (returns `403 Forbidden` instead of `204`)
+- Missing or incomplete `ai` block (returns `403 Forbidden` instead of `204`)
 
 ### Webhook Signature Validation
 
@@ -285,7 +284,7 @@ The app uses a central workflow architecture:
 
 1. **Cloudflare Worker** receives webhook events, validates HMAC signatures, checks `.github/aptu.yml` configuration, and dispatches `repository_dispatch` events to the central review repository.
 2. **Central workflow** (`aptu[bot]`) runs the actual triage and review logic. It checks out the target repository, resolves AI credentials, and posts results back as the `aptu[bot]` GitHub App user.
-3. **Caller-supplied keys:** External installations provide their own AI API keys via repository secrets. The central workflow reads the secret name from `.github/aptu.yml` (`ai.api-key-secret`) and resolves it at runtime. Allowlisted installations use the operator's shared credentials.
+3. **Repository AI keys:** Each installation provides its own AI API key via a repository secret. The central workflow reads the secret name from `.github/aptu.yml` (`ai.api-key-secret`) and resolves it at runtime.
 
 This model keeps triage and review logic in one place while letting each installation control its own AI provider and credentials.
 

@@ -11,32 +11,26 @@ Aptu is an AI SDLC review harness for GitHub (GitHub App, CLI, and GitHub Action
 Grant the app access to a repository, then commit a `.github/aptu.yml` file to opt in:
 
 ```yaml
-# Minimal: allowlisted orgs run on shared operator credentials, no ai block required
 version: 1
 triage:
   enabled: true
 review:
   enabled: true
-```
-
-```yaml
-# External installs must supply their own AI provider credentials
-version: 1
-triage:
-  enabled: true
-review:
-  enabled: true
+  paths:
+    - "src/**"
+    - "crates/**"
+    - "!**/*.md"
 ai:
-  provider: gemini
-  model: your-model-id
-  api-key-secret: GEMINI_API_KEY
+  provider: openrouter
+  model: google/gemma-4-26b-a4b-it
+  api-key-secret: OPENROUTER_API_KEY
 ```
 
-Allowlisted organizations (including `clouatre-labs`) run on the app operator's shared credentials with no `ai` block required. External installs must supply their own provider, model, and API key secret in the `ai` block, or the webhook returns `403 Forbidden`.
+All installations must supply an `ai` block with `provider`, `model`, and `api-key-secret`. `api-key-secret` is the name of a repository secret containing the API key.
 
 **Mention commands:** Comment `@aptu triage` on an issue or `@aptu review` on a PR to trigger the app manually. The app responds with a reaction to confirm receipt.
 
-**Automatic security scanning:** When `scan.enabled: true` is set in `.github/aptu.yml`, the app runs `aptu scan-security` on every PR push event, uploads SARIF results to GitHub Code Scanning, and posts a commit status. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md#app-managed-scanning).
+**Automatic security scanning:** When `scan.enabled: true` is set in `.github/aptu.yml`, the app runs `aptu scan-security` on every PR push event, uploads SARIF results to GitHub Code Scanning, and posts a commit status. Scanning is local pattern matching only and does not require an `ai` block. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md#app-managed-scanning).
 
 **Quotas:** The app enforces per-installation and global rate limits. When a quota is exceeded, the webhook returns `429 Too Many Requests` with a `Retry-After` header.
 
