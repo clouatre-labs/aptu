@@ -231,6 +231,13 @@ inputs:
       threshold. Leave empty to keep the scan non-blocking (advisory only).
     required: false
     default: ''
+  sarif-upload:
+    description: >
+      Set to 'false' to skip uploading the SARIF report to code scanning. Use when
+      the scan runs outside the target repository (for example, a centralized scan
+      that uploads SARIF itself). Defaults to 'true'.
+    required: false
+    default: 'true'
 
   # --- PR queue ---
   pr-queue:
@@ -609,7 +616,8 @@ runs:
         fi
 
     - name: Upload SARIF report
-      if: always() && hashFiles('findings.sarif') != ''
+      if: always() && inputs.sarif-upload == 'true' && hashFiles('findings.sarif') != ''
+      continue-on-error: true
       uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
       with:
         sarif_file: findings.sarif
