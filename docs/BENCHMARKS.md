@@ -3,6 +3,8 @@
 
 # Benchmarks
 
+> **Note:** Results below reflect measurements taken at the time of each referenced PR. Model availability, pricing, and latency may have changed since. Use `aptu models list` for current model information.
+
 ## Comparative Benchmark
 
 Head-to-head comparison of `aptu+mercury-2` ([Mercury 2](https://openrouter.ai/inception/mercury-2) by Inception Labs -- a small, efficient, diffusion-based LLM -- with structured, schema-enforced prompts) vs a raw `claude-opus-4.6` call with a two-sentence generic prompt (no schema, no rubric, no AST context). Issue [#1122](https://github.com/clouatre-labs/aptu/issues/1122).

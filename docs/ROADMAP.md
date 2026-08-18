@@ -14,6 +14,7 @@ This document describes the project direction across three time horizons. Items 
 
 ## Recently Shipped
 
+- **GitHub App** (#94): `aptu-dev` GitHub App with config-as-code opt-in, mention commands, automatic security scanning, per-installation quotas, and per-repository AI key model. Installed from [github.com/apps/aptu-dev](https://github.com/apps/aptu-dev).
 - **Structural graph context for `pr review`** (#1420): petgraph BFS blast-radius from changed files, opt-in via `graph` Cargo feature, disk-cached by commit SHA
 - **Model-tier routing** (#1416): routes large PRs to a higher-capability model tier automatically based on estimated prompt size
 - **Prompt optimisation** (#1415): minified schemas, examples moved to user turn (~2.6k chars saved per call)
@@ -31,7 +32,6 @@ These items address known gaps and complete features already partially implement
 - **API key memory hygiene**: apply `zeroize` on drop to all secret-typed fields in `aptu-core`; prevents secrets from lingering in freed memory after deallocation (single-dependency hardening)
 - **Claude Max/Pro/Team OAuth**: authenticate via an existing Claude subscription (`credentials.json` from the `claude` CLI) as an alternative to a dedicated API key; eliminates the main onboarding friction point for Anthropic users
 - **Prompt caching**: 10-30% cost reduction on active repos, no model switch required. System prompt (5,000 chars) + AST/call-graph context do not change between runs on the same repo. Cache-read cost is 0.1x input cost on both Gemini and Anthropic.
-- **GitHub App support**: enables PRs from forks and org-wide installation without per-repo token management -- the primary blocker for team adoption
 
 ## Medium-Term (6-18 months)
 
@@ -86,11 +86,9 @@ Patterns audited and not adopted:
 
 ## Removed from Roadmap
 
-- **iOS App** (Phase 2 in SPEC.md): not aligned with GitHub Actions / App focus.
-- **Gamification / Leaderboards** (Phase 3 in SPEC.md): deferred; requires platform and user base first.
+- **iOS App**: not aligned with GitHub Actions / App focus.
+- **Gamification / Leaderboards**: deferred; requires platform and user base first.
 - **MCP Server** (`aptu-mcp`): removed (see #1232).
-
-These remain in SPEC.md for historical context.
 
 ## Issue Index
 

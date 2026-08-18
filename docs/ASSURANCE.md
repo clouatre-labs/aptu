@@ -38,6 +38,27 @@ Aptu does not execute remote code, evaluate arbitrary expressions, or write to t
 |                  | ----------------> |   Config files   |
 +------------------+                   | (~/.config/aptu) |
                                        +------------------+
+
++------------------+   HMAC-SHA256    +------------------+
+| GitHub Webhook   | ---------------> | Cloudflare Worker|
+| (push, PR, issue)|                   | (validate,       |
+|                  |                   |  dispatch)       |
+|                  |                   +------------------+
+|                  |                          |
+|                  |              repository_dispatch
+|                  |                          v
+|                  |                   +------------------+
+|                  |                   | Central Workflow |
+|                  |                   | (aptu[bot] runs  |
+|                  |                   |  triage/review)  |
+|                  |                   +------------------+
+|                  |                          |
+|                  |              reads repo secrets
+|                  |                          v
+|                  |                   +------------------+
+|                  |                   | Repository       |
+|                  |                   | Secrets (AI keys)|
++------------------+                   +------------------+
 ```
 
 **Boundaries and assumptions:**
@@ -46,6 +67,10 @@ Aptu does not execute remote code, evaluate arbitrary expressions, or write to t
 - CLI process to AI provider (OpenRouter, Gemini/Google, Groq, Cerebras, Zenmux, Z.AI): TLS enforced; API keys transmitted only in Authorization headers, never in request bodies or URLs.
 - CLI process to OS keyring: platform keyring API (keyring crate); tokens are never written to disk in plaintext.
 - Config files: user-owned files in `~/.config/aptu/`; no secrets are stored there (see keyring above).
+- GitHub Webhook to Cloudflare Worker: HMAC-SHA256 signature validation; invalid signatures rejected with `401`. The webhook secret is stored as a Wrangler secret and never logged.
+- Cloudflare Worker to Central Workflow: `repository_dispatch` events sent via GitHub API with installation token; the worker reads `.github/aptu.yml` from the repository to determine enabled features and credential requirements.
+- Central Workflow to Repository Secrets: the workflow reads AI API keys from repository secrets named in `.github/aptu.yml` (`ai.api-key-secret`). Secrets are never logged or exposed in workflow output.
+- Installation permissions: the GitHub App requests minimal scopes (`contents: read`, `issues: write`, `pull_requests: write`, `metadata: read`). Each installation can restrict repository access.
 
 ## Input Validation
 

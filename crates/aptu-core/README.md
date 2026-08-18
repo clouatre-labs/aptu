@@ -3,7 +3,9 @@
 
 # aptu-core
 
-Core library for Aptu - AI-Powered Triage Utility.
+Core library for Aptu - AI-powered issue-triage and PR-review harness.
+
+`aptu-core` is shared by the Aptu CLI, GitHub Action, and `aptu-dev` GitHub App. It provides the domain logic, AI provider abstraction, GitHub API integration, and security scanning used across all three surfaces. The GitHub App resolves credentials from repository secrets rather than the local OS keyring; the keyring feature is used only by the CLI.
 
 [![docs.rs](https://img.shields.io/badge/docs.rs-aptu--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs)](https://docs.rs/aptu-core)
 [![CLI crate](https://img.shields.io/badge/CLI-aptu--cli-fc8d62?style=flat-square&labelColor=555555&logo=rust)](https://crates.io/crates/aptu-cli)
