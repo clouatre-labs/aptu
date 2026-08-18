@@ -28,13 +28,13 @@ ai:
 
 All installations must supply an `ai` block with `provider`, `model`, and `api-key-secret`. `api-key-secret` is the name of a repository secret containing the API key.
 
-**Mention commands:** Comment `@aptu triage` on an issue or `@aptu review` on a PR to trigger the app manually. The app responds with a reaction to confirm receipt.
+**Mention commands:** Comment `@aptu` on an issue or PR to trigger the app manually. The commenter must be a repository collaborator. Mention commands work regardless of whether automatic dispatch is enabled in `.github/aptu.yml`.
 
 **Automatic security scanning:** When `scan.enabled: true` is set in `.github/aptu.yml`, the app runs `aptu scan-security` on every PR push event, uploads SARIF results to GitHub Code Scanning, and posts a commit status. Scanning is local pattern matching only and does not require an `ai` block. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md#app-managed-scanning).
 
-**Quotas:** The app enforces per-installation and global rate limits. When a quota is exceeded, the webhook returns `429 Too Many Requests` with a `Retry-After` header.
+**Quotas:** The app enforces per-installation (50 events per event type per 24h) and global (500 per 24h) rate limits. When a quota is exceeded, the webhook returns `429 Too Many Requests` with a `Retry-After` header.
 
-See [docs/GITHUB_ACTION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_ACTION.md#aptu-dev-github-app) for the full configuration schema.
+See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_APP.md) for the permissions matrix and install walkthrough, or [docs/GITHUB_ACTION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_ACTION.md#aptu-dev-github-app) for the full configuration schema.
 
 ## Features
 
