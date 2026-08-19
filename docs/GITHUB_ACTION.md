@@ -232,7 +232,7 @@ scan:
 | `review.instructions-file` | No | string | Path to custom PR review instructions within this repository (e.g., `.github/instructions/pr-review.md`). |
 | `review.skip-labeled` | No | boolean | Skip PR review dispatch if PR has any labels (default: `false`). |
 | `review.paths` | No | string[] | Glob patterns for PR review dispatch. Use `!`-prefixed patterns for exclusions. |
-| `ai.provider` | See note | string | AI provider (`openai`, `anthropic`, `gemini`, `openrouter`, `bedrock`). All three `ai` fields are required when the `ai` block is present. |
+| `ai.provider` | See note | string | AI provider (`anthropic`, `cerebras`, `gemini`, `groq`, `openrouter`, `zai`, `zenmux`). All three `ai` fields are required when the `ai` block is present. |
 | `ai.model` | See note | string | Model identifier for your configured AI provider. All three `ai` fields are required when the `ai` block is present. |
 | `ai.api-key-secret` | See note | string | Name of a repository secret containing the API key. Must match `^[A-Z0-9_]+$`. All three `ai` fields are required when the `ai` block is present. |
 | `scan.enabled` | No | boolean | Enable automatic security scanning on PR push events (default: `false`). Scanning is local pattern matching only and does not require an `ai` block. |
@@ -241,10 +241,10 @@ scan:
 
 ### Configuration Requirements
 
-All installations must supply an `ai` block with `provider`, `model`, and `api-key-secret` in `.github/aptu.yml`:
+All installations must supply an `ai` block with `provider`, `model`, and `api-key-secret` in `.github/aptu.yml` for triage and review:
 
 - The `api-key-secret` must be the exact name of a repository secret containing a valid API key for the specified provider
-- If the `ai` block is missing or incomplete, the webhook returns `403 Forbidden` with a diagnostic body explaining the requirement
+- If the `ai` block is present but incomplete, the config parser returns null and no dispatch occurs (the webhook returns `200 OK` with no dispatch). If the `ai` block is absent, the config is valid; dispatch occurs but the downstream workflow receives no AI credentials.
 - Security scanning via `scan.enabled: true` does not require an `ai` block (local pattern matching only)
 
 ### Dispatch Behavior
@@ -252,14 +252,16 @@ All installations must supply an `ai` block with `provider`, `model`, and `api-k
 The app dispatches on the following events:
 
 - **Issue Triage**: when an issue is opened (if `triage.enabled: true`)
-- **PR Review**: when a PR is opened, updated, or reopened (if `review.enabled: true` and `skip-labeled` is not true, and not all changed files match `review.paths`)
+- **PR Review**: when a PR is opened, updated, or reopened (if `review.enabled: true` and at least one changed file qualifies under `review.paths`)
+- **Security Scan**: when a PR is opened, updated, or reopened (if `scan.enabled: true`)
 
-Dispatch is skipped (returns `204 No Content`) in these cases:
+Dispatch is skipped in these cases (the webhook returns `204 No Content` when the path filter excludes all files, and `200 OK` otherwise):
 
-- `triage.enabled: false` or `review.enabled: false`
-- PR review: all changed files match a pattern in `review.paths`
-- PR review: `skip-labeled: true` and the PR has at least one label
-- Missing or incomplete `ai` block (returns `403 Forbidden` instead of `204`)
+- `triage.enabled: false` or `review.enabled: false` (or `scan.enabled: false` for scan)
+- PR review: all changed files pass the `review.paths` filter (no file qualifies for review)
+- `.github/aptu.yml` is absent or fails validation (parser returns null; `shouldDispatch` returns false)
+
+The `review.skip-labeled` field is not evaluated by the Worker. It is passed through to the downstream workflow, which may skip review if the PR already has labels.
 
 ### Webhook Signature Validation
 
@@ -267,16 +269,16 @@ The Cloudflare Worker validates all incoming webhook payloads using HMAC-SHA256 
 
 ### Mention Commands
 
-Comment `@aptu triage` on an issue or `@aptu review` on a PR to trigger the app manually. The app responds with a reaction to confirm receipt, then dispatches the corresponding workflow. Mention commands work regardless of whether automatic dispatch is enabled in `.github/aptu.yml`.
+Comment `@aptu` on an issue or PR to trigger the app manually. The commenter must be a repository collaborator (any collaborator role). The Worker dispatches the corresponding workflow based on the comment location: issue comments trigger triage, PR review comments trigger review. Mention commands work regardless of whether automatic dispatch is enabled in `.github/aptu.yml`, but are still subject to the owner allowlist and quota limits.
 
 ### Quota Model
 
-The app enforces two tiers of rate limits:
+The app enforces two tiers of rate limits, both using a rolling 24-hour window:
 
-- **Per-installation quota:** Each installation has a configurable request budget per hour. When exceeded, the webhook returns `429 Too Many Requests` with a `Retry-After` header.
-- **Global quota:** A shared budget across all installations protects the central worker from overload. Exhaustion returns `429` with a `Retry-After` header.
+- **Per-installation quota:** 50 events per event type (triage, review, scan) per 24-hour rolling window. When exceeded, the webhook returns `429 Too Many Requests` with a `Retry-After` header.
+- **Global quota:** 500 events across all installations per 24-hour rolling window (configurable via `GLOBAL_QUOTA_LIMIT`). Exhaustion returns `429` with a `Retry-After` header.
 
-Quota counters reset at the top of each hour. The `Retry-After` header value is the number of seconds until the next reset window.
+Quota counters do not reset at a fixed time; timestamps older than 24 hours are pruned on each request. The `Retry-After` header value is the number of seconds until the oldest event in the window expires.
 
 ### Auth and Execution Model
 
