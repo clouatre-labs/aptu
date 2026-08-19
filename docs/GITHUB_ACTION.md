@@ -244,7 +244,7 @@ scan:
 All installations must supply an `ai` block with `provider`, `model`, and `api-key-secret` in `.github/aptu.yml` for triage and review:
 
 - The `api-key-secret` must be the exact name of a repository secret containing a valid API key for the specified provider
-- If the `ai` block is missing or incomplete, the config parser returns null and no dispatch occurs (the webhook returns `200 OK` with no dispatch)
+- If the `ai` block is present but incomplete, the config parser returns null and no dispatch occurs (the webhook returns `200 OK` with no dispatch). If the `ai` block is absent, the config is valid; dispatch occurs but the downstream workflow receives no AI credentials.
 - Security scanning via `scan.enabled: true` does not require an `ai` block (local pattern matching only)
 
 ### Dispatch Behavior
@@ -255,7 +255,7 @@ The app dispatches on the following events:
 - **PR Review**: when a PR is opened, updated, or reopened (if `review.enabled: true` and at least one changed file qualifies under `review.paths`)
 - **Security Scan**: when a PR is opened, updated, or reopened (if `scan.enabled: true`)
 
-Dispatch is skipped (returns `200 OK` with no dispatch) in these cases:
+Dispatch is skipped in these cases (the webhook returns `204 No Content` when the path filter excludes all files, and `200 OK` otherwise):
 
 - `triage.enabled: false` or `review.enabled: false` (or `scan.enabled: false` for scan)
 - PR review: all changed files pass the `review.paths` filter (no file qualifies for review)
@@ -269,7 +269,7 @@ The Cloudflare Worker validates all incoming webhook payloads using HMAC-SHA256 
 
 ### Mention Commands
 
-Comment `@aptu` on an issue or PR to trigger the app manually. The commenter must be a repository collaborator (admin, write, or pull permission). The Worker dispatches the corresponding workflow based on the comment location: issue comments trigger triage, PR review comments trigger review. Mention commands work regardless of whether automatic dispatch is enabled in `.github/aptu.yml`, but are still subject to the owner allowlist and quota limits.
+Comment `@aptu` on an issue or PR to trigger the app manually. The commenter must be a repository collaborator (any collaborator role). The Worker dispatches the corresponding workflow based on the comment location: issue comments trigger triage, PR review comments trigger review. Mention commands work regardless of whether automatic dispatch is enabled in `.github/aptu.yml`, but are still subject to the owner allowlist and quota limits.
 
 ### Quota Model
 

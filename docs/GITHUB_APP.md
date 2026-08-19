@@ -2,6 +2,8 @@
 
 The `aptu-dev` GitHub App automates issue triage, PR review, and security scanning without installing the GitHub Action in each repository. A Cloudflare Worker validates webhook signatures, checks the owner allowlist, reads `.github/aptu.yml` from the target repo, and dispatches `repository_dispatch` events to a central workflow in `clouatre-labs/aptu-github-app`.
 
+For the architectural rationale behind Aptu's review-gate model, see [AI SDLC Governance: Three Layers for Engineering Leaders](https://clouatre.ca/posts/ai-sdlc-governance-stack/).
+
 For the `.github/aptu.yml` configuration schema and field reference, see [GitHub Action documentation](GITHUB_ACTION.md#aptu-dev-github-app).
 
 ## Permissions
@@ -59,6 +61,6 @@ Quota counters do not reset at a fixed time; timestamps older than 24 hours are 
 
 ## Manual Triggers
 
-Comment `@aptu` on an issue or PR to trigger the App manually. The Worker detects the mention, verifies the commenter is a repository collaborator (admin, write, or pull permission), enforces quota, then dispatches the corresponding workflow. The bot's own comments are skipped to prevent self-trigger loops.
+Comment `@aptu` on an issue or PR to trigger the App manually. The Worker detects the mention, verifies the commenter is a repository collaborator (any collaborator role), enforces quota, then dispatches the corresponding workflow. The bot's own comments are skipped to prevent self-trigger loops.
 
 Mention commands work regardless of whether automatic dispatch is enabled in `.github/aptu.yml`, but are still subject to the owner allowlist and quota limits.
