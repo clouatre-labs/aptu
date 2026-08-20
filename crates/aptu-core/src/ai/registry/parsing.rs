@@ -1,26 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Centralized provider configuration registry.
-//!
-//! This module provides a static registry of all AI providers supported by Aptu,
-//! including their metadata, API endpoints, and available models.
-//!
-//! It also provides runtime model validation infrastructure via the `ModelRegistry` trait
-//! with a simple sync implementation using static model lists.
-//!
-//! # Examples
-//!
-//! ```
-//! use aptu_core::ai::registry::{get_provider, all_providers};
-//!
-//! // Get a specific provider
-//! let provider = get_provider("openrouter");
-//! assert!(provider.is_some());
-//!
-//! // Get all providers
-//! let providers = all_providers();
-//! assert_eq!(providers.len(), 7);
-//! ```
+//! HTTP model parsing and caching logic.
 
 use async_trait::async_trait;
 use secrecy::ExposeSecret;
@@ -28,157 +8,12 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
 
+use super::consts::{
+    PROVIDER_CEREBRAS, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_OPENROUTER, PROVIDER_ZAI,
+    PROVIDER_ZENMUX,
+};
 use crate::auth::TokenProvider;
 use crate::cache::FileCache;
-
-/// Configuration for an AI provider.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ProviderConfig {
-    /// Provider identifier (lowercase, used in config files)
-    pub name: &'static str,
-
-    /// Human-readable provider name for UI display
-    pub display_name: &'static str,
-
-    /// API base URL for this provider
-    pub api_url: &'static str,
-
-    /// Environment variable name for API key
-    pub api_key_env: &'static str,
-
-    /// Default model name for this provider
-    pub model: &'static str,
-
-    /// Default maximum tokens for API responses
-    pub max_tokens: u32,
-
-    /// Default temperature for API requests
-    pub temperature: f32,
-}
-
-// ============================================================================
-// Provider Registry
-// ============================================================================
-
-/// Provider name constant for Anthropic.
-///
-/// Used throughout the codebase to avoid hardcoding the string literal
-/// in multiple places. Replaces all direct "anthropic" comparisons.
-pub const PROVIDER_ANTHROPIC: &str = "anthropic";
-
-/// Static registry of all supported AI providers
-pub static PROVIDERS: &[ProviderConfig] = &[
-    ProviderConfig {
-        name: "gemini",
-        display_name: "Google Gemini",
-        api_url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-        api_key_env: "GEMINI_API_KEY",
-        model: "gemini-3.1-flash-lite",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-    ProviderConfig {
-        name: "openrouter",
-        display_name: "OpenRouter",
-        api_url: "https://openrouter.ai/api/v1/chat/completions",
-        api_key_env: "OPENROUTER_API_KEY",
-        model: "mistralai/mistral-small-2603",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-    ProviderConfig {
-        name: "groq",
-        display_name: "Groq",
-        api_url: "https://api.groq.com/openai/v1/chat/completions",
-        api_key_env: "GROQ_API_KEY",
-        model: "llama3-70b-8192",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-    ProviderConfig {
-        name: "cerebras",
-        display_name: "Cerebras",
-        api_url: "https://api.cerebras.ai/v1/chat/completions",
-        api_key_env: "CEREBRAS_API_KEY",
-        model: "llama3.1-8b",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-    ProviderConfig {
-        name: "zenmux",
-        display_name: "Zenmux",
-        api_url: "https://zenmux.ai/api/v1/chat/completions",
-        api_key_env: "ZENMUX_API_KEY",
-        model: "gpt-4o-mini",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-    ProviderConfig {
-        name: "zai",
-        display_name: "Z.AI (Zhipu)",
-        api_url: "https://api.z.ai/api/paas/v4/chat/completions",
-        api_key_env: "ZAI_API_KEY",
-        model: "glm-4-plus",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-    ProviderConfig {
-        name: PROVIDER_ANTHROPIC,
-        display_name: "Anthropic",
-        api_url: "https://api.anthropic.com/v1/chat/completions",
-        api_key_env: "ANTHROPIC_API_KEY",
-        model: "claude-sonnet-4-6",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-];
-
-/// Retrieves a provider configuration by name.
-///
-/// # Arguments
-///
-/// * `name` - The provider name (case-sensitive, lowercase)
-///
-/// # Returns
-///
-/// Some(ProviderConfig) if found, None otherwise.
-///
-/// # Examples
-///
-/// ```
-/// use aptu_core::ai::registry::get_provider;
-///
-/// let provider = get_provider("openrouter");
-/// assert!(provider.is_some());
-/// assert_eq!(provider.unwrap().display_name, "OpenRouter");
-/// ```
-#[must_use]
-pub fn get_provider(name: &str) -> Option<&'static ProviderConfig> {
-    PROVIDERS.iter().find(|p| p.name == name)
-}
-
-/// Returns all available providers.
-///
-/// # Returns
-///
-/// A slice of all `ProviderConfig` entries in the registry.
-///
-/// # Examples
-///
-/// ```
-/// use aptu_core::ai::registry::all_providers;
-///
-/// let providers = all_providers();
-/// assert_eq!(providers.len(), 7);
-/// ```
-#[must_use]
-pub fn all_providers() -> &'static [ProviderConfig] {
-    PROVIDERS
-}
-
-// ============================================================================
-// Runtime Model Validation
-// ============================================================================
 
 /// Error type for model registry operations.
 #[derive(Debug, Error)]
@@ -445,12 +280,12 @@ impl CachedModelRegistry<'_> {
     /// Fetch models from provider API.
     async fn fetch_from_api(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
         let url = match provider {
-            "openrouter" => "https://openrouter.ai/api/v1/models",
-            "gemini" => "https://generativelanguage.googleapis.com/v1beta/models",
-            "groq" => "https://api.groq.com/openai/v1/models",
-            "cerebras" => "https://api.cerebras.ai/v1/models",
-            "zenmux" => "https://zenmux.ai/api/v1/models",
-            "zai" => "https://api.z.ai/api/paas/v4/models",
+            PROVIDER_OPENROUTER => "https://openrouter.ai/api/v1/models",
+            PROVIDER_GEMINI => "https://generativelanguage.googleapis.com/v1beta/models",
+            PROVIDER_GROQ => "https://api.groq.com/openai/v1/models",
+            PROVIDER_CEREBRAS => "https://api.cerebras.ai/v1/models",
+            PROVIDER_ZENMUX => "https://zenmux.ai/api/v1/models",
+            PROVIDER_ZAI => "https://api.z.ai/api/paas/v4/models",
             _ => return Err(RegistryError::ProviderNotFound(provider.to_string())),
         };
 
@@ -461,13 +296,14 @@ impl CachedModelRegistry<'_> {
 
         // Build request incrementally with provider-specific authentication
         let request = match provider {
-            "gemini" => {
+            PROVIDER_GEMINI => {
                 // Gemini uses header authentication
                 self.client
                     .get(url)
                     .header("x-goog-api-key", api_key.expose_secret())
             }
-            "openrouter" | "groq" | "cerebras" | "zenmux" | "zai" => {
+            PROVIDER_OPENROUTER | PROVIDER_GROQ | PROVIDER_CEREBRAS | PROVIDER_ZENMUX
+            | PROVIDER_ZAI => {
                 // These providers use Bearer token authentication
                 self.client.get(url).header(
                     "Authorization",
@@ -489,9 +325,11 @@ impl CachedModelRegistry<'_> {
 
         // Parse based on provider API format
         let models = match provider {
-            "openrouter" => Self::parse_openrouter_models(&data, provider),
-            "gemini" => Self::parse_gemini_models(&data, provider),
-            "groq" | "cerebras" | "zenmux" | "zai" => Self::parse_generic_models(&data, provider),
+            PROVIDER_OPENROUTER => Self::parse_openrouter_models(&data, provider),
+            PROVIDER_GEMINI => Self::parse_gemini_models(&data, provider),
+            PROVIDER_GROQ | PROVIDER_CEREBRAS | PROVIDER_ZENMUX | PROVIDER_ZAI => {
+                Self::parse_generic_models(&data, provider)
+            }
             _ => vec![],
         };
 
@@ -554,119 +392,6 @@ impl ModelRegistry for CachedModelRegistry<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_get_provider_gemini() {
-        let provider = get_provider("gemini");
-        assert!(provider.is_some());
-        let provider = provider.unwrap();
-        assert_eq!(provider.display_name, "Google Gemini");
-        assert_eq!(provider.api_key_env, "GEMINI_API_KEY");
-    }
-
-    #[test]
-    fn test_get_provider_openrouter() {
-        let provider = get_provider("openrouter");
-        assert!(provider.is_some());
-        let provider = provider.unwrap();
-        assert_eq!(provider.display_name, "OpenRouter");
-        assert_eq!(provider.api_key_env, "OPENROUTER_API_KEY");
-    }
-
-    #[test]
-    fn test_get_provider_groq() {
-        let provider = get_provider("groq");
-        assert!(provider.is_some());
-        let provider = provider.unwrap();
-        assert_eq!(provider.display_name, "Groq");
-        assert_eq!(provider.api_key_env, "GROQ_API_KEY");
-    }
-
-    #[test]
-    fn test_get_provider_cerebras() {
-        let provider = get_provider("cerebras");
-        assert!(provider.is_some());
-        let provider = provider.unwrap();
-        assert_eq!(provider.display_name, "Cerebras");
-        assert_eq!(provider.api_key_env, "CEREBRAS_API_KEY");
-    }
-
-    #[test]
-    fn test_get_provider_not_found() {
-        let provider = get_provider("nonexistent");
-        assert!(provider.is_none());
-    }
-
-    #[test]
-    fn test_get_provider_case_sensitive() {
-        let provider = get_provider("OpenRouter");
-        assert!(
-            provider.is_none(),
-            "Provider lookup should be case-sensitive"
-        );
-    }
-
-    #[test]
-    fn test_all_providers_count() {
-        let providers = all_providers();
-        assert_eq!(providers.len(), 7, "Should have exactly 7 providers");
-    }
-
-    #[test]
-    fn test_all_providers_have_unique_names() {
-        let providers = all_providers();
-        let mut names = Vec::new();
-        for provider in providers {
-            assert!(
-                !names.contains(&provider.name),
-                "Duplicate provider name: {}",
-                provider.name
-            );
-            names.push(provider.name);
-        }
-    }
-
-    #[test]
-    fn test_get_provider_zenmux() {
-        let provider = get_provider("zenmux");
-        assert!(provider.is_some());
-        let provider = provider.unwrap();
-        assert_eq!(provider.display_name, "Zenmux");
-        assert_eq!(provider.api_key_env, "ZENMUX_API_KEY");
-    }
-
-    #[test]
-    fn test_get_provider_zai() {
-        let provider = get_provider("zai");
-        assert!(provider.is_some());
-        let provider = provider.unwrap();
-        assert_eq!(provider.display_name, "Z.AI (Zhipu)");
-        assert_eq!(provider.api_key_env, "ZAI_API_KEY");
-    }
-
-    #[test]
-    fn test_provider_api_urls_valid() {
-        let providers = all_providers();
-        for provider in providers {
-            assert!(
-                provider.api_url.starts_with("https://"),
-                "Provider {} API URL should use HTTPS",
-                provider.name
-            );
-        }
-    }
-
-    #[test]
-    fn test_provider_api_key_env_not_empty() {
-        let providers = all_providers();
-        for provider in providers {
-            assert!(
-                !provider.api_key_env.is_empty(),
-                "Provider {} should have API key env var",
-                provider.name
-            );
-        }
-    }
 
     #[test]
     fn test_parse_openrouter_models_with_pricing() {
