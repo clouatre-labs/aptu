@@ -8,7 +8,7 @@
 //! - `send_and_parse`: retry loop around `try_request` with circuit breaker
 
 use anyhow::{Context, Result};
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use super::parse::{parse_ai_json, redact_api_error_body};
 use crate::ai::provider::AiProvider;
@@ -16,6 +16,38 @@ use crate::ai::types::{ChatCompletionRequest, ChatCompletionResponse};
 use crate::error::AptuError;
 use crate::history::AiStats;
 use crate::retry::{extract_retry_after, is_retryable_anyhow};
+
+fn map_http_error(
+    status: u16,
+    provider_name: &str,
+    api_key_env: &str,
+    retry_after: Option<u64>,
+    error_body: &str,
+) -> Result<()> {
+    match status {
+        401 => {
+            anyhow::bail!(
+                "Invalid {provider_name} API key. Check your {api_key_env} environment variable."
+            );
+        }
+        429 => {
+            warn!("Rate limited by {provider_name} API");
+            let retry_after_val = retry_after.unwrap_or(0);
+            debug!(retry_after = retry_after_val, "Parsed Retry-After header");
+            Err(AptuError::RateLimited {
+                provider: provider_name.to_string(),
+                retry_after: retry_after_val,
+            }
+            .into())
+        }
+        _ => {
+            anyhow::bail!(
+                "{provider_name} API error (HTTP {status}): {}",
+                redact_api_error_body(error_body)
+            );
+        }
+    }
+}
 
 /// Sends a chat completion request to the provider's API (HTTP-only, no retry).
 ///
@@ -27,9 +59,6 @@ pub(super) async fn send_request_inner(
     request: &ChatCompletionRequest,
 ) -> Result<ChatCompletionResponse> {
     use secrecy::ExposeSecret;
-    use tracing::warn;
-
-    use crate::error::AptuError;
 
     let mut req = provider.http_client().post(provider.api_url());
 
@@ -55,35 +84,24 @@ pub(super) async fn send_request_inner(
     // Check for HTTP errors
     let status = response.status();
     if !status.is_success() {
-        if status.as_u16() == 401 {
-            anyhow::bail!(
-                "Invalid {} API key. Check your {} environment variable.",
-                provider.name(),
-                provider.api_key_env()
-            );
-        } else if status.as_u16() == 429 {
-            warn!("Rate limited by {} API", provider.name());
-            // Parse Retry-After header (seconds), default to 0 if not present
-            let retry_after = response
+        let retry_after = if status.as_u16() == 429 {
+            response
                 .headers()
                 .get("Retry-After")
                 .and_then(|h| h.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(0);
-            debug!(retry_after, "Parsed Retry-After header");
-            return Err(AptuError::RateLimited {
-                provider: provider.name().to_string(),
-                retry_after,
-            }
-            .into());
-        }
+        } else {
+            None
+        };
         let error_body = response.text().await.unwrap_or_default();
-        anyhow::bail!(
-            "{} API error (HTTP {}): {}",
-            provider.name(),
+        return map_http_error(
             status.as_u16(),
-            redact_api_error_body(&error_body)
-        );
+            provider.name(),
+            provider.api_key_env(),
+            retry_after,
+            &error_body,
+        )
+        .map(|()| unreachable!("map_http_error returned Ok for non-success HTTP status"));
     }
 
     // Parse response
@@ -275,4 +293,194 @@ pub(super) async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
     );
 
     Ok((parsed, ai_stats, finish_reasons))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_http_error_401() {
+        let err = map_http_error(401, "openrouter", "OPENROUTER_API_KEY", None, "").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("openrouter"));
+        assert!(msg.contains("OPENROUTER_API_KEY"));
+    }
+
+    #[test]
+    fn test_map_http_error_429() {
+        let err = map_http_error(429, "gemini", "GEMINI_API_KEY", Some(30), "").unwrap_err();
+        let aptu_err = err.downcast_ref::<AptuError>().expect("expected AptuError");
+        match aptu_err {
+            AptuError::RateLimited {
+                provider,
+                retry_after,
+            } => {
+                assert_eq!(provider, "gemini");
+                assert_eq!(*retry_after, 30);
+            }
+            _ => panic!("expected AptuError::RateLimited, got: {aptu_err:?}"),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    struct CircuitOpenProvider {
+        breaker: crate::ai::CircuitBreaker,
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    impl AiProvider for CircuitOpenProvider {
+        fn config(&self) -> &crate::ai::registry::ProviderConfig {
+            &crate::ai::provider::test_utils::TEST_PROVIDER_CONFIG
+        }
+
+        fn http_client(&self) -> &reqwest::Client {
+            unimplemented!()
+        }
+
+        fn api_key(&self) -> &secrecy::SecretString {
+            unimplemented!()
+        }
+
+        fn circuit_breaker(&self) -> Option<&crate::ai::CircuitBreaker> {
+            Some(&self.breaker)
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_send_and_parse_circuit_open() {
+        let breaker = crate::ai::CircuitBreaker::new(1, 60);
+        breaker.record_failure();
+        assert!(breaker.is_open());
+
+        let provider = CircuitOpenProvider { breaker };
+        let request = ChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            max_tokens: None,
+            temperature: None,
+            response_format: None,
+        };
+
+        let result = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
+            &provider, &request,
+        )
+        .await;
+
+        let err = result.unwrap_err();
+        let aptu_err = err.downcast_ref::<AptuError>().expect("expected AptuError");
+        assert!(matches!(aptu_err, AptuError::CircuitOpen));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    struct HttpMockProvider {
+        client: reqwest::Client,
+        key: secrecy::SecretString,
+        url: String,
+        max_attempts: u32,
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    impl AiProvider for HttpMockProvider {
+        fn config(&self) -> &crate::ai::registry::ProviderConfig {
+            &crate::ai::provider::test_utils::TEST_PROVIDER_CONFIG
+        }
+
+        fn api_url(&self) -> &str {
+            &self.url
+        }
+
+        fn http_client(&self) -> &reqwest::Client {
+            &self.client
+        }
+
+        fn api_key(&self) -> &secrecy::SecretString {
+            &self.key
+        }
+
+        fn max_attempts(&self) -> u32 {
+            self.max_attempts
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_send_and_parse_retry_then_succeed() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+
+        tokio::spawn(async move {
+            // First request: return 429 Rate Limited with Retry-After: 0 and Connection: close
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf).await;
+                let body = "rate limit exceeded";
+                let response = format!(
+                    "HTTP/1.1 429 Too Many Requests\r\n\
+                     Retry-After: 0\r\n\
+                     Content-Length: {}\r\n\
+                     Connection: close\r\n\
+                     \r\n\
+                     {}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+
+            // Second request: return 200 OK with valid response JSON
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf).await;
+                let body = r#"{"choices":[{"message":{"role":"assistant","content":"{\"_message\":\"ok\"}"}}]}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     Content-Type: application/json\r\n\
+                     Content-Length: {}\r\n\
+                     Connection: close\r\n\
+                     \r\n\
+                     {}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .build()
+            .expect("build client");
+
+        let provider = HttpMockProvider {
+            client,
+            key: secrecy::SecretString::from("test-key".to_string()),
+            url: format!("http://{addr}"),
+            max_attempts: 3,
+        };
+
+        let request = ChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            max_tokens: None,
+            temperature: None,
+            response_format: None,
+        };
+
+        let (parsed, stats, _reasons) = send_and_parse::<
+            crate::ai::provider::test_utils::ErrorTestResponse,
+        >(&provider, &request)
+        .await
+        .expect("send_and_parse should succeed after retry");
+
+        assert_eq!(parsed._message, "ok");
+        assert_eq!(stats.provider, "test");
+    }
 }
