@@ -15,8 +15,59 @@ use serde::{Deserialize, Serialize};
 
 use super::circuit_breaker::CircuitBreaker;
 use super::provider::AiProvider;
-use super::registry::{PROVIDER_ANTHROPIC, ProviderConfig, get_provider};
+use super::registry::{PROVIDER_ANTHROPIC, PROVIDER_OPENROUTER, ProviderConfig, get_provider};
 use crate::config::AiConfig;
+
+/// Checks if a model is in the free tier (no cost).
+/// Free models on `OpenRouter` always have the `:free` suffix.
+#[must_use]
+pub fn is_free_model(model: &str) -> bool {
+    model.ends_with(":free")
+}
+
+/// Resolves Anthropic credentials with OAuth fallback.
+///
+/// For the Anthropic provider, attempts to use Claude OAuth credentials in this order:
+/// 1. Existing token in OS keyring
+/// 2. ~/.claude/credentials.json file
+/// 3. Environment variable (fallback)
+///
+/// Returns `Some(client)` if credentials were found via OAuth or env var,
+/// `None` if no credentials were available.
+#[must_use]
+pub fn resolve_anthropic_credential(ai_config: &crate::config::AiConfig) -> Option<AiClient> {
+    // Try keyring first
+    if let Ok(Some(client)) = AiClient::from_keyring_oauth(ai_config) {
+        return Some(client);
+    }
+
+    // Try credentials file
+    if let Ok(Some(client)) = AiClient::from_claude_credentials(ai_config) {
+        return Some(client);
+    }
+
+    // Fall back to environment variable
+    AiClient::new(PROVIDER_ANTHROPIC, ai_config).ok()
+}
+
+/// Validates model against `OpenRouter` free-tier policy.
+fn validate_openrouter_free_tier(
+    provider_name: &str,
+    model: &str,
+    config: &AiConfig,
+) -> Result<()> {
+    if provider_name == PROVIDER_OPENROUTER && !config.allow_paid_models && !is_free_model(model) {
+        anyhow::bail!(
+            "Model '{}' is not in the free tier.\n\
+             To use paid models, set `allow_paid_models = true` in your config file:\n\
+             {}\n\n\
+             Or use a free model like: google/gemma-3-12b-it:free",
+            model,
+            crate::config::config_file_path().display()
+        );
+    }
+    Ok(())
+}
 
 /// Authentication method used by the AI client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -121,19 +172,7 @@ impl AiClient {
             .with_context(|| format!("Unknown AI provider: {provider_name}"))?;
 
         // Validate model against cost control (OpenRouter-specific)
-        if provider_name == "openrouter"
-            && !config.allow_paid_models
-            && !super::is_free_model(&config.model)
-        {
-            anyhow::bail!(
-                "Model '{}' is not in the free tier.\n\
-                 To use paid models, set `allow_paid_models = true` in your config file:\n\
-                 {}\n\n\
-                 Or use a free model like: google/gemma-3-12b-it:free",
-                config.model,
-                crate::config::config_file_path().display()
-            );
-        }
+        validate_openrouter_free_tier(provider_name, &config.model, config)?;
 
         // Get API key from environment
         let api_key = env::var(provider.api_key_env).with_context(|| {
@@ -194,19 +233,7 @@ impl AiClient {
             .with_context(|| format!("Unknown AI provider: {provider_name}"))?;
 
         // Validate model against cost control (OpenRouter-specific)
-        if provider_name == "openrouter"
-            && !config.allow_paid_models
-            && !super::is_free_model(model_name)
-        {
-            anyhow::bail!(
-                "Model '{}' is not in the free tier.\n\
-                 To use paid models, set `allow_paid_models = true` in your config file:\n\
-                 {}\n\n\
-                 Or use a free model like: google/gemma-3-12b-it:free",
-                model_name,
-                crate::config::config_file_path().display()
-            );
-        }
+        validate_openrouter_free_tier(provider_name, model_name, config)?;
 
         // Create HTTP client with timeout (timeout() is native-only; wasm32 uses fetch API)
         let http = build_http_client(config.timeout_seconds)?;
@@ -414,7 +441,7 @@ impl AiProvider for AiClient {
         }
 
         // OpenRouter-specific headers
-        if self.provider.name == "openrouter" {
+        if self.provider.name == PROVIDER_OPENROUTER {
             if let Ok(val) = "https://github.com/clouatre-labs/aptu".parse() {
                 headers.insert("HTTP-Referer", val);
             }
@@ -434,7 +461,7 @@ mod tests {
 
     fn test_config() -> AiConfig {
         AiConfig {
-            provider: "openrouter".to_string(),
+            provider: PROVIDER_OPENROUTER.to_string(),
             model: "test-model:free".to_string(),
             max_tokens: 2048,
             temperature: 0.3,
@@ -486,7 +513,7 @@ mod tests {
         config.model = "anthropic/claude-sonnet-4-6".to_string();
         config.allow_paid_models = false;
         let result = AiClient::with_api_key(
-            "openrouter",
+            PROVIDER_OPENROUTER,
             SecretString::from("key"),
             "anthropic/claude-sonnet-4-6",
             &config,
@@ -499,7 +526,7 @@ mod tests {
         let mut config = test_config();
         config.retry_max_attempts = 5;
         let client = AiClient::with_api_key(
-            "openrouter",
+            PROVIDER_OPENROUTER,
             SecretString::from("key"),
             "test-model:free",
             &config,
@@ -530,7 +557,7 @@ mod tests {
     fn test_build_headers_non_anthropic_unaffected() {
         let config = test_config();
         let client = AiClient::with_api_key(
-            "openrouter",
+            PROVIDER_OPENROUTER,
             SecretString::from("test_key"),
             "test-model:free",
             &config,

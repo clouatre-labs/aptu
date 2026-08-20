@@ -16,7 +16,7 @@ pub mod review_context;
 pub mod types;
 
 pub use circuit_breaker::CircuitBreaker;
-pub use client::{AiClient, AuthMethod};
+pub use client::{AiClient, AuthMethod, is_free_model, resolve_anthropic_credential};
 pub use dep_enrichment::enrich_dep_releases;
 pub use models::{AiModel, ModelProvider};
 pub use provider::AiProvider;
@@ -32,38 +32,6 @@ pub struct AiResponse {
     pub triage: TriageResponse,
     /// AI usage statistics.
     pub stats: AiStats,
-}
-
-/// Checks if a model is in the free tier (no cost).
-/// Free models on `OpenRouter` always have the `:free` suffix.
-#[must_use]
-pub fn is_free_model(model: &str) -> bool {
-    model.ends_with(":free")
-}
-
-/// Resolves Anthropic credentials with OAuth fallback.
-///
-/// For the Anthropic provider, attempts to use Claude OAuth credentials in this order:
-/// 1. Existing token in OS keyring
-/// 2. ~/.claude/credentials.json file
-/// 3. Environment variable (fallback)
-///
-/// Returns `Some(client)` if credentials were found via OAuth or env var,
-/// `None` if no credentials were available.
-#[must_use]
-pub fn resolve_anthropic_credential(ai_config: &crate::config::AiConfig) -> Option<AiClient> {
-    // Try keyring first
-    if let Ok(Some(client)) = AiClient::from_keyring_oauth(ai_config) {
-        return Some(client);
-    }
-
-    // Try credentials file
-    if let Ok(Some(client)) = AiClient::from_claude_credentials(ai_config) {
-        return Some(client);
-    }
-
-    // Fall back to environment variable
-    AiClient::new(PROVIDER_ANTHROPIC, ai_config).ok()
 }
 
 /// Sets up the primary AI client with credential resolution.
