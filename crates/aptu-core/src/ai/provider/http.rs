@@ -276,3 +276,356 @@ pub(super) async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
 
     Ok((parsed, ai_stats, finish_reasons))
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use secrecy::SecretString;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::*;
+    use crate::ai::CircuitBreaker;
+    use crate::ai::provider::AiProvider;
+    use crate::ai::registry::ProviderConfig;
+    use crate::ai::types::ChatMessage;
+    use crate::error::AptuError;
+
+    #[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+    struct TestPayload {
+        message: String,
+    }
+
+    struct MockHttpProvider {
+        client: reqwest::Client,
+        api_key: SecretString,
+        config: &'static ProviderConfig,
+        circuit_breaker: Option<CircuitBreaker>,
+        max_attempts: u32,
+    }
+
+    impl MockHttpProvider {
+        fn new(server_uri: &str) -> Self {
+            let config = Box::leak(Box::new(ProviderConfig {
+                name: "test-provider",
+                display_name: "Test Provider",
+                api_url: Box::leak(server_uri.to_string().into_boxed_str()),
+                api_key_env: "TEST_PROVIDER_API_KEY",
+                model: "test-model",
+                max_tokens: 1000,
+                temperature: 0.7,
+            }));
+
+            Self {
+                client: reqwest::Client::new(),
+                api_key: SecretString::new("test-secret-key".to_string().into()),
+                config,
+                circuit_breaker: None,
+                max_attempts: 3,
+            }
+        }
+
+        fn with_circuit_breaker(mut self, cb: CircuitBreaker) -> Self {
+            self.circuit_breaker = Some(cb);
+            self
+        }
+
+        fn with_max_attempts(mut self, max_attempts: u32) -> Self {
+            self.max_attempts = max_attempts;
+            self
+        }
+    }
+
+    impl AiProvider for MockHttpProvider {
+        fn config(&self) -> &ProviderConfig {
+            self.config
+        }
+
+        fn http_client(&self) -> &reqwest::Client {
+            &self.client
+        }
+
+        fn api_key(&self) -> &SecretString {
+            &self.api_key
+        }
+
+        fn circuit_breaker(&self) -> Option<&CircuitBreaker> {
+            self.circuit_breaker.as_ref()
+        }
+
+        fn max_attempts(&self) -> u32 {
+            self.max_attempts
+        }
+    }
+
+    fn sample_request() -> ChatCompletionRequest {
+        ChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: Some("hello".to_string()),
+                reasoning: None,
+                cache_control: None,
+            }],
+            response_format: None,
+            max_tokens: Some(100),
+            temperature: Some(0.7),
+        }
+    }
+
+    fn sample_response_json(content: &str) -> serde_json::Value {
+        serde_json::json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": content
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 20,
+                "total_tokens": 30,
+                "cost": 0.001,
+                "cache_read_tokens": 0,
+                "cache_write_tokens": 0
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn test_send_request_inner_adds_bearer_auth_header() {
+        // Arrange
+        let server = MockServer::start().await;
+        let provider = MockHttpProvider::new(&server.uri());
+        let request = sample_request();
+
+        let response_body = sample_response_json("{\"message\": \"success\"}");
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(header("Authorization", "Bearer test-secret-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Act
+        let result = send_request_inner(&provider, &request).await;
+
+        // Assert
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert_eq!(response.choices.len(), 1);
+        assert_eq!(
+            response.choices[0].message.content.as_deref(),
+            Some("{\"message\": \"success\"}")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_send_request_inner_returns_401_error_message() {
+        // Arrange
+        let server = MockServer::start().await;
+        let provider = MockHttpProvider::new(&server.uri());
+        let request = sample_request();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Act
+        let result = send_request_inner(&provider, &request).await;
+
+        // Assert
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains(
+            "Invalid test-provider API key. Check your TEST_PROVIDER_API_KEY environment variable."
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_send_request_inner_returns_rate_limited_error_on_429() {
+        // Arrange
+        let server = MockServer::start().await;
+        let provider = MockHttpProvider::new(&server.uri());
+        let request = sample_request();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "5"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Act
+        let result = send_request_inner(&provider, &request).await;
+
+        // Assert
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err.downcast_ref::<AptuError>() {
+            Some(AptuError::RateLimited {
+                provider,
+                retry_after,
+            }) => {
+                assert_eq!(provider, "test-provider");
+                assert_eq!(*retry_after, 5);
+            }
+            _ => panic!("Expected AptuError::RateLimited, got: {err:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_try_request_valid_json_response() {
+        // Arrange
+        let server = MockServer::start().await;
+        let provider = MockHttpProvider::new(&server.uri());
+        let request = sample_request();
+
+        let response_body = sample_response_json("{\"message\": \"hello world\"}");
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Act
+        let result: Result<(TestPayload, ChatCompletionResponse)> =
+            try_request(&provider, &request).await;
+
+        // Assert
+        assert!(result.is_ok());
+        let (payload, completion) = result.unwrap();
+        assert_eq!(payload.message, "hello world");
+        assert_eq!(completion.choices.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_try_request_malformed_json_error() {
+        // Arrange
+        let server = MockServer::start().await;
+        let provider = MockHttpProvider::new(&server.uri());
+        let request = sample_request();
+
+        let response_body = sample_response_json("{invalid json content");
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Act
+        let result: Result<(TestPayload, ChatCompletionResponse)> =
+            try_request(&provider, &request).await;
+
+        // Assert
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_send_and_parse_retries_after_429_then_succeeds() {
+        // Arrange
+        let server = MockServer::start().await;
+        let provider = MockHttpProvider::new(&server.uri());
+        let request = sample_request();
+
+        let response_body = sample_response_json("{\"message\": \"recovered\"}");
+
+        // First attempt returns 429 with Retry-After: 0 to avoid real sleeps
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "0"))
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Second attempt returns 200 OK
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Act
+        let result: Result<(TestPayload, AiStats, Vec<String>)> =
+            send_and_parse(&provider, &request).await;
+
+        // Assert
+        assert!(result.is_ok());
+        let (payload, stats, finish_reasons) = result.unwrap();
+        assert_eq!(payload.message, "recovered");
+        assert_eq!(stats.provider, "test-provider");
+        assert_eq!(stats.model, "test-model");
+        assert_eq!(stats.input_tokens, 10);
+        assert_eq!(stats.output_tokens, 20);
+        assert_eq!(finish_reasons, vec!["stop".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn test_send_and_parse_exhausts_retries_on_persistent_429() {
+        // Arrange
+        let server = MockServer::start().await;
+        // max_attempts = 1 to test immediate exhaustion without real sleeps
+        let provider = MockHttpProvider::new(&server.uri()).with_max_attempts(1);
+        let request = sample_request();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "0"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Act
+        let result: Result<(TestPayload, AiStats, Vec<String>)> =
+            send_and_parse(&provider, &request).await;
+
+        // Assert
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.is::<AptuError>());
+    }
+
+    #[tokio::test]
+    async fn test_send_and_parse_circuit_breaker_open_short_circuits() {
+        // Arrange
+        let server = MockServer::start().await;
+        let cb = CircuitBreaker::new(1, 60);
+        // Trigger failure to open circuit breaker
+        cb.record_failure();
+        assert!(cb.is_open());
+
+        let provider = MockHttpProvider::new(&server.uri()).with_circuit_breaker(cb);
+        let request = sample_request();
+
+        // Server should NOT receive any requests
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        // Act
+        let result: Result<(TestPayload, AiStats, Vec<String>)> =
+            send_and_parse(&provider, &request).await;
+
+        // Assert
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err.downcast_ref::<AptuError>() {
+            Some(AptuError::CircuitOpen) => {}
+            _ => panic!("Expected AptuError::CircuitOpen, got: {err:?}"),
+        }
+    }
+}

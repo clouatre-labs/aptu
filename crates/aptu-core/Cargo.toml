@@ -91,6 +91,7 @@ uuid = { version = "1", features = ["v4", "serde", "js"] }
 [dev-dependencies]
 criterion = { workspace = true }
 serial_test = { workspace = true }
+wiremock = { workspace = true }
 
 [[bench]]
 name = "security_scan"

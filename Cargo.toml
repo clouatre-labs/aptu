@@ -66,6 +66,7 @@ schemars = { version = "1.0" }
 assert_cmd = "2"
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 regex = "1"
+wiremock = "0.6"
 
 [workspace.lints.rust]
 unsafe_code = "warn"
