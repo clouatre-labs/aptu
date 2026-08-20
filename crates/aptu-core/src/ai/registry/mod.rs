@@ -36,6 +36,7 @@ pub use consts::{
 pub use config::{PROVIDERS, ProviderConfig, all_providers, get_provider};
 
 // Re-export parsing and model types
-pub use parsing::{
-    CachedModel, CachedModelRegistry, Capability, ModelRegistry, PricingInfo, RegistryError,
-};
+pub use parsing::{CachedModel, Capability, ModelRegistry, PricingInfo, RegistryError};
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use parsing::CachedModelRegistry;
