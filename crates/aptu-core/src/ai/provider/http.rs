@@ -8,7 +8,7 @@
 //! - `send_and_parse`: retry loop around `try_request` with circuit breaker
 
 use anyhow::{Context, Result};
-use tracing::{debug, instrument, warn};
+use tracing::{debug, instrument};
 
 use super::parse::{parse_ai_json, redact_api_error_body};
 use crate::ai::provider::AiProvider;
@@ -31,7 +31,6 @@ fn map_http_error(
             );
         }
         429 => {
-            warn!("Rate limited by {provider_name} API");
             let retry_after_val = retry_after.unwrap_or(0);
             debug!(retry_after = retry_after_val, "Parsed Retry-After header");
             Err(AptuError::RateLimited {
@@ -145,8 +144,9 @@ pub(super) async fn try_request<T: serde::de::DeserializeOwned>(
 
 /// Sends a chat completion request and parses the response with retry logic.
 ///
-/// This method wraps both HTTP request and JSON parsing in a single retry loop,
-/// allowing truncated responses to be retried. Includes circuit breaker handling.
+/// This method wraps the HTTP request in a retry loop (via `try_request`) and retries
+/// on transient errors, including truncated JSON responses. Includes circuit breaker
+/// handling before the first attempt.
 ///
 /// # Arguments
 ///
@@ -218,7 +218,8 @@ pub(super) async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
                     "Retrying after error"
                 );
 
-                // Drop err before await to avoid holding non-Send value across await
+                // Drop err before await: it is non-Send and must not be held
+                // across the sleep boundary. All fields have been extracted above.
                 drop(err);
                 tokio::time::sleep(delay).await;
             }
