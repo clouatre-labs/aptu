@@ -23,28 +23,33 @@ fn map_http_error(
     api_key_env: &str,
     retry_after: Option<u64>,
     error_body: &str,
-) -> Result<()> {
+) -> Result<(), AptuError> {
     match status {
-        401 => {
-            anyhow::bail!(
+        401 => Err(AptuError::AI {
+            message: format!(
                 "Invalid {provider_name} API key. Check your {api_key_env} environment variable."
-            );
-        }
+            ),
+            status: Some(401),
+            provider: provider_name.to_string(),
+        }),
         429 => {
             let retry_after_val = retry_after.unwrap_or(0);
             debug!(retry_after = retry_after_val, "Parsed Retry-After header");
             Err(AptuError::RateLimited {
                 provider: provider_name.to_string(),
                 retry_after: retry_after_val,
-            }
-            .into())
+            })
         }
-        _ => {
-            anyhow::bail!(
-                "{provider_name} API error (HTTP {status}): {}",
+        _ => Err(AptuError::AI {
+            message: format!(
+                "{} API error (HTTP {}): {}",
+                provider_name,
+                status,
                 redact_api_error_body(error_body)
-            );
-        }
+            ),
+            status: Some(status),
+            provider: provider_name.to_string(),
+        }),
     }
 }
 
@@ -100,6 +105,7 @@ pub(super) async fn send_request_inner(
             retry_after,
             &error_body,
         )
+        .map_err(Into::into)
         .map(|()| unreachable!("map_http_error returned Ok for non-success HTTP status"));
     }
 
@@ -311,16 +317,15 @@ mod tests {
     #[test]
     fn test_map_http_error_429() {
         let err = map_http_error(429, "gemini", "GEMINI_API_KEY", Some(30), "").unwrap_err();
-        let aptu_err = err.downcast_ref::<AptuError>().expect("expected AptuError");
-        match aptu_err {
+        match err {
             AptuError::RateLimited {
                 provider,
                 retry_after,
             } => {
                 assert_eq!(provider, "gemini");
-                assert_eq!(*retry_after, 30);
+                assert_eq!(retry_after, 30);
             }
-            _ => panic!("expected AptuError::RateLimited, got: {aptu_err:?}"),
+            _ => panic!("expected AptuError::RateLimited, got: {err:?}"),
         }
     }
 
