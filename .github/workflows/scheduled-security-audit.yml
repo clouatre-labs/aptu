@@ -1,0 +1,53 @@
+name: Scheduled Security Audit
+
+# CVE data and Actions security advisories change independent of code commits.
+# ci.yml and security.yml checks only run on pull requests and pushes to main.
+# This workflow re-runs workflow security audits on a weekly schedule, independent of any diff.
+
+on:
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  zizmor:
+    name: Workflow SHA pinning
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write # needed for SARIF upload on public repos
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Lint GitHub Actions workflows
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          advanced-security: ${{ github.event.repository.visibility == 'public' }}
+          min-severity: medium
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  poutine:
+    name: Workflow audit
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Audit workflow security
+        uses: boostsecurityio/poutine-action@e240ebd3eff8b2db5a8e5f6b28f58739d7db2247 # v1.1.4
+      - name: Upload poutine SARIF results
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        continue-on-error: true
+        with:
+          sarif_file: results.sarif
+          category: poutine

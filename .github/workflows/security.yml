@@ -1,0 +1,87 @@
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # TruffleHog is used instead of gitleaks/gitleaks-action because gitleaks-action
+      # requires a GITLEAKS_LICENSE org secret for GitHub Organisation repos (free tier
+      # available but requires registration). TruffleHog has no per-org licensing gate.
+      - name: Scan for committed secrets
+        uses: trufflesecurity/trufflehog@bcfcf73aaf4759d4dadc2783177c245a02792318 # v3.97.0
+        with:
+          extra_args: --only-verified
+
+  zizmor:
+    name: Workflow SHA pinning
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write # needed for SARIF upload on public repos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Lint GitHub Actions workflows
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          min-severity: medium
+          advanced-security: ${{ github.event.repository.visibility == 'public' }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  poutine:
+    name: Workflow audit
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Audit workflow security
+        uses: boostsecurityio/poutine-action@e240ebd3eff8b2db5a8e5f6b28f58739d7db2247 # v1.1.4
+      - name: Upload poutine SARIF results
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        continue-on-error: true
+        with:
+          sarif_file: results.sarif
+          category: poutine
+
+  security-result:
+    name: Security Result
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 2
+    permissions: {}
+    needs: [secrets, zizmor, poutine]
+    if: always()
+    steps:
+      - name: Check all security jobs passed
+        run: |
+          for result in "${{ needs.secrets.result }}" "${{ needs.zizmor.result }}" "${{ needs.poutine.result }}"; do
+            if [[ "$result" != "success" ]]; then
+              echo "Security check failed or cancelled: $result"
+              exit 1
+            fi
+          done
+          echo "All security checks passed"

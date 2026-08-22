@@ -83,14 +83,38 @@ jobs:
       - name: Install commitlint
         run: |
           npm install --no-save \
-            @commitlint/cli@20.5.3 \
-            @commitlint/config-conventional@20.5.3
+            @commitlint/cli@21.2.1 \
+            @commitlint/config-conventional@21.2.0
       - name: Validate commit messages
         run: |
           npx commitlint \
             --from ${{ github.event.pull_request.base.sha }} \
             --to ${{ github.event.pull_request.head.sha }} \
             --verbose
+
+  check-base:
+    name: Check Branch Base
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Verify branch is up-to-date with main
+        run: |
+          git fetch origin main
+          base_commit=$(git merge-base origin/main HEAD)
+          main_head=$(git rev-parse origin/main)
+          if [ "$base_commit" != "$main_head" ]; then
+            behind=$(git rev-list --count "$base_commit".."$main_head")
+            echo "::error::Branch is $behind commit(s) behind main. Please update your branch with the latest main."
+            echo "Run: git fetch origin && git rebase origin/main  # or merge: git fetch origin && git merge origin/main"
+            exit 1
+          fi
 
   deny:
     name: Audit Dependencies
@@ -286,43 +310,11 @@ jobs:
         run: ./target/ci/aptu scan-security crates/ --output github-annotations --sarif-output findings.sarif --fail-on critical,high --exclude crates/aptu-core/src/security --exclude crates/aptu-core/tests --exclude crates/aptu-core/benches --exclude crates/aptu-core/src/facade
       - name: Upload SARIF report
         if: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@18420e3271f74589575af831a523c833acda327f # codeql-bundle-v2.26.2
         with:
           sarif_file: findings.sarif
           category: aptu-scan-security
-
-  zizmor:
-    name: zizmor
-    runs-on: ubuntu-24.04-arm
-    needs: [changes]
-    if: needs.changes.outputs.workflows == 'true' || github.event_name != 'pull_request'
-    permissions:
-      contents: read
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
-        with:
-          advanced-security: false
-          annotations: true
-          min-severity: high
-
-  gitleaks:
-    name: Scan for secrets
-    runs-on: ubuntu-24.04-arm
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
-    permissions:
-      contents: read
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   lint-docs:
     name: Lint Docs
@@ -347,7 +339,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions: {}
     if: always()
-    needs: [commitlint, deny, check, test, build, integration, scan-self, zizmor, gitleaks, wasm-check, lint-docs]
+    needs: [commitlint, check-base, deny, check, test, build, integration, scan-self, wasm-check, lint-docs]
     timeout-minutes: 2
     steps:
       - name: Verify all jobs passed or were skipped
