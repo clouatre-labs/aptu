@@ -1,0 +1,7 @@
+# Suppress unavoidable findings.
+# ci.yml uses github.actor to gate Renovate-only jobs; this is intentional
+# and not attacker-controllable in this context.
+rules:
+  bot-conditions:
+    ignore:
+      - ci.yml

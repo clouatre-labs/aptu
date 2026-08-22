@@ -42,12 +42,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Lint GitHub Actions workflows
-        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+      # zizmor is run via direct CLI invocation instead of zizmorcore/zizmor-action
+      # because zizmorcore is not a verified GitHub creator, which triggers
+      # poutine's github_action_from_unverified_creator_used finding.
+      # This is the officially documented manual integration pattern:
+      # https://docs.zizmor.sh/integrations/#manual-integration
+      # zizmor is installed into an isolated venv to avoid PEP 668 issues
+      # and to avoid adding any third-party GitHub Actions.
+      - name: Install zizmor
+        env:
+          ZIZMOR_VERSION: "1.29.0"
+        run: |
+          python -m venv /tmp/zizmor
+          /tmp/zizmor/bin/pip install --quiet "zizmor==${ZIZMOR_VERSION}"
+      - name: Run zizmor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: /tmp/zizmor/bin/zizmor --min-severity=medium --format=sarif -c .github/zizmor.yml . > zizmor.sarif
+      - name: Upload zizmor SARIF results
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        continue-on-error: true
         with:
-          min-severity: medium
-          advanced-security: ${{ github.event.repository.visibility == 'public' }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          sarif_file: zizmor.sarif
+          category: zizmor
 
   poutine:
     name: Workflow audit
