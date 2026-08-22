@@ -16,6 +16,9 @@ permissions: {}
 jobs:
   scorecard:
     name: Scorecard Analysis
+    # OpenSSF Scorecard only supports public repositories.
+    # Skip on private/internal repos to avoid GITHUB_TOKEN GraphQL access errors.
+    if: github.event.repository.visibility == 'public'
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -40,7 +43,7 @@ jobs:
         env:
           ENABLE_SARIF: "1"
           GITHUB_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./scorecard --repo=github.com/clouatre-labs/aptu --format=sarif --show-details > results.sarif
+        run: ./scorecard --repo=github.com/${{ github.repository }} --format=sarif --show-details > results.sarif
 
       - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
