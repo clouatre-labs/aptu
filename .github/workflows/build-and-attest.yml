@@ -34,10 +34,7 @@ on:
         default: false
         description: Dry run mode (skip upload and attestation)
 
-permissions:
-  contents: write
-  id-token: write
-  attestations: write
+permissions: {}
 
 env:
   CARGO_TERM_COLOR: always

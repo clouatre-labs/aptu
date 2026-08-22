@@ -21,8 +21,7 @@ on:
         type: string
         default: ''
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
