@@ -137,6 +137,10 @@ pub struct AiConfig {
     /// cached model registry before creating an AI client. Provides helpful
     /// suggestions if an invalid model ID is detected.
     pub validation_enabled: bool,
+    /// `OpenRouter` data collection setting: `"allow"` or `"deny"` (default: `"deny"`).
+    pub openrouter_data_collection: String,
+    /// `OpenRouter` Zero Data Retention requirement (default: `true`).
+    pub openrouter_zdr: bool,
 }
 
 impl Default for AiConfig {
@@ -155,6 +159,8 @@ impl Default for AiConfig {
             fallback: None,
             custom_guidance: None,
             validation_enabled: true,
+            openrouter_data_collection: "deny".to_string(),
+            openrouter_zdr: true,
         }
     }
 }

@@ -60,6 +60,22 @@ inputs:
     required: false
     default: 'inception/mercury-2'
 
+  # --- Privacy controls ---
+  openrouter-data-collection:
+    description: >
+      OpenRouter data collection policy: "deny" (default) or "allow".
+      When set to "deny", OpenRouter is instructed not to retain or use
+      prompts and outputs for training. Only affects the OpenRouter provider.
+    required: false
+    default: 'deny'
+  openrouter-zdr:
+    description: >
+      OpenRouter Zero Data Retention flag (default: true).
+      When true, OpenRouter is instructed to enforce zero data retention.
+      Only affects the OpenRouter provider.
+    required: false
+    default: 'true'
+
   # --- Behavior flags (alphabetical) ---
   apply-labels:
     description: Apply AI-suggested labels and milestone (issue triage and PR review)
@@ -404,6 +420,8 @@ runs:
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
+        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         DRY_RUN: ${{ inputs.dry-run }}
         NO_COMMENT: ${{ inputs.no-comment }}
@@ -449,6 +467,8 @@ runs:
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
+        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         DRY_RUN: ${{ inputs.dry-run }}
         ISSUE_STATE: ${{ inputs.issue-state }}
@@ -492,6 +512,8 @@ runs:
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
+        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
         DRY_RUN: ${{ inputs.dry-run }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
@@ -529,6 +551,8 @@ runs:
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
+        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         DEEP: ${{ inputs.deep }}
         DRY_RUN: ${{ inputs.dry-run }}
@@ -640,6 +664,8 @@ runs:
         ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
+        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
+        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
       run: |
         set -e
         echo "Running: aptu pr queue --repo $REPO"

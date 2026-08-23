@@ -135,6 +135,10 @@ pub struct AiClient {
     circuit_breaker: CircuitBreaker,
     /// Optional custom guidance from config to inject into system prompts.
     custom_guidance: Option<String>,
+    /// `OpenRouter` data collection setting.
+    openrouter_data_collection: String,
+    /// `OpenRouter` Zero Data Retention requirement.
+    openrouter_zdr: bool,
     /// Authentication method used.
     auth_method: AuthMethod,
 }
@@ -199,6 +203,8 @@ impl AiClient {
                 config.circuit_breaker_reset_seconds,
             ),
             custom_guidance: config.custom_guidance.clone(),
+            openrouter_data_collection: config.openrouter_data_collection.clone(),
+            openrouter_zdr: config.openrouter_zdr,
             auth_method: AuthMethod::ApiKey,
         })
     }
@@ -251,6 +257,8 @@ impl AiClient {
                 config.circuit_breaker_reset_seconds,
             ),
             custom_guidance: config.custom_guidance.clone(),
+            openrouter_data_collection: config.openrouter_data_collection.clone(),
+            openrouter_zdr: config.openrouter_zdr,
             auth_method: AuthMethod::ApiKey,
         })
     }
@@ -452,6 +460,17 @@ impl AiProvider for AiClient {
 
         headers
     }
+
+    fn provider_body_extensions(&self) -> Option<serde_json::Value> {
+        if self.provider.name == PROVIDER_OPENROUTER {
+            Some(serde_json::json!({
+                "data_collection": &self.openrouter_data_collection,
+                "zdr": self.openrouter_zdr,
+            }))
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -474,6 +493,8 @@ mod tests {
             fallback: None,
             custom_guidance: None,
             validation_enabled: true,
+            openrouter_data_collection: "deny".to_string(),
+            openrouter_zdr: true,
         }
     }
 
@@ -625,5 +646,38 @@ mod tests {
         )
         .expect("should create client");
         assert_eq!(client.auth_method(), AuthMethod::ApiKey);
+    }
+
+    #[test]
+    fn test_provider_body_extensions_openrouter() {
+        let config = test_config();
+        let client = AiClient::with_api_key(
+            PROVIDER_OPENROUTER,
+            SecretString::from("test_key"),
+            "test-model:free",
+            &config,
+        )
+        .expect("should create openrouter client");
+
+        let ext = client.provider_body_extensions();
+        assert!(ext.is_some());
+        let val = ext.unwrap();
+        assert_eq!(val["data_collection"], "deny");
+        assert_eq!(val["zdr"], true);
+    }
+
+    #[test]
+    fn test_provider_body_extensions_non_openrouter() {
+        let config = test_config();
+        let client = AiClient::with_api_key(
+            PROVIDER_ANTHROPIC,
+            SecretString::from("test_key"),
+            "test-model",
+            &config,
+        )
+        .expect("should create anthropic client");
+
+        let ext = client.provider_body_extensions();
+        assert!(ext.is_none());
     }
 }

@@ -17,7 +17,7 @@ use crate::github::auth::create_client_from_provider;
 use crate::github::pulls::{
     fetch_pr_details, post_pr_review as gh_post_pr_review, update_pr_review_comment,
 };
-use crate::sanitize::sanitise_user_field;
+use crate::sanitize::{redact_secrets, sanitise_user_field};
 use crate::security::SecurityScanner;
 
 /// Default review comment side used for GitHub PR review comments.
@@ -147,6 +147,7 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
 /// - AI API call fails
 #[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider, pr_details), fields(number = pr_details.number))]
+#[allow(clippy::too_many_lines)]
 pub async fn analyze_pr(
     provider: &dyn TokenProvider,
     pr_details: &PrDetails,
@@ -163,14 +164,21 @@ pub async fn analyze_pr(
     let review_config = app_config.review;
 
     // Byte-limit pre-check (prompt injection defence)
-    // Concatenate all patches and validate via sanitise_user_field
+    // Concatenate all patches, redact sensitive credentials, then validate via sanitise_user_field
     let all_patches: String = pr_details
         .files
         .iter()
         .map(|f| f.patch.as_deref().unwrap_or(""))
         .collect();
+    let (redacted_patches, redaction_count) = redact_secrets(&all_patches);
+    if redaction_count > 0 {
+        debug!(
+            redactions = redaction_count,
+            "Redacted secrets from PR diff"
+        );
+    }
     let limit_kb = app_config.prompt.max_diff_bytes / 1024;
-    let _ = sanitise_user_field("pr_diff", &all_patches, app_config.prompt.max_diff_bytes)
+    let _ = sanitise_user_field("pr_diff", &redacted_patches, app_config.prompt.max_diff_bytes)
         .map_err(|e| match e {
             AptuError::InputExceedsLimit { field, actual_bytes, limit_bytes, .. } => {
                 AptuError::InputExceedsLimit {
@@ -516,13 +524,24 @@ pub async fn label_pr(
         })?;
 
     // Byte-limit pre-check (prompt injection defence)
-    // Concatenate all patches and validate via sanitise_user_field
+    // Concatenate all patches, redact sensitive credentials, then validate via sanitise_user_field
     let all_patches: String = pr_details
         .files
         .iter()
         .map(|f| f.patch.as_deref().unwrap_or(""))
         .collect();
-    let _ = sanitise_user_field("pr_diff", &all_patches, app_config.prompt.max_diff_bytes)?;
+    let (redacted_patches, redaction_count) = redact_secrets(&all_patches);
+    if redaction_count > 0 {
+        debug!(
+            redactions = redaction_count,
+            "Redacted secrets from PR diff"
+        );
+    }
+    let _ = sanitise_user_field(
+        "pr_diff",
+        &redacted_patches,
+        app_config.prompt.max_diff_bytes,
+    )?;
 
     // Extract labels from PR metadata (deterministic approach)
     let file_paths: Vec<String> = pr_details
@@ -670,6 +689,8 @@ mod tests {
             fallback: None,
             custom_guidance: None,
             validation_enabled: false,
+            openrouter_data_collection: "deny".to_string(),
+            openrouter_zdr: true,
         };
 
         let provider = MockProvider;
