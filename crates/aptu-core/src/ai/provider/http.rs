@@ -79,8 +79,16 @@ pub(super) async fn send_request_inner(
         req = req.header(key.clone(), value.clone());
     }
 
+    let mut body = serde_json::to_value(request).context(format!(
+        "Failed to serialize request for {}",
+        provider.name()
+    ))?;
+    if let Some(extensions) = provider.provider_body_extensions() {
+        body["provider"] = extensions;
+    }
+
     let response = req
-        .json(request)
+        .json(&body)
         .send()
         .await
         .context(format!("Failed to send request to {} API", provider.name()))?;

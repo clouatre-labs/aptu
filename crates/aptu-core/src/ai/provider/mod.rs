@@ -113,6 +113,11 @@ pub trait AiProvider: Send + Sync {
         headers
     }
 
+    /// Provider-specific request body extensions (e.g., `OpenRouter` data controls).
+    fn provider_body_extensions(&self) -> Option<serde_json::Value> {
+        None
+    }
+
     /// Validates the model configuration.
     fn validate_model(&self) -> Result<()> {
         Ok(())

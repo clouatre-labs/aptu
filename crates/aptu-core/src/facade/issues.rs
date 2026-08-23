@@ -19,7 +19,7 @@ use crate::github::auth::{create_client_from_provider, create_client_with_token}
 use crate::github::graphql::fetch_issue_with_repo_context;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::issues::{create_issue as gh_create_issue, filter_labels_by_relevance};
-use crate::sanitize::sanitise_user_field;
+use crate::sanitize::{redact_secrets, sanitise_user_field};
 use crate::security::SecurityScanner;
 
 /// Analyzes a GitHub issue and generates triage suggestions.
@@ -53,15 +53,24 @@ pub async fn analyze_issue(
     let app_config = load_config().unwrap_or_default();
 
     // Byte-limit pre-check (prompt injection defence)
+    // Redact sensitive credentials before sanitisation and byte limit checks
+    let (redacted_body, redaction_count) = redact_secrets(&issue.body);
+    if redaction_count > 0 {
+        debug!(
+            redactions = redaction_count,
+            "Redacted secrets from issue body"
+        );
+    }
     // sanitise_user_field validates the byte limit and wraps in XML tags
     let _ = sanitise_user_field(
         "issue_body",
-        &issue.body,
+        &redacted_body,
         app_config.prompt.max_issue_body_bytes,
     )?;
 
     // Clone issue into mutable local variable for potential label enrichment
     let mut issue_mut = issue.clone();
+    issue_mut.body = redacted_body;
 
     // Fetch repository labels via GraphQL if available_labels is empty and owner/repo are non-empty
     if issue_mut.available_labels.is_empty()
@@ -604,6 +613,8 @@ mod tests {
             fallback: None,
             custom_guidance: None,
             validation_enabled: false,
+            openrouter_data_collection: "deny".to_string(),
+            openrouter_zdr: true,
         };
 
         let provider = MockProvider;

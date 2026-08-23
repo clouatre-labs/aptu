@@ -348,6 +348,52 @@ When a field exceeds its limit:
 
 Note: `aptu scan-security` performs local pattern matching and does not invoke AI; these limits do not apply to it.
 
+### Secret Redaction
+
+Before user-supplied text (issue bodies, PR diffs) is passed to AI providers, aptu applies regex-based secret redaction. Detected credentials are replaced with `[REDACTED]` while preserving surrounding syntax.
+
+Patterns covered:
+
+- API keys, secret keys, and access tokens (`api_key = "..."`, `secret_key: "..."`, `access_token = "..."`)
+- Passwords (`password = "..."`, `passwd: "..."`, `pwd = "..."`)
+- Bearer tokens (`Authorization: Bearer ...`)
+- GitHub App tokens (`ghs_...`)
+
+Limitations:
+
+- Redaction is regex-based and cannot guarantee detection of unknown, obfuscated, or non-standard secret formats.
+- Redaction is applied before byte-limit checks; redacted text is what gets sent to the AI provider.
+- Redaction counts are logged at `debug` level only; redacted content is never logged.
+
+## OpenRouter Data Controls
+
+When using the OpenRouter provider, aptu injects per-request data controls into the API request body:
+
+```toml
+[ai]
+openrouter_data_collection = "deny"  # "deny" (default) or "allow"
+openrouter_zdr = true                # Zero Data Retention (default: true)
+```
+
+These map to the OpenRouter `provider` object in the request body:
+
+- `data_collection: "deny"` instructs OpenRouter not to retain or use prompts/outputs for training.
+- `zdr: true` enforces zero data retention at the routing layer.
+
+These settings only affect the OpenRouter provider. Direct provider calls (Gemini, Anthropic, Groq, etc.) are not modified. For direct providers, data retention and training policies depend on the provider's account tier and terms of service.
+
+### GitHub Action inputs
+
+When using the GitHub Action, these can be set as inputs:
+
+```yaml
+- uses: clouatre-labs/aptu@main
+  with:
+    provider: openrouter
+    openrouter-data-collection: deny
+    openrouter-zdr: true
+```
+
 ## DCO Sign-off (`dco_signoff`)
 
 When creating a branch and commit via `aptu pr create --diff`, Aptu can append a
