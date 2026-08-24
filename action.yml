@@ -749,7 +749,7 @@ runs:
       with:
         name: aptu-token-usage-${{ github.run_id }}
         path: ${{ runner.temp }}/aptu-token-usage.jsonl
-        retention-days: 90
+        retention-days: 7
         if-no-files-found: ignore
 
     - name: Upload review context artifact
@@ -758,5 +758,5 @@ runs:
       with:
         name: aptu-review-context-${{ github.run_id }}
         path: ${{ runner.temp }}/aptu-review-context.jsonl
-        retention-days: 90
+        retention-days: 7
         if-no-files-found: ignore
