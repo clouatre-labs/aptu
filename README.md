@@ -45,7 +45,7 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 | AI Triage | Yes | Yes | Yes |
 | PR Analysis | Yes | Yes | Yes |
 | Dependency Enrichment | Yes | Yes | Yes |
-| Multiple Providers | Yes[^1] | Yes | Yes |
+| Multiple Providers | Yes | Yes | Yes |
 | Prompt Customization | Yes | Yes | Yes |
 | Observability | - | Yes | Yes |
 | Model-Tier Routing | - | Yes | Yes |
@@ -54,9 +54,7 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 | Local History | - | Yes | - |
 | Claude OAuth | - | Yes | - |
 
-[^1]: App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names). CLI and Action support all seven: Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux; free-tier models available via OpenRouter.
-
-`aptu pr create --diff <file>` applies a patch, commits, and opens a PR. `--deep` (CLI) / `deep: true` (Action) adds AST and cross-file call-graph context to `pr review` prompts. Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required.
+`aptu pr create --diff <file>` applies a patch, commits, and opens a PR. `--deep` (CLI) / `deep: true` (Action) adds AST and cross-file call-graph context to `pr review` prompts. CLI and Action support seven providers: Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux; the App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names). Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required.
 
 ## Architecture Benchmark
 
