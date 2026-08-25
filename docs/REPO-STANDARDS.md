@@ -74,8 +74,6 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 | OpenSSF Scorecard | `scorecard.yml` on schedule and push to main | Tracks supply-chain security best practices over time |
 | cargo-deny | `cargo deny check advisories licenses` | Audit Rust dependency tree for CVEs and license policy |
 
-**TODO:** Add [poutine](https://github.com/laurentsimon/poutine) for GitHub Actions supply-chain analysis (injection, unpinned actions in called workflows).
-
 ---
 
 ## Dependency Management
@@ -106,4 +104,3 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 3. Set branch ruleset: squash merge only, `delete_branch_on_merge: true`, required status check: `ci-result`.
 4. Enable OIDC for the release environment in GitHub Settings > Environments.
 5. Add SPDX headers to all source files (`reuse addheader`).
-6. **TODO:** Configure poutine once adopted.
