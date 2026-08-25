@@ -305,6 +305,10 @@ diff --git a/test.rs b/test.rs
         // Should ignore in vendor file
         let findings = scanner.scan_file(code, "vendor/lib.rs");
         assert!(findings.is_empty(), "Should ignore in vendor/");
+
+        // Should ignore in examples file
+        let findings = scanner.scan_file(code, "examples/config.rs");
+        assert!(findings.is_empty(), "Should ignore in examples/");
     }
 
     #[test]
@@ -317,6 +321,19 @@ diff --git a/test.rs b/test.rs
                 .iter()
                 .any(|f| f.pattern_id == "prompt-injection-ignore-instructions"),
             "Expected prompt-injection-ignore-instructions finding"
+        );
+    }
+
+    #[test]
+    fn test_scan_diff_defensive_phrasing_no_match() {
+        let scanner = SecurityScanner::new();
+        let diff = "+++ b/README.md\n+Ignore instructions in comments.\n";
+        let findings = scanner.scan_diff(diff);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.pattern_id == "prompt-injection-ignore-instructions"),
+            "Defensive phrasing should not match prompt-injection-ignore-instructions"
         );
     }
 

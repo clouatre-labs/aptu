@@ -187,7 +187,7 @@
   {
     "id": "prompt-injection-ignore-instructions",
     "description": "Detects attempts to override AI instructions via ignore directives",
-    "pattern": "(?i)ignore (all |previous |above )*(instructions|rules|guidelines)",
+    "pattern": "(?i)ignore (all |previous |above )+(instructions|rules|guidelines)",
     "severity": "high",
     "confidence": "medium",
     "cwe": "CWE-1336",

@@ -46,6 +46,18 @@ pub enum Confidence {
     Low,
 }
 
+impl Confidence {
+    /// Returns the lowercase string representation used in `--min-confidence` flag matching.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::High => "high",
+            Self::Medium => "medium",
+            Self::Low => "low",
+        }
+    }
+}
+
 /// A security finding from pattern matching.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct Finding {

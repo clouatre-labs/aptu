@@ -233,6 +233,9 @@ pub enum Commands {
         /// Fail with exit code 1 if findings match these severities (comma-separated: critical,high,medium,low)
         #[arg(long, value_delimiter = ',')]
         fail_on: Vec<String>,
+        /// Minimum confidence required for a finding to participate in --fail-on gating (high, medium, low)
+        #[arg(long, default_value = "high")]
+        min_confidence: String,
         /// Exclude paths matching this prefix (repeatable)
         #[arg(long)]
         exclude: Vec<String>,

@@ -1105,6 +1105,7 @@ pub async fn run(
             path,
             diff,
             fail_on,
+            min_confidence,
             exclude,
             sarif_output,
         } => {
@@ -1112,6 +1113,7 @@ pub async fn run(
                 path,
                 diff,
                 fail_on,
+                min_confidence,
                 exclude,
                 ctx.format,
                 sarif_output,

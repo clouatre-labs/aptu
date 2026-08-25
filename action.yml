@@ -247,6 +247,13 @@ inputs:
       threshold. Leave empty to keep the scan non-blocking (advisory only).
     required: false
     default: ''
+  scan-exclude:
+    description: >
+      Comma-or-newline-separated path prefixes to exclude from aptu scan-security
+      (e.g. examples/,vendor/). Each entry is passed as a separate --exclude flag.
+      Leave empty to scan every non-ignored path.
+    required: false
+    default: ''
   sarif-upload:
     description: >
       Set to 'false' to skip uploading the SARIF report to code scanning. Use when
@@ -625,18 +632,25 @@ runs:
         SCAN_DIFF: ${{ inputs.scan-security-diff }}
         SCAN_PATH: ${{ inputs.scan-path }}
         FAIL_ON: ${{ inputs.fail-on }}
+        SCAN_EXCLUDE: ${{ inputs.scan-exclude }}
       run: |
         set -e
         FAIL_ON_ARGS=()
         if [[ -n "$FAIL_ON" ]]; then
           FAIL_ON_ARGS+=(--fail-on "$FAIL_ON")
         fi
+        EXCLUDE_ARGS=()
+        if [[ -n "$SCAN_EXCLUDE" ]]; then
+          while IFS= read -r prefix; do
+            [[ -n "$prefix" ]] && EXCLUDE_ARGS+=(--exclude "$prefix")
+          done < <(echo "$SCAN_EXCLUDE" | tr ',' '\n')
+        fi
         if [[ -n "$SCAN_DIFF" ]]; then
-          echo "Running: aptu scan-security --diff $SCAN_DIFF --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]}"
-          aptu scan-security --diff "$SCAN_DIFF" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}"
+          echo "Running: aptu scan-security --diff $SCAN_DIFF --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]} ${EXCLUDE_ARGS[*]}"
+          aptu scan-security --diff "$SCAN_DIFF" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}" "${EXCLUDE_ARGS[@]}"
         else
-          echo "Running: aptu scan-security $SCAN_PATH --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]}"
-          aptu scan-security "$SCAN_PATH" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}"
+          echo "Running: aptu scan-security $SCAN_PATH --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]} ${EXCLUDE_ARGS[*]}"
+          aptu scan-security "$SCAN_PATH" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}" "${EXCLUDE_ARGS[@]}"
         fi
 
     - name: Upload SARIF report
