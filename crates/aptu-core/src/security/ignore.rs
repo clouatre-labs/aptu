@@ -79,6 +79,7 @@ impl Default for SecurityConfig {
                 "vendor/".to_string(),
                 "generated/".to_string(),
                 "docs/".to_string(),
+                "examples/".to_string(),
                 "build/".to_string(),
                 "target/".to_string(),
                 "dist/".to_string(),
@@ -221,15 +222,17 @@ mod tests {
     fn test_security_config_default_has_sensible_paths() {
         let config = SecurityConfig::default();
         assert!(config.ignore_patterns.is_empty());
-        assert_eq!(config.ignore_paths.len(), 12);
+        assert_eq!(config.ignore_paths.len(), 13);
         assert!(config.ignore_paths.contains(&"tests/".to_string()));
         assert!(config.ignore_paths.contains(&"test/".to_string()));
         assert!(config.ignore_paths.contains(&"benches/".to_string()));
         assert!(config.ignore_paths.contains(&"fixtures/".to_string()));
         assert!(config.ignore_paths.contains(&"vendor/".to_string()));
+        assert!(config.ignore_paths.contains(&"examples/".to_string()));
         for prefix in [
             "generated/",
             "docs/",
+            "examples/",
             "build/",
             "target/",
             "dist/",
@@ -253,7 +256,7 @@ mod tests {
         // with_defaults is deprecated but should still work
         let config = SecurityConfig::with_defaults();
         assert!(config.ignore_patterns.is_empty());
-        assert_eq!(config.ignore_paths.len(), 12);
+        assert_eq!(config.ignore_paths.len(), 13);
     }
 
     #[test]
@@ -403,7 +406,7 @@ mod tests {
         let config = SecurityConfig::load_from_path(&path).expect("load default");
         // When file doesn't exist, should return sensible defaults
         assert!(config.ignore_patterns.is_empty());
-        assert_eq!(config.ignore_paths.len(), 12);
+        assert_eq!(config.ignore_paths.len(), 13);
     }
 
     #[test]
