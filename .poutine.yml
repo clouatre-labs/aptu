@@ -1,8 +1,0 @@
-# poutine configuration
-# https://github.com/boostsecurityio/poutine
-#
-# pr_runs_on_self_hosted is skipped because this repository uses only
-# GitHub-hosted runners. poutine does not recognize ubuntu-24.04-arm
-# as a hosted runner label, causing false positives on PR-triggered jobs.
-skip:
-  - rule: pr_runs_on_self_hosted
