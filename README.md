@@ -6,7 +6,7 @@ Aptu is an AI SDLC review harness for GitHub (GitHub App, CLI, and GitHub Action
 
 ## GitHub App
 
-[Install the Aptu GitHub App](https://github.com/apps/aptu-dev) to enable AI-powered issue triage and PR review across your repositories with zero workflow changes.
+Install the [Aptu GitHub App](https://github.com/apps/aptu-dev) and add the dispatch handler workflows to enable AI-powered issue triage and PR review across your repositories.
 
 Grant the app access to a repository, then commit a `.github/aptu.yml` file to opt in:
 
@@ -23,10 +23,11 @@ review:
 ai:
   provider: openrouter
   model: google/gemma-4-26b-a4b-it
-  api-key-secret: OPENROUTER_API_KEY
 ```
 
-All installations must supply an `ai` block with `provider`, `model`, and `api-key-secret`. `api-key-secret` is the name of a repository secret containing the API key.
+All installations must supply an `ai` block with `provider` and `model`. The provider determines which repository secret the dispatch handler resolves (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`).
+
+Each repository must install the dispatch handler workflows from [aptu-github-app](https://github.com/clouatre-labs/aptu-github-app/blob/main/README.md#installation). The Worker mints an operation-scoped installation token and forwards it to the dispatch handlers; installers do not need `APP_ID` or `APP_PRIVATE_KEY` secrets.
 
 **Mention commands:** Comment `@aptu` on an issue or PR to trigger the app manually. The commenter must be a repository collaborator. Mention commands work regardless of whether automatic dispatch is enabled in `.github/aptu.yml`.
 

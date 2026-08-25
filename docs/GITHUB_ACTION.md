@@ -208,12 +208,10 @@ review:
     - "crates/**"
     - "!**/*.md"
 
-# AI provider credentials (all three fields required when present)
+# AI provider credentials (both fields required when present)
 ai:
   provider: openrouter
   model: google/gemma-4-26b-a4b-it
-  # Name of a repository secret containing the API key (must match ^[A-Z0-9_]+$)
-  api-key-secret: OPENROUTER_API_KEY
 
 # Security scanning (runs without an ai block)
 scan:
@@ -232,18 +230,17 @@ scan:
 | `review.instructions-file` | No | string | Path to custom PR review instructions within this repository (e.g., `.github/instructions/pr-review.md`). |
 | `review.skip-labeled` | No | boolean | Skip PR review dispatch if PR has any labels (default: `false`). |
 | `review.paths` | No | string[] | Glob patterns for PR review dispatch. Use `!`-prefixed patterns for exclusions. |
-| `ai.provider` | See note | string | AI provider (`anthropic`, `cerebras`, `gemini`, `groq`, `openrouter`, `zai`, `zenmux`). All three `ai` fields are required when the `ai` block is present. |
-| `ai.model` | See note | string | Model identifier for your configured AI provider. All three `ai` fields are required when the `ai` block is present. |
-| `ai.api-key-secret` | See note | string | Name of a repository secret containing the API key. Must match `^[A-Z0-9_]+$`. All three `ai` fields are required when the `ai` block is present. |
+| `ai.provider` | See note | string | AI provider (`anthropic`, `cerebras`, `gemini`, `groq`, `openrouter`, `zai`, `zenmux`). Both `ai` fields are required when the `ai` block is present. |
+| `ai.model` | See note | string | Model identifier for your configured AI provider. Both `ai` fields are required when the `ai` block is present. |
 | `scan.enabled` | No | boolean | Enable automatic security scanning on PR push events (default: `false`). Scanning is local pattern matching only and does not require an `ai` block. |
 | `scan.fail-on` | No | string | Comma-separated severities that fail the scan (`critical`, `high`, `medium`, `low`). |
 | `scan.path` | No | string | Root directory to scan (default: `.`). |
 
 ### Configuration Requirements
 
-All installations must supply an `ai` block with `provider`, `model`, and `api-key-secret` in `.github/aptu.yml` for triage and review:
+All installations must supply an `ai` block with `provider` and `model` in `.github/aptu.yml` for triage and review:
 
-- The `api-key-secret` must be the exact name of a repository secret containing a valid API key for the specified provider
+- The `provider` determines which repository secret the dispatch handler resolves (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`)
 - If the `ai` block is present but incomplete, the config parser returns null and no dispatch occurs (the webhook returns `200 OK` with no dispatch). If the `ai` block is absent, the config is valid; dispatch occurs but the downstream workflow receives no AI credentials.
 - Security scanning via `scan.enabled: true` does not require an `ai` block (local pattern matching only)
 
@@ -284,9 +281,9 @@ Quota counters do not reset at a fixed time; timestamps older than 24 hours are 
 
 The app uses a central workflow architecture:
 
-1. **Cloudflare Worker** receives webhook events, validates HMAC signatures, checks `.github/aptu.yml` configuration, and dispatches `repository_dispatch` events to the central review repository.
-2. **Central workflow** (`aptu[bot]`) runs the actual triage and review logic. It checks out the target repository, resolves AI credentials, and posts results back as the `aptu[bot]` GitHub App user.
-3. **Repository AI keys:** Each installation provides its own AI API key via a repository secret. The central workflow reads the secret name from `.github/aptu.yml` (`ai.api-key-secret`) and resolves it at runtime.
+1. **Cloudflare Worker** receives webhook events, validates HMAC signatures, checks `.github/aptu.yml` configuration, and dispatches `repository_dispatch` events to the caller repository.
+2. **Dispatch handler workflow** in the caller repository runs the actual triage and review logic using the operation-scoped token forwarded by the Worker.
+3. **Repository AI keys:** Each installation provides its own AI API key via a repository secret (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`) based on `ai.provider`. The dispatch handler resolves the secret at runtime.
 
 This model keeps triage and review logic in one place while letting each installation control its own AI provider and credentials.
 

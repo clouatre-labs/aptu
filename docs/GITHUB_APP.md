@@ -19,7 +19,7 @@ The App requests the following repository permissions at install time. Each is s
 | Commit statuses | Read and write | Post the `aptu-scan-security` status to the PR head commit. Read access is unused but required by GitHub's permission model. |
 | Metadata | Read | Required by GitHub for all Apps. |
 
-The App never has access to your repository secrets or API keys. The `ai.api-key-secret` field in `.github/aptu.yml` references a secret **name** that resolves inside your own repository's GitHub Actions runtime, never in the Worker.
+The App never has access to your repository secrets or API keys. The `ai.provider` field in `.github/aptu.yml` determines which repository secret the dispatch handler resolves (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`), never in the Worker.
 
 ## Owner Allowlist
 
@@ -29,7 +29,9 @@ The Worker enforces a hard `ALLOWED_OWNERS` gate before any event processing. Re
 
 1. **Install the App:** Navigate to [https://github.com/apps/aptu-dev](https://github.com/apps/aptu-dev) and click **Install**. Select the repositories (or organization) you want the App to access. The App owner must add your GitHub account or organization to the `ALLOWED_OWNERS` list before webhooks will be processed.
 
-2. **Create the opt-in config:** Add `.github/aptu.yml` to the target repository. Triage and review only activate when this file exists and passes validation. See the [configuration reference](GITHUB_ACTION.md#opt-in-configuration) for the full schema. Minimal example:
+2. **Copy the dispatch handler workflows:** Copy the three dispatch handler workflow files (`aptu-review.yml`, `aptu-triage.yml`, and `aptu-scan-security.yml`) into `.github/workflows/` in the target repository. See the [aptu-github-app installation guide](https://github.com/clouatre-labs/aptu-github-app/blob/main/README.md#installation) for the workflow templates.
+
+3. **Create the opt-in config:** Add `.github/aptu.yml` to the target repository. Triage and review only activate when this file exists and passes validation. See the [configuration reference](GITHUB_ACTION.md#opt-in-configuration) for the full schema. Minimal example:
 
    ```yaml
    version: 1
@@ -43,12 +45,11 @@ The Worker enforces a hard `ALLOWED_OWNERS` gate before any event processing. Re
    ai:
      provider: openrouter
      model: google/gemma-4-26b-a4b-it
-     api-key-secret: OPENROUTER_API_KEY
    ```
 
-3. **Configure the AI key secret:** In the target repository, go to **Settings > Secrets and variables > Actions** and add a repository secret whose name matches the `api-key-secret` value in `.github/aptu.yml`. The secret must contain a valid API key for the specified provider. The Worker never sees the secret value; it passes only the secret name to the downstream workflow, which resolves it via `${{ secrets[github.event.client_payload.ai_key_secret] }}`.
+4. **Configure the AI key secret:** In the target repository, go to **Settings > Secrets and variables > Actions** and add a repository secret named after your chosen provider (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`). The secret must contain a valid API key for the specified provider. The Worker never sees the secret value; the dispatch handler resolves it in the caller's Actions runtime.
 
-4. **Verify:** Open a test issue or PR in the target repository. If the config is valid and the feature is enabled, the Worker dispatches the corresponding workflow and returns `204 No Content`. If the config is absent, invalid, or the feature is disabled, the Worker returns `200 OK` with no dispatch. Check the `clouatre-labs/aptu-github-app` Actions tab for dispatched workflow runs.
+5. **Verify:** Open a test issue or PR in the target repository. If the config is valid and the feature is enabled, the Worker dispatches the corresponding workflow and returns `204 No Content`. If the config is absent, invalid, or the feature is disabled, the Worker returns `200 OK` with no dispatch. Check the target repository's Actions tab for dispatched workflow runs.
 
 ## Quota Model
 
