@@ -6,9 +6,7 @@
 //! [`super::GraphDb`] payload. The header is two little-endian `u32`s:
 //! `FORMAT_VERSION` (bytes 0..4) then `schema_hash` (bytes 4..8), a
 //! compile-time FNV-1a hash over the `Node`/`Edge` variant names used to
-//! invalidate stale caches when the schema changes. `Modifies` edges are
-//! ephemeral (derived from the current diff) and are always removed before
-//! serialization; they never appear in a cached graph.
+//! invalidate stale caches when the schema changes.
 //!
 //! Only the actual file I/O (`load_or_build`, `persist_graph`) is gated to
 //! non-WASM targets. Path construction and byte encode/decode are pure
@@ -17,7 +15,9 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use super::{Edge, GraphDb};
+#[cfg(test)]
+use super::Edge;
+use super::GraphDb;
 use crate::config::GraphConfig;
 
 /// Cache format version. Bump when the encoding changes in an incompatible way.
@@ -28,7 +28,7 @@ const FORMAT_VERSION: u32 = 3;
 /// Any change to the set (or order) of `Node`/`Edge` variant names must be
 /// reflected in [`SCHEMA_STRING`] so that stale cached graphs are invalidated
 /// by [`decode_graph`] rather than postcard mis-decoding.
-const SCHEMA_STRING: &str = "File|Module|Function|Struct|Enum|Trait|Impl|Contains|Calls|Imports|Implements|HasMethod|Modifies|Tests";
+const SCHEMA_STRING: &str = "File|Module|Function|Contains|Calls|Imports";
 
 /// Computes the compile-time FNV-1a hash of [`SCHEMA_STRING`].
 #[must_use]
@@ -70,9 +70,7 @@ pub fn encode_graph(graph: &GraphDb) -> Option<Vec<u8>> {
     }
     for idx in graph.edge_indices() {
         let (a, b) = graph.edge_endpoints(idx)?;
-        if !matches!(graph[idx], Edge::Modifies) {
-            filtered.add_edge(a, b, graph[idx]);
-        }
+        filtered.add_edge(a, b, graph[idx]);
     }
 
     let payload = postcard::to_allocvec(&filtered).ok()?;
@@ -294,34 +292,8 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_decode_excludes_modifies_edges() {
-        let mut graph = GraphDb::new();
-        let n1 = graph.add_node(super::super::Node::Function {
-            name: "foo".to_string(),
-            path: "src/lib.rs".to_string(),
-            visibility: "pub".to_string(),
-        });
-        let n2 = graph.add_node(super::super::Node::Function {
-            name: "bar".to_string(),
-            path: "src/lib.rs".to_string(),
-            visibility: "pub".to_string(),
-        });
-        graph.add_edge(n1, n2, Edge::Calls);
-        graph.add_edge(n1, n2, Edge::Modifies);
-
-        let bytes = encode_graph(&graph).expect("encode must succeed");
-        let decoded = decode_graph(&bytes).expect("should decode successfully");
-
-        assert_eq!(decoded.edge_count(), 1, "only Calls edge should remain");
-        let has_modifies = decoded
-            .edge_indices()
-            .any(|idx| matches!(decoded.edge_weight(idx), Some(Edge::Modifies)));
-        assert!(!has_modifies, "Modifies edges should be excluded");
-    }
-
-    #[test]
     fn test_schema_hash_changes_on_variant_change() {
-        const MUTATED: &str = "File|Module|Function|Struct|Enum|Trait|Impl|Contains|Calls|Imports|Implements|HasMethod|Modifies|Tests|NewVariant";
+        const MUTATED: &str = "File|Module|Function|Contains|Calls|Imports|NewVariant";
         // The hash must be non-zero (FNV-1a of a non-empty string is never 0).
         assert_ne!(schema_hash(), 0, "schema hash must be non-zero");
 

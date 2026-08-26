@@ -26,8 +26,9 @@
 //!   comment in issue #1512 claimed this module emits `Struct`/`Enum`/`Trait`
 //!   /`Impl` nodes and `Implements`/`HasMethod`/`Tests` edges; that was
 //!   accurate before PR #1445 (which replaced a text-format builder with the
-//!   typed-struct builder) but not against the current code. See issue #1520
-//!   for the correction. The actual remaining blockers to consolidation (per
+//!   typed-struct builder) but not against the current code, and those dead
+//!   variants were removed in #1521. See issue #1520 for the correction. The
+//!   actual remaining blockers to consolidation (per
 //!   `docs/audit/2026-08-26-graph-module-consolidation-reassessment.md`, F3)
 //!   are input-shape gaps, not ontology: `StructuralGraph` derives file path
 //!   from `entry.formatted.lines().next()` rather than a struct field, and
@@ -82,40 +83,6 @@ pub enum Node {
         /// Visibility (e.g., `pub`, `pub(crate)`, private).
         visibility: String,
     },
-    /// A struct definition.
-    Struct {
-        /// Struct name.
-        name: String,
-        /// File path containing the struct.
-        path: String,
-        /// Visibility (e.g., `pub`, `pub(crate)`, private).
-        visibility: String,
-    },
-    /// An enum definition.
-    Enum {
-        /// Enum name.
-        name: String,
-        /// File path containing the enum.
-        path: String,
-        /// Visibility (e.g., `pub`, `pub(crate)`, private).
-        visibility: String,
-    },
-    /// A trait definition.
-    Trait {
-        /// Trait name.
-        name: String,
-        /// File path containing the trait.
-        path: String,
-        /// Visibility (e.g., `pub`, `pub(crate)`, private).
-        visibility: String,
-    },
-    /// An `impl` block.
-    Impl {
-        /// Impl target name (type or trait-for-type description).
-        name: String,
-        /// File path containing the impl block.
-        path: String,
-    },
 }
 
 impl Node {
@@ -123,13 +90,9 @@ impl Node {
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            Node::File { name, .. }
-            | Node::Module { name, .. }
-            | Node::Function { name, .. }
-            | Node::Struct { name, .. }
-            | Node::Enum { name, .. }
-            | Node::Trait { name, .. }
-            | Node::Impl { name, .. } => name,
+            Node::File { name, .. } | Node::Module { name, .. } | Node::Function { name, .. } => {
+                name
+            }
         }
     }
 
@@ -137,13 +100,9 @@ impl Node {
     #[must_use]
     pub fn path(&self) -> &str {
         match self {
-            Node::File { path, .. }
-            | Node::Module { path, .. }
-            | Node::Function { path, .. }
-            | Node::Struct { path, .. }
-            | Node::Enum { path, .. }
-            | Node::Trait { path, .. }
-            | Node::Impl { path, .. } => path,
+            Node::File { path, .. } | Node::Module { path, .. } | Node::Function { path, .. } => {
+                path
+            }
         }
     }
 }
@@ -157,14 +116,6 @@ pub enum Edge {
     Calls,
     /// The source node imports the target node (module or item import).
     Imports,
-    /// The source node (impl) implements the target node (trait or type).
-    Implements,
-    /// The source node (impl) has the target node as a method.
-    HasMethod,
-    /// The source node modifies the target node (ephemeral; never cached).
-    Modifies,
-    /// The source node (test function) tests the target node.
-    Tests,
 }
 
 /// The structural graph database: a directed graph of `Node`s connected by `Edge`s.

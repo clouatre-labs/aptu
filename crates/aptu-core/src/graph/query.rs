@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Graph queries: blast-radius BFS, ephemeral Modifies edges, and text rendering.
+//! Graph queries: blast-radius BFS and text rendering.
 //!
 //! The main entry point is [`blast_radius`], which performs a bounded BFS in both
-//! directions from a set of modified nodes over [`Edge::Calls`], [`Edge::Implements`],
-//! [`Edge::HasMethod`], and [`Edge::Tests`] edges, returning the induced subgraph.
+//! directions from a set of modified nodes over [`Edge::Calls`] edges, returning the induced subgraph.
 
 use std::collections::{HashSet, VecDeque};
 
@@ -36,9 +35,8 @@ pub fn find_modified_nodes(graph: &mut GraphDb, modified_symbols: &[&str]) -> Ve
 /// Computes the blast-radius subgraph from a set of `modified_nodes`.
 ///
 /// Performs a bounded BFS in both directions (callers and callees) from each
-/// node in `modified_nodes` over [`Edge::Calls`], [`Edge::Implements`],
-/// [`Edge::HasMethod`], and [`Edge::Tests`] edges. [`Edge::Contains`] and
-/// [`Edge::Modifies`] are excluded.
+/// node in `modified_nodes` over [`Edge::Calls`] edges. [`Edge::Contains`] and
+/// [`Edge::Imports`] are excluded.
 ///
 /// The returned graph contains at most `max_nodes` nodes (including the seed
 /// nodes). Traversal stops as soon as the cap is reached. `max_depth` caps the
@@ -55,12 +53,7 @@ pub fn blast_radius(
         return GraphDb::new();
     }
 
-    let relevant_edges = |e: &Edge| {
-        matches!(
-            e,
-            Edge::Calls | Edge::Implements | Edge::HasMethod | Edge::Tests
-        )
-    };
+    let relevant_edges = |e: &Edge| matches!(e, Edge::Calls);
 
     let mut visited: HashSet<NodeIndex> = HashSet::new();
     let mut queue: VecDeque<(NodeIndex, usize)> = VecDeque::new();
@@ -102,7 +95,7 @@ pub fn blast_radius(
 }
 
 /// Builds an induced subgraph containing only the nodes in `node_set` and
-/// the edges between them (excluding [`Edge::Modifies`] and [`Edge::Contains`]).
+/// the edges between them (excluding [`Edge::Contains`]).
 fn build_induced_subgraph(graph: &GraphDb, node_set: &HashSet<NodeIndex>) -> GraphDb {
     use std::collections::HashMap;
     let mut sub = GraphDb::new();
@@ -121,7 +114,7 @@ fn build_induced_subgraph(graph: &GraphDb, node_set: &HashSet<NodeIndex>) -> Gra
         let src = edge_ref.source();
         let dst = edge_ref.target();
         let weight = edge_ref.weight();
-        if matches!(weight, Edge::Modifies | Edge::Contains) {
+        if matches!(weight, Edge::Contains) {
             continue;
         }
         if let (Some(&new_src), Some(&new_dst)) = (index_map.get(&src), index_map.get(&dst)) {
@@ -161,12 +154,6 @@ pub fn render_subgraph_text(subgraph: &GraphDb) -> String {
                 .or_default()
                 .insert(subgraph[edge_ref.source()].name().to_string());
         }
-        if matches!(edge_ref.weight(), Edge::HasMethod | Edge::Implements) {
-            calls
-                .entry(edge_ref.source())
-                .or_default()
-                .insert(subgraph[edge_ref.target()].name().to_string());
-        }
     }
 
     // Group rendered lines by file path so the LLM sees co-located symbols
@@ -177,10 +164,6 @@ pub fn render_subgraph_text(subgraph: &GraphDb) -> String {
         let node = &subgraph[idx];
         let prefix = match node {
             Node::Function { .. } => "fn",
-            Node::Struct { .. } => "struct",
-            Node::Enum { .. } => "enum",
-            Node::Trait { .. } => "trait",
-            Node::Impl { .. } => "impl",
             Node::File { .. } | Node::Module { .. } => continue,
         };
         let name = node.name();
