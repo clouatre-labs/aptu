@@ -7,6 +7,43 @@
 //! produced by `aptu-coder-core`, caches the result on disk keyed by
 //! repository and commit SHA, and computes a bounded blast-radius subgraph
 //! around modified symbols for prompt injection.
+//!
+//! ## Why this duplicates `aptu_coder_core::graph::StructuralGraph`
+//!
+//! `aptu-coder-core` (a crates.io dependency, not a path/git dependency)
+//! ships its own persisted structural graph, `StructuralGraph`. This module
+//! does not build on it, and that is a deliberate decision, not an
+//! oversight:
+//!
+//! - **Different input.** This module builds `GraphDb` from `CallGraph` (a
+//!   `HashMap`-based, request-scoped representation with symbol-matching
+//!   modes) plus raw `SemanticAnalysis`. `StructuralGraph` is built from
+//!   `&[FileAnalysisOutput]`, a different, higher-level input path.
+//! - **Different ontology.** `StructuralGraph`'s `Node`/`Edge` model is
+//!   deliberately language-agnostic (`File`/`Symbol`/`Module` nodes,
+//!   `Function`/`Class` symbol kinds, `Contains`/`Calls`/`Imports` edges).
+//!   The `aptu-coder-core` audit
+//!   (`docs/audit/2026-08-24-knowledge-graph-implementation.md`, R3, shipped
+//!   in v0.30.0 via PR #1438) removed `Implements`/`HasMethod`/`Tests` edges
+//!   and `Trait`/`Impl` symbol kinds from that crate specifically because
+//!   nothing there emitted them. This module *does* emit and query
+//!   Rust-specific `Struct`/`Enum`/`Trait`/`Impl` nodes and
+//!   `Implements`/`HasMethod`/`Tests` edges below; re-adding those variants
+//!   upstream would reverse that audit's design decision for the sake of one
+//!   downstream consumer, and since neither enum is `#[non_exhaustive]`,
+//!   doing so would be a breaking change for every other consumer matching on
+//!   them.
+//! - **Precedent.** The same audit's F7/R6 already concluded that
+//!   `StructuralGraph` and `CallGraph` should stay separate within
+//!   `aptu-coder-core` because they serve different workloads; that
+//!   reasoning extends here.
+//! - **Release topology.** Extending `StructuralGraph` to cover this
+//!   module's ontology would require a change in the `aptu-coder` repo, a
+//!   new crates.io release, and only then a version bump here — a
+//!   cross-repo, cross-release chain that cannot land as a single PR against
+//!   either repo.
+//!
+//! See issue #1510 for the full analysis.
 
 pub mod builder;
 pub mod cache;
