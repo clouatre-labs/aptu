@@ -337,15 +337,15 @@ mod tests {
 
     #[test]
     fn test_schema_hash_changes_on_variant_change() {
+        const MUTATED: &str = "File|Module|Function|Struct|Enum|Trait|Impl|Contains|Calls|Imports|Implements|HasMethod|Modifies|Tests|NewVariant";
         // The hash must be non-zero (FNV-1a of a non-empty string is never 0).
         assert_ne!(schema_hash(), 0, "schema hash must be non-zero");
 
         // Verify that any change to SCHEMA_STRING produces a different hash by
         // computing FNV-1a on a mutated string and asserting divergence.
-        const MUTATED: &str = "File|Module|Function|Struct|Enum|Trait|Impl|Contains|Calls|Imports|Implements|HasMethod|Modifies|Tests|NewVariant";
         let mut hash: u32 = 0x811c_9dc5;
         for &b in MUTATED.as_bytes() {
-            hash ^= b as u32;
+            hash ^= u32::from(b);
             hash = hash.wrapping_mul(0x0100_0193);
         }
         assert_ne!(
