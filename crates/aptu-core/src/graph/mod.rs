@@ -19,20 +19,22 @@
 //!   `HashMap`-based, request-scoped representation with symbol-matching
 //!   modes) plus raw `SemanticAnalysis`. `StructuralGraph` is built from
 //!   `&[FileAnalysisOutput]`, a different, higher-level input path.
-//! - **Different ontology.** `StructuralGraph`'s `Node`/`Edge` model is
-//!   deliberately language-agnostic (`File`/`Symbol`/`Module` nodes,
-//!   `Function`/`Class` symbol kinds, `Contains`/`Calls`/`Imports` edges).
-//!   The `aptu-coder-core` audit
-//!   (`docs/audit/2026-08-24-knowledge-graph-implementation.md`, R3, shipped
-//!   in v0.30.0 via PR #1438) removed `Implements`/`HasMethod`/`Tests` edges
-//!   and `Trait`/`Impl` symbol kinds from that crate specifically because
-//!   nothing there emitted them. This module *does* emit and query
-//!   Rust-specific `Struct`/`Enum`/`Trait`/`Impl` nodes and
-//!   `Implements`/`HasMethod`/`Tests` edges below; re-adding those variants
-//!   upstream would reverse that audit's design decision for the sake of one
-//!   downstream consumer, and since neither enum is `#[non_exhaustive]`,
-//!   doing so would be a breaking change for every other consumer matching on
-//!   them.
+//! - **Actual ontology vs. stated.** This module's `build_from_analysis`
+//!   function (the sole production builder) emits exactly `Node::File`,
+//!   `Node::Function`, `Node::Module` and `Edge::Contains`, `Edge::Imports`,
+//!   `Edge::Calls` — a strict subset of `StructuralGraph`'s model. The doc
+//!   comment in issue #1512 claimed this module emits `Struct`/`Enum`/`Trait`
+//!   /`Impl` nodes and `Implements`/`HasMethod`/`Tests` edges; that was
+//!   accurate before PR #1445 (which replaced a text-format builder with the
+//!   typed-struct builder) but not against the current code. See issue #1520
+//!   for the correction. The actual remaining blockers to consolidation (per
+//!   `docs/audit/2026-08-26-graph-module-consolidation-reassessment.md`, F3)
+//!   are input-shape gaps, not ontology: `StructuralGraph` derives file path
+//!   from `entry.formatted.lines().next()` rather than a struct field, and
+//!   aptu's call-edge filtering (skipping `<reference>` pseudo-edges and
+//!   `is_impl_trait` edges, `builder.rs:88-96`) has unverified parity with
+//!   `SemanticAnalysis.calls`-based filtering, per #1510's acceptance
+//!   criteria that `blast_radius()` output must not regress.
 //! - **Precedent.** The same audit's F7/R6 already concluded that
 //!   `StructuralGraph` and `CallGraph` should stay separate within
 //!   `aptu-coder-core` because they serve different workloads; that
