@@ -763,8 +763,7 @@ fn derive_modified_symbols(
                     .and_then(|m| m.as_str().parse::<usize>().ok())
                     .unwrap_or(0);
                 continue;
-            }
-            if line.starts_with("@@") {
+            } else if line.starts_with("@@") {
                 // Unrecognized hunk header format; stop tracking line numbers for this hunk.
                 new_line = 0;
                 continue;
