@@ -182,7 +182,7 @@ fn try_load_cached(path: &PathBuf, cfg: &GraphConfig) -> std::io::Result<Option<
 /// Creates parent directories if needed. Failures are logged at WARN level
 /// and never propagated (caching is best-effort).
 #[cfg(not(target_arch = "wasm32"))]
-fn persist_graph(path: &PathBuf, graph: &GraphDb) {
+fn persist_graph(path: &std::path::Path, graph: &GraphDb) {
     if let Some(parent) = path.parent()
         && let Err(e) = std::fs::create_dir_all(parent)
     {
@@ -199,49 +199,33 @@ fn persist_graph(path: &PathBuf, graph: &GraphDb) {
         return;
     };
 
-    // Atomic write: write to a uniquely-named sibling temp file then rename to
-    // prevent partial file corruption if the process crashes during the write
-    // and avoid races between concurrent writers.
+    if let Err(e) = write_atomic(path, &bytes) {
+        tracing::warn!(
+            path = %path.display(),
+            error = %e,
+            "graph cache: failed to write cache file"
+        );
+    }
+}
+
+/// Writes `bytes` to `path` atomically: writes to a uniquely-named sibling
+/// temp file then renames it into place, so a crash mid-write never corrupts
+/// an existing cache entry and concurrent writers never race on a partial file.
+#[cfg(not(target_arch = "wasm32"))]
+fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
-    let mut tmp = match tempfile::Builder::new().tempfile_in(parent) {
-        Ok(t) => t,
+    let mut tmp = tempfile::Builder::new().tempfile_in(parent)?;
+    let result = tmp.write_all(bytes).and_then(|()| tmp.flush());
+    match result {
+        Ok(()) => std::fs::rename(tmp.path(), path),
         Err(e) => {
-            tracing::warn!(
-                path = %parent.display(),
-                error = %e,
-                "graph cache: failed to create temp file"
-            );
-            return;
+            let _ = std::fs::remove_file(tmp.path());
+            Err(e)
         }
-    };
-    if let Err(e) = tmp.write_all(&bytes) {
-        tracing::warn!(
-            path = %tmp.path().display(),
-            error = %e,
-            "graph cache: failed to write temp file"
-        );
-        let _ = std::fs::remove_file(tmp.path());
-        return;
     }
-    if let Err(e) = tmp.flush() {
-        tracing::warn!(
-            path = %tmp.path().display(),
-            error = %e,
-            "graph cache: failed to flush temp file"
-        );
-        let _ = std::fs::remove_file(tmp.path());
-        return;
-    }
-    if let Err(e) = std::fs::rename(tmp.path(), path) {
-        tracing::warn!(
-            src = %tmp.path().display(),
-            dst = %path.display(),
-            error = %e,
-            "graph cache: failed to rename temp file to cache path"
-        );
-    }
-    // tmp drops here; the file has been renamed so the NamedTempFile destructor
-    // will attempt to delete a path that no longer exists, which is harmless.
+    // tmp drops here; on the success path the file has been renamed so the
+    // NamedTempFile destructor will attempt to delete a path that no longer
+    // exists, which is harmless.
 }
 
 #[cfg(test)]
