@@ -27,6 +27,13 @@ static SYMBOL_RE: LazyLock<Regex> = LazyLock::new(|| {
     .expect("valid SYMBOL_RE")
 });
 
+/// Regex to parse a unified-diff hunk header (`@@ -old_start,old_count +new_start,new_count @@`)
+/// and extract the starting line number of the hunk in the new file.
+#[cfg(all(feature = "ast-context", feature = "graph"))]
+static HUNK_HEADER_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@").expect("valid HUNK_HEADER_RE")
+});
+
 /// Estimated overhead for XML tags, section headers, and schema preamble added by
 /// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
 /// non-content characters when estimating total prompt size.
@@ -659,7 +666,7 @@ async fn build_ctx_graph(
         let repo_str = pr.repo.clone();
         let graph_config_owned = graph_config.clone();
         let graph_owned = ast_output.graph.clone();
-        let function_names: Vec<String> = derive_modified_symbols(&pr.files);
+        let function_names: Vec<String> = derive_modified_symbols(&pr.files, Some(ast_output));
 
         let spawn_result = tokio::task::spawn_blocking(move || {
             let (mut graph, cache_hit) = crate::graph::cache::load_or_build(
@@ -715,15 +722,26 @@ async fn build_ctx_graph(
 /// Derives modified symbol names from PR file patches by parsing diff hunks.
 ///
 /// Iterates `pr.files`, parses each patch string for `@@` hunk headers to get
-/// changed line ranges, then matches added/changed lines against
-/// `fn`/`struct`/`enum`/`trait`/`impl` name patterns to extract symbol names.
+/// changed line ranges, then resolves every changed line to a symbol name via
+/// two complementary paths:
+///
+/// - AST line-range lookup: when `ast_output` is provided, each context/added line's
+///   absolute line number in the new file is checked against that file's
+///   `symbol_ranges` (from AST analysis) to find its enclosing function. This is what
+///   catches diffs that only edit statements inside an existing symbol's body.
+/// - `SYMBOL_RE` fallback: added lines are also matched against
+///   `fn`/`struct`/`enum`/`trait`/`impl` declaration patterns, independent of
+///   `ast_output`, to catch brand-new symbols not yet present in the AST index.
 ///
 /// Handles:
 /// - `patch = None` -> empty `Vec`
 /// - `patch_truncated = true` -> partial set (uses what's available)
 /// - Renamed files (status field) -> treated same as modified for extraction
 #[cfg(all(feature = "ast-context", feature = "graph"))]
-fn derive_modified_symbols(files: &[crate::ai::types::PrFile]) -> Vec<String> {
+fn derive_modified_symbols(
+    files: &[crate::ai::types::PrFile],
+    ast_output: Option<&crate::ast_context::AstContextOutput>,
+) -> Vec<String> {
     let mut symbols: Vec<String> = Vec::new();
 
     for file in files {
@@ -731,14 +749,45 @@ fn derive_modified_symbols(files: &[crate::ai::types::PrFile]) -> Vec<String> {
             continue;
         };
 
-        // Parse each line of the patch for symbol definitions
+        let ranges_for_file = ast_output.and_then(|ao| ao.symbol_ranges.get(&file.filename));
+        let mut new_line: usize = 0;
+
         for line in patch.lines() {
-            // Skip hunk headers, removed lines, and file-header lines
-            if line.starts_with("@@") || line.starts_with('-') || line.starts_with("+++") {
+            if line.starts_with("+++") {
                 continue;
             }
 
-            // Match added lines with symbol declarations using regex
+            if let Some(caps) = HUNK_HEADER_RE.captures(line) {
+                new_line = caps
+                    .get(1)
+                    .and_then(|m| m.as_str().parse::<usize>().ok())
+                    .unwrap_or(0);
+                continue;
+            } else if line.starts_with("@@") {
+                // Unrecognized hunk header format; stop tracking line numbers for this hunk.
+                new_line = 0;
+                continue;
+            }
+            if line.starts_with('-') || line.starts_with('\\') {
+                // Removed lines don't exist in the new file; "\ No newline..." markers
+                // carry no line of their own. Neither advances the new-file line counter.
+                continue;
+            }
+
+            // Remaining lines are context (' ' prefix) or additions ('+' prefix); both
+            // occupy a line in the new file at `new_line`.
+            if new_line > 0
+                && let Some(ranges) = ranges_for_file
+                && let Some((_, _, name)) = ranges
+                    .iter()
+                    .find(|(start, end, _)| (*start..=*end).contains(&new_line))
+                && !symbols.contains(name)
+            {
+                symbols.push(name.clone());
+            }
+
+            // Match added lines with symbol declarations using regex (fallback for
+            // brand-new symbols not yet reflected in the AST index).
             if let Some(caps) = SYMBOL_RE.captures(line) {
                 let keyword = caps.get(2).map_or("", |m| m.as_str());
                 let name = caps.get(3).map_or("", |m| m.as_str()).to_string();
@@ -764,6 +813,8 @@ fn derive_modified_symbols(files: &[crate::ai::types::PrFile]) -> Vec<String> {
                     symbols.push(sym);
                 }
             }
+
+            new_line += 1;
         }
     }
 
@@ -1328,7 +1379,7 @@ mod tests {
         }];
 
         // Act
-        let symbols = derive_modified_symbols(&files);
+        let symbols = derive_modified_symbols(&files, None);
 
         // Assert
         assert!(symbols.is_empty(), "patch=None should yield empty symbols");
@@ -1365,7 +1416,7 @@ mod tests {
         }];
 
         // Act
-        let mut symbols = derive_modified_symbols(&files);
+        let mut symbols = derive_modified_symbols(&files, None);
         symbols.sort();
 
         // Assert
@@ -1411,7 +1462,7 @@ mod tests {
         }];
 
         // Act
-        let symbols = derive_modified_symbols(&files);
+        let symbols = derive_modified_symbols(&files, None);
 
         // Assert: partial set from available patch content
         assert!(
@@ -1444,7 +1495,7 @@ mod tests {
         }];
 
         // Act
-        let symbols = derive_modified_symbols(&files);
+        let symbols = derive_modified_symbols(&files, None);
 
         // Assert: renamed files are treated same as modified
         assert!(
@@ -1478,7 +1529,7 @@ mod tests {
         }];
 
         // Act
-        let mut symbols = derive_modified_symbols(&files);
+        let mut symbols = derive_modified_symbols(&files, None);
         symbols.sort();
 
         // Assert
@@ -1513,7 +1564,7 @@ mod tests {
         }];
 
         // Act
-        let mut symbols = derive_modified_symbols(&files);
+        let mut symbols = derive_modified_symbols(&files, None);
         symbols.sort();
 
         // Assert
@@ -1548,7 +1599,7 @@ mod tests {
         }];
 
         // Act
-        let mut symbols = derive_modified_symbols(&files);
+        let mut symbols = derive_modified_symbols(&files, None);
         symbols.sort();
 
         // Assert
@@ -1586,7 +1637,7 @@ mod tests {
         }];
 
         // Act
-        let mut symbols = derive_modified_symbols(&files);
+        let mut symbols = derive_modified_symbols(&files, None);
         symbols.sort();
 
         // Assert
@@ -1601,6 +1652,168 @@ mod tests {
         assert!(
             symbols.contains(&"Named".to_string()),
             "should extract named struct name"
+        );
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_hunk_line_number_extraction() {
+        // Arrange: hunk header starts the new file at line 10; the added line is the
+        // third line processed (10, 11, 12), so it must resolve to absolute line 12.
+        let patch = "\
+@@ -8,3 +10,5 @@
+ fn existing_fn() {
+     let x = 1;
++    let y = 2;
+     x + y
+ }
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 1,
+            deletions: 0,
+        }];
+
+        let mut symbol_ranges = std::collections::HashMap::new();
+        symbol_ranges.insert(
+            "src/lib.rs".to_string(),
+            vec![(12usize, 12usize, "existing_fn".to_string())],
+        );
+        let ast_output = crate::ast_context::AstContextOutput {
+            text: String::new(),
+            graph: crate::graph::GraphDb::default(),
+            symbol_ranges,
+        };
+
+        // Act
+        let symbols = derive_modified_symbols(&files, Some(&ast_output));
+
+        // Assert: only line 12 (the added line) falls in this narrow range, so a match
+        // here proves the hunk-header start (+10) plus two lines of advancement is exact.
+        assert!(
+            symbols.contains(&"existing_fn".to_string()),
+            "hunk header +10 should anchor line tracking so the body-edit line (12) resolves"
+        );
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_existing_body_edits() {
+        // Arrange: patch only edits a statement inside an existing function body --
+        // no new fn/struct/enum/trait/impl declaration line anywhere in the hunk.
+        let patch = "\
+@@ -20,3 +20,3 @@
+ fn process_data(input: &str) -> String {
+-    input.to_string()
++    input.trim().to_string()
+ }
+";
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some(patch.to_string()),
+            patch_truncated: false,
+            full_content: None,
+            additions: 1,
+            deletions: 1,
+        }];
+
+        // Act: without AST data, a body-only edit yields nothing (documents the bug).
+        let symbols_without_ast = derive_modified_symbols(&files, None);
+        assert!(
+            symbols_without_ast.is_empty(),
+            "SYMBOL_RE alone cannot resolve a body-only edit to its enclosing symbol"
+        );
+
+        let mut symbol_ranges = std::collections::HashMap::new();
+        symbol_ranges.insert(
+            "src/lib.rs".to_string(),
+            vec![(20usize, 23usize, "process_data".to_string())],
+        );
+        let ast_output = crate::ast_context::AstContextOutput {
+            text: String::new(),
+            graph: crate::graph::GraphDb::default(),
+            symbol_ranges,
+        };
+
+        // Act: with AST line-range data, the same patch resolves to its enclosing function.
+        let symbols_with_ast = derive_modified_symbols(&files, Some(&ast_output));
+
+        // Assert
+        assert!(
+            symbols_with_ast.contains(&"process_data".to_string()),
+            "body-only edit should resolve to its enclosing function via AST line ranges"
+        );
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn test_modified_symbols_with_ast_output_returns_symbols() {
+        // Arrange: two files -- one with a body-only edit resolved via AST data, one
+        // with a brand-new declaration still caught by the SYMBOL_RE fallback.
+        let patch_a = "\
+@@ -5,2 +5,2 @@
+ fn helper_one(a: i32) -> i32 {
+-    a + 1
++    a + 2
+ }
+";
+        let patch_b = "\
+@@ -1,1 +1,2 @@
+ fn existing() {}
++fn brand_new_fn() {}
+";
+        let files = vec![
+            PrFile {
+                filename: "src/a.rs".to_string(),
+                status: "modified".to_string(),
+                patch: Some(patch_a.to_string()),
+                patch_truncated: false,
+                full_content: None,
+                additions: 1,
+                deletions: 1,
+            },
+            PrFile {
+                filename: "src/b.rs".to_string(),
+                status: "modified".to_string(),
+                patch: Some(patch_b.to_string()),
+                patch_truncated: false,
+                full_content: None,
+                additions: 1,
+                deletions: 0,
+            },
+        ];
+
+        let mut symbol_ranges = std::collections::HashMap::new();
+        symbol_ranges.insert(
+            "src/a.rs".to_string(),
+            vec![(5usize, 7usize, "helper_one".to_string())],
+        );
+        let ast_output = crate::ast_context::AstContextOutput {
+            text: String::new(),
+            graph: crate::graph::GraphDb::default(),
+            symbol_ranges,
+        };
+
+        // Act
+        let symbols = derive_modified_symbols(&files, Some(&ast_output));
+
+        // Assert: modified_nodes is non-empty and includes both resolution paths.
+        assert!(
+            !symbols.is_empty(),
+            "modified_nodes should be non-empty for a PR editing existing code"
+        );
+        assert!(
+            symbols.contains(&"helper_one".to_string()),
+            "body-edit in file a should resolve via AST line ranges"
+        );
+        assert!(
+            symbols.contains(&"brand_new_fn".to_string()),
+            "new declaration in file b should still be caught by the SYMBOL_RE fallback"
         );
     }
 }

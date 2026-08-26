@@ -45,6 +45,12 @@ pub(crate) struct AstContextOutput {
     /// Only present when both `ast-context` and `graph` features are enabled.
     #[cfg(all(feature = "ast-context", feature = "graph"))]
     pub graph: crate::graph::GraphDb,
+    /// Per-file map of `(start_line, end_line, symbol_name)` for every function found by
+    /// AST analysis, keyed by the PR-relative filename (matches `PrFile::filename`).
+    /// Lets callers resolve a changed line number to its enclosing symbol without a
+    /// second analysis pass. Only present when both `ast-context` and `graph` are enabled.
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    pub symbol_ranges: std::collections::HashMap<String, Vec<(usize, usize, String)>>,
 }
 
 impl AstContextOutput {
@@ -53,6 +59,7 @@ impl AstContextOutput {
         Self {
             text,
             graph: crate::graph::GraphDb::default(),
+            symbol_ranges: std::collections::HashMap::new(),
         }
     }
 
@@ -62,8 +69,16 @@ impl AstContextOutput {
     }
 
     #[cfg(all(feature = "ast-context", feature = "graph"))]
-    fn with_graph(text: String, graph: crate::graph::GraphDb) -> Self {
-        Self { text, graph }
+    fn with_graph(
+        text: String,
+        graph: crate::graph::GraphDb,
+        symbol_ranges: std::collections::HashMap<String, Vec<(usize, usize, String)>>,
+    ) -> Self {
+        Self {
+            text,
+            graph,
+            symbol_ranges,
+        }
     }
 }
 
@@ -130,6 +145,9 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
         Vec::new();
     #[cfg(feature = "graph")]
     let mut impl_traits: Vec<aptu_coder_core::ImplTraitInfo> = Vec::new();
+    #[cfg(feature = "graph")]
+    let mut symbol_ranges: std::collections::HashMap<String, Vec<(usize, usize, String)>> =
+        std::collections::HashMap::new();
 
     for file in files {
         let ext = Path::new(&file.filename)
@@ -166,6 +184,16 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
                 {
                     analysis_pairs.push((full_path.clone(), analysis.semantic.clone()));
                     impl_traits.extend(analysis.semantic.impl_traits.clone());
+
+                    let ranges: Vec<(usize, usize, String)> = analysis
+                        .semantic
+                        .functions
+                        .iter()
+                        .map(|f| (f.line, f.end_line, f.name.clone()))
+                        .collect();
+                    if !ranges.is_empty() {
+                        symbol_ranges.insert(file.filename.clone(), ranges);
+                    }
                 }
             }
             Err(e) => {
@@ -191,7 +219,11 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
     #[cfg(feature = "graph")]
     {
         if analysis_pairs.is_empty() {
-            return AstContextOutput::with_graph(output, crate::graph::GraphDb::new());
+            return AstContextOutput::with_graph(
+                output,
+                crate::graph::GraphDb::new(),
+                symbol_ranges,
+            );
         }
 
         match aptu_coder_core::graph::CallGraph::build_from_results(
@@ -223,11 +255,11 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
                         merged.add_edge(node_map[src.index()], node_map[dst.index()], weight);
                     }
                 }
-                AstContextOutput::with_graph(output, merged)
+                AstContextOutput::with_graph(output, merged, symbol_ranges)
             }
             Err(e) => {
                 tracing::warn!("ast_context: CallGraph::build_from_results failed: {e}");
-                AstContextOutput::with_graph(output, crate::graph::GraphDb::new())
+                AstContextOutput::with_graph(output, crate::graph::GraphDb::new(), symbol_ranges)
             }
         }
     }
