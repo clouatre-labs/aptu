@@ -58,22 +58,12 @@ pub fn cache_path(owner: &str, repo: &str, sha: &str) -> PathBuf {
 
 /// Encodes `graph` into the on-disk cache byte format.
 ///
-/// Removes `Modifies` edges by rebuilding a filtered graph (single O(N+E) pass
-/// over nodes and edges), then prepends the 8-byte header (`FORMAT_VERSION`
-/// followed by `schema_hash`) to the postcard-encoded payload. Returns `None`
-/// if postcard serialization fails.
+/// Prepends the 8-byte header (`FORMAT_VERSION` followed by `schema_hash`) to
+/// the postcard-encoded payload. Returns `None` if postcard serialization
+/// fails.
 #[must_use]
 pub fn encode_graph(graph: &GraphDb) -> Option<Vec<u8>> {
-    let mut filtered = GraphDb::new();
-    for idx in graph.node_indices() {
-        filtered.add_node(graph[idx].clone());
-    }
-    for idx in graph.edge_indices() {
-        let (a, b) = graph.edge_endpoints(idx)?;
-        filtered.add_edge(a, b, graph[idx]);
-    }
-
-    let payload = postcard::to_allocvec(&filtered).ok()?;
+    let payload = postcard::to_allocvec(graph).ok()?;
 
     let mut bytes = Vec::with_capacity(8 + payload.len());
     bytes.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
