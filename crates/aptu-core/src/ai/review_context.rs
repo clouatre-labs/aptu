@@ -384,7 +384,9 @@ fn apply_budget_drops(
         let dropped_chars = call_graph.len();
         call_graph.clear();
         estimated_size -= dropped_chars;
-        budget_drops.push("call_graph".to_string());
+        if dropped_chars > 0 {
+            budget_drops.push("call_graph".to_string());
+        }
     }
 
     // Drop graph_context second (priority tier 2: between call_graph and ast_context; added in #1408).
@@ -398,7 +400,9 @@ fn apply_budget_drops(
         let dropped_chars = graph_context.len();
         graph_context.clear();
         estimated_size -= dropped_chars;
-        budget_drops.push("graph_context".to_string());
+        if dropped_chars > 0 {
+            budget_drops.push("graph_context".to_string());
+        }
     }
 
     // Drop ast_context if still over budget
@@ -411,7 +415,9 @@ fn apply_budget_drops(
         let dropped_chars = ast_context.len();
         ast_context.clear();
         estimated_size -= dropped_chars;
-        budget_drops.push("ast_context".to_string());
+        if dropped_chars > 0 {
+            budget_drops.push("ast_context".to_string());
+        }
     }
 
     drop_dep_enrichments_by_size(pr, &mut estimated_size, max_prompt_chars, budget_drops);
@@ -1010,6 +1016,80 @@ mod tests {
             pr.files[0].patch.is_some(),
             "file patch should be retained when dep drop brought size within budget"
         );
+    }
+
+    /// Verifies that empty sections do NOT appear in budget_drops telemetry.
+    /// Regression test for telemetry accuracy bug where empty-section drops were unconditionally recorded.
+    #[test]
+    fn test_apply_budget_drops_empty_sections() {
+        let mut pr = make_pr_with_content(100, 100);
+        // All context sections are empty -- no content to drop
+        let mut ast_context = String::new();
+        let mut call_graph = String::new();
+        let mut graph_context = String::new();
+
+        // Tight budget to trigger drop attempts, but sections are empty
+        let max_prompt_chars = 500;
+
+        let mut drops = Vec::new();
+        apply_budget_drops(
+            &mut pr,
+            &mut ast_context,
+            &mut call_graph,
+            &mut graph_context,
+            false,
+            max_prompt_chars,
+            &mut drops,
+        );
+
+        // Empty sections should NOT appear in budget_drops
+        // (they were cleared but no content was actually dropped)
+        assert!(
+            !drops.contains(&"call_graph".to_string()),
+            "empty call_graph should not appear in budget_drops"
+        );
+        assert!(
+            !drops.contains(&"graph_context".to_string()),
+            "empty graph_context should not appear in budget_drops"
+        );
+        assert!(
+            !drops.contains(&"ast_context".to_string()),
+            "empty ast_context should not appear in budget_drops"
+        );
+    }
+
+    /// Verifies that populated sections DO appear in budget_drops telemetry.
+    /// Ensures the fix does not suppress telemetry for sections with actual content.
+    #[test]
+    fn test_apply_budget_drops_populated_sections() {
+        let mut pr = make_pr_with_content(100, 100);
+        // Populate all context sections with meaningful content
+        let mut ast_context = "a".repeat(300);
+        let mut call_graph = "b".repeat(300);
+        let mut graph_context = "c".repeat(300);
+
+        // Tight budget to force drops, with populated sections
+        let max_prompt_chars = 600;
+
+        let mut drops = Vec::new();
+        apply_budget_drops(
+            &mut pr,
+            &mut ast_context,
+            &mut call_graph,
+            &mut graph_context,
+            false,
+            max_prompt_chars,
+            &mut drops,
+        );
+
+        // Populated sections should appear in budget_drops (in priority order)
+        // Priority order: call_graph -> graph_context -> ast_context
+        assert!(
+            drops.contains(&"call_graph".to_string()),
+            "populated call_graph should appear in budget_drops"
+        );
+        // graph_context and ast_context presence depends on budget constraints,
+        // but at least call_graph must be present for this test
     }
 
     #[test]
