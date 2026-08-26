@@ -46,9 +46,7 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 | PR Analysis | Yes | Yes | Yes |
 | Dependency Enrichment | Yes | Yes | Yes |
 | Multiple Providers | Yes | Yes | Yes |
-| OpenSSF Best Practices Silver | Yes | Yes | Yes |
-| Structural Graph Context | - | Yes | Yes |
-| Prompt Customization | Yes | Yes | - |
+| Prompt Customization | Yes | Yes | Yes |
 | Observability | - | Yes | Yes |
 | Model-Tier Routing | - | Yes | Yes |
 | Issue Discovery | - | Yes | - |
@@ -56,7 +54,7 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 | Local History | - | Yes | - |
 | Claude OAuth | - | Yes | - |
 
-`aptu pr create --diff <file>` applies a patch, commits, and opens a PR. Structural graph context injects petgraph BFS blast-radius context into `pr review` prompts (opt-in, `--features graph` for the CLI; `deep: true` for the Action). Multiple providers: Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux; free-tier models available via OpenRouter. Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required. See [Security](#security) for why the OpenSSF badge matters.
+`aptu pr create --diff <file>` applies a patch, commits, and opens a PR. `--deep` (CLI) / `deep: true` (Action) adds AST and cross-file call-graph context to `pr review` prompts. CLI and Action support seven providers: Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux; the App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names). Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required.
 
 ## Architecture Benchmark
 
@@ -184,7 +182,7 @@ See [SECURITY.md](https://github.com/clouatre-labs/aptu/blob/main/SECURITY.md) f
 
 ## Architecture
 
-Aptu assembles structured context (AST, call-graph blast radius, security scanner output, and dependency release notes) before any AI call. A prompt-injection byte cap and local-only security scanning ensure no raw source code is sent to external services without explicit review. The GitHub App, CLI, and GitHub Action share a common `aptu-core` library; see [docs/ARCHITECTURE.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ARCHITECTURE.md) for the full crate structure, data flow, and key dependencies.
+Aptu assembles structured context (AST, cross-file call-graph, security scanner output, and dependency release notes) before any AI call. A prompt-injection byte cap and local-only security scanning ensure no raw source code is sent to external services without explicit review. The GitHub App, CLI, and GitHub Action share a common `aptu-core` library; see [docs/ARCHITECTURE.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ARCHITECTURE.md) for the full crate structure, data flow, and key dependencies.
 
 For the governance model behind Aptu's harness design, see [AI SDLC Governance: Three Layers for Engineering Leaders](https://clouatre.ca/posts/ai-sdlc-governance-stack/).
 
