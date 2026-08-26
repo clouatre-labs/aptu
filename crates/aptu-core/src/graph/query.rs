@@ -247,13 +247,13 @@ mod tests {
     #[test]
     fn test_blast_radius_returns_all_direct_callers_of_modified_node() {
         // Arrange: target has two callers.
-        let (graph, target, caller_a, caller_b) = two_caller_graph();
+        let (graph, target, _caller_a, _caller_b) = two_caller_graph();
 
         // Act
         let sub = blast_radius(&graph, &[target], 100, 10);
 
         // Assert: all three nodes are in the subgraph.
-        let names: Vec<&str> = sub.node_weights().map(|n| n.name()).collect();
+        let names: Vec<&str> = sub.node_weights().map(Node::name).collect();
         assert!(names.contains(&"target"), "target must be in subgraph");
         assert!(names.contains(&"caller_a"), "caller_a must be in subgraph");
         assert!(names.contains(&"caller_b"), "caller_b must be in subgraph");
@@ -265,14 +265,14 @@ mod tests {
         let mut graph = GraphDb::new();
         let mut prev = graph.add_node(Node::Function {
             name: "n0".to_string(),
-            path: "".to_string(),
+            path: String::new(),
             visibility: "pub".to_string(),
         });
         let root = prev;
         for i in 1..10usize {
             let next = graph.add_node(Node::Function {
                 name: format!("n{i}"),
-                path: "".to_string(),
+                path: String::new(),
                 visibility: "pub".to_string(),
             });
             graph.add_edge(prev, next, Edge::Calls);
@@ -304,14 +304,14 @@ mod tests {
         let mut graph = GraphDb::new();
         let center = graph.add_node(Node::Function {
             name: "center".to_string(),
-            path: "".to_string(),
+            path: String::new(),
             visibility: "pub".to_string(),
         });
         let mut depth1 = Vec::new();
         for i in 0..5 {
             let caller = graph.add_node(Node::Function {
                 name: format!("caller{i}"),
-                path: "".to_string(),
+                path: String::new(),
                 visibility: "pub".to_string(),
             });
             graph.add_edge(caller, center, Edge::Calls);
@@ -320,7 +320,7 @@ mod tests {
         for (i, &d1) in depth1.iter().enumerate() {
             let caller2 = graph.add_node(Node::Function {
                 name: format!("caller2_{i}"),
-                path: "".to_string(),
+                path: String::new(),
                 visibility: "pub".to_string(),
             });
             graph.add_edge(caller2, d1, Edge::Calls);
@@ -390,12 +390,12 @@ mod tests {
         let mut graph = GraphDb::new();
         graph.add_node(Node::Function {
             name: "foo".to_string(),
-            path: "".to_string(),
+            path: String::new(),
             visibility: "pub".to_string(),
         });
         graph.add_node(Node::Function {
             name: "bar".to_string(),
-            path: "".to_string(),
+            path: String::new(),
             visibility: "pub".to_string(),
         });
 
