@@ -151,9 +151,9 @@ dependencies = [
 
 [[package]]
 name = "aptu-coder-core"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bae88a925a7ff4b208895db589ab7abe8cb3f3f5730bea7cdc337654000ce3b9"
+checksum = "a4a4c7a81effd159a2e262b994c2e8b54b4d752bfd8541b25d21d68b2f186f30"
 dependencies = [
  "base64 0.23.1",
  "blake3",
