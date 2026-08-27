@@ -27,15 +27,29 @@
 //!   /`Impl` nodes and `Implements`/`HasMethod`/`Tests` edges; that was
 //!   accurate before PR #1445 (which replaced a text-format builder with the
 //!   typed-struct builder) but not against the current code, and those dead
-//!   variants were removed in #1521. See issue #1520 for the correction. The
-//!   actual remaining blockers to consolidation (per
-//!   `docs/audit/2026-08-26-graph-module-consolidation-reassessment.md`, F3)
-//!   are input-shape gaps, not ontology: `StructuralGraph` derives file path
-//!   from `entry.formatted.lines().next()` rather than a struct field, and
-//!   aptu's call-edge filtering (skipping `<reference>` pseudo-edges and
-//!   `is_impl_trait` edges, `builder.rs:88-96`) has unverified parity with
-//!   `SemanticAnalysis.calls`-based filtering, per #1510's acceptance
-//!   criteria that `blast_radius()` output must not regress.
+//!   variants were removed in #1521. See issue #1520 for the correction.
+//! - **Input-shape gaps: one closed, one verified.** `StructuralGraph`
+//!   previously derived file path from `entry.formatted.lines().next()`
+//!   rather than a struct field; `aptu-coder-core` v0.31.0 (aptu-coder#1459)
+//!   added an explicit `path: String` field to `FileAnalysisOutput`, and
+//!   `StructuralGraph::build_from_analysis` now reads `entry.path` directly,
+//!   closing that gap. The second gap — whether aptu's call-edge filtering
+//!   (skipping `<reference>` pseudo-edges and `is_impl_trait` edges,
+//!   `builder.rs:88-96`) has parity with `StructuralGraph`'s
+//!   `SemanticAnalysis.calls`-based edges — is now verified rather than
+//!   assumed: `StructuralGraph::build_from_analysis` builds `Calls` edges
+//!   solely from `entry.semantic.calls` (`CallInfo`, real call sites) and
+//!   never reads `SemanticAnalysis.references` or `impl_traits`. Those two
+//!   fields are exactly where `CallGraph::build_from_results` (this crate's
+//!   own `CallGraph` builder) synthesizes the `<reference>` pseudo-edges and
+//!   impl-trait edges that `builder.rs` must filter out. The two builders
+//!   agree by construction, not by matching filter logic: `StructuralGraph`
+//!   never ingests the synthetic edge kinds aptu filters.
+//!   `builder::tests::test_calls_parity_with_structural_graph` exercises
+//!   both builders against the same real analysis and asserts identical
+//!   `Calls` edge sets. Per #1510's acceptance criteria that
+//!   `blast_radius()` output must not regress, this closes the second
+//!   blocker too.
 //! - **Precedent.** The same audit's F7/R6 already concluded that
 //!   `StructuralGraph` and `CallGraph` should stay separate within
 //!   `aptu-coder-core` because they serve different workloads; that
@@ -45,6 +59,12 @@
 //!   new crates.io release, and only then a version bump here — a
 //!   cross-repo, cross-release chain that cannot land as a single PR against
 //!   either repo.
+//! - **#1510 reaffirmed.** Both blockers this doc comment previously
+//!   flagged as open are now closed (file path: aptu-coder#1459; call-edge
+//!   parity: verified above). No new information surfaced that warrants
+//!   reopening #1510's "keep separate" decision — the ontology, precedent,
+//!   and release-topology reasons above still hold. A future proposal to
+//!   consolidate would need its own issue. See issue #1525.
 //!
 //! See issue #1510 for the full analysis.
 
