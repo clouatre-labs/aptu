@@ -132,9 +132,8 @@ fn build_induced_subgraph(graph: &GraphDb, node_set: &HashSet<NodeIndex>) -> Gra
 /// fn foo [calls: bar, baz] [callers: qux]
 /// ```
 ///
-/// Only `Function` nodes are listed by default; `Struct`, `Enum`, `Trait`, and
-/// `Impl` nodes appear without call/caller annotations. `File` and `Module`
-/// nodes are omitted (they are structural, not behavioural).
+/// Only `Function` nodes are listed; `File` and `Module` nodes are skipped
+/// (structural, not behavioural). See `graph::mod` for the full ontology.
 #[must_use]
 pub fn render_subgraph_text(subgraph: &GraphDb) -> String {
     use std::collections::{BTreeMap, BTreeSet, HashMap};
