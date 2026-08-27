@@ -45,11 +45,14 @@
 //!   impl-trait edges that `builder.rs` must filter out. The two builders
 //!   agree by construction, not by matching filter logic: `StructuralGraph`
 //!   never ingests the synthetic edge kinds aptu filters.
+//!   Starting with `aptu-coder-core` 0.32.0, `StructuralGraph::build_from_analysis`
+//!   resolves cross-file same-name collisions via same-file preference / line-proximity
+//!   / arg-count fallback, while aptu's `build_from_analysis` operates per-file
+//!   and is name-only. Name-pair output agrees; node-level resolution differs.
 //!   `builder::tests::test_calls_parity_with_structural_graph` exercises
-//!   both builders against the same real analysis and asserts identical
-//!   `Calls` edge sets. Per #1510's acceptance criteria that
-//!   `blast_radius()` output must not regress, this closes the second
-//!   blocker too.
+//!   both single-file and cross-file collision fixtures and asserts parity.
+//!   Per #1510's acceptance criteria that `blast_radius()` output must not regress,
+//!   this closes the second blocker too.
 //! - **Precedent.** The same audit's F7/R6 already concluded that
 //!   `StructuralGraph` and `CallGraph` should stay separate within
 //!   `aptu-coder-core` because they serve different workloads; that

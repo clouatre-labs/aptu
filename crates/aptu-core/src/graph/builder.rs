@@ -127,9 +127,13 @@ pub fn build_from_analysis(
 mod tests {
     use super::*;
 
+    use aptu_coder_core::FileAnalysisOutput;
+    use aptu_coder_core::analyze_str;
     use aptu_coder_core::graph::CallGraph;
+    use aptu_coder_core::graph::StructuralGraph;
+    use aptu_coder_core::graph::{Edge as CoderEdge, Node as CoderNode};
     use aptu_coder_core::{CallEdge, FunctionInfo, ImportInfo, SemanticAnalysis};
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::path::PathBuf;
 
     fn make_fn(name: &str) -> FunctionInfo {
@@ -164,6 +168,64 @@ mod tests {
         let mut cg = CallGraph::new();
         cg.callers = callers;
         cg
+    }
+
+    /// Build a CallGraph from real `semantic.calls` data for a given file path.
+    fn make_call_graph_from_semantic(semantic: &SemanticAnalysis, file_path: &str) -> CallGraph {
+        let mut callers: HashMap<String, Vec<CallEdge>> = HashMap::new();
+        for call in &semantic.calls {
+            callers
+                .entry(call.callee.clone())
+                .or_default()
+                .push(CallEdge {
+                    neighbor_name: call.caller.clone(),
+                    path: PathBuf::from(file_path),
+                    line: call.line,
+                    is_impl_trait: false,
+                });
+        }
+        make_call_graph(callers)
+    }
+
+    /// Collect Calls edges as (caller, callee) name-pairs from aptu's GraphDb.
+    fn collect_aptu_calls(graph: &GraphDb) -> HashSet<(String, String)> {
+        graph
+            .edge_indices()
+            .filter_map(|e| {
+                let (src, dst) = graph.edge_endpoints(e)?;
+                if !matches!(graph.edge_weight(e), Some(Edge::Calls)) {
+                    return None;
+                }
+                let Node::Function { name: src_name, .. } = &graph[src] else {
+                    return None;
+                };
+                let Node::Function { name: dst_name, .. } = &graph[dst] else {
+                    return None;
+                };
+                Some((src_name.clone(), dst_name.clone()))
+            })
+            .collect()
+    }
+
+    /// Collect Calls edges as (caller, callee) name-pairs from StructuralGraph.
+    fn collect_structural_calls(graph: &StructuralGraph) -> HashSet<(String, String)> {
+        graph
+            .graph
+            .edge_indices()
+            .filter_map(|e| {
+                let (src, dst) = graph.graph.edge_endpoints(e)?;
+                if !matches!(graph.graph.edge_weight(e), Some(CoderEdge::Calls)) {
+                    return None;
+                }
+                let CoderNode::Symbol { name: src_name, .. } = &graph.graph[src] else {
+                    return None;
+                };
+                let CoderNode::Symbol { name: dst_name, .. } = &graph.graph[dst] else {
+                    return None;
+                };
+                Some((src_name.clone(), dst_name.clone()))
+            })
+            .collect()
     }
 
     #[test]
@@ -283,12 +345,6 @@ mod tests {
 
     #[test]
     fn test_calls_parity_with_structural_graph() {
-        use aptu_coder_core::FileAnalysisOutput;
-        use aptu_coder_core::analyze_str;
-        use aptu_coder_core::graph::StructuralGraph;
-        use aptu_coder_core::graph::{Edge as CoderEdge, Node as CoderNode};
-        use std::collections::HashSet;
-
         // CallInfo/ReferenceInfo/ImplTraitInfo are #[non_exhaustive] in
         // aptu-coder-core with no public constructor, so a real `.calls`
         // entry must come from the crate's own analyzer, not a hand-built
@@ -333,22 +389,7 @@ mod tests {
 
         // Act: aptu-core's CallGraph-based builder.
         let aptu_graph = build_from_analysis("src/lib.rs", &semantic, &call_graph);
-        let aptu_calls: HashSet<(String, String)> = aptu_graph
-            .edge_indices()
-            .filter_map(|e| {
-                let (src, dst) = aptu_graph.edge_endpoints(e)?;
-                if !matches!(aptu_graph.edge_weight(e), Some(Edge::Calls)) {
-                    return None;
-                }
-                let Node::Function { name: src_name, .. } = &aptu_graph[src] else {
-                    return None;
-                };
-                let Node::Function { name: dst_name, .. } = &aptu_graph[dst] else {
-                    return None;
-                };
-                Some((src_name.clone(), dst_name.clone()))
-            })
-            .collect();
+        let aptu_calls = collect_aptu_calls(&aptu_graph);
 
         // Act: aptu-coder-core's StructuralGraph, fed the SAME real
         // semantic — it only ever reads `semantic.calls`, never
@@ -361,23 +402,7 @@ mod tests {
             None,
         )];
         let structural = StructuralGraph::build_from_analysis(&entries);
-        let structural_calls: HashSet<(String, String)> = structural
-            .graph
-            .edge_indices()
-            .filter_map(|e| {
-                let (src, dst) = structural.graph.edge_endpoints(e)?;
-                if !matches!(structural.graph.edge_weight(e), Some(CoderEdge::Calls)) {
-                    return None;
-                }
-                let CoderNode::Symbol { name: src_name, .. } = &structural.graph[src] else {
-                    return None;
-                };
-                let CoderNode::Symbol { name: dst_name, .. } = &structural.graph[dst] else {
-                    return None;
-                };
-                Some((src_name.clone(), dst_name.clone()))
-            })
-            .collect();
+        let structural_calls = collect_structural_calls(&structural);
 
         // Assert: both builders agree on the real edge; the `<reference>`
         // pseudo-edge and impl-trait edge that aptu-core must filter never
@@ -391,6 +416,142 @@ mod tests {
         assert_eq!(
             structural_calls, expected,
             "StructuralGraph builder Calls edges"
+        );
+    }
+
+    /// Cross-file same-name collision fixture.
+    ///
+    /// Starting with aptu-coder-core 0.32.0, StructuralGraph::build_from_analysis
+    /// resolves cross-file same-name collisions via same-file preference.
+    /// In contrast, aptu's build_from_analysis is a per-file builder.
+    /// Both builders agree on name-pair output, while node-level resolution
+    /// differs (StructuralGraph resolves within the same file).
+    #[test]
+    fn test_cross_file_calls_parity_with_structural_graph() {
+        let src_a = "fn helper() {}\nfn main() { helper(); }\n";
+        let src_b = "fn helper() {}\nfn main() { helper(); }\n";
+
+        let semantic_a = analyze_str(src_a, "rust", None)
+            .expect("analyze_str src_a")
+            .semantic;
+        let semantic_b = analyze_str(src_b, "rust", None)
+            .expect("analyze_str src_b")
+            .semantic;
+
+        assert_eq!(semantic_a.calls.len(), 1, "src_a must produce one call");
+        assert_eq!(semantic_b.calls.len(), 1, "src_b must produce one call");
+
+        // Act: aptu-core builder (per-file)
+        let call_graph_a = make_call_graph_from_semantic(&semantic_a, "src/a.rs");
+        let call_graph_b = make_call_graph_from_semantic(&semantic_b, "src/b.rs");
+        let aptu_graph_a = build_from_analysis("src/a.rs", &semantic_a, &call_graph_a);
+        let aptu_graph_b = build_from_analysis("src/b.rs", &semantic_b, &call_graph_b);
+
+        let aptu_calls_a = collect_aptu_calls(&aptu_graph_a);
+        let aptu_calls_b = collect_aptu_calls(&aptu_graph_b);
+        let aptu_calls_a_count = aptu_graph_a
+            .edge_indices()
+            .filter(|e| matches!(aptu_graph_a.edge_weight(*e), Some(Edge::Calls)))
+            .count();
+        let aptu_calls_b_count = aptu_graph_b
+            .edge_indices()
+            .filter(|e| matches!(aptu_graph_b.edge_weight(*e), Some(Edge::Calls)))
+            .count();
+
+        let mut aptu_cross_calls = aptu_calls_a;
+        aptu_cross_calls.extend(aptu_calls_b);
+
+        // Act: aptu-coder-core StructuralGraph with both files
+        let cross_entries = vec![
+            FileAnalysisOutput::new(
+                "src/a.rs".to_string(),
+                String::new(),
+                semantic_a.clone(),
+                src_a.lines().count(),
+                None,
+            ),
+            FileAnalysisOutput::new(
+                "src/b.rs".to_string(),
+                String::new(),
+                semantic_b.clone(),
+                src_b.lines().count(),
+                None,
+            ),
+        ];
+        let structural_cross = StructuralGraph::build_from_analysis(&cross_entries);
+        let structural_cross_calls = collect_structural_calls(&structural_cross);
+
+        let structural_calls_count = structural_cross
+            .graph
+            .edge_indices()
+            .filter(|e| {
+                matches!(
+                    structural_cross.graph.edge_weight(*e),
+                    Some(CoderEdge::Calls)
+                )
+            })
+            .count();
+
+        let mut edges_cross_files = false;
+        for e in structural_cross.graph.edge_indices() {
+            if matches!(
+                structural_cross.graph.edge_weight(e),
+                Some(CoderEdge::Calls)
+            ) {
+                if let Some((src, dst)) = structural_cross.graph.edge_endpoints(e) {
+                    let (
+                        CoderNode::Symbol {
+                            file_path: src_file,
+                            ..
+                        },
+                        CoderNode::Symbol {
+                            file_path: dst_file,
+                            ..
+                        },
+                    ) = (&structural_cross.graph[src], &structural_cross.graph[dst])
+                    else {
+                        continue;
+                    };
+                    if src_file != dst_file {
+                        edges_cross_files = true;
+                    }
+                }
+            }
+        }
+
+        // Assert:
+        // 1. StructuralGraph produces exactly 2 Calls edges
+        assert_eq!(
+            structural_calls_count, 2,
+            "StructuralGraph must produce exactly 2 Calls edges"
+        );
+        // 2. aptu produces exactly 1 Calls edge per file
+        assert_eq!(
+            aptu_calls_a_count, 1,
+            "aptu builder must produce 1 Calls edge for src/a.rs"
+        );
+        assert_eq!(
+            aptu_calls_b_count, 1,
+            "aptu builder must produce 1 Calls edge for src/b.rs"
+        );
+        // 3. Name-pair sets agree between both builders: {("main", "helper")}
+        let expected_cross: HashSet<(String, String)> =
+            [("main".to_string(), "helper".to_string())]
+                .into_iter()
+                .collect();
+        assert_eq!(
+            aptu_cross_calls, expected_cross,
+            "aptu-core builder cross-file name-pair Calls edges"
+        );
+        assert_eq!(
+            structural_cross_calls, expected_cross,
+            "StructuralGraph cross-file name-pair Calls edges"
+        );
+        // 4. StructuralGraph edges do not cross files (same-file preference
+        //    resolves main->helper within same file)
+        assert!(
+            !edges_cross_files,
+            "StructuralGraph Calls edges must resolve within the same file"
         );
     }
 
