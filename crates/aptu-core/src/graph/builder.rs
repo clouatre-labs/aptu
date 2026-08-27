@@ -123,7 +123,7 @@ pub fn build_from_analysis(
     graph
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "ast-context", feature = "graph"))]
 mod tests {
     use super::*;
 
@@ -279,6 +279,119 @@ mod tests {
             .count();
         assert_eq!(file_count, 1, "expected one File node");
         assert_eq!(graph.edge_count(), 0, "expected no edges");
+    }
+
+    #[test]
+    fn test_calls_parity_with_structural_graph() {
+        use aptu_coder_core::FileAnalysisOutput;
+        use aptu_coder_core::analyze_str;
+        use aptu_coder_core::graph::StructuralGraph;
+        use aptu_coder_core::graph::{Edge as CoderEdge, Node as CoderNode};
+        use std::collections::HashSet;
+
+        // CallInfo/ReferenceInfo/ImplTraitInfo are #[non_exhaustive] in
+        // aptu-coder-core with no public constructor, so a real `.calls`
+        // entry must come from the crate's own analyzer, not a hand-built
+        // literal.
+        let source = "fn callee_fn() {}\nfn caller_fn() { callee_fn(); }\n";
+        let analyzed = analyze_str(source, "rust", None).expect("analyze_str");
+        let semantic = analyzed.semantic;
+        assert_eq!(
+            semantic.calls.len(),
+            1,
+            "fixture must produce exactly one call"
+        );
+
+        // aptu-core's CallGraph is hand-built (as in the tests above) so it
+        // can carry `<reference>` and impl-trait synthetic edges alongside
+        // the real one, exercising builder.rs's filter.
+        let mut callers: HashMap<String, Vec<CallEdge>> = HashMap::new();
+        callers.insert(
+            "callee_fn".to_string(),
+            vec![
+                CallEdge {
+                    neighbor_name: "caller_fn".to_string(),
+                    path: PathBuf::from("src/lib.rs"),
+                    line: 2,
+                    is_impl_trait: false,
+                },
+                CallEdge {
+                    neighbor_name: "<reference>".to_string(),
+                    path: PathBuf::from("src/lib.rs"),
+                    line: 2,
+                    is_impl_trait: false,
+                },
+                CallEdge {
+                    neighbor_name: "SomeImpl".to_string(),
+                    path: PathBuf::from("src/lib.rs"),
+                    line: 2,
+                    is_impl_trait: true,
+                },
+            ],
+        );
+        let call_graph = make_call_graph(callers);
+
+        // Act: aptu-core's CallGraph-based builder.
+        let aptu_graph = build_from_analysis("src/lib.rs", &semantic, &call_graph);
+        let aptu_calls: HashSet<(String, String)> = aptu_graph
+            .edge_indices()
+            .filter_map(|e| {
+                let (src, dst) = aptu_graph.edge_endpoints(e)?;
+                if !matches!(aptu_graph.edge_weight(e), Some(Edge::Calls)) {
+                    return None;
+                }
+                let Node::Function { name: src_name, .. } = &aptu_graph[src] else {
+                    return None;
+                };
+                let Node::Function { name: dst_name, .. } = &aptu_graph[dst] else {
+                    return None;
+                };
+                Some((src_name.clone(), dst_name.clone()))
+            })
+            .collect();
+
+        // Act: aptu-coder-core's StructuralGraph, fed the SAME real
+        // semantic — it only ever reads `semantic.calls`, never
+        // `.references`/`.impl_traits`.
+        let entries = vec![FileAnalysisOutput::new(
+            "src/lib.rs".to_string(),
+            String::new(),
+            semantic,
+            source.lines().count(),
+            None,
+        )];
+        let structural = StructuralGraph::build_from_analysis(&entries);
+        let structural_calls: HashSet<(String, String)> = structural
+            .graph
+            .edge_indices()
+            .filter_map(|e| {
+                let (src, dst) = structural.graph.edge_endpoints(e)?;
+                if !matches!(structural.graph.edge_weight(e), Some(CoderEdge::Calls)) {
+                    return None;
+                }
+                let CoderNode::Symbol { name: src_name, .. } = &structural.graph[src] else {
+                    return None;
+                };
+                let CoderNode::Symbol { name: dst_name, .. } = &structural.graph[dst] else {
+                    return None;
+                };
+                Some((src_name.clone(), dst_name.clone()))
+            })
+            .collect();
+
+        // Assert: both builders agree on the real edge; the `<reference>`
+        // pseudo-edge and impl-trait edge that aptu-core must filter never
+        // appear in StructuralGraph's output because they were never part
+        // of `semantic.calls` to begin with.
+        let expected: HashSet<(String, String)> =
+            [("caller_fn".to_string(), "callee_fn".to_string())]
+                .into_iter()
+                .collect();
+        assert_eq!(aptu_calls, expected, "aptu-core builder Calls edges");
+        assert_eq!(
+            structural_calls, expected,
+            "StructuralGraph builder Calls edges"
+        );
     }
 
     #[test]
