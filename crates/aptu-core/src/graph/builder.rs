@@ -123,7 +123,7 @@ pub fn build_from_analysis(
     graph
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "ast-context", feature = "graph"))]
 mod tests {
     use super::*;
 
