@@ -34,7 +34,7 @@ dirs = { workspace = true }
 keyring-core = { workspace = true, optional = true }
 
 # Optional: AST analysis for context injection
-aptu-coder-core = { version = "0.32.2", optional = true }
+aptu-coder-core = { version = "0.32.3", optional = true }
 
 # Graph analysis for PR review context (petgraph is pure Rust, WASM-safe)
 # Binary serialization for graph cache
