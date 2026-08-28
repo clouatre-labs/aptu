@@ -1,15 +1,11 @@
-# Audit: KG Benchmark -- Multi-PR Size Scaling (No KG vs Current KG) -- August 2026
+# Audit: KG Benchmark — Multi-PR Size Scaling (No KG vs Current KG) — August 2026
 
-Date: 2026-08-27 (pre-fix baseline), 2026-08-27 (post-fix re-run after PR #1539)
-Toolchain: aptu 0.10.16 release build; pre-fix at main @ 88c20e4, post-fix at main @ 32f546d
-Data: 4 PRs x 2 configs x 3 runs = 24 total runs per benchmark (48 runs total), same OpenRouter
-`mistralai/mistral-small-2603` model on all runs.
-Method: `aptu pr review <PR> --repo clouatre-labs/aptu -o json` -- real AI calls, nothing posted.
-Scope: `~/.config/aptu/config.toml` (`[graph]` section), `~/.local/share/aptu/graph/` (disk cache),
-`.ai_stats` JSON fields (`prompt_chars`, `input_tokens`, `cost_usd`, `duration_ms`, `model`),
-`.review` JSON fields (`verdict`, `comments`, `concerns`, `strengths`).
-Structure: Tables 1-6 are the pre-fix baseline (preserved). Tables 7-13 are the post-fix re-run
-after PR #1539 resolved the F5 bug.
+Date: 2026-08-27 (pre-fix baseline), 2026-08-27 (post-fix re-run after PR #1539)  
+Toolchain: aptu 0.10.16 release build; pre-fix at main @ 88c20e4, post-fix at main @ 32f546d  
+Data: 4 PRs x 2 configs x 3 runs = 24 total runs per benchmark (48 runs total), same OpenRouter `mistralai/mistral-small-2603` model on all runs.  
+Method: `aptu pr review <PR> --repo clouatre-labs/aptu -o json` — real AI calls, nothing posted.  
+Scope: `~/.config/aptu/config.toml` (`[graph]` section), `~/.local/share/aptu/graph/` (disk cache), `.ai_stats` JSON fields (`prompt_chars`, `input_tokens`, `cost_usd`, `duration_ms`, `model`), `.review` JSON fields (`verdict`, `comments`, `concerns`, `strengths`).  
+Structure: Tables 1-6 are the pre-fix baseline (preserved). Tables 7-13 are the post-fix re-run after PR #1539 resolved the F5 bug.
 
 ---
 
@@ -21,8 +17,8 @@ whether KG should be enabled by default.
 
 Two configs tested:
 
-1. **No KG** -- graph disabled (default; no config file)
-2. **Current KG** -- aptu-coder-core 0.32.2 graph enabled with pre-consolidation
+1. **No KG** — graph disabled (default; no config file)
+2. **Current KG** — aptu-coder-core 0.32.2 graph enabled with pre-consolidation
    `graph::builder` + `graph::query`
 
 ### Target PRs
@@ -170,7 +166,7 @@ rm -rf ~/.local/share/aptu/graph/clouatre-labs/aptu/
 Note: PR #1519 KG run 3 had a duration outlier (11,871 ms vs ~4,000 ms average), inflating the
 warm-cache duration average. Cost deltas are unreliable due to provider prompt caching (F2).
 
-### Table 3: Cross-PR Comparison -- KG Delta % by PR Size
+### Table 3: Cross-PR Comparison — KG Delta % by PR Size
 
 | PR | Size | Files Modified | Graph Cache | Token Delta % | Char Delta % | KG Injected Context? |
 |----|------|---------------|-------------|---------------|--------------|---------------------|
@@ -390,7 +386,7 @@ re-run to verify consistent context injection across diverse PRs.
 ### R3: Re-run benchmark after StructuralGraph consolidation (info)
 
 **Priority:** Info
-**Fixes:** --
+**Fixes:** —
 
 Re-run with the same 4 PRs, same method, 3 runs per config. Add a third config ("future KG" using
 `StructuralGraph`). Compare three-way: prompt chars, input tokens, cost, latency. Key question:
@@ -410,7 +406,7 @@ averages and an explicit caveat.
 ### R5: Preserve this file as the baseline (info)
 
 **Priority:** Info
-**Fixes:** --
+**Fixes:** —
 
 Create `2026-XX-XX-kg-benchmark-post-fix.md` for the follow-up after #1538 is fixed. Do not
 modify this file after merge; it is the pre-fix baseline.
@@ -435,9 +431,9 @@ modify this file after merge; it is the pre-fix baseline.
 |---|---|---|---|
 | R1 | Info | F5 | Fix AST text cap break in `ast_context.rs` (tracked in #1538) |
 | R2 | Info | F5 | Do not enable KG by default until F5 is fixed |
-| R3 | Info | -- | Re-run benchmark after StructuralGraph consolidation (three-way comparison) |
+| R3 | Info | — | Re-run benchmark after StructuralGraph consolidation (three-way comparison) |
 | R4 | Info | F2 | Use input_tokens as primary metric, not cost_usd |
-| R5 | Info | -- | Preserve this file as the pre-fix baseline |
+| R5 | Info | — | Preserve this file as the pre-fix baseline |
 
 ---
 
@@ -504,7 +500,7 @@ graph data collection.
 | | | | Delta | +37,958 | +10,285 | -$0.000844 | +2 | |
 | | | | % Change | +52.2% | +53.6% | -23.5% | +0.0% | |
 
-### Table 9: Pre-Fix vs Post-Fix Comparison -- KG Context Injection
+### Table 9: Pre-Fix vs Post-Fix Comparison — KG Context Injection
 
 | PR | Size | Pre-Fix KG Delta (chars) | Post-Fix KG Delta (chars) | Pre-Fix Cache (bytes) | Post-Fix Cache (bytes) | Pre-Fix Injected? | Post-Fix Injected? |
 |----|------|--------------------------|---------------------------|----------------------|------------------------|-------------------|-------------------|
@@ -518,7 +514,7 @@ broken PRs (#1531, #1519) now produce non-empty graph caches (13,896 and 21,933 
 previously). PRs that already worked (#1529, #1532) are unchanged in context injection volume,
 confirming the fix does not alter existing behavior.
 
-### Table 10: Post-Fix Cross-PR Comparison -- KG Delta % by PR Size
+### Table 10: Post-Fix Cross-PR Comparison — KG Delta % by PR Size
 
 | PR | Size | Files Modified | Graph Cache | Token Delta % | Char Delta % | KG Injected Context? |
 |----|------|---------------|-------------|---------------|--------------|---------------------|
@@ -598,7 +594,7 @@ detect a measurable quality difference.
 
 ### Post-Fix Findings
 
-#### F6: Bug fix confirmed -- KG now injects context on all 4 PRs (INFO / POSITIVE)
+#### F6: Bug fix confirmed — KG now injects context on all 4 PRs (INFO / POSITIVE)
 
 **Severity:** Info
 **Category:** POSITIVE
@@ -665,7 +661,7 @@ helps reviewers catch structural defects that diff-only reviews miss.
 #### R7: Run Benchmark v2 (cost + value) after StructuralGraph consolidation (info)
 
 **Priority:** Info
-**Fixes:** --
+**Fixes:** —
 
 Supersedes R3. After issue #1533 replaces the KG interface, run Benchmark v2 with known-defect
 PRs to measure both cost and value. Three-way comparison: No KG, current KG (this baseline),
@@ -678,7 +674,7 @@ input; cost is secondary if the value is real.
 
 | ID | Severity | Category | Finding |
 |---|---|---|---|
-| F6 | Info | POSITIVE | Bug fix confirmed -- KG now injects context on all 4 PRs (was 2 of 4) |
+| F6 | Info | POSITIVE | Bug fix confirmed — KG now injects context on all 4 PRs (was 2 of 4) |
 | F7 | Info | MEASUREMENT | KG token overhead ranges from +12.5% to +53.6% across all PRs (was +12.5% to +23.5% on 2 PRs) |
 | F8 | Info | MEASUREMENT | KG overhead does not correlate with PR size; symbol density in modified files is the predictor |
 
@@ -687,7 +683,7 @@ input; cost is secondary if the value is real.
 | ID | Priority | Fixes | Recommendation |
 |---|---|---|---|
 | R6 | Info | F5, F6 | KG default enablement deferred pending value measurement (cost-only benchmark insufficient) |
-| R7 | Info | -- | Run Benchmark v2 (cost + value, known-defect PRs) after StructuralGraph consolidation |
+| R7 | Info | — | Run Benchmark v2 (cost + value, known-defect PRs) after StructuralGraph consolidation |
 
 Note: R5 recommended creating a separate `2026-XX-XX-kg-benchmark-post-fix.md` file. The post-fix
 results were appended to this file instead, preserving the pre-fix baseline (Tables 1-6) intact
@@ -741,12 +737,14 @@ Each defect PR should have a clean version (same files, no bug) to serve as a co
 4 PRs: 3 defective + 1 clean.
 
 **Method**:
+
 - 2 configs: No KG, KG enabled
 - 2 runs per PR per config (not 3; 2 is enough with deterministic prompt chars)
 - 4 PRs x 2 configs x 2 runs = 16 runs
 - Same model, same command, same extraction
 
 **Value metrics** (new):
+
 - For each run, extract the full `comments` array text (not just count)
 - Classify each comment as: catches the defect (true positive), flags something irrelevant (false
   positive), or misses the defect (false negative)
@@ -754,12 +752,14 @@ Each defect PR should have a clean version (same files, no bug) to serve as a co
 - Compare hit rate: KG vs No KG on the 3 defect PRs
 
 **Cost metrics** (same as current):
+
 - `input_tokens`, `prompt_chars`, `cost_usd`, `duration_ms`
 
 **Decision rule**: KG is worth enabling if it catches defects that No KG misses, without
 increasing false positives. Cost is secondary if the value is real.
 
 **What this does NOT do**:
+
 - No human-rated review quality (too expensive, not simple)
 - No large-scale statistical analysis (16 runs is small, but binary hit/miss is interpretable)
 - No latency focus (already shown to be noise at this scale per F3)
