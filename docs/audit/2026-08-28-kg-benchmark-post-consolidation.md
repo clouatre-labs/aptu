@@ -189,6 +189,27 @@ Before #1559, warm runs on these same PRs dropped to the No KG baseline (Table 2
 
 **Impact:** R10's acceptance criterion (cold/warm injection identical) is met. F9/F10 are resolved; the graph feature's cache-hit path is release-verifiable again.
 
+### F15: StructuralGraph is 6.6-33x faster than the retired local pipeline, and scales better (PERFORMANCE)
+
+**Severity:** Info
+
+**Category:** PERFORMANCE
+
+Follow-up to the "is the new implementation faster or better" question. Local, AI-free microbenchmark (no network calls): synthetic fixtures of realistic Rust functions with cross-file call chains, timing only the graph pipeline (build + seed + blast-radius + render) with `std::time::Instant`, release profile, 200 iterations each.
+
+| Fixture | OLD (`graph::builder` + `graph::query`, pre-#1544) | NEW (`StructuralGraph`) | Speedup |
+|------|------|------|------|
+| 5 files / 50 functions (typical PR size) | median 157.8µs | median 23.9µs | ~6.6x |
+| 30 files / 300 functions (large PR size) | median 3,650.8µs | median 110.6µs | ~33x |
+
+Scaling: 6x more files made OLD ~23x slower (worse than linear) but NEW only ~4.6x slower (sub-linear).
+
+**Mechanism** (verified by inspecting the actual rendered output, not just timings): the retired `builder::build_from_analysis` is called once per file, but against a `CallGraph` built globally across all changed files. Each per-file call only recognizes its own functions; every cross-file callee it doesn't recognize gets a fresh placeholder node created on the spot, and the resulting per-file graphs are merged naively. With F files this creates duplicate nodes for the same symbol across files — slower to build and merge, and it also inflates the rendered output: the 30-file OLD run rendered 182 lines / 7,830 chars, but with the same line (e.g. `fn func_0_1 [calls: func_0_2] [callers: func_0_0]`) repeated multiple times from duplicate nodes matching by name. The NEW pipeline on the identical input rendered a clean 7 lines / 403 chars, no duplication.
+
+**Impact:** answers the earlier open question — the retired implementation's larger character counts in the real historical benchmark (Table 3/4, F11) were not necessarily richer content; at least part of that volume was likely this duplicate-node artifact, not additional useful information. The consolidation (#1544) was a net improvement on both speed and, in this respect, output quality — not merely a maintainability tradeoff.
+
+**Caveat:** absolute local pipeline time (tens to low hundreds of microseconds) is negligible next to the AI-provider round-trip that dominates `aptu pr review`'s wall-clock time (seconds, per Table 1). This is a real, reproducible, mechanistically-explained speedup, but it is not what limits current review latency.
+
 ## Recommendations
 
 ### R8: Fix symbol-index deserialization upstream before relying on the graph cache
@@ -225,6 +246,14 @@ Same 4 PRs, same method. Acceptance: KG prompt chars identical across cold and w
 
 No restoration-to-parity work is warranted: the retired implementation's higher pre-consolidation numbers were not a more faithful measurement, just differently drifted against a different checkout state. Closes #1557. When replaying historical merged PRs for future graph benchmarks, either use still-open PRs or check out each PR's own head SHA into `repo_path` before its cold run.
 
+### R12: Benchmark same-name symbol collision resolution before assuming F15's speedup holds everywhere
+
+**Priority:** Info
+
+**Fixes:** F15
+
+F15's fixtures used uniquely-named functions, so they never exercised `StructuralGraph::build_from_analysis`'s documented same-file-preference / line-proximity / arg-count collision resolution (`graph/mod.rs`'s doc comment, upstream since aptu-coder-core 0.32.0). Real Rust codebases commonly repeat names like `new`, `default`, `fmt`, `from` across many files/impls; if that resolution step is not O(1) or O(log n) per symbol, a repo heavy with such collisions could hit a slower path this benchmark never touched. Not yet measured — a fixture with many same-named functions across files would settle it.
+
 ## Summary
 
 *Table 5: Findings.*
@@ -237,6 +266,7 @@ No restoration-to-parity work is warranted: the retired implementation's higher 
 | F12 | Info | MEASUREMENT | No quality signal; input_tokens confirmed as primary metric |
 | F13 | Info | MEASUREMENT | Cold-run volume gap is a replay-methodology artifact (checkout-time file drift, #1529's file deleted by #1544), not a StructuralGraph regression; 0.32.4 re-verified |
 | F14 | Info | MEASUREMENT | Cold/warm parity confirmed restored on aptu-coder-core 0.32.4 (#1559); R10 acceptance criterion met |
+| F15 | Info | PERFORMANCE | StructuralGraph is 6.6-33x faster than the retired local pipeline on synthetic fixtures, and scales sub-linearly where the retired pipeline scaled worse than linear; retired pipeline's larger output was partly duplicate-node noise |
 
 *Table 6: Recommendations.*
 
@@ -246,6 +276,7 @@ No restoration-to-parity work is warranted: the retired implementation's higher 
 | R9 | High | F9-F11 | Graph feature not release-verified for cache-hit usage; re-verify before release |
 | R10 | Info | F9 | Re-run benchmark post-fix; acceptance: cold/warm injection identical — **Verified, see F14** |
 | R11 | Info | F11, F13 | Accept current cold-run volume; fix future replay methodology instead of code; closes #1557 |
+| R12 | Info | F15 | Benchmark same-name symbol collision resolution — untested scaling path |
 
 ## Reproduction
 
