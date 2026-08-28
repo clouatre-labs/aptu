@@ -494,7 +494,7 @@ mod tests {
         .await
         .expect("send_and_parse should succeed after retry");
 
-        assert_eq!(parsed._message, "ok");
+        assert_eq!(parsed.message, "ok");
         assert_eq!(stats.provider, "test");
     }
 }

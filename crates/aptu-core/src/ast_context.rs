@@ -44,7 +44,7 @@ pub(crate) struct AstContextOutput {
     /// Structural graph built from the same analysis data.
     /// Only present when both `ast-context` and `graph` features are enabled.
     #[cfg(all(feature = "ast-context", feature = "graph"))]
-    pub graph: crate::graph::GraphDb,
+    pub graph: crate::graph::StructuralGraph,
     /// Per-file map of `(start_line, end_line, symbol_name)` for every function found by
     /// AST analysis, keyed by the PR-relative filename (matches `PrFile::filename`).
     /// Lets callers resolve a changed line number to its enclosing symbol without a
@@ -58,7 +58,7 @@ impl AstContextOutput {
     pub(crate) fn new(text: String) -> Self {
         Self {
             text,
-            graph: crate::graph::GraphDb::default(),
+            graph: aptu_coder_core::graph::StructuralGraph::build_from_analysis(&[]),
             symbol_ranges: std::collections::HashMap::new(),
         }
     }
@@ -71,7 +71,7 @@ impl AstContextOutput {
     #[cfg(all(feature = "ast-context", feature = "graph"))]
     fn with_graph(
         text: String,
-        graph: crate::graph::GraphDb,
+        graph: crate::graph::StructuralGraph,
         symbol_ranges: std::collections::HashMap<String, Vec<(usize, usize, String)>>,
     ) -> Self {
         Self {
@@ -222,50 +222,20 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
     // Build structural graph from accumulated analysis data (no second analyze_file pass).
     #[cfg(feature = "graph")]
     {
-        if analysis_pairs.is_empty() {
-            return AstContextOutput::with_graph(
-                output,
-                crate::graph::GraphDb::new(),
-                symbol_ranges,
-            );
-        }
-
-        match aptu_coder_core::graph::CallGraph::build_from_results(
-            analysis_pairs.clone(),
-            &impl_traits,
-            false,
-        ) {
-            Ok(call_graph) => {
-                // Reuse the already-accumulated (path, semantic) pairs -- no second analyze_file.
-                let mut merged = crate::graph::GraphDb::new();
-                for (full_path, semantic) in &analysis_pairs {
-                    let rel_name = full_path.file_name().map_or_else(
-                        || full_path.to_string_lossy().into_owned(),
-                        |n| n.to_string_lossy().into_owned(),
-                    );
-                    let file_graph = crate::graph::builder::build_from_analysis(
-                        &rel_name,
-                        semantic,
-                        &call_graph,
-                    );
-                    // Merge into combined graph.
-                    let node_map: Vec<_> = file_graph
-                        .node_indices()
-                        .map(|idx| merged.add_node(file_graph[idx].clone()))
-                        .collect();
-                    for edge_idx in file_graph.edge_indices() {
-                        let (src, dst) = file_graph.edge_endpoints(edge_idx).unwrap();
-                        let weight = *file_graph.edge_weight(edge_idx).unwrap();
-                        merged.add_edge(node_map[src.index()], node_map[dst.index()], weight);
-                    }
-                }
-                AstContextOutput::with_graph(output, merged, symbol_ranges)
-            }
-            Err(e) => {
-                tracing::warn!("ast_context: CallGraph::build_from_results failed: {e}");
-                AstContextOutput::with_graph(output, crate::graph::GraphDb::new(), symbol_ranges)
-            }
-        }
+        let entries: Vec<_> = analysis_pairs
+            .iter()
+            .map(|(path, semantic)| {
+                aptu_coder_core::FileAnalysisOutput::new(
+                    path.to_string_lossy().into_owned(),
+                    String::new(),
+                    semantic.clone(),
+                    0,
+                    None,
+                )
+            })
+            .collect();
+        let graph = aptu_coder_core::graph::StructuralGraph::build_from_analysis(&entries);
+        AstContextOutput::with_graph(output, graph, symbol_ranges)
     }
 
     #[cfg(not(feature = "graph"))]
@@ -468,6 +438,26 @@ mod tests {
         assert!(
             !result.symbol_ranges["big.rs"].is_empty(),
             "symbol_ranges for 'big.rs' must have function entries"
+        );
+
+        // The graph must be built from the same uncapped analysis data, not from
+        // the text that happened to fit in the AST context budget.
+        let symbols: Vec<&str> = result
+            .graph
+            .graph
+            .node_indices()
+            .filter_map(|index| match &result.graph.graph[index] {
+                aptu_coder_core::graph::Node::Symbol { name, .. } => Some(name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            symbols.contains(&"func_0"),
+            "graph must contain first symbol"
+        );
+        assert!(
+            symbols.contains(&"func_79"),
+            "graph must contain last symbol"
         );
     }
 

@@ -128,14 +128,15 @@ mod tests {
 
     #[derive(Debug, serde::Deserialize)]
     struct ErrorTestResponse {
-        _message: String,
+        #[serde(rename = "_message")]
+        message: String,
     }
 
     #[test]
     fn test_parse_ai_json_with_valid_json() {
         let json = r#"{"_message": "hello"}"#;
         let result: ErrorTestResponse = parse_ai_json(json, "test").unwrap();
-        assert_eq!(result._message, "hello");
+        assert_eq!(result.message, "hello");
     }
 
     #[test]

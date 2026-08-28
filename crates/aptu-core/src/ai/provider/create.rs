@@ -107,8 +107,6 @@ pub(super) async fn create_issue(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_utils::*;
-    use super::*;
 
     #[test]
     fn test_build_create_user_prompt_sanitizes_title_injection() {

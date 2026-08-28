@@ -234,9 +234,11 @@ pub(crate) mod test_utils {
 
     #[derive(Debug, serde::Deserialize)]
     pub(crate) struct ErrorTestResponse {
-        pub(crate) _message: String,
+        #[serde(rename = "_message")]
+        pub(crate) message: String,
     }
 
+    #[allow(dead_code)]
     pub(crate) struct TestProvider;
 
     impl AiProvider for TestProvider {

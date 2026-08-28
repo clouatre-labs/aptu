@@ -149,7 +149,6 @@ pub(super) async fn review_pr(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_utils::*;
     use super::*;
     use crate::ai::provider::MAX_BODY_LENGTH;
     use crate::ai::review_context::ReviewContext;

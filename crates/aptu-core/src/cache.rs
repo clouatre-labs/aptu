@@ -591,11 +591,11 @@ mod tests {
             value: "x".to_string(),
             count: 0,
         };
-        let result = cache
+        cache
             .set("..\\windows\\system32", &data)
             .await
             .expect("set should succeed silently");
-        assert_eq!(result, ());
+        assert_eq!((), ());
     }
 
     #[tokio::test]

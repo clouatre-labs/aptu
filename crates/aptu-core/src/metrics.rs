@@ -140,6 +140,7 @@ fn write_context_jsonl_impl(path: &str, record: &ReviewContextRecord) -> std::io
 
 #[cfg(test)]
 mod tests {
+    #![allow(unsafe_code)]
     use super::*;
     use std::fs;
     use tempfile::TempDir;
@@ -372,8 +373,7 @@ mod tests {
         let json = serde_json::to_string(&record).expect("serialization failed");
         assert!(
             json.contains(r#""max_prompt_chars":120000"#),
-            "max_prompt_chars must be present in JSON with correct value, got: {}",
-            json,
+            "max_prompt_chars must be present in JSON with correct value, got: {json}",
         );
     }
 }
