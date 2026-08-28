@@ -501,7 +501,7 @@ fn drop_patches_by_size(
             let filename = files[file_idx].filename.clone();
             files[file_idx].patch = None;
             *estimated_size -= patch_size;
-            budget_drops.push(format!("file_content:{filename}"));
+            budget_drops.push(format!("patch:{filename}"));
         }
     }
 }
@@ -1139,6 +1139,67 @@ mod tests {
         );
         // graph_context and ast_context presence depends on budget constraints,
         // but at least call_graph must be present for this test
+    }
+
+    /// Regression test for issue #1548: verifies patch and `full_content` budget drops
+    /// use distinct prefixes ("patch:" vs "`file_content`:") to avoid collision.
+    #[test]
+    fn test_budget_drops_distinguish_patch_from_full_content() {
+        let mut pr = make_pr_with_content(500, 500);
+        let mut ast_context = String::new();
+        let mut call_graph = String::new();
+        let mut graph_context = String::new();
+
+        // Budget tight enough to force BOTH patch and full_content drops for the file
+        let max_prompt_chars = 50;
+
+        let mut drops = Vec::new();
+        apply_budget_drops(
+            &mut pr,
+            &mut ast_context,
+            &mut call_graph,
+            &mut graph_context,
+            false,
+            max_prompt_chars,
+            &mut drops,
+        );
+
+        // Both patch and full_content should be None (both dropped)
+        assert!(
+            pr.files[0].patch.is_none(),
+            "patch should be dropped when over budget"
+        );
+        assert!(
+            pr.files[0].full_content.is_none(),
+            "full_content should be dropped when over budget"
+        );
+
+        // Drops should contain exactly two distinct entries: one for patch, one for full_content
+        assert!(
+            drops.contains(&"patch:src/lib.rs".to_string()),
+            "budget_drops should contain 'patch:src/lib.rs' for the dropped patch"
+        );
+        assert!(
+            drops.contains(&"file_content:src/lib.rs".to_string()),
+            "budget_drops should contain 'file_content:src/lib.rs' for the dropped full_content"
+        );
+
+        // Verify they are distinct (not duplicates with the same prefix)
+        let patch_drops: Vec<_> = drops.iter().filter(|s| s.starts_with("patch:")).collect();
+        let full_content_drops: Vec<_> = drops
+            .iter()
+            .filter(|s| s.starts_with("file_content:"))
+            .collect();
+        assert_eq!(
+            patch_drops.len(),
+            1,
+            "should have exactly one 'patch:' entry"
+        );
+        assert_eq!(
+            full_content_drops.len(),
+            1,
+            "should have exactly one 'file_content:' entry"
+        );
     }
 
     #[test]

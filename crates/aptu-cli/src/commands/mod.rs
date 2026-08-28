@@ -384,6 +384,8 @@ async fn review_single_pr(
         dry_run: opts.dry_run,
         labels: pr_details.labels,
         security_findings,
+        files_total: context_record.files_total,
+        files_with_patch: context_record.files_with_patch,
     };
     output::render_pr_review(&result, ctx)?;
 

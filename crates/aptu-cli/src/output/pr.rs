@@ -274,6 +274,20 @@ impl Renderable for PrReviewResult {
         writeln!(w, "{}: {}", style("Verdict").bold(), verdict_style)?;
         writeln!(w)?;
 
+        // Coverage (only shown when some file patches were dropped from the review context)
+        if self.files_with_patch < self.files_total {
+            writeln!(
+                w,
+                "{}",
+                style(format!(
+                    "Coverage: {}/{} file patches included in review context",
+                    self.files_with_patch, self.files_total
+                ))
+                .yellow()
+            )?;
+            writeln!(w)?;
+        }
+
         // Security Findings (shown early for visibility)
         if let Some(findings) = &self.security_findings {
             render_security_findings_text(w, findings, ctx)?;
@@ -362,6 +376,15 @@ impl Renderable for PrReviewResult {
         writeln!(w)?;
         writeln!(w, "**Verdict:** {}", self.review.verdict)?;
         writeln!(w)?;
+
+        if self.files_with_patch < self.files_total {
+            writeln!(
+                w,
+                "**Coverage:** {}/{} file patches included in review context",
+                self.files_with_patch, self.files_total
+            )?;
+            writeln!(w)?;
+        }
 
         writeln!(w, "### Summary")?;
         writeln!(w, "{}", self.review.summary)?;
@@ -654,6 +677,8 @@ mod tests {
             security_findings,
             dry_run: false,
             labels: vec![],
+            files_total: 5,
+            files_with_patch: 5,
         }
     }
 
@@ -756,5 +781,63 @@ mod tests {
 
         assert!(text.contains("Security Findings"));
         assert!(!text.contains("(use --verbose for details)"));
+    }
+
+    #[test]
+    fn test_render_text_coverage_shown_when_patches_dropped() {
+        let mut result = build_test_result(None);
+        result.files_total = 5;
+        result.files_with_patch = 2;
+
+        let mut output = Vec::new();
+        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Text, false);
+
+        result.render_text(&mut output, &ctx).unwrap();
+        let text = String::from_utf8(output).unwrap();
+
+        assert!(text.contains("Coverage: 2/5 file patches included in review context"));
+    }
+
+    #[test]
+    fn test_render_text_coverage_hidden_when_all_patches_included() {
+        let result = build_test_result(None);
+        // files_total: 5, files_with_patch: 5 from build_test_result
+
+        let mut output = Vec::new();
+        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Text, false);
+
+        result.render_text(&mut output, &ctx).unwrap();
+        let text = String::from_utf8(output).unwrap();
+
+        assert!(!text.contains("Coverage:"));
+    }
+
+    #[test]
+    fn test_render_markdown_coverage_shown_when_patches_dropped() {
+        let mut result = build_test_result(None);
+        result.files_total = 5;
+        result.files_with_patch = 2;
+
+        let mut output = Vec::new();
+        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
+
+        result.render_markdown(&mut output, &ctx).unwrap();
+        let text = String::from_utf8(output).unwrap();
+
+        assert!(text.contains("**Coverage:** 2/5 file patches included in review context"));
+    }
+
+    #[test]
+    fn test_render_markdown_coverage_hidden_when_all_patches_included() {
+        let result = build_test_result(None);
+        // files_total: 5, files_with_patch: 5 from build_test_result
+
+        let mut output = Vec::new();
+        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
+
+        result.render_markdown(&mut output, &ctx).unwrap();
+        let text = String::from_utf8(output).unwrap();
+
+        assert!(!text.contains("**Coverage:**"));
     }
 }

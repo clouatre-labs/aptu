@@ -178,6 +178,10 @@ pub struct PrReviewResult {
     /// Security findings from scanning (if any).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub security_findings: Option<Vec<aptu_core::Finding>>,
+    /// Total number of files in the PR.
+    pub files_total: usize,
+    /// Number of files whose patch was included in the review prompt (after budget drops).
+    pub files_with_patch: usize,
 }
 
 /// Outcome of a single PR review operation in a bulk operation.
