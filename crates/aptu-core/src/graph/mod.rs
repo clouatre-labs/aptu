@@ -6,7 +6,7 @@
 //! This module delegates graph construction and traversal to
 //! `aptu-coder-core::graph::StructuralGraph` rather than maintaining a local
 //! `Node`/`Edge`/petgraph implementation (retired in #1533/#1544). Blast-radius
-//! rendering composes three upstream calls: `find_symbols` seeds candidate
+//! rendering composes three upstream calls: `find_symbols_all` seeds candidate
 //! nodes by name, `blast_radius_bidirectional` expands the bounded subgraph,
 //! and `render_subgraph_text` formats it.
 //!
@@ -25,7 +25,7 @@ pub fn render_blast_radius(
     max_nodes: usize,
     max_depth: usize,
 ) -> String {
-    let seeds = graph.find_symbols(names);
+    let seeds = graph.find_symbols_all(names);
     let (nodes, _) = graph.blast_radius_bidirectional(&seeds, max_nodes, max_depth);
     graph.render_subgraph_text(&nodes)
 }
@@ -56,5 +56,13 @@ mod tests {
         assert_eq!(first, second);
         assert!(!first.is_empty());
         assert!(first.contains("fn shared"));
+        assert!(
+            first.contains("z_call"),
+            "must include caller of the first file's shared()"
+        );
+        assert!(
+            first.contains("a_call"),
+            "must include caller of the second file's shared()"
+        );
     }
 }
