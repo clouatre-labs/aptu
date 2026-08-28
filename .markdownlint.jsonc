@@ -13,6 +13,14 @@
     "strict": false
   },
 
+  // Blank line required around headings, lists, and fenced code blocks
+  "MD022": true,
+  "MD031": true,
+  "MD032": true,
+
+  // Fenced code blocks must declare a language
+  "MD040": true,
+
   // No horizontal rules (--- / *** / ___) in delivery documents
   // style: "---" is deterministic; "consistent" silently allows HRs if used uniformly
   "MD035": {

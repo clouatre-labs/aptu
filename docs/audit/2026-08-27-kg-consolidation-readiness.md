@@ -11,12 +11,14 @@ PR #1532 bumped aptu-coder-core to 0.32.0 and verified Calls edge parity between
 ## Current State
 
 aptu's graph module (`graph/`) provides:
+
 - `builder.rs`: `build_from_analysis()` - builds `GraphDb` from `SemanticAnalysis` + `CallGraph`
 - `query.rs`: `blast_radius()` (bidirectional BFS), `render_subgraph_text()` (prompt-ready text), `find_modified_nodes()`
 - `cache.rs`: on-disk cache keyed by `(owner, repo, sha)`, WASM-safe, TTL-based expiration
 - `mod.rs`: `Node` (File/Module/Function), `Edge` (Contains/Calls/Imports), `GraphDb` type alias
 
 aptu-coder-core's `StructuralGraph` provides:
+
 - `build_from_analysis()` / `from_call_graph()` - builds from `&[FileAnalysisOutput]`
 - `bfs_blast_radius()` / `blast_radius_subgraph()` - outgoing-only BFS
 - `GraphDiskStore` - sharded LRU cache with file locking
@@ -49,6 +51,7 @@ aptu accepts `&[NodeIndex]` (multiple modified functions per PR). `StructuralGra
 ### R1: Implement in aptu-coder-core (issue #1472)
 
 Add to `StructuralGraph`:
+
 1. `render_subgraph_text(&self, nodes: &[NodeIndex]) -> String` matching aptu's output format
 2. `blast_radius_bidirectional(&self, seeds: &[NodeIndex], max_nodes: usize, max_depth: usize) -> (Vec<NodeIndex>, Vec<(NodeIndex, NodeIndex, Edge)>)` walking both directions over `Edge::Calls` only
 3. Gate `GraphDiskStore` behind `#[cfg(not(target_arch = "wasm32"))]`
@@ -56,6 +59,7 @@ Add to `StructuralGraph`:
 ### R2: Consolidate in aptu (issue #1533)
 
 After aptu-coder ships a release with R1:
+
 1. Replace `graph::builder` with `StructuralGraph::build_from_analysis` / `from_call_graph`
 2. Replace `graph::query` with StructuralGraph's new methods
 3. Replace `graph::cache` with `GraphDiskStore` (or thin adapter)

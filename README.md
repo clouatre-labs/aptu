@@ -151,7 +151,7 @@ Use `aptu models list` to discover available models from all configured provider
 
 ### Discovering models
 
-```
+```bash
 aptu models list                                # all providers
 aptu models list --provider openrouter          # OpenRouter only
 ```

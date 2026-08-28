@@ -1,4 +1,5 @@
 Guidelines:
+
 - summary: Problem explanation and why matters
 - suggested_labels: bug, enhancement, documentation, question, duplicate, invalid, wontfix
 - clarifying_questions: Empty if clear

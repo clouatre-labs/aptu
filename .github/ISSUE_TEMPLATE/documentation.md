@@ -15,6 +15,7 @@ Example: "The README doesn't explain how to configure the AI provider. Users nee
 <!-- Where does this documentation go? File path, section in existing doc, or new file? -->
 
 Example:
+
 - Update section "Configuration" in `README.md`
 - Or: Add to existing `SPEC.md` (section reference)
 - Or: New file: `docs/providers.md`
@@ -23,7 +24,8 @@ Example:
 <!-- What exists today? What is missing or incomplete? -->
 
 Current documentation (if any):
-```
+
+```text
 <quote from existing docs>
 ```
 
@@ -37,13 +39,15 @@ Gap: No explanation of which AI providers are supported, how to select one, or h
 <!-- What to add or update? Include the new content structure and key topics to cover. -->
 
 ### Content to Add/Update
+
 - Section/heading: <what should be documented>
 - Key topics: list of important points to cover
 - Target audience: developers, users, contributors
 - Format: narrative prose, API reference, tutorial, FAQ
 
 ### Structure
-```
+
+```markdown
 ## Section Title
 
 ### Subsection

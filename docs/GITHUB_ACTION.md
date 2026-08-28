@@ -102,7 +102,7 @@ If no credentials are available, the action fails with a diagnostic message.
 
 The action writes token usage to `$GITHUB_STEP_SUMMARY` by default. Example output:
 
-```
+```text
 | Provider | Input | Output | Cache % | ETU |
 |----------|-------|--------|---------|-----|
 | OpenRouter | 12,000 | 3,500 | 0% | 7.75 |

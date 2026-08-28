@@ -125,12 +125,14 @@ chain = [
 When the primary provider fails with a non-retryable error (after retry exhaustion), Aptu will automatically try each provider in the fallback chain. If a fallback entry specifies a model override, that model is used; otherwise, the primary model is used. Rate limit and circuit breaker errors are not retried via fallback.
 
 **Use Cases:**
+
 - Resilience against provider outages
 - Automatic failover for quota exhaustion
 - Multi-provider redundancy for critical workflows
 - Per-provider model optimization
 
 **Notes:**
+
 - Fallback only triggers for non-retryable errors
 - Each fallback provider must have a valid API key configured
 - Model overrides are optional; if not specified, the primary model is used
@@ -156,10 +158,13 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 1. Get an API key from [Anthropic Console](https://console.anthropic.com/keys)
 2. Set the environment variable:
+
    ```bash
    export ANTHROPIC_API_KEY="your-api-key-here"
    ```
+
 3. Configure in `~/.config/aptu/config.toml`:
+
    ```toml
    [ai]
    provider = "anthropic"
@@ -174,10 +179,13 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 1. Get an API key from [Cerebras Console](https://console.cerebras.ai/keys)
 2. Set the environment variable:
+
    ```bash
    export CEREBRAS_API_KEY="your-api-key-here"
    ```
+
 3. Configure in `~/.config/aptu/config.toml`:
+
    ```toml
    [ai]
    provider = "cerebras"
@@ -190,10 +198,13 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
 2. Set the environment variable:
+
    ```bash
    export GEMINI_API_KEY="your-api-key-here"
    ```
+
 3. Configure in `~/.config/aptu/config.toml`:
+
    ```toml
    [ai]
    provider = "gemini"
@@ -208,10 +219,13 @@ Use `aptu models list --provider gemini` to discover current model IDs.
 
 1. Get an API key from [Groq Console](https://console.groq.com/keys)
 2. Set the environment variable:
+
    ```bash
    export GROQ_API_KEY="your-api-key-here"
    ```
+
 3. Configure in `~/.config/aptu/config.toml`:
+
    ```toml
    [ai]
    provider = "groq"
@@ -224,10 +238,13 @@ Use `aptu models list --provider gemini` to discover current model IDs.
 
 1. Get an API key from [OpenRouter](https://openrouter.ai/keys)
 2. Set the environment variable:
+
    ```bash
    export OPENROUTER_API_KEY="sk-or-..."
    ```
+
 3. Configure in `~/.config/aptu/config.toml`:
+
    ```toml
    [ai]
    provider = "openrouter"
@@ -240,10 +257,13 @@ Use `aptu models list --provider gemini` to discover current model IDs.
 
 1. Get an API key from [Z.AI](https://z.ai)
 2. Set the environment variable:
+
    ```bash
    export ZAI_API_KEY="your-api-key-here"
    ```
+
 3. Configure in `~/.config/aptu/config.toml`:
+
    ```toml
    [ai]
    provider = "zai"
@@ -256,10 +276,13 @@ Use `aptu models list --provider gemini` to discover current model IDs.
 
 1. Get an API key from [ZenMux](https://zenmux.ai)
 2. Set the environment variable:
+
    ```bash
    export ZENMUX_API_KEY="your-api-key-here"
    ```
+
 3. Configure in `~/.config/aptu/config.toml`:
+
    ```toml
    [ai]
    provider = "zenmux"
