@@ -131,6 +131,21 @@ fn build_ast_context_sync(_repo_path: &str, _files: &[PrFile]) -> AstContextOutp
     AstContextOutput::new(String::new())
 }
 
+#[cfg(feature = "graph")]
+fn analysis_output_entry(
+    path: &std::path::Path,
+    semantic: &aptu_coder_core::SemanticAnalysis,
+    line_count: usize,
+) -> aptu_coder_core::FileAnalysisOutput {
+    aptu_coder_core::FileAnalysisOutput::new(
+        path.to_string_lossy().into_owned(),
+        String::new(),
+        semantic.clone(),
+        line_count,
+        None,
+    )
+}
+
 #[cfg(feature = "ast-context")]
 #[allow(clippy::too_many_lines)]
 fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput {
@@ -141,8 +156,11 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
 
     // Accumulate analysis data for graph building
     #[cfg(feature = "graph")]
-    let mut analysis_pairs: Vec<(std::path::PathBuf, aptu_coder_core::SemanticAnalysis)> =
-        Vec::new();
+    let mut analysis_pairs: Vec<(
+        std::path::PathBuf,
+        aptu_coder_core::SemanticAnalysis,
+        usize,
+    )> = Vec::new();
     #[cfg(feature = "graph")]
     let mut impl_traits: Vec<aptu_coder_core::ImplTraitInfo> = Vec::new();
     #[cfg(feature = "graph")]
@@ -184,7 +202,11 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
                 // Always accumulate graph data regardless of text cap
                 #[cfg(feature = "graph")]
                 {
-                    analysis_pairs.push((full_path.clone(), analysis.semantic.clone()));
+                    analysis_pairs.push((
+                        full_path.clone(),
+                        analysis.semantic.clone(),
+                        analysis.line_count,
+                    ));
                     impl_traits.extend(analysis.semantic.impl_traits.clone());
 
                     let ranges: Vec<(usize, usize, String)> = analysis
@@ -224,15 +246,7 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
     {
         let entries: Vec<_> = analysis_pairs
             .iter()
-            .map(|(path, semantic)| {
-                aptu_coder_core::FileAnalysisOutput::new(
-                    path.to_string_lossy().into_owned(),
-                    String::new(),
-                    semantic.clone(),
-                    0,
-                    None,
-                )
-            })
+            .map(|(path, semantic, line_count)| analysis_output_entry(path, semantic, *line_count))
             .collect();
         let graph = aptu_coder_core::graph::StructuralGraph::build_from_analysis(&entries);
         AstContextOutput::with_graph(output, graph, symbol_ranges)
@@ -388,6 +402,16 @@ mod tests {
         let result = build_ast_context(&repo_path, &files).await;
         // Verify it doesn't panic and respects the cap
         assert!(result.text.len() <= 2200, "output should be near cap");
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[test]
+    fn analysis_output_entry_uses_real_line_count() {
+        // Regression test for #1550: line_count must reflect the real file,
+        // not a hardcoded 0, so upstream's line-proximity tiebreaker has signal.
+        let semantic = aptu_coder_core::SemanticAnalysis::default();
+        let entry = analysis_output_entry(std::path::Path::new("f.rs"), &semantic, 42);
+        assert_eq!(entry.line_count, 42);
     }
 
     #[cfg(all(feature = "ast-context", feature = "graph"))]
