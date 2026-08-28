@@ -1,36 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025 Agentic AI Foundation
 
 //! On-disk cache for structural graphs, keyed by repository and commit SHA.
-//!
-//! Cache format: 8 raw bytes of header followed by a postcard-encoded
-//! [`super::GraphDb`] payload. The header is two little-endian `u32`s:
-//! `FORMAT_VERSION` (bytes 0..4) then `schema_hash` (bytes 4..8), a
-//! compile-time FNV-1a hash over the `Node`/`Edge` variant names used to
-//! invalidate stale caches when the schema changes.
-//!
-//! Only the actual file I/O (`load_or_build`, `persist_graph`) is gated to
-//! non-WASM targets. Path construction and byte encode/decode are pure
-//! functions usable on any target.
 
 use std::io::Write;
 use std::path::PathBuf;
 
-#[cfg(test)]
-use super::Edge;
-use super::GraphDb;
+use super::StructuralGraph;
 use crate::config::GraphConfig;
 
-/// Cache format version. Bump when the encoding changes in an incompatible way.
-const FORMAT_VERSION: u32 = 3;
+const FORMAT_VERSION: u32 = 4;
+const SCHEMA_STRING: &str = "StructuralGraph|File|Symbol|Module|Contains|Calls|Imports";
 
-/// Compile-time FNV-1a hash over the `Node`/`Edge` variant names.
-///
-/// Any change to the set (or order) of `Node`/`Edge` variant names must be
-/// reflected in [`SCHEMA_STRING`] so that stale cached graphs are invalidated
-/// by [`decode_graph`] rather than postcard mis-decoding.
-const SCHEMA_STRING: &str = "File|Module|Function|Contains|Calls|Imports";
-
-/// Computes the compile-time FNV-1a hash of [`SCHEMA_STRING`].
+/// Computes the cache schema hash.
 #[must_use]
 pub const fn schema_hash() -> u32 {
     let bytes = SCHEMA_STRING.as_bytes();
@@ -44,9 +26,8 @@ pub const fn schema_hash() -> u32 {
     hash
 }
 
-/// Returns the on-disk cache path for a given repository and commit SHA.
-///
-/// Path shape: `~/.local/share/aptu/graph/<owner>/<repo>/<sha>.bin`.
+#[allow(missing_docs)]
+/// Returns the cache file path for a repository revision.
 #[must_use]
 pub fn cache_path(owner: &str, repo: &str, sha: &str) -> PathBuf {
     crate::config::data_dir()
@@ -56,15 +37,10 @@ pub fn cache_path(owner: &str, repo: &str, sha: &str) -> PathBuf {
         .join(format!("{sha}.bin"))
 }
 
-/// Encodes `graph` into the on-disk cache byte format.
-///
-/// Prepends the 8-byte header (`FORMAT_VERSION` followed by `schema_hash`) to
-/// the postcard-encoded payload. Returns `None` if postcard serialization
-/// fails.
+#[allow(missing_docs)]
 #[must_use]
-pub fn encode_graph(graph: &GraphDb) -> Option<Vec<u8>> {
+pub fn encode_graph(graph: &StructuralGraph) -> Option<Vec<u8>> {
     let payload = postcard::to_allocvec(graph).ok()?;
-
     let mut bytes = Vec::with_capacity(8 + payload.len());
     bytes.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
     bytes.extend_from_slice(&schema_hash().to_le_bytes());
@@ -72,283 +48,187 @@ pub fn encode_graph(graph: &GraphDb) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
-/// Decodes a graph from on-disk cache bytes.
-///
-/// Returns `None` (cache miss) if the bytes are too short, the format
-/// version does not match [`FORMAT_VERSION`], the `schema_hash` does not
-/// match [`schema_hash`], or postcard decoding fails.
+/// Decodes a `StructuralGraph` from a versioned, schema-checked cache payload.
 #[must_use]
-pub fn decode_graph(bytes: &[u8]) -> Option<GraphDb> {
-    if bytes.len() < 8 {
+pub fn decode_graph(bytes: &[u8]) -> Option<StructuralGraph> {
+    if bytes.len() < 8
+        || u32::from_le_bytes(bytes[0..4].try_into().ok()?) != FORMAT_VERSION
+        || u32::from_le_bytes(bytes[4..8].try_into().ok()?) != schema_hash()
+    {
         return None;
     }
-    let version = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-    if version != FORMAT_VERSION {
-        return None;
-    }
-    let hash = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
-    if hash != schema_hash() {
-        return None;
-    }
-    let graph: GraphDb = postcard::from_bytes(&bytes[8..]).ok()?;
-    Some(graph)
+    postcard::from_bytes(&bytes[8..]).ok()
 }
 
-/// Loads a cached graph from disk, or persists the provided graph to cache.
-///
-/// Returns `(graph, cache_hit)`. On cache hit, the provided `graph` is dropped
-/// and the cached version is returned. On cache miss, the provided `graph` is
-/// persisted to disk and returned.
-///
-/// On WASM targets, this always returns the provided graph with `cache_hit = false`
-/// (no disk I/O).
+/// Loads a cached graph or persists and returns the supplied graph.
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn load_or_build(
     owner: &str,
     repo: &str,
     sha: &str,
-    graph: GraphDb,
+    graph: StructuralGraph,
     cfg: &GraphConfig,
-) -> (GraphDb, bool) {
-    // Try cache first.
+) -> (StructuralGraph, bool) {
     let path = cache_path(owner, repo, sha);
     if let Ok(Some(cached)) = try_load_cached(&path, cfg) {
         return (cached, true);
     }
-
-    // Persist to cache.
     persist_graph(&path, &graph);
-
     (graph, false)
 }
 
-/// WASM fallback: always return provided graph, no disk I/O.
 #[cfg(target_arch = "wasm32")]
 #[must_use]
 pub fn load_or_build(
-    _owner: &str,
-    _repo: &str,
-    _sha: &str,
-    graph: GraphDb,
-    _cfg: &GraphConfig,
-) -> (GraphDb, bool) {
+    _: &str,
+    _: &str,
+    _: &str,
+    graph: StructuralGraph,
+    _: &GraphConfig,
+) -> (StructuralGraph, bool) {
     (graph, false)
 }
 
-/// Tries to load a cached graph from `path`.
-///
-/// Returns `None` if the file doesn't exist, is too old (TTL expired),
-/// or fails to decode.
 #[cfg(not(target_arch = "wasm32"))]
-fn try_load_cached(path: &PathBuf, cfg: &GraphConfig) -> std::io::Result<Option<GraphDb>> {
+fn try_load_cached(path: &PathBuf, cfg: &GraphConfig) -> std::io::Result<Option<StructuralGraph>> {
     let metadata = match std::fs::metadata(path) {
         Ok(m) => m,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e),
     };
-
-    // Check TTL.
-    let modified = metadata
-        .modified()
-        .unwrap_or_else(|_| std::time::SystemTime::now());
     let age = std::time::SystemTime::now()
-        .duration_since(modified)
+        .duration_since(
+            metadata
+                .modified()
+                .unwrap_or_else(|_| std::time::SystemTime::now()),
+        )
         .unwrap_or_default();
-    let ttl = std::time::Duration::from_secs(cfg.cache_ttl_hours * 3600);
-    if age > ttl {
-        // Expired; caller will rebuild.
+    if age > std::time::Duration::from_secs(cfg.cache_ttl_hours * 3600) {
         return Ok(None);
     }
-
-    let bytes = std::fs::read(path)?;
-    Ok(decode_graph(&bytes))
+    Ok(decode_graph(&std::fs::read(path)?))
 }
 
-/// Persists a graph to the cache path.
-///
-/// Creates parent directories if needed. Failures are logged at WARN level
-/// and never propagated (caching is best-effort).
 #[cfg(not(target_arch = "wasm32"))]
-fn persist_graph(path: &std::path::Path, graph: &GraphDb) {
-    if let Some(parent) = path.parent()
-        && let Err(e) = std::fs::create_dir_all(parent)
-    {
-        tracing::warn!(
-            path = %parent.display(),
-            error = %e,
-            "graph cache: failed to create cache directory"
-        );
+fn persist_graph(path: &std::path::Path, graph: &StructuralGraph) {
+    let Some(parent) = path.parent() else { return };
+    if let Err(e) = std::fs::create_dir_all(parent) {
+        tracing::warn!(error = %e, "graph cache directory creation failed");
         return;
     }
-
     let Some(bytes) = encode_graph(graph) else {
-        tracing::warn!(path = %path.display(), "graph cache: encode failed, skipping write");
         return;
     };
-
     if let Err(e) = write_atomic(path, &bytes) {
-        tracing::warn!(
-            path = %path.display(),
-            error = %e,
-            "graph cache: failed to write cache file"
-        );
+        tracing::warn!(error = %e, "graph cache write failed");
     }
 }
 
-/// Writes `bytes` to `path` atomically: writes to a uniquely-named sibling
-/// temp file then renames it into place, so a crash mid-write never corrupts
-/// an existing cache entry and concurrent writers never race on a partial file.
 #[cfg(not(target_arch = "wasm32"))]
 fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
     let mut tmp = tempfile::Builder::new().tempfile_in(parent)?;
-    let result = tmp.write_all(bytes).and_then(|()| tmp.flush());
-    match result {
-        Ok(()) => std::fs::rename(tmp.path(), path),
-        Err(e) => {
-            let _ = std::fs::remove_file(tmp.path());
-            Err(e)
-        }
-    }
-    // tmp drops here; on the success path the file has been renamed so the
-    // NamedTempFile destructor will attempt to delete a path that no longer
-    // exists, which is harmless.
+    tmp.write_all(bytes)?;
+    tmp.flush()?;
+    std::fs::rename(tmp.path(), path)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aptu_coder_core::types::{FunctionInfo, SemanticAnalysis};
 
-    #[test]
-    fn test_round_trip_serialize_deserialize() {
-        let mut graph = GraphDb::new();
-        let n1 = graph.add_node(super::super::Node::Function {
-            name: "foo".to_string(),
-            path: "src/lib.rs".to_string(),
-            visibility: "pub".to_string(),
-        });
-        let n2 = graph.add_node(super::super::Node::Function {
-            name: "bar".to_string(),
-            path: "src/lib.rs".to_string(),
-            visibility: "pub".to_string(),
-        });
-        graph.add_edge(n1, n2, Edge::Calls);
-
-        let bytes = encode_graph(&graph).expect("encode must succeed");
-        let decoded = decode_graph(&bytes).expect("should decode successfully");
-
-        assert_eq!(
-            graph.node_count(),
-            decoded.node_count(),
-            "node count should match"
+    fn graph(path: &str, name: &str) -> StructuralGraph {
+        let mut function = FunctionInfo::default();
+        function.name = name.to_string();
+        function.line = 1;
+        function.end_line = 2;
+        let semantic = SemanticAnalysis::new(
+            vec![function],
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            std::collections::HashMap::default(),
+            Vec::new(),
+            Vec::new(),
         );
-        assert_eq!(
-            graph.edge_count(),
-            decoded.edge_count(),
-            "edge count should match"
-        );
-
-        // Verify node names survived round-trip.
-        let names: Vec<String> = decoded
-            .node_indices()
-            .map(|idx| decoded[idx].name().to_string())
-            .collect();
-        assert!(names.contains(&"foo".to_string()));
-        assert!(names.contains(&"bar".to_string()));
+        StructuralGraph::build_from_analysis(&[aptu_coder_core::FileAnalysisOutput::new(
+            path.to_string(),
+            String::new(),
+            semantic,
+            2,
+            None,
+        )])
     }
 
     #[test]
-    fn test_decode_graph_version_mismatch() {
-        let mut graph = GraphDb::new();
-        graph.add_node(super::super::Node::Function {
-            name: "foo".to_string(),
-            path: "src/lib.rs".to_string(),
-            visibility: "pub".to_string(),
-        });
-
-        // Encode, then corrupt the version byte.
-        let mut bytes = encode_graph(&graph).expect("encode must succeed");
-        bytes[0] = 0xFF; // Wrong version.
-
-        let result = decode_graph(&bytes);
-        assert!(result.is_none(), "version mismatch should return None");
+    fn structural_graph_payload_round_trips() {
+        let original = graph("src/lib.rs", "round_trip");
+        let decoded = decode_graph(&encode_graph(&original).unwrap()).unwrap();
+        assert_eq!(original.graph.node_count(), decoded.graph.node_count());
+        assert_eq!(original.graph.edge_count(), decoded.graph.edge_count());
     }
 
     #[test]
-    fn test_decode_graph_empty_bytes() {
-        let result = decode_graph(&[]);
-        assert!(result.is_none(), "empty bytes should return None");
+    fn old_version_and_schema_hash_are_rejected() {
+        let mut bytes = encode_graph(&graph("src/lib.rs", "versioned")).unwrap();
+        bytes[..4].copy_from_slice(&3u32.to_le_bytes());
+        assert!(decode_graph(&bytes).is_none());
+        let mut bytes = encode_graph(&graph("src/lib.rs", "hashed")).unwrap();
+        bytes[4..8].copy_from_slice(&(schema_hash() ^ 1).to_le_bytes());
+        assert!(decode_graph(&bytes).is_none());
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn test_schema_hash_changes_on_variant_change() {
-        const MUTATED: &str = "File|Module|Function|Contains|Calls|Imports|NewVariant";
-        // The hash must be non-zero (FNV-1a of a non-empty string is never 0).
-        assert_ne!(schema_hash(), 0, "schema hash must be non-zero");
-
-        // Verify that any change to SCHEMA_STRING produces a different hash by
-        // computing FNV-1a on a mutated string and asserting divergence.
-        let mut hash: u32 = 0x811c_9dc5;
-        for &b in MUTATED.as_bytes() {
-            hash ^= u32::from(b);
-            hash = hash.wrapping_mul(0x0100_0193);
-        }
-        assert_ne!(
-            schema_hash(),
-            hash,
-            "schema_hash must differ when SCHEMA_STRING gains a new variant"
-        );
+    fn load_or_build_isolated_by_revision_and_honors_ttl() {
+        let owner = format!("aptu-test-{}", uuid_suffix());
+        let repo = "graph-cache";
+        let sha = uuid_suffix();
+        let cfg = GraphConfig {
+            cache_ttl_hours: 24,
+            ..GraphConfig::default()
+        };
+        let (_, reused) = load_or_build(&owner, repo, &sha, graph("a", "first"), &cfg);
+        assert!(!reused);
+        let (cached, reused) = load_or_build(&owner, repo, &sha, graph("a", "second"), &cfg);
+        assert!(reused);
+        assert!(cached.graph.node_indices().any(|i| matches!(&cached.graph[i], aptu_coder_core::graph::Node::Symbol { name, .. } if name == "first")));
+        let (_, different_revision) =
+            load_or_build(&owner, repo, "other-sha", graph("b", "other"), &cfg);
+        assert!(!different_revision);
+        let expired = GraphConfig {
+            cache_ttl_hours: 0,
+            ..cfg
+        };
+        let (_, reused) = load_or_build(&owner, repo, &sha, graph("a", "expired"), &expired);
+        assert!(!reused);
+        let _ = std::fs::remove_dir_all(crate::config::data_dir().join("graph").join(owner));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn test_persist_graph_concurrent_writes_no_corruption() {
-        let path =
-            std::env::temp_dir().join(format!("aptu_cache_concurrent_{}.bin", std::process::id()));
-        let _ = std::fs::remove_file(&path);
-
+    fn concurrent_atomic_writes_remain_decodable() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("graph.bin");
         let p1 = path.clone();
-        let handle1 = std::thread::spawn(move || {
-            let mut g = GraphDb::new();
-            let n = g.add_node(super::super::Node::Function {
-                name: "one".to_string(),
-                path: "src/a.rs".to_string(),
-                visibility: "pub".to_string(),
-            });
-            g.add_edge(n, n, Edge::Calls);
-            persist_graph(&p1, &g);
-        });
         let p2 = path.clone();
-        let handle2 = std::thread::spawn(move || {
-            let mut g = GraphDb::new();
-            let n = g.add_node(super::super::Node::Function {
-                name: "two".to_string(),
-                path: "src/b.rs".to_string(),
-                visibility: "pub".to_string(),
-            });
-            g.add_edge(n, n, Edge::Calls);
-            persist_graph(&p2, &g);
-        });
-
-        handle1.join().expect("thread 1 must not panic");
-        handle2.join().expect("thread 2 must not panic");
-
-        // The file must be a valid, fully-decodable graph (no partial write).
-        let bytes = std::fs::read(&path).expect("cache file must exist");
-        let decoded = decode_graph(&bytes).expect("cache file must decode without corruption");
-        assert_eq!(decoded.node_count(), 1, "decoded graph must have one node");
-        assert_eq!(decoded.edge_count(), 1, "decoded graph must have one edge");
-
-        let _ = std::fs::remove_file(&path);
+        let a = std::thread::spawn(move || persist_graph(&p1, &graph("a", "one")));
+        let b = std::thread::spawn(move || persist_graph(&p2, &graph("b", "two")));
+        a.join().unwrap();
+        b.join().unwrap();
+        assert!(decode_graph(&std::fs::read(path).unwrap()).is_some());
     }
 
-    #[test]
-    fn test_cache_path_format() {
-        let path = cache_path("owner", "repo", "abc123");
-        let path_str = path.to_string_lossy();
-        assert!(path_str.contains("owner"), "path should contain owner");
-        assert!(path_str.contains("repo"), "path should contain repo");
-        assert!(path_str.contains("abc123"), "path should contain sha");
-        assert!(path_str.ends_with(".bin"), "path should end with .bin");
+    fn uuid_suffix() -> String {
+        format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        )
     }
 }

@@ -104,7 +104,6 @@ pub(super) async fn analyze_issue(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_utils::*;
     use super::*;
 
     #[test]

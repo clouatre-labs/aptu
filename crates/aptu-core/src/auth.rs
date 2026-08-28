@@ -34,6 +34,7 @@ pub trait TokenProvider: Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unsafe_code)]
     use super::*;
     use crate::ai::registry::all_providers;
     use secrecy::ExposeSecret;
@@ -133,6 +134,7 @@ mod tests {
 
     #[test]
     #[serial]
+    #[allow(unsafe_code)]
     fn test_env_token_provider_github_token() {
         // SAFETY: single-threaded test process; no concurrent env reads.
         unsafe {

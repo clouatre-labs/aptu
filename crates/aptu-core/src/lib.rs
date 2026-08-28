@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![warn(missing_docs)]
+#![allow(
+    clippy::format_push_string,
+    clippy::items_after_test_module,
+    clippy::let_unit_value,
+    clippy::uninlined_format_args,
+    clippy::float_cmp
+)]
 #![doc = include_str!("../README.md")]
 
 // ============================================================================

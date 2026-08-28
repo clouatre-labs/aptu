@@ -1344,7 +1344,7 @@ mod tests {
         let mut page1_items = Vec::new();
         for i in 0..100 {
             page1_items.push(PrFile {
-                filename: format!("file{}.rs", i),
+                filename: format!("file{i}.rs"),
                 status: "modified".to_string(),
                 additions: 1,
                 deletions: 0,
@@ -1358,7 +1358,7 @@ mod tests {
         let mut page2_items = Vec::new();
         for i in 100..150 {
             page2_items.push(PrFile {
-                filename: format!("file{}.rs", i),
+                filename: format!("file{i}.rs"),
                 status: "modified".to_string(),
                 additions: 1,
                 deletions: 0,
@@ -1387,7 +1387,7 @@ mod tests {
         let mut files = Vec::new();
         for i in 0..301 {
             files.push(PrFile {
-                filename: format!("file{}.rs", i),
+                filename: format!("file{i}.rs"),
                 status: "modified".to_string(),
                 additions: 1,
                 deletions: 0,

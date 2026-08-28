@@ -37,7 +37,6 @@ keyring-core = { workspace = true, optional = true }
 aptu-coder-core = { version = "0.32.2", optional = true }
 
 # Graph analysis for PR review context (petgraph is pure Rust, WASM-safe)
-petgraph = { version = "0.8", features = ["serde-1"], optional = true }
 # Binary serialization for graph cache
 postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
 
@@ -103,7 +102,7 @@ keyring = ["dep:keyring-core"]
 # Enable AST context injection for PR reviews
 ast-context = ["dep:aptu-coder-core"]
 # Enable structural graph context for PR reviews (petgraph is WASM-safe)
-graph = ["dep:petgraph", "dep:postcard"]
+graph = ["dep:aptu-coder-core", "dep:postcard"]
 
 [lints]
 workspace = true

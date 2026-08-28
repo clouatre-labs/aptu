@@ -73,6 +73,7 @@ fn default_max_dep_packages() -> usize {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::items_after_test_module)]
     use super::*;
 
     #[test]

@@ -235,7 +235,7 @@ pub async fn build_review_context(
 
     // Step 2: Build AST context if repo_path resolved
     // When `ast-context` feature is enabled, build_ctx_ast returns AstContextOutput
-    // (which carries both the text string and the structural GraphDb).
+    // (which carries both the text string and the structural StructuralGraph).
     // When disabled, it returns a plain String.
     #[cfg(feature = "ast-context")]
     let ast_output = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
@@ -592,7 +592,7 @@ pub(crate) fn estimate_pr_size(
 /// Builds AST context for changed files.
 ///
 /// Returns an [`AstContextOutput`] containing the text string and (when the `graph`
-/// feature is also enabled) the structural [`GraphDb`] built from the same analysis.
+/// feature is also enabled) the structural [`StructuralGraph`] built from the same analysis.
 #[allow(clippy::unused_async)]
 #[cfg(feature = "ast-context")]
 async fn build_ctx_ast(
@@ -669,7 +669,7 @@ async fn build_ctx_graph(
         let function_names: Vec<String> = derive_modified_symbols(&pr.files, Some(ast_output));
 
         let spawn_result = tokio::task::spawn_blocking(move || {
-            let (mut graph, cache_hit) = crate::graph::cache::load_or_build(
+            let (graph, cache_hit) = crate::graph::cache::load_or_build(
                 &owner_str,
                 &repo_str,
                 &sha,
@@ -677,15 +677,13 @@ async fn build_ctx_graph(
                 &graph_config_owned,
             );
             let fn_refs: Vec<&str> = function_names.iter().map(String::as_str).collect();
-            let modified_nodes = crate::graph::query::find_modified_nodes(&mut graph, &fn_refs);
-            let subgraph = crate::graph::query::blast_radius(
-                &graph,
-                &modified_nodes,
-                graph_config_owned.max_nodes,
-                graph_config_owned.max_depth,
-            );
             (
-                crate::graph::query::render_subgraph_text(&subgraph),
+                crate::graph::render_blast_radius(
+                    &graph,
+                    &fn_refs,
+                    graph_config_owned.max_nodes,
+                    graph_config_owned.max_depth,
+                ),
                 cache_hit,
             )
         })
@@ -993,8 +991,8 @@ mod tests {
         }
     }
 
-    /// Verifies that apply_budget_drops enforces the documented drop order:
-    /// call_graph -> ast_context -> dep_enrichments -> patches -> full_content.
+    /// Verifies that `apply_budget_drops` enforces the documented drop order:
+    /// `call_graph` -> `ast_context` -> `dep_enrichments` -> `patches` -> `full_content`.
     #[test]
     fn test_apply_budget_drops_order() {
         let mut pr = make_pr_with_content(500, 500);
@@ -1029,7 +1027,7 @@ mod tests {
         );
     }
 
-    /// Verifies that dep_enrichments are dropped before file patches.
+    /// Verifies that `dep_enrichments` are dropped before file patches.
     #[test]
     fn test_apply_budget_drops_dep_enrichments_before_patches() {
         let mut pr = make_pr_with_content(200, 0);
@@ -1069,7 +1067,7 @@ mod tests {
         );
     }
 
-    /// Verifies that empty sections do NOT appear in budget_drops telemetry.
+    /// Verifies that empty sections do NOT appear in `budget_drops` telemetry.
     /// Regression test for telemetry accuracy bug where empty-section drops were unconditionally recorded.
     #[test]
     fn test_apply_budget_drops_empty_sections() {
@@ -1109,7 +1107,7 @@ mod tests {
         );
     }
 
-    /// Verifies that populated sections DO appear in budget_drops telemetry.
+    /// Verifies that populated sections DO appear in `budget_drops` telemetry.
     /// Ensures the fix does not suppress telemetry for sections with actual content.
     #[test]
     fn test_apply_budget_drops_populated_sections() {
@@ -1685,7 +1683,7 @@ mod tests {
         );
         let ast_output = crate::ast_context::AstContextOutput {
             text: String::new(),
-            graph: crate::graph::GraphDb::default(),
+            graph: aptu_coder_core::graph::StructuralGraph::build_from_analysis(&[]),
             symbol_ranges,
         };
 
@@ -1736,7 +1734,7 @@ mod tests {
         );
         let ast_output = crate::ast_context::AstContextOutput {
             text: String::new(),
-            graph: crate::graph::GraphDb::default(),
+            graph: aptu_coder_core::graph::StructuralGraph::build_from_analysis(&[]),
             symbol_ranges,
         };
 
@@ -1795,7 +1793,7 @@ mod tests {
         );
         let ast_output = crate::ast_context::AstContextOutput {
             text: String::new(),
-            graph: crate::graph::GraphDb::default(),
+            graph: aptu_coder_core::graph::StructuralGraph::build_from_analysis(&[]),
             symbol_ranges,
         };
 

@@ -731,7 +731,7 @@ mod tests {
     fn test_etu_zero_on_default() {
         // Zero inputs produce zero ETU; also covers the serde default path.
         let stats = AiStats::default().with_computed_etu();
-        assert_eq!(stats.effective_token_units, 0.0);
+        assert!((stats.effective_token_units - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]

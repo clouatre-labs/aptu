@@ -111,7 +111,6 @@ pub(super) async fn suggest_pr_labels(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_utils::*;
     use super::*;
 
     #[test]
