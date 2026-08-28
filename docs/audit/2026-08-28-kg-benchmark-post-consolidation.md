@@ -311,7 +311,7 @@ F15's fixtures used uniquely-named functions, so they never exercised `Structura
 | R12 | Info | F15 | Benchmark same-name symbol collision resolution — untested scaling path — **Measured, see F16** |
 | R13 | Info | F16 | Index collision candidates by file to remove the O(N) same-file scan; low priority, not worth blocking on |
 
-## Reproduction
+## Reproduction: AI-Based Benchmark (Tables 1-4)
 
 ```bash
 # Build from main
@@ -334,3 +334,159 @@ done
 ```
 
 Do NOT clear cache between runs. Cleanup: remove the config file and the graph cache directory.
+
+## Reproduction: Local Microbenchmark (F15/F16)
+
+Local, AI-free, no network calls, no cost. Both F15 (unique names, 5/30 files) and F16
+(paired control/collision fixtures, 10-400 files) use this same harness: generate `.rs`
+fixtures on disk, temporarily append a `#[cfg(test)]` bench module to
+`crates/aptu-core/src/graph/mod.rs`, run it under `--release`, capture the numbers, then
+revert the source change. The bench module is never committed.
+
+### 1. Generate fixtures
+
+```python
+#!/usr/bin/env python3
+"""Generate control/collision fixtures for the F15/F16 local microbenchmark."""
+import os
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+
+
+def write(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(content)
+
+
+def gen_control(n):
+    """F15's control shape: every function uniquely named, chained within and across files."""
+    outdir = os.path.join(BASE, f"control_{n}")
+    for i in range(n):
+        lines = []
+        if i == 0:
+            lines.append("pub fn bench_seed() { f0_0(); }")
+            names = [f"f0_{j}" for j in range(6)]
+        else:
+            names = [f"f{i}_{j}" for j in range(7)]
+        for idx, name in enumerate(names):
+            if idx < len(names) - 1:
+                call = f"{names[idx + 1]}();"
+            elif i < n - 1:
+                call = f"f{i + 1}_0();"
+            else:
+                call = ""
+            lines.append(f"pub fn {name}() {{ {call} }}")
+        write(os.path.join(outdir, f"file_{i}.rs"), "\n".join(lines) + "\n")
+
+
+def gen_collision(n):
+    """F16's collision shape: every file defines the same 5 names, forcing N-way candidates."""
+    outdir = os.path.join(BASE, f"collision_{n}")
+    colliding = ["new", "default", "fmt", "from", "get"]
+    for i in range(n):
+        lines = []
+        colliding_calls = " ".join(f"{name}();" for name in colliding)
+        next_call = f"link_{i + 1}();" if i < n - 1 else ""
+        if i == 0:
+            lines.append("pub fn bench_seed() { link_0(); }")
+        lines.append(f"pub fn link_{i}() {{ {colliding_calls} {next_call} }}")
+        for name in colliding:
+            lines.append(f"pub fn {name}() {{}}")
+        if i > 0:
+            lines.append(f"pub fn helper_{i}() {{}}")
+        write(os.path.join(outdir, f"file_{i}.rs"), "\n".join(lines) + "\n")
+
+
+for n in (10, 30, 50, 100, 200, 400):
+    gen_control(n)
+    gen_collision(n)
+
+print("done")
+```
+
+Run it from a scratch directory (fixtures are ephemeral, not committed):
+`python3 gen_fixtures.py`. F15 used only the 5/30-file sizes; F16 used the full 10-400 curve.
+
+### 2. Append the bench harness
+
+Append to the end of `crates/aptu-core/src/graph/mod.rs`:
+
+```rust
+#[cfg(test)]
+mod bench_r12 {
+    use std::time::{Duration, Instant};
+
+    const ITERS: usize = 200;
+    const ROOT: &str = "/absolute/path/to/scratch/fixtures"; // wherever gen_fixtures.py wrote
+
+    fn load_entries(dir: &str) -> Vec<aptu_coder_core::FileAnalysisOutput> {
+        let mut paths: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.extension().is_some_and(|e| e == "rs"))
+            .collect();
+        paths.sort_by_key(|p| {
+            p.file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .trim_start_matches("file_")
+                .parse::<usize>()
+                .unwrap()
+        });
+        paths
+            .iter()
+            .map(|p| aptu_coder_core::analyze_file(p.to_str().unwrap(), None).unwrap())
+            .collect()
+    }
+
+    fn bench_once(label: &str, dir: &str, seed: &str) {
+        let entries = load_entries(dir);
+        let mut durations: Vec<Duration> = Vec::with_capacity(ITERS);
+        let mut last_text = String::new();
+        for _ in 0..ITERS {
+            let start = Instant::now();
+            let graph = super::StructuralGraph::build_from_analysis(&entries);
+            let text = super::render_blast_radius(&graph, &[seed], 50_000, 4);
+            std::hint::black_box(&text);
+            durations.push(start.elapsed());
+            last_text = text;
+        }
+        durations.sort();
+        let min = durations[0];
+        let max = durations[durations.len() - 1];
+        let median = durations[durations.len() / 2];
+        let mean = durations.iter().sum::<Duration>() / durations.len() as u32;
+        eprintln!(
+            "{label}: files={} funcs~={} min={min:?} median={median:?} mean={mean:?} max={max:?} render_lines={} render_chars={}",
+            entries.len(),
+            entries.len() * 7,
+            last_text.lines().count(),
+            last_text.len(),
+        );
+    }
+
+    // One #[test] per (fixture type, N) combination, e.g.:
+    #[test]
+    fn bench_control_50() {
+        bench_once("control_50", &format!("{ROOT}/control_50"), "bench_seed");
+    }
+    #[test]
+    fn bench_collision_50() {
+        bench_once("collision_50", &format!("{ROOT}/collision_50"), "bench_seed");
+    }
+    // ...repeat for each N in 10/30/50/100/200/400, both control_ and collision_.
+}
+```
+
+### 3. Run and revert
+
+```bash
+cargo test --release -p aptu-core --features ast-context,graph bench_r12 -- --nocapture --test-threads=1
+
+# Capture the eprintln! output, then revert — do not commit the bench module:
+git checkout -- crates/aptu-core/src/graph/mod.rs
+```
+
+`--test-threads=1` avoids CPU contention skewing timings across the parallel test binaries.
