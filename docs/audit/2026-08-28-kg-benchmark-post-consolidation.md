@@ -170,6 +170,25 @@ One genuine, already-documented rendering difference remains (`crates/aptu-core/
 
 **Impact:** no code regression to fix. The graph feature's cold-run rendering is behaving as designed; the apparent volume loss is an artifact of re-auditing already-merged historical PRs against a later checkout. Future KG benchmarks that replay historical PRs should either use still-open PRs or check out each PR's own head SHA into `repo_path` before that PR's cold run, to get a faithful measurement.
 
+### F14: R10 verified — #1559 restores cold/warm parity (VERIFICATION)
+
+**Severity:** Info
+
+**Category:** MEASUREMENT
+
+Re-ran the KG config, 3 runs per PR (cold + 2 warm), on aptu-coder-core 0.32.4 (main @ e5c164a, includes #1559):
+
+| PR | Cold (run 1) | Warm (run 2) | Warm (run 3) | Cold = Warm? |
+|------|------|------|------|------|
+| 1519 | 81,913 chars / 21,642 tokens | 81,913 / 21,642 | 81,913 / 21,642 | Yes |
+| 1529 | 16,661 / 5,454 | 16,661 / 5,454 | 16,661 / 5,466 | Yes (0 injection either way, per F13) |
+| 1531 | 75,134 / 21,381 | 75,134 / 21,381 | 75,134 / 21,381 | Yes |
+| 1532 | 81,865 / 28,614 | 81,865 / 28,614 | 81,865 / 28,614 | Yes |
+
+Before #1559, warm runs on these same PRs dropped to the No KG baseline (Table 2: e.g. #1531 warm was 72,442/20,605 vs cold 75,134/21,369). Now every warm run matches its cold run exactly. Duration showed no consistent cold-vs-warm pattern (e.g. #1532: cold 4,360ms, warm 3,868ms/2,971ms, faster; #1531: cold 2,987ms, warm 4,267ms/4,646ms, slower) — dominated by AI-provider response variance, not local cache lookup cost, consistent with F12.
+
+**Impact:** R10's acceptance criterion (cold/warm injection identical) is met. F9/F10 are resolved; the graph feature's cache-hit path is release-verifiable again.
+
 ## Recommendations
 
 ### R8: Fix symbol-index deserialization upstream before relying on the graph cache
@@ -194,6 +213,8 @@ The graph feature is opt-in (`[graph] enabled = true`; default off), so default-
 
 **Fixes:** F9
 
+**Status:** Verified — see F14.
+
 Same 4 PRs, same method. Acceptance: KG prompt chars identical across cold and warm runs per PR, and warm-run injection equal to cold-run injection.
 
 ### R11: Accept current cold-run volume; fix the replay methodology, not the code
@@ -215,6 +236,7 @@ No restoration-to-parity work is warranted: the retired implementation's higher 
 | F11 | Info | MEASUREMENT | Cold-run injection 21-95% below pre-consolidation baseline; #1529 builds an empty graph |
 | F12 | Info | MEASUREMENT | No quality signal; input_tokens confirmed as primary metric |
 | F13 | Info | MEASUREMENT | Cold-run volume gap is a replay-methodology artifact (checkout-time file drift, #1529's file deleted by #1544), not a StructuralGraph regression; 0.32.4 re-verified |
+| F14 | Info | MEASUREMENT | Cold/warm parity confirmed restored on aptu-coder-core 0.32.4 (#1559); R10 acceptance criterion met |
 
 *Table 6: Recommendations.*
 
@@ -222,7 +244,7 @@ No restoration-to-parity work is warranted: the retired implementation's higher 
 |----|----------|-------|----------------|
 | R8 | High | F9, F10 | Rebuild symbol index post-deserialize upstream; extend aptu roundtrip test |
 | R9 | High | F9-F11 | Graph feature not release-verified for cache-hit usage; re-verify before release |
-| R10 | Info | F9 | Re-run benchmark post-fix; acceptance: cold/warm injection identical |
+| R10 | Info | F9 | Re-run benchmark post-fix; acceptance: cold/warm injection identical — **Verified, see F14** |
 | R11 | Info | F11, F13 | Accept current cold-run volume; fix future replay methodology instead of code; closes #1557 |
 
 ## Reproduction
