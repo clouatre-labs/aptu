@@ -52,10 +52,10 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 
 ### GitHub Integration
 
-- PR review injects AST + call-graph context from GitHub Contents API; multi-language (Rust, Go, Python, TS, JS, C/C++, C#, Java)
-- Structural graph context (petgraph-backed BFS blast-radius, depth-capped via `GraphConfig.max_depth` (default: 4 hops), opt-in via `graph` Cargo feature); disk-cached by commit SHA using postcard serialization with atomic tempfile-then-rename writes and a schema-hash header that auto-invalidates stale cache entries on upgrade; `GraphConfig::validate_consistency()` runs at config load time alongside `ReviewConfig::validate_consistency()` and warns when the graph is enabled with `max_depth = 0` or `max_nodes = 0`
+- PR review injects AST + call-graph context from GitHub Contents API; multi-language (Rust, Go, Python, TS, JS, C/C++, C#, Java, Fortran)
+- Structural graph context (adapter delegating to `aptu-coder-core::graph::StructuralGraph` for `find_symbols_all`, `blast_radius_bidirectional`, and `render_subgraph_text`, depth-capped via `GraphConfig.max_depth` (default: 4 hops), opt-in via `graph` Cargo feature); disk-cached by commit SHA using postcard serialization with atomic tempfile-then-rename writes and a schema-hash header that auto-invalidates stale cache entries on upgrade; `GraphConfig::validate_consistency()` runs at config load time alongside `ReviewConfig::validate_consistency()` and warns when the graph is enabled with `max_depth = 0` or `max_nodes = 0`
 - Model-tier routing selects `small_model` or `large_model` based on estimated prompt size
-- Review context budgets in `[review]` (`ReviewConfig`): `max_diff_chars` 200k, `max_patch_chars_per_file` 10k; patches exceeding the per-file limit are dropped; `ReviewConfig::validate_consistency()` warns on misconfigured `min_budget_for_call_graph`; `GraphConfig::validate_consistency()` warns on zero `max_depth` or `max_nodes` when graph is enabled; both run at `AppConfig` load time
+- Review context budgets in `[review]` (`ReviewConfig`): `max_diff_chars` 200k, `max_patch_chars_per_file` 25k; patches exceeding the per-file limit are dropped; `ReviewConfig::validate_consistency()` warns on misconfigured `min_budget_for_call_graph`; `GraphConfig::validate_consistency()` warns on zero `max_depth` or `max_nodes` when graph is enabled; both run at `AppConfig` load time
 - Inline comment dedup keys on `(path, line, side)`; `line=None` comments excluded from map; unchanged body skipped; changed body PATCH-updated in place
 - GitHub OAuth device flow; credentials stored in OS keyring; no `GITHUB_TOKEN` env var needed
 

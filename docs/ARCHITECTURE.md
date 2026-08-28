@@ -67,9 +67,9 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Gro
 2. Fetch full file content for changed files via GitHub Contents API (capped at `max_full_content_files`, `max_chars_per_file`)
 3. Build AST context: function signatures and imports for each changed file using `aptu-coder-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
 4. Build call-graph context: cross-file caller chains for changed functions; modified symbols are derived from PR diff hunks (declaration lines matching `fn`/`async fn`, `struct`, `enum`, `trait`, `impl` via a `SYMBOL_RE` static regex), not from the full graph; callers residing only in files the PR does not touch are intentionally excluded
-5. Build structural graph context: `build_from_analysis()` constructs a `GraphDb` directly from typed `SemanticAnalysis` and `CallGraph` structs (the text-format parsers `parse_ast_context_string` and `parse_call_graph_string` were removed); `blast_radius()` runs a depth-capped (via `GraphConfig.max_depth`) and node-capped BFS from modified symbols (opt-in via `graph` Cargo feature); disk-cached by commit SHA with atomic writes and a schema-versioned header that auto-invalidates stale cache files on upgrade
+5. Build structural graph context: `aptu_coder_core::graph::StructuralGraph::build_from_analysis()` constructs a `StructuralGraph` directly from typed analysis entries; blast-radius rendering composes `find_symbols_all` for multi-symbol seed lookup, `blast_radius_bidirectional` for depth-capped (via `GraphConfig.max_depth`) and node-capped BFS expansion across callers and callees, and `render_subgraph_text` for text formatting (opt-in via `graph` Cargo feature); disk-cached by commit SHA with atomic writes and a schema-versioned header that auto-invalidates stale cache files on upgrade
 6. Dependency enrichment: if the PR bumps dependencies, fetch upstream GitHub Release notes for up to `max_dep_packages` packages and include summaries in context (controlled by `ReviewConfig`)
-7. Enforce prompt budget (`max_prompt_chars`): drop sections in order (structural graph, call graph, AST, full content, diff hunks) until budget is met
+7. Enforce prompt budget (`max_prompt_chars`): drop sections in order (`call_graph` -> `graph_context` -> `ast_context` -> `dep_enrichments` -> file patches -> file `full_content`) until budget is met
 8. Post inline review comments via GitHub REST API
 
 The `ReviewContext` struct centralises all enrichment decisions: AST context, call graph, instructions, dependency release notes, and budget enforcement are all managed there before the prompt is assembled. Repo-path is inferred from CWD when not explicitly supplied via `--repo-path`.
@@ -109,9 +109,9 @@ Each function accepts a `&dyn TokenProvider` for credential resolution. Function
 `AstContextOutput` (in `ast_context.rs`) is returned by the AST context builder instead of a plain string. It carries:
 
 - `text: String` -- the rendered AST summary for prompt injection
-- `graph: GraphDb` -- the structural call graph built from the same analysis pass (only present when both the `ast-context` and `graph` Cargo features are enabled)
+- `graph: StructuralGraph` -- the structural call graph built from the same analysis pass (only present when both the `ast-context` and `graph` Cargo features are enabled)
 
-Building the `GraphDb` from the `SemanticAnalysis` and `CallGraph` structs retained during the AST pass means the graph is constructed once without a second parse or a text-format round-trip.
+Building the `StructuralGraph` from the analysis pairs retained during the AST pass means the graph is constructed once without a second parse or a text-format round-trip.
 
 ### Prompt System
 
