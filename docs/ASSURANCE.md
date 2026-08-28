@@ -23,7 +23,7 @@ Aptu does not execute remote code, evaluate arbitrary expressions, or write to t
 
 ## Trust Boundaries
 
-```
+```text
 +------------------+     TLS 1.2+      +------------------+
 |   CLI process    | ----------------> |   GitHub API     |
 |  (aptu-cli)      |                   |  (api.github.com)|

@@ -332,7 +332,7 @@ jobs:
         with:
           bun-version: "1"
       - name: Run markdownlint
-        run: bunx markdownlint-cli2@0.23.1 "**/*.md" "#node_modules"
+        run: bunx markdownlint-cli2@0.23.2 "**/*.md" "#node_modules"
 
   ci-result:
     name: CI Result

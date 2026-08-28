@@ -26,7 +26,7 @@ The command should complete successfully and return structured output.
 ## Actual Behavior
 <!-- What actually happens? Include error messages, stack traces, or unexpected output. -->
 
-```
+```text
 <paste full error output or stack trace here>
 ```
 
@@ -41,7 +41,7 @@ The command should complete successfully and return structured output.
 ## Logs / Error Output
 <!-- Full error message, panic backtrace, or relevant log output. Use code block. Set RUST_LOG=debug for verbose output. -->
 
-```
+```text
 <paste full error output here>
 ```
 

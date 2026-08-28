@@ -20,6 +20,7 @@ Not a coder? You can still help Aptu grow:
 - **Just** - Task runner for common commands
 
 Install Just:
+
 ```bash
 # macOS
 brew install just
@@ -119,7 +120,7 @@ Fuzz targets are located in `fuzz/fuzz_targets/` and are independent from the ma
 
 We follow [Conventional Commits](https://www.conventionalcommits.org/) to enable automated semantic versioning and changelog generation. All commits must follow this format:
 
-```
+```text
 <type>(<scope>): <subject>
 
 <body>
@@ -203,11 +204,13 @@ We use a hybrid GraphQL + REST approach via Octocrab. **Default to REST unless G
 Ask: *Does GraphQL save enough API calls to justify custom query/struct overhead?*
 
 **Use GraphQL when:**
+
 - Fetching **3+ related resource types** in one call (e.g., issue + labels + milestones + comments)
 - Batching **across multiple repos** using aliases
 - **Server-side filtering** reduces payload significantly
 
 **Use REST (Octocrab) when:**
+
 - Fetching **1-2 resource types** (e.g., list issues, get single issue)
 - Performing **mutations** (create, update, delete)
 - **Client-side filtering** is required anyway (negates GraphQL's advantage)
@@ -255,12 +258,14 @@ Configure a GPG key for signing commits and tags:
 
 1. **Generate a key** (if needed): `gpg --full-generate-key`
 2. **Configure Git**:
+
    ```bash
    gpg --list-secret-keys --keyid-format=long  # Find your KEY_ID
    git config --global user.signingkey <KEY_ID>
    git config --global commit.gpgsign true
    git config --global tag.gpgsign true
    ```
+
 3. **Add to GitHub**: `gpg --armor --export <KEY_ID> | pbcopy` (Linux: `xclip -selection clipboard`) and paste at [GitHub Settings](https://github.com/settings/keys)
 
 ### Release Steps
@@ -272,6 +277,7 @@ Configure a GPG key for signing commits and tags:
    floating tag before pushing, otherwise the release workflow fails (the `Release Tag Protection`
    ruleset blocks `GITHUB_TOKEN` from creating new `refs/tags/v*` refs via POST, but allows
    updating existing ones via PATCH):
+
    ```bash
    # Replace vX.Y with the new minor version.
    # Only run this for the first release of a new minor; the tag must not exist yet.
@@ -285,6 +291,7 @@ Configure a GPG key for signing commits and tags:
      -f ref="refs/tags/vX.Y" \
      -f sha="$(git rev-parse HEAD)"
    ```
+
 5. Push: `git push origin main --tags`
    - For any `vX.Y.Z` release, the workflow automatically moves the `vX.Y` floating tag
      used by the GitHub Action (`clouatre-labs/aptu@vX.Y`) to the new commit.

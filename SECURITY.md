@@ -38,6 +38,7 @@ The `aptu-dev` GitHub App runs on Cloudflare Workers with a central GitHub Actio
 ### Incident Ownership
 
 The app operator (clouatre-labs) is responsible for:
+
 - Monitoring webhook delivery and worker health
 - Responding to availability incidents within the SLA defined above
 - Notifying affected installations of any security-relevant changes

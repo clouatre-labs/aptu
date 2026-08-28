@@ -49,12 +49,14 @@ let result = some_function(args)?;
 ```
 
 ### Integration Notes
+
 - Error handling: use `thiserror` for custom errors
 - Logging: use `tracing` macros, not `println!`
 - Testing: add tests covering happy path and edge cases
 - CLI: follow `clap` patterns in existing subcommands
 
 ### API References
+
 - SPEC.md: relevant section reference
 - Upstream crate docs: link to docs.rs
 - Related code: file paths and line ranges for patterns

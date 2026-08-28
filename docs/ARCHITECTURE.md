@@ -6,7 +6,7 @@ Aptu is an AI-powered issue-triage and PR-review harness for GitHub. The archite
 
 ## Crate Structure
 
-```
+```text
 aptu/
 ├── aptu-cli          # CLI entry point, command routing, user I/O
 └── aptu-core         # Domain logic, GitHub API, AI providers
@@ -19,7 +19,7 @@ aptu/
 
 ## Data Flow
 
-```
+```text
 User Input (CLI)          GitHub Webhook (App)
        |                         |
 [aptu-cli] Parse args    [Cloudflare Worker] Validate HMAC,
@@ -43,19 +43,24 @@ The GitHub App path: a Cloudflare Worker receives webhook events, validates HMAC
 ## Key Abstractions
 
 ### TokenProvider Trait
+
 Abstracts credential retrieval across platforms. Implementations:
+
 - `CliTokenProvider` - CLI (env vars, gh CLI, keyring)
 - `FfiTokenProvider` - mobile keychain via UniFFI (KMP; Android Keystore via KVault)
 - `MockTokenProvider` - Testing
 
 ### AiProvider Trait
+
 Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Groq, Cerebras, Zenmux, Z.AI). Each provider:
+
 - Implements unified `chat_completion()` interface
 - Manages provider-specific API endpoints and authentication
 - Handles rate limiting via `backon` retry strategy
 - Model-tier routing selects `small_model` or `large_model` based on estimated prompt size, enabling automatic escalation for large PRs
 
 ### PR Review Pipeline
+
 `aptu pr review` assembles the AI prompt in layers, each capped by `ReviewConfig`:
 
 1. Fetch PR diff and metadata via Octocrab
@@ -84,6 +89,7 @@ The `ReviewContext` struct centralises all enrichment decisions: AST context, ca
 Returns the branch name that was pushed, or a `PatchError` variant on any failure.
 
 ### Facade Functions
+
 `aptu-core/facade/` is a module directory of high-level entry points for CLI and FFI consumers, one file per concern:
 
 | File | Key exports |

@@ -23,6 +23,7 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 ## Findings
 
 ### P1 — Schema prose descriptions duplicate guidelines
+
 **Severity:** High  
 **Area:** Prompt efficiency  
 **Finding:** `triage_schema.json` (1,008 bytes) and `pr_review_schema.json` (497 bytes) carry verbose prose field descriptions (e.g. "A 2-3 sentence summary of...") that restate content already present in the corresponding guidelines files (`triage_guidelines.md`, `pr_review_guidelines.md`). The schema is injected in the user turn on every call; the duplicated description text adds tokens with no new information for the model.  
@@ -31,6 +32,7 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 **Acceptance criteria:** Schema JSON files contain no prose duplicated verbatim or near-verbatim from guidelines files. `tests/prompt_lint.rs` passes. Token count of assembled prompt drops measurably for a representative triage and PR review call.
 
 ### P2 — Full JSON examples embedded in system prompt on every call
+
 **Severity:** High  
 **Area:** Prompt efficiency  
 **Finding:** `triage_guidelines.md` and `pr_review_guidelines.md` embed two full JSON examples (a happy-path case and an edge case) directly in the system prompt. These are sent unconditionally on every triage and PR review call, regardless of issue or PR complexity.  
@@ -39,6 +41,7 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 **Acceptance criteria:** System prompt for triage and PR review no longer contains inline JSON examples by default. `tests/prompt_lint.rs` updated and passing. System prompt byte count for both builders is reduced and documented in the PR description.
 
 ### P3 — Model-tier routing not implemented
+
 **Severity:** High  
 **Area:** Architecture  
 **Finding:** `registry.rs` hardcodes a single model per provider; there is no routing logic that selects a cheaper or smaller model for low-complexity workloads. `estimate_pr_size()` exists in `provider/review.rs` but is used only to enforce prompt budget limits (truncation), not to select a model tier. This is Phase 1 of the `autonomous-coder.md` spec and is currently 0% implemented.  
@@ -47,10 +50,12 @@ Assess whether aptu's hand-written prompt set carries avoidable token cost, whet
 **Acceptance criteria:** `resolve_for_task` selects model by workload size for at least PR review; behavior is covered by a unit test asserting tier selection via `resolve_for_task` for a small and a large size input. `docs/spec/autonomous-coder.md` Phase 1 status updated to reflect implementation. The two divergent implementations of `estimate_pr_size()` must be reconciled into a single canonical version before routing logic is wired; see #1406 for scope.
 
 ### P4 — In-process structural graph not implemented
+
 **Severity:** Medium  
 **Area:** Architecture  
 **Finding:** Current ast_context/call_graph is already structured output from `aptu-coder-core` (a tree-sitter-backed analysis crate, v0.25.4): compact function signatures and caller chains capped and managed by `apply_budget_drops` in `review_context.rs`. The separate GitHub Contents API raw-content fallback (for oversized diffs) is a distinct code path. The gap is the absence of a queryable structural graph that can compute blast radius in a single pass across crates. External research on code-knowledge-graph approaches shows substantial token and tool-call reductions, and accuracy gains, for structurally similar workloads (issue resolution, code review).  
 **Evidence:**
+
 - RepoGraph (ICLR 2025, arXiv:2410.14684): +32.8% relative resolve rate on SWE-bench Lite.
 - KGCompass (arXiv:2603.27277): 58.3% resolve rate, 10x fewer tokens, 2.1x fewer tool calls.
 - Code-review-graph (deepwiki): median 82x per-question token reduction.
