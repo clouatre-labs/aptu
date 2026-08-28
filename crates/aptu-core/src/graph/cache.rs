@@ -63,6 +63,10 @@ pub fn encode_graph(graph: &StructuralGraph) -> Option<Vec<u8>> {
 }
 
 /// Decodes a `StructuralGraph` from a versioned, schema-checked cache payload.
+///
+/// `symbol_index` is `#[serde(skip)]` upstream, so a freshly decoded graph
+/// always starts with an empty index; it must be rebuilt here or every
+/// warm cache hit would yield zero seeds from `find_symbols_all`.
 #[must_use]
 pub fn decode_graph(bytes: &[u8]) -> Option<StructuralGraph> {
     if bytes.len() < 8
@@ -71,7 +75,9 @@ pub fn decode_graph(bytes: &[u8]) -> Option<StructuralGraph> {
     {
         return None;
     }
-    postcard::from_bytes(&bytes[8..]).ok()
+    let mut graph: StructuralGraph = postcard::from_bytes(&bytes[8..]).ok()?;
+    graph.rebuild_symbol_index();
+    Some(graph)
 }
 
 /// Loads a cached graph or persists and returns the supplied graph.
@@ -185,6 +191,10 @@ mod tests {
         let decoded = decode_graph(&encode_graph(&original).unwrap()).unwrap();
         assert_eq!(original.graph.node_count(), decoded.graph.node_count());
         assert_eq!(original.graph.edge_count(), decoded.graph.edge_count());
+        // Regression: `symbol_index` is `#[serde(skip)]` upstream, so a
+        // decoded graph must rebuild it or `find_symbols_all` silently
+        // returns zero seeds on every warm cache hit.
+        assert!(!decoded.find_symbols_all(&["round_trip"]).is_empty());
     }
 
     #[test]
