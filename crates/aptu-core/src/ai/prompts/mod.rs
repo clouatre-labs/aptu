@@ -98,6 +98,7 @@ pub fn build_pr_label_system_prompt(context: &str) -> String {
 use super::provider::{SCHEMA_PREAMBLE, sanitize_prompt_field};
 use super::review_context::{ReviewContext, truncate_at_line_boundary};
 use super::types::IssueDetails;
+use std::collections::HashSet;
 use std::fmt::Write;
 use tracing;
 
@@ -277,6 +278,17 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     };
     let _ = writeln!(prompt, "Description:\n{body}\n");
 
+    let dropped_patches: HashSet<&str> = ctx
+        .budget_drops
+        .iter()
+        .filter_map(|s| s.strip_prefix("patch:"))
+        .collect();
+    let dropped_full_content: HashSet<&str> = ctx
+        .budget_drops
+        .iter()
+        .filter_map(|s| s.strip_prefix("file_content:"))
+        .collect();
+
     let mut files_included = 0;
     let mut files_skipped = 0;
     let mut total_diff_size = 0;
@@ -300,6 +312,11 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         };
 
         let _ = writeln!(prompt, "File: {filename} ({status})");
+
+        let patch_was_budget_dropped =
+            patch.is_none() && dropped_patches.contains(filename.as_str());
+        let full_content_was_budget_dropped =
+            full_content.is_none() && dropped_full_content.contains(filename.as_str());
 
         // Include patch if available
         // Skip the patch for added files that already have full_content: the patch
@@ -346,6 +363,11 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
                 let _ = writeln!(prompt, "```diff\n{sanitized_patch}\n```\n");
             }
             total_diff_size += patch_size;
+        } else if patch_was_budget_dropped {
+            let _ = writeln!(
+                prompt,
+                "[APTU: patch dropped due to prompt budget -- do not speculate on missing content]"
+            );
         }
 
         // Include full file content if available (cap at ctx.max_chars_per_file)
@@ -368,6 +390,11 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
                 "<file_content path=\"{}\">\n{}\n</file_content>\n",
                 sanitize_prompt_field(&filename),
                 sanitized
+            );
+        } else if full_content_was_budget_dropped {
+            let _ = writeln!(
+                prompt,
+                "[APTU: file content dropped due to prompt budget -- do not speculate on missing content]"
             );
         }
 
@@ -1144,6 +1171,232 @@ mod tests {
         assert!(
             !prompt.contains("<existing_review_comments>"),
             "existing_review_comments block must be omitted when review_comments is empty"
+        );
+    }
+
+    /// Regression test for issue #1548: verifies budget-dropped patches are annotated.
+    #[test]
+    fn test_budget_dropped_patch_annotated() {
+        use super::super::types::{PrDetails, PrFile};
+
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 0,
+            deletions: 0,
+            patch: None, // patch was dropped by budget
+            patch_truncated: false,
+            full_content: None,
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 100,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/100".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        let mut ctx = super::super::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            budget_drops: vec!["patch:src/lib.rs".to_string()], // Record that patch was budget-dropped
+            ..Default::default()
+        };
+
+        // Act: build the prompt
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: annotation for budget-dropped patch is present
+        assert!(
+            prompt.contains(
+                "[APTU: patch dropped due to prompt budget -- do not speculate on missing content]"
+            ),
+            "budget-dropped patch must be annotated"
+        );
+    }
+
+    /// Regression test for issue #1548: verifies budget-dropped `full_content` is annotated.
+    #[test]
+    fn test_budget_dropped_full_content_annotated() {
+        use super::super::types::{PrDetails, PrFile};
+
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "added".to_string(),
+            additions: 0,
+            deletions: 0,
+            patch: None,
+            patch_truncated: false,
+            full_content: None, // full_content was dropped by budget
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 101,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/101".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        let mut ctx = super::super::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            budget_drops: vec!["file_content:src/lib.rs".to_string()], // Record that full_content was budget-dropped
+            ..Default::default()
+        };
+
+        // Act: build the prompt
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: annotation for budget-dropped full_content is present
+        assert!(
+            prompt.contains("[APTU: file content dropped due to prompt budget -- do not speculate on missing content]"),
+            "budget-dropped full_content must be annotated"
+        );
+    }
+
+    /// Regression test for issue #1548: verifies legitimate missing content is NOT over-annotated.
+    /// A file with patch=None and an empty `budget_drops` (not a budget drop, just legitimately has no patch)
+    /// must NOT receive a budget-drop annotation.
+    #[test]
+    fn test_no_annotation_for_legitimate_missing_patch() {
+        use super::super::types::{PrDetails, PrFile};
+
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "added".to_string(),
+            additions: 0,
+            deletions: 0,
+            patch: None, // No patch, but not because of budget drop
+            patch_truncated: false,
+            full_content: Some("file content".to_string()),
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 102,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/102".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        let mut ctx = super::super::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            budget_drops: vec![], // Empty: no budget drops occurred
+            max_chars_per_file: 1000,
+            ..Default::default()
+        };
+
+        // Act: build the prompt
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: NO budget-drop annotations should be present
+        assert!(
+            !prompt.contains("[APTU: patch dropped due to prompt budget"),
+            "legitimate missing patch must not be annotated as budget-dropped"
+        );
+        assert!(
+            !prompt.contains("[APTU: file content dropped due to prompt budget"),
+            "legitimate missing content must not be annotated as budget-dropped"
+        );
+    }
+
+    /// Regression test for issue #1548: an "added" file with both `patch` and `full_content`
+    /// present has its patch intentionally skipped (redundant with `full_content`) -- this is a
+    /// design choice, not a budget drop, and must not get the budget-drop annotation even
+    /// though the patch does not appear in the prompt.
+    #[test]
+    fn test_no_annotation_for_added_file_with_patch_skipped_by_design() {
+        use super::super::types::{PrDetails, PrFile};
+
+        let files = vec![PrFile {
+            filename: "src/new_module.rs".to_string(),
+            status: "added".to_string(),
+            additions: 10,
+            deletions: 0,
+            patch: Some("+fn new_fn() {}".to_string()), // present, but redundant with full_content
+            patch_truncated: false,
+            full_content: Some("fn new_fn() {}".to_string()),
+        }];
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 103,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/103".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        let mut ctx = super::super::review_context::ReviewContext {
+            pr,
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            budget_drops: vec![], // Empty: no budget drops occurred
+            max_chars_per_file: 1000,
+            ..Default::default()
+        };
+
+        // Act: build the prompt
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: the patch itself is omitted (by design, redundant with full_content)...
+        assert!(
+            !prompt.contains("+fn new_fn() {}"),
+            "patch for an added file with full_content must be skipped by design"
+        );
+        // ...but no budget-drop annotation is emitted, since this was not a budget drop.
+        assert!(
+            !prompt.contains("[APTU: patch dropped due to prompt budget"),
+            "patch skipped by design (added file with full_content) must not be annotated as budget-dropped"
         );
     }
 }
