@@ -741,12 +741,14 @@ Each defect PR should have a clean version (same files, no bug) to serve as a co
 4 PRs: 3 defective + 1 clean.
 
 **Method**:
+
 - 2 configs: No KG, KG enabled
 - 2 runs per PR per config (not 3; 2 is enough with deterministic prompt chars)
 - 4 PRs x 2 configs x 2 runs = 16 runs
 - Same model, same command, same extraction
 
 **Value metrics** (new):
+
 - For each run, extract the full `comments` array text (not just count)
 - Classify each comment as: catches the defect (true positive), flags something irrelevant (false
   positive), or misses the defect (false negative)
@@ -754,12 +756,14 @@ Each defect PR should have a clean version (same files, no bug) to serve as a co
 - Compare hit rate: KG vs No KG on the 3 defect PRs
 
 **Cost metrics** (same as current):
+
 - `input_tokens`, `prompt_chars`, `cost_usd`, `duration_ms`
 
 **Decision rule**: KG is worth enabling if it catches defects that No KG misses, without
 increasing false positives. Cost is secondary if the value is real.
 
 **What this does NOT do**:
+
 - No human-rated review quality (too expensive, not simple)
 - No large-scale statistical analysis (16 runs is small, but binary hit/miss is interpretable)
 - No latency focus (already shown to be noise at this scale per F3)
