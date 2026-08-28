@@ -174,12 +174,14 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
                     }
                     file_block.push('\n');
                 }
-                if output.len() + file_block.len() > CAP {
-                    break;
+                // Cap only the text output, not the graph data collection.
+                // Previously a `break` here skipped analysis_pairs/symbol_ranges
+                // for remaining files, producing an empty graph on large PRs (#1538).
+                if output.len() + file_block.len() <= CAP {
+                    output.push_str(&file_block);
                 }
-                output.push_str(&file_block);
 
-                // Accumulate for graph building
+                // Always accumulate graph data regardless of text cap
                 #[cfg(feature = "graph")]
                 {
                     analysis_pairs.push((full_path.clone(), analysis.semantic.clone()));
@@ -203,9 +205,11 @@ fn build_ast_context_sync(repo_path: &str, files: &[PrFile]) -> AstContextOutput
     }
     output.push_str("</ast_context>\n");
 
-    // If nothing was added (only the wrapper tags), return empty
+    // If nothing was added (only the wrapper tags), clear the text but still
+    // proceed to graph building -- graph data may have been accumulated even
+    // when all file blocks exceeded the text cap (#1538).
     if output == "\n<ast_context>\n</ast_context>\n" {
-        return AstContextOutput::new(String::new());
+        output.clear();
     }
 
     // Enforce cap on the full output
@@ -383,6 +387,7 @@ fn build_call_graph_context_sync(repo_path: &str, files: &[PrFile]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     fn make_pr_file(filename: &str) -> PrFile {
         PrFile {
@@ -413,6 +418,57 @@ mod tests {
         let result = build_ast_context(&repo_path, &files).await;
         // Verify it doesn't panic and respects the cap
         assert!(result.text.len() <= 2200, "output should be near cap");
+    }
+
+    #[cfg(all(feature = "ast-context", feature = "graph"))]
+    #[tokio::test]
+    async fn test_graph_data_populated_when_text_cap_exceeded() {
+        // Regression test for #1538: when the first file's AST block exceeds the
+        // 2000-char text cap, analysis_pairs and symbol_ranges must still be
+        // populated so the graph is non-empty.
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("big.rs");
+        // Generate enough functions to exceed the 2000-char text cap.
+        let mut content = String::from("// SPDX-License-Identifier: Apache-2.0\n");
+        for i in 0..80 {
+            content.push_str(&format!(
+                "pub fn func_{i}(x: u32, y: u32) -> u32 {{ x + y + {i} }}\n"
+            ));
+        }
+        std::fs::write(&file_path, &content).unwrap();
+
+        let files = vec![PrFile {
+            filename: "big.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 80,
+            deletions: 0,
+            patch: None,
+            patch_truncated: false,
+            full_content: None,
+        }];
+        let result = build_ast_context(temp_dir.path().to_str().unwrap(), &files).await;
+
+        // Text should be capped near 2000 chars (or empty if the single file
+        // block exceeds CAP, which is acceptable as long as graph data is present)
+        assert!(
+            result.text.len() <= 2200,
+            "text must be capped near 2000 chars, got {}",
+            result.text.len()
+        );
+
+        // Graph data must still be populated despite the text cap
+        assert!(
+            !result.symbol_ranges.is_empty(),
+            "symbol_ranges must be populated even when text cap is exceeded"
+        );
+        assert!(
+            result.symbol_ranges.contains_key("big.rs"),
+            "symbol_ranges must contain 'big.rs' entry"
+        );
+        assert!(
+            !result.symbol_ranges["big.rs"].is_empty(),
+            "symbol_ranges for 'big.rs' must have function entries"
+        );
     }
 
     #[tokio::test]
