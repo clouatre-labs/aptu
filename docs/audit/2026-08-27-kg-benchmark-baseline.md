@@ -1,5 +1,7 @@
 # Audit: KG Benchmark — Multi-PR Size Scaling (No KG vs Current KG) — August 2026
 
+> **Status: Superseded.** Historical benchmark baseline preserved for comparison. Graph consolidation completed across PRs #1544, #1551, #1553, and #1554. See `docs/ARCHITECTURE.md` for current structural graph design.
+
 Date: 2026-08-27 (pre-fix baseline), 2026-08-27 (post-fix re-run after PR #1539)  
 Toolchain: aptu 0.10.16 release build; pre-fix at main @ 88c20e4, post-fix at main @ 32f546d  
 Data: 4 PRs x 2 configs x 3 runs = 24 total runs per benchmark (48 runs total), same OpenRouter `mistralai/mistral-small-2603` model on all runs.  

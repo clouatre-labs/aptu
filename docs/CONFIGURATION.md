@@ -301,7 +301,7 @@ max_prompt_chars = 120000          # Total prompt character budget (default: 120
 max_full_content_files = 10        # Max files fetched in full via GitHub Contents API (default: 10)
 max_chars_per_file = 16000         # Max chars of full file content per file (default: 16 000)
 max_diff_chars = 200000            # Max total diff characters across all files in the prompt (default: 200 000)
-max_patch_chars_per_file = 10000   # Max chars per individual file patch; patches exceeding this are dropped entirely (default: 10 000)
+max_patch_chars_per_file = 25000   # Max chars per individual file patch; patches exceeding this are dropped entirely (default: 25 000)
 max_instructions_chars = 1500      # Max chars of instructions file content included in review prompt (default: 1 500)
 min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
 max_dep_packages = 3               # Max dependency bump packages for which upstream release notes are fetched (default: 3)
@@ -319,7 +319,7 @@ When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in th
 
 ## Structural Graph Configuration
 
-Controls the petgraph-backed in-process call graph built from tree-sitter parsing of PR-changed files. The graph computes a bounded blast-radius subgraph around modified symbols and injects it into the PR review prompt. This feature is opt-in and disabled by default.
+Controls structural graph context injection via an adapter delegating graph construction and traversal to `aptu-coder-core::graph::StructuralGraph`. The graph computes a bounded bidirectional blast-radius subgraph around modified symbols using multi-language typed AST analysis and injects plain-text formatted output (`render_subgraph_text`) into the PR review prompt. This feature is opt-in and disabled by default.
 
 ```toml
 [graph]
@@ -333,7 +333,7 @@ The graph is cached on disk at `~/.local/share/aptu/graph/<owner>/<repo>/<sha>.b
 
 `max_nodes` caps the subgraph size injected into the prompt. Larger values produce richer context but increase prompt size; the `apply_budget_drops` pipeline will drop the graph section before AST context if the prompt budget is exceeded.
 
-Only Rust files (`.rs`) are parsed for symbol and call-edge extraction in the initial release. Non-Rust files receive a `File` node only and do not contribute call edges.
+Symbol and call-edge extraction uses multi-language typed AST analysis across supported source files.
 
 ## Cache Configuration
 
