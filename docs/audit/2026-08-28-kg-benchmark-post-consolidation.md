@@ -210,6 +210,27 @@ Scaling: 6x more files made OLD ~23x slower (worse than linear) but NEW only ~4.
 
 **Caveat:** absolute local pipeline time (tens to low hundreds of microseconds) is negligible next to the AI-provider round-trip that dominates `aptu pr review`'s wall-clock time (seconds, per Table 1). This is a real, reproducible, mechanistically-explained speedup, but it is not what limits current review latency.
 
+### F16: Same-name collision resolution scales super-linearly, but only becomes visible far beyond real PR sizes (PERFORMANCE)
+
+**Severity:** Info
+
+**Category:** PERFORMANCE
+
+Follow-up to R12. F15's fixtures used uniquely-named functions across files, so `StructuralGraph::build_from_analysis`'s documented same-file-preference / line-proximity / arg-count collision resolution (`resolve_candidate()`, `aptu-coder-core` 0.32.4 `src/graph/structural.rs:90-163`) was never exercised. This benchmark adds a paired "collision" fixture: every file defines the same 5 names (`new`, `default`, `fmt`, `from`, `get`) instead of unique names, with the same 7-functions-per-file shape and the same cross-file chain structure as the control fixture, so file count is the only variable. Same harness as F15 (`std::time::Instant`, release profile, 200 iterations, local/AI-free), extended to N = 10/30/50/100/200/400 files to see the full scaling curve, not just one point.
+
+| Files | Control median (unique names) | Collision median (5 names, N-way) | Ratio |
+|------|------|------|------|
+| 10 | 23.96µs | 35.38µs | 1.48x |
+| 30 | 57.42µs | 79.83µs | 1.39x |
+| 50 | 96.04µs | 143.96µs | 1.50x |
+| 100 | 187.58µs | 374.71µs | 2.00x |
+| 200 | 374.21µs | 865.50µs | 2.31x |
+| 400 | 744.33µs | 3,236.33µs | 4.35x |
+
+**Mechanism:** `resolve_candidate()` only takes its O(1) path when a name has 0 or 1 global candidates (`structural.rs:98-103`). With a name repeated across N files, every call site referencing it has N candidates, and stage b (same-file preference, `structural.rs:106-116`) does a full linear scan over all N candidates before it can narrow the pool — even when the scan's outcome is an unambiguous same-file match. `build_from_analysis` runs this resolution once per caller and once per callee for every recorded call, unconditionally, during graph *build* (not gated by seed or depth), so the cost lands regardless of which symbol is later queried. Confirms the O(N) source read from R12 directly: the collision/control ratio does not stay flat, it climbs monotonically (1.4x -> 1.5x -> 2.0x -> 2.3x -> 4.35x) as N grows, which a fixed constant-factor overhead would not do. Control itself scales sub-linearly (~31x time for a 40x file-count increase, consistent with F15), while collision scales faster than control at every step, most sharply between 200 and 400 files (ratio nearly doubles in that one step). Render output size stayed flat across all N for both fixture types (control: 6 lines / 314-315 chars; collision: 27 lines / 1,253-1,257 chars) — the growth differential is entirely in the build phase, not rendering, isolating collision resolution as the sole driver.
+
+**Impact:** the effect is real and matches R12's hypothesis, but the file counts where it becomes noticeable (100+) are well beyond what `build_ast_context_sync` (`crates/aptu-core/src/ast_context.rs:151-247`) normally sees: `entries` there is built strictly from `files: &[PrFile]`, the PR's own changed-file list, not the whole repo. Realistic PRs run tens of files, where the ratio (1.4-1.5x) is a few-microsecond difference, negligible next to the AI round-trip per F15's caveat. This is not a regression to fix urgently, but it is a genuine untested slow path: an unusually large PR (a repo-wide rename or trait-impl sweep touching hundreds of files that each define `new`/`default`/`fmt`) would hit measurably worse-than-control scaling, and the local pipeline cost, while still small in absolute terms at N=400 (3.2ms), is no longer negligible-by-inspection the way F15's uniquely-named fixtures suggested.
+
 ## Recommendations
 
 ### R8: Fix symbol-index deserialization upstream before relying on the graph cache
@@ -254,6 +275,16 @@ No restoration-to-parity work is warranted: the retired implementation's higher 
 
 F15's fixtures used uniquely-named functions, so they never exercised `StructuralGraph::build_from_analysis`'s documented same-file-preference / line-proximity / arg-count collision resolution (`graph/mod.rs`'s doc comment, upstream since aptu-coder-core 0.32.0). Real Rust codebases commonly repeat names like `new`, `default`, `fmt`, `from` across many files/impls; if that resolution step is not O(1) or O(log n) per symbol, a repo heavy with such collisions could hit a slower path this benchmark never touched. Not yet measured — a fixture with many same-named functions across files would settle it.
 
+**Status:** Measured — see F16.
+
+### R13: Index collision candidates by file to remove the O(N) same-file scan, but treat it as low priority
+
+**Priority:** Info
+
+**Fixes:** F16
+
+`resolve_candidate()`'s same-file-preference stage (`structural.rs:106-116`) filters the *entire* candidate list for a name on every call, even when the eventual match is unambiguous. Grouping `symbol_index` by `(name, file_path)` — or keeping a secondary `HashMap<(String, String), NodeIndex>` populated during `build_nodes` — would make same-file lookups O(1) and remove the dominant cost driver F16 measured, without changing `resolve_candidate`'s line-proximity/arg-count fallback stages (which only run on the rarer same-file-miss or same-line-tie paths). Not urgent: `build_ast_context_sync` bounds `entries` to a single PR's changed-file list, and F16 shows the effect costs low-single-digit milliseconds even at 400 colliding files — a PR size well outside normal review workloads. Worth doing opportunistically upstream in `aptu-coder-core`, not worth blocking on.
+
 ## Summary
 
 *Table 5: Findings.*
@@ -267,6 +298,7 @@ F15's fixtures used uniquely-named functions, so they never exercised `Structura
 | F13 | Info | MEASUREMENT | Cold-run volume gap is a replay-methodology artifact (checkout-time file drift, #1529's file deleted by #1544), not a StructuralGraph regression; 0.32.4 re-verified |
 | F14 | Info | MEASUREMENT | Cold/warm parity confirmed restored on aptu-coder-core 0.32.4 (#1559); R10 acceptance criterion met |
 | F15 | Info | PERFORMANCE | StructuralGraph is 6.6-33x faster than the retired local pipeline on synthetic fixtures, and scales sub-linearly where the retired pipeline scaled worse than linear; retired pipeline's larger output was partly duplicate-node noise |
+| F16 | Info | PERFORMANCE | Same-name collision resolution scales super-linearly (ratio climbs 1.4x -> 4.35x from 10 to 400 colliding files); only becomes material well beyond real PR sizes (`entries` is bounded by PR changed-files) |
 
 *Table 6: Recommendations.*
 
@@ -276,7 +308,8 @@ F15's fixtures used uniquely-named functions, so they never exercised `Structura
 | R9 | High | F9-F11 | Graph feature not release-verified for cache-hit usage; re-verify before release |
 | R10 | Info | F9 | Re-run benchmark post-fix; acceptance: cold/warm injection identical — **Verified, see F14** |
 | R11 | Info | F11, F13 | Accept current cold-run volume; fix future replay methodology instead of code; closes #1557 |
-| R12 | Info | F15 | Benchmark same-name symbol collision resolution — untested scaling path |
+| R12 | Info | F15 | Benchmark same-name symbol collision resolution — untested scaling path — **Measured, see F16** |
+| R13 | Info | F16 | Index collision candidates by file to remove the O(N) same-file scan; low priority, not worth blocking on |
 
 ## Reproduction
 
