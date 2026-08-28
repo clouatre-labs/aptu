@@ -149,6 +149,27 @@ Where injection occurs (cold runs only), volume is 21-95% lower than the baselin
 
 All 24 runs returned `approve` with 0 concerns; comment and strength counts fluctuate without a directional KG effect, matching the baseline's Limitations analysis. Duration differences between KG warm and No KG are within run-to-run noise. `cost_usd` again shows cold-run variance unrelated to token counts, reconfirming R4 (use `input_tokens`).
 
+### F13: Cold-run volume gap is a replay-methodology artifact, not a StructuralGraph regression (DETERMINATION)
+
+**Severity:** Info
+
+**Category:** MEASUREMENT
+
+Follow-up to F11, closing out issue #1557. `ast_context.rs::build_ast_context_sync` reads every changed file from the local filesystem at `repo_path` via `analyze_file`, never from the PR's own historical commit through GitHub's Contents API. `derive_modified_symbols` resolves diff-hunk line numbers exactly as recorded in the PR's own historical patch (fetched from GitHub) against `symbol_ranges` built from whatever is *currently checked out* on disk. All 4 benchmarked PRs were merged well before either benchmark's reference commit, so replaying them measures the checked-out file's present-day content, not the file as it stood at the PR's own head SHA.
+
+This fully explains PR #1529's empty (12-byte) cache: its only changed file, `crates/aptu-core/src/graph/query.rs`, was deleted from main by PR #1544 — the very consolidation this audit measures. Post-consolidation, `analyze_file` cannot find the file at all; the error is silently swallowed (`ast_context.rs`: `Err(e) => debug!("ast_context: skipping {}: {}", file.filename, e)`), so the PR contributes zero graph data. Pre-consolidation the file still existed on the checked-out main, so it produced some (not necessarily faithful) data — that number was never a clean reproduction of PR #1529's own diff-to-symbol mapping either.
+
+Two candidate explanations were checked directly against source and ruled out:
+
+- **Node-type coverage**: the retired `graph::query::Node` enum (pre-#1544) had exactly three variants — `File`, `Function`, `Module` — and `render_subgraph_text`'s match arm rendered only `Function`. The pre-#1529 docstring claiming `Struct`/`Enum`/`Trait`/`Impl` nodes were also rendered did not match the code; PR #1529 corrected the docstring to reality. No behavior changed.
+- **Seed derivation**: `derive_modified_symbols` (including its `SYMBOL_RE` regex fallback for brand-new declarations) is byte-identical on both sides of the #1544 consolidation boundary (introduced in #1445; untouched by #1544 or by #1538's later fix). Seeding logic did not regress.
+
+One genuine, already-documented rendering difference remains (`crates/aptu-core/src/graph/mod.rs:13-15`): the new renderer emits duplicate-name symbols once per distinct node rather than deduplicating by name, which makes output larger, not smaller, in that case — so it cannot explain the overall volume reduction either.
+
+**Re-verification on aptu-coder-core 0.32.4** (current main @ 7cec7f7, includes #1559): cold-run numbers reproduce the Table 2/3 post-consolidation figures within normal tokenizer jitter — #1529 16,661 chars (5,454 tokens), #1531 75,134 chars (21,381 tokens), #1532 81,865 chars (28,626 tokens), #1519 81,913 chars (21,642 tokens); cache file sizes byte-identical (12B / 6,585B / 480B / 10,460B). Confirms #1559's decode-path fix does not touch the cold-build path, as expected.
+
+**Impact:** no code regression to fix. The graph feature's cold-run rendering is behaving as designed; the apparent volume loss is an artifact of re-auditing already-merged historical PRs against a later checkout. Future KG benchmarks that replay historical PRs should either use still-open PRs or check out each PR's own head SHA into `repo_path` before that PR's cold run, to get a faithful measurement.
+
 ## Recommendations
 
 ### R8: Fix symbol-index deserialization upstream before relying on the graph cache
@@ -175,6 +196,14 @@ The graph feature is opt-in (`[graph] enabled = true`; default off), so default-
 
 Same 4 PRs, same method. Acceptance: KG prompt chars identical across cold and warm runs per PR, and warm-run injection equal to cold-run injection.
 
+### R11: Accept current cold-run volume; fix the replay methodology, not the code
+
+**Priority:** Info
+
+**Fixes:** F11, F13
+
+No restoration-to-parity work is warranted: the retired implementation's higher pre-consolidation numbers were not a more faithful measurement, just differently drifted against a different checkout state. Closes #1557. When replaying historical merged PRs for future graph benchmarks, either use still-open PRs or check out each PR's own head SHA into `repo_path` before its cold run.
+
 ## Summary
 
 *Table 5: Findings.*
@@ -185,6 +214,7 @@ Same 4 PRs, same method. Acceptance: KG prompt chars identical across cold and w
 | F10 | High | BUG | KG is a steady-state no-op on cache-hit reviews (8 of 12 KG runs) |
 | F11 | Info | MEASUREMENT | Cold-run injection 21-95% below pre-consolidation baseline; #1529 builds an empty graph |
 | F12 | Info | MEASUREMENT | No quality signal; input_tokens confirmed as primary metric |
+| F13 | Info | MEASUREMENT | Cold-run volume gap is a replay-methodology artifact (checkout-time file drift, #1529's file deleted by #1544), not a StructuralGraph regression; 0.32.4 re-verified |
 
 *Table 6: Recommendations.*
 
@@ -193,6 +223,7 @@ Same 4 PRs, same method. Acceptance: KG prompt chars identical across cold and w
 | R8 | High | F9, F10 | Rebuild symbol index post-deserialize upstream; extend aptu roundtrip test |
 | R9 | High | F9-F11 | Graph feature not release-verified for cache-hit usage; re-verify before release |
 | R10 | Info | F9 | Re-run benchmark post-fix; acceptance: cold/warm injection identical |
+| R11 | Info | F11, F13 | Accept current cold-run volume; fix future replay methodology instead of code; closes #1557 |
 
 ## Reproduction
 
