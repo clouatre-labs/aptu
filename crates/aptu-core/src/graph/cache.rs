@@ -2,6 +2,18 @@
 // SPDX-FileCopyrightText: 2025 Agentic AI Foundation
 
 //! On-disk cache for structural graphs, keyed by repository and commit SHA.
+//!
+//! Cache files are an 8-byte header (`FORMAT_VERSION` as little-endian `u32`,
+//! then an FNV-1a `schema_hash` of [`SCHEMA_STRING`] as little-endian `u32`)
+//! followed by the postcard-serialized graph payload. Entries older than
+//! `GraphConfig::cache_ttl_hours` or with a mismatched header are treated as
+//! misses and rebuilt. Writes are atomic (write to a tempfile in the same
+//! directory, then rename). On `wasm32`, caching is unavailable and
+//! `load_or_build` always falls back to rebuilding in memory.
+//!
+//! Any change to the on-disk schema must bump `FORMAT_VERSION` and update
+//! `SCHEMA_STRING` together, so stale entries miss once and rebuild instead of
+//! decoding into the wrong shape.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -26,7 +38,6 @@ pub const fn schema_hash() -> u32 {
     hash
 }
 
-#[allow(missing_docs)]
 /// Returns the cache file path for a repository revision.
 #[must_use]
 pub fn cache_path(owner: &str, repo: &str, sha: &str) -> PathBuf {
@@ -37,7 +48,10 @@ pub fn cache_path(owner: &str, repo: &str, sha: &str) -> PathBuf {
         .join(format!("{sha}.bin"))
 }
 
-#[allow(missing_docs)]
+/// Encodes a `StructuralGraph` into the versioned, schema-checked cache format:
+/// an 8-byte header (`FORMAT_VERSION` then [`schema_hash`], both little-endian
+/// `u32`) followed by the postcard-serialized graph. Returns `None` if
+/// serialization fails.
 #[must_use]
 pub fn encode_graph(graph: &StructuralGraph) -> Option<Vec<u8>> {
     let payload = postcard::to_allocvec(graph).ok()?;
@@ -78,6 +92,9 @@ pub fn load_or_build(
     (graph, false)
 }
 
+/// WASM fallback: disk caching is unavailable on `wasm32`, so this always
+/// rebuilds and returns the supplied graph unchanged, reporting `false` (no
+/// cache hit) rather than keying by owner/repo/SHA or honoring the TTL.
 #[cfg(target_arch = "wasm32")]
 #[must_use]
 pub fn load_or_build(
