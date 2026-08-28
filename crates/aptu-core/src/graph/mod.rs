@@ -2,6 +2,17 @@
 // SPDX-FileCopyrightText: 2025 Agentic AI Foundation
 
 //! Structural graph adapter backed by `aptu-coder-core`.
+//!
+//! This module delegates graph construction and traversal to
+//! `aptu-coder-core::graph::StructuralGraph` rather than maintaining a local
+//! `Node`/`Edge`/petgraph implementation (retired in #1533/#1544). Blast-radius
+//! rendering composes three upstream calls: `find_symbols` seeds candidate
+//! nodes by name, `blast_radius_bidirectional` expands the bounded subgraph,
+//! and `render_subgraph_text` formats it.
+//!
+//! Rendering is deterministic: upstream sorts candidates by node index, and
+//! duplicate-name symbols each render once per distinct node, unlike the
+//! retired renderer which deduplicated by name.
 
 pub mod cache;
 pub use aptu_coder_core::graph::StructuralGraph;
