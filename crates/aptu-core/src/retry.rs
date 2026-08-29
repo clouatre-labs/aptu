@@ -140,18 +140,19 @@ const MAX_RETRY_AFTER_SECS: u64 = 120;
 /// # Arguments
 ///
 /// * `e` - Reference to an anyhow error
+/// * `max_delay_secs` - Upper bound to cap the retry-after value at
 ///
 /// # Returns
 ///
 /// `Some(duration)` if a `RateLimited` error is found with `retry_after` > 0,
 /// `None` otherwise
 #[must_use]
-pub fn extract_retry_after(e: &anyhow::Error) -> Option<std::time::Duration> {
+pub fn extract_retry_after(e: &anyhow::Error, max_delay_secs: u64) -> Option<std::time::Duration> {
     if let Some(crate::error::AptuError::RateLimited { retry_after, .. }) =
         e.downcast_ref::<crate::error::AptuError>()
         && *retry_after > 0
     {
-        let capped = (*retry_after).min(MAX_RETRY_AFTER_SECS);
+        let capped = (*retry_after).min(max_delay_secs);
         return Some(std::time::Duration::from_secs(capped));
     }
     None
