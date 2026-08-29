@@ -32,8 +32,8 @@ pub trait ConfigSource: Send + Sync {
 pub struct InMemoryConfigSource(pub AppConfig);
 
 impl ConfigSource for InMemoryConfigSource {
-    fn load(&self) -> Result<AppConfig, AptuError> {
-        Ok(self.0.clone())
+    fn load(&self) -> Option<AppConfig> {
+        Some(self.0.clone())
     }
 }
 
