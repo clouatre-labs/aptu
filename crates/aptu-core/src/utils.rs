@@ -177,46 +177,6 @@ pub(crate) fn is_priority_label(label: &str) -> bool {
     false
 }
 
-/// Parses a git remote URL to extract owner/repo.
-///
-/// Supports SSH (git@github.com:owner/repo.git) and HTTPS
-/// (<https://github.com/owner/repo.git>) formats.
-///
-/// # Examples
-///
-/// ```ignore
-/// use aptu_core::utils::parse_git_remote_url;
-///
-/// assert_eq!(parse_git_remote_url("git@github.com:owner/repo.git"), Ok("owner/repo".to_string()));
-/// assert_eq!(parse_git_remote_url("https://github.com/owner/repo.git"), Ok("owner/repo".to_string()));
-/// assert_eq!(parse_git_remote_url("git@github.com:owner/repo"), Ok("owner/repo".to_string()));
-/// ```
-pub(crate) fn parse_git_remote_url(url: &str) -> Result<String, String> {
-    // Parse SSH format: git@github.com:owner/repo.git
-    if let Some(ssh_part) = url.strip_prefix("git@github.com:") {
-        let repo = ssh_part.strip_suffix(".git").unwrap_or(ssh_part);
-        return Ok(repo.to_string());
-    }
-
-    // Parse HTTPS format: https://github.com/owner/repo.git
-    if let Some(https_part) = url.strip_prefix("https://github.com/") {
-        let repo = https_part.strip_suffix(".git").unwrap_or(https_part);
-        return Ok(repo.to_string());
-    }
-
-    // Try generic regex pattern for other git hosts
-    let re = Regex::new(r"(?:git@|https://)[^/]+[:/]([^/]+)/(.+?)(?:\.git)?$")
-        .map_err(|e| format!("Regex error: {e}"))?;
-
-    if let Some(caps) = re.captures(url)
-        && let (Some(owner), Some(repo)) = (caps.get(1), caps.get(2))
-    {
-        return Ok(format!("{}/{}", owner.as_str(), repo.as_str()));
-    }
-
-    Err(format!("Could not parse git remote URL: {url}"))
-}
-
 /// Infers the GitHub repository (owner/repo) from the local git config.
 ///
 /// Runs `git config --get remote.origin.url` and parses the result.
