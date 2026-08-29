@@ -140,20 +140,20 @@ use std::fmt::Write as FmtWrite;
 /// pushed within the last 30 days, meeting minimum star count and language criteria.
 #[must_use]
 pub fn build_search_query(filter: &DiscoveryFilter) -> String {
-    let mut query = String::from("good-first-issues:>0");
+    let mut search_query = String::from("good-first-issues:>0");
 
-    // Calculate date 30 days ago from now
-    let thirty_days_ago = Utc::now() - Duration::days(30);
-    let date_str = thirty_days_ago.format("%Y-%m-%d").to_string();
-    let _ = write!(query, " pushed:>{date_str}");
+    // Compute the cutoff date for the "pushed within" filter
+    let cutoff_date = Utc::now() - Duration::days(30);
+    let cutoff_date_str = cutoff_date.format("%Y-%m-%d").to_string();
+    let _ = write!(search_query, " pushed:>{cutoff_date_str}");
 
-    let _ = write!(query, " stars:>={}", filter.min_stars);
+    let _ = write!(search_query, " stars:>={}", filter.min_stars);
 
     if let Some(lang) = &filter.language {
-        let _ = write!(query, " language:{lang}");
+        let _ = write!(search_query, " language:{lang}");
     }
 
-    query
+    search_query
 }
 
 /// Search for repositories matching the discovery filter.
