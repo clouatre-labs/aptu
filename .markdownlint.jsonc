@@ -6,12 +6,21 @@
 
   "default": false,
 
+  // Heading levels must increment by one (no skipped levels)
+  "MD001": true,
+
   // Trailing spaces: require exactly 2 for hard line breaks, forbid all others
   "MD009": {
     "br_spaces": 2,
     "list_item_empty_lines": false,
     "strict": false
   },
+
+  // No hard tabs
+  "MD010": true,
+
+  // Paragraphs are unwrapped (one line each); no hard-wrap column limit
+  "MD013": false,
 
   // Blank line required around headings, lists, and fenced code blocks
   "MD022": true,

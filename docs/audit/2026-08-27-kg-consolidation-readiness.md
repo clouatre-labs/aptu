@@ -2,8 +2,8 @@
 
 > **Status: Superseded.** Graph consolidation into `StructuralGraph` was implemented across PRs #1544, #1551, #1553, and #1554. See `docs/ARCHITECTURE.md` for current structural graph architecture.
 
-Date: 2026-08-27
-Related: #1510, #1525, #1528, #1532, #1533
+Date: 2026-08-27  
+Related: #1510, #1525, #1528, #1532, #1533  
 Blocks: clouatre-labs/aptu-coder#1472
 
 ## Context

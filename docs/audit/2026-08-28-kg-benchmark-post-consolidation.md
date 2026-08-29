@@ -337,11 +337,7 @@ Do NOT clear cache between runs. Cleanup: remove the config file and the graph c
 
 ## Reproduction: Local Microbenchmark (F15/F16)
 
-Local, AI-free, no network calls, no cost. Both F15 (unique names, 5/30 files) and F16
-(paired control/collision fixtures, 10-400 files) use this same harness: generate `.rs`
-fixtures on disk, temporarily append a `#[cfg(test)]` bench module to
-`crates/aptu-core/src/graph/mod.rs`, run it under `--release`, capture the numbers, then
-revert the source change. The bench module is never committed.
+Local, AI-free, no network calls, no cost. Both F15 (unique names, 5/30 files) and F16 (paired control/collision fixtures, 10-400 files) use this same harness: generate `.rs` fixtures on disk, temporarily append a `#[cfg(test)]` bench module to `crates/aptu-core/src/graph/mod.rs`, run it under `--release`, capture the numbers, then revert the source change. The bench module is never committed.
 
 ### 1. Generate fixtures
 
@@ -405,8 +401,7 @@ for n in (10, 30, 50, 100, 200, 400):
 print("done")
 ```
 
-Run it from a scratch directory (fixtures are ephemeral, not committed):
-`python3 gen_fixtures.py`. F15 used only the 5/30-file sizes; F16 used the full 10-400 curve.
+Run it from a scratch directory (fixtures are ephemeral, not committed): `python3 gen_fixtures.py`. F15 used only the 5/30-file sizes; F16 used the full 10-400 curve.
 
 ### 2. Append the bench harness
 
