@@ -159,7 +159,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
       - name: Run Clippy lints
-        run: cargo clippy --locked --profile ci --features aptu-core/graph -- -D warnings -W clippy::cognitive_complexity
+        run: cargo clippy --locked --profile ci --features aptu-core/ast-context -- -D warnings -W clippy::cognitive_complexity
       - name: Build examples
         run: cargo build --examples --locked -p aptu-core --profile ci
 
@@ -190,9 +190,9 @@ jobs:
       - name: Run tests
         # --no-fail-fast: run all tests and report all failures at once
         run: cargo nextest run --workspace --locked --no-fail-fast
-      - name: Run tests with ast-context and graph features
+      - name: Run tests with ast-context feature
         # Exercises the strict !result.is_empty() assertion branch in ast_context tests
-        run: cargo nextest run -p aptu-core --locked --no-fail-fast --features ast-context,graph
+        run: cargo nextest run -p aptu-core --locked --no-fail-fast --features ast-context
 
   build:
     name: Build CLI

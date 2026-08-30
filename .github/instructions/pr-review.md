@@ -44,10 +44,7 @@ When reviewing `.github/workflows/` changes:
 - Inline comment dedup map key is `(path, line, side, commit_id)`; `line=None` comments are
   excluded from the map; PATCH-update on changed body must be preserved; do not suggest
   collapsing skip and update into a single code path.
-- New code in `graph/` or `review_context.rs` requiring OS I/O must carry both
-  `#[cfg(feature = "graph")]` and `#[cfg(not(target_arch = "wasm32"))]`; flag missing gates.
-- Graph cache uses postcard (not bincode, not serde_json); do not suggest swapping serializers.
-- Both `ReviewConfig::validate_consistency()` and `GraphConfig::validate_consistency()` are called once at config load time (`config/loader.rs`); do not flag them as unused or suggest moving the call to individual use sites.
+- `ReviewConfig::validate_consistency()` is called once at config load time (`config/loader.rs`); do not flag it as unused or suggest moving the call to individual use sites.
 
 ## General
 

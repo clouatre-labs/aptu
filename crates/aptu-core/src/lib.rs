@@ -148,8 +148,6 @@ pub mod facade;
 /// Git utilities: patch application, branch management, and version gating.
 pub mod git;
 pub mod github;
-#[cfg(feature = "graph")]
-pub mod graph;
 pub mod history;
 pub mod metrics;
 pub mod repos;
