@@ -65,14 +65,12 @@ If you prefer not to use Just:
 ```bash
 # Tests run via nextest; install with: cargo install cargo-nextest (or use cargo-binstall)
 cargo nextest run --workspace   # Run tests
-# Also run the graph-feature (ast-context) test suite:
+# Also run the ast-context test suite:
 cargo nextest run -p aptu-core --features ast-context
 cargo fmt        # Format code
 cargo clippy     # Lint
 cargo build      # Build binary
 ```
-
-The `--features graph` flag enables the optional petgraph-backed structural graph context for `pr review`. It is not required for standard contributions.
 
 ### Good First Issues
 
