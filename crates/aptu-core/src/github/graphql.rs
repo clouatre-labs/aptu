@@ -152,22 +152,11 @@ pub async fn fetch_issues<R: AsRef<str>>(
             .await
             .context("Failed to execute GraphQL query")?;
 
-    // Check for GraphQL errors
-    if let Some(errors) = response.get("errors") {
-        let error_msg = serde_json::to_string_pretty(errors).unwrap_or_default();
-        anyhow::bail!("GraphQL error: {error_msg}");
-    }
-
-    // Parse the response
-    let data = response
-        .get("data")
-        .context("Missing 'data' field in GraphQL response")?;
-
     let mut results = Vec::with_capacity(repos.len());
 
     for i in 0..repos.len() {
         let key = format!("repo{i}");
-        if let Some(repo_data) = data.get(&key) {
+        if let Some(repo_data) = response.get(&key) {
             // Repository might not exist or be private
             if repo_data.is_null() {
                 debug!(repo = key, "Repository not found or inaccessible");
@@ -414,6 +403,15 @@ fn is_not_found_error(errors: &Value) -> bool {
             err.get("type")
                 .and_then(|t| t.as_str())
                 .is_some_and(|t| t == "NOT_FOUND")
+                || err
+                    .get("extensions")
+                    .and_then(|extensions| extensions.get("type"))
+                    .and_then(|t| t.as_str())
+                    .is_some_and(|t| t == "NOT_FOUND")
+                || err
+                    .get("message")
+                    .and_then(|message| message.as_str())
+                    .is_some_and(|message| message.to_ascii_lowercase().contains("not found"))
         })
     } else {
         false
@@ -439,40 +437,28 @@ pub async fn fetch_issue_with_repo_context(
     let query = build_issue_with_repo_context_query(owner, repo, number);
     debug!("Executing GraphQL query for issue with repo context");
 
-    let response: Value = client
-        .graphql(&query)
-        .await
-        .context("Failed to execute GraphQL query")?;
-
-    // Check for GraphQL errors
-    if let Some(errors) = response.get("errors") {
-        let error_msg = serde_json::to_string_pretty(errors).unwrap_or_default();
-
-        // Only attempt fallback for NOT_FOUND errors to avoid unnecessary API calls
-        if is_not_found_error(errors) {
-            debug!("GraphQL NOT_FOUND error, checking if reference is a PR");
-
-            // Try to fetch as a PR to provide a better error message
-            if (client.pulls(owner, repo).get(number).await).is_ok() {
-                return Err(AptuError::TypeMismatch {
-                    number,
-                    expected: ResourceType::Issue,
-                    actual: ResourceType::PullRequest,
+    let response: Value = match client.graphql(&query).await {
+        Ok(response) => response,
+        Err(error) => {
+            if let octocrab::Error::Graphql { source, .. } = &error
+                && is_not_found_error(&serde_json::json!(source.0))
+            {
+                debug!("GraphQL NOT_FOUND error, checking if reference is a PR");
+                if (client.pulls(owner, repo).get(number).await).is_ok() {
+                    return Err(AptuError::TypeMismatch {
+                        number,
+                        expected: ResourceType::Issue,
+                        actual: ResourceType::PullRequest,
+                    }
+                    .into());
                 }
-                .into());
             }
+            return Err(anyhow::anyhow!(error).context("Failed to execute GraphQL query"));
         }
-
-        // Not a PR or not a NOT_FOUND error, return the original GraphQL error
-        anyhow::bail!("GraphQL error: {error_msg}");
-    }
-
-    let data = response
-        .get("data")
-        .context("Missing 'data' field in GraphQL response")?;
+    };
 
     // Extract issue from nested structure
-    let issue_data = data.get("issue").and_then(|v| v.get("issue"));
+    let issue_data = response.get("issue").and_then(|v| v.get("issue"));
 
     let Some(issue_val) = issue_data.filter(|v| !v.is_null()) else {
         debug!("Issue not found in GraphQL response, checking if reference is a PR");
@@ -494,7 +480,7 @@ pub async fn fetch_issue_with_repo_context(
     let issue: IssueNodeDetailed =
         serde_json::from_value(issue_val.clone()).context("Failed to parse issue data")?;
 
-    let repo_data = data
+    let repo_data = response
         .get("repository")
         .context("Repository not found in GraphQL response")?;
 
@@ -514,6 +500,27 @@ pub async fn fetch_issue_with_repo_context(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn not_found_error_detected() {
+        assert!(is_not_found_error(
+            &serde_json::json!([{"type": "NOT_FOUND"}])
+        ));
+    }
+
+    #[test]
+    fn unrelated_error_not_detected() {
+        assert!(!is_not_found_error(
+            &serde_json::json!([{"type": "FORBIDDEN"}])
+        ));
+    }
+
+    #[test]
+    fn malformed_errors_not_detected() {
+        assert!(!is_not_found_error(
+            &serde_json::json!({"type": "NOT_FOUND"})
+        ));
+    }
 
     #[test]
     fn build_query_single_repo() {
@@ -638,8 +645,7 @@ pub async fn resolve_tag_to_commit_sha(
 
     // Extract the target from the response
     let target = response
-        .get("data")
-        .and_then(|data| data.get("repository"))
+        .get("repository")
         .and_then(|repo| repo.get("ref"))
         .and_then(|ref_obj| ref_obj.get("target"));
 
