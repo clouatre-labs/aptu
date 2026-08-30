@@ -10,30 +10,6 @@ use std::path::PathBuf;
 use crate::ai::types::PrDetails;
 use crate::config::ReviewConfig;
 
-#[cfg(all(feature = "ast-context", feature = "graph"))]
-use regex::Regex;
-#[cfg(all(feature = "ast-context", feature = "graph"))]
-use std::sync::LazyLock;
-
-/// Regex to extract symbol names from unified-diff added lines.
-/// Matches `fn`/`async fn`, `struct`, `enum`, `trait`, and `impl` declarations,
-/// stripping any visibility prefix (including `pub(crate)`, `pub(super)`, etc.).
-/// Capture group 2 is the keyword, capture group 3 is the symbol name.
-#[cfg(all(feature = "ast-context", feature = "graph"))]
-static SYMBOL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"^\+(\s*)(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(fn|struct|enum|trait|impl)\s+([a-zA-Z_]\w*)",
-    )
-    .expect("valid SYMBOL_RE")
-});
-
-/// Regex to parse a unified-diff hunk header (`@@ -old_start,old_count +new_start,new_count @@`)
-/// and extract the starting line number of the hunk in the new file.
-#[cfg(all(feature = "ast-context", feature = "graph"))]
-static HUNK_HEADER_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@").expect("valid HUNK_HEADER_RE")
-});
-
 /// Estimated overhead for XML tags, section headers, and schema preamble added by
 /// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
 /// non-content characters when estimating total prompt size.
@@ -79,10 +55,6 @@ pub struct ReviewContext {
     pub prompt_chars_final: usize,
     /// Estimated total character size of the PR review prompt before budget drops.
     pub estimated_size: usize,
-    /// Structural graph subgraph text for prompt injection (empty when graph feature is disabled).
-    pub graph_context: String,
-    /// Whether the structural graph was loaded from the on-disk cache (false when feature is off).
-    pub graph_cache_hit: bool,
 }
 
 impl ReviewContext {
@@ -192,8 +164,6 @@ impl Default for ReviewContext {
             budget_drops: Vec::new(),
             prompt_chars_final: 0,
             estimated_size: 0,
-            graph_context: String::new(),
-            graph_cache_hit: false,
         }
     }
 }
@@ -222,7 +192,6 @@ pub async fn build_review_context(
     repo_path: Option<String>,
     deep: bool,
     review_config: &ReviewConfig,
-    graph_config: &crate::config::GraphConfig,
 ) -> crate::Result<ReviewContext> {
     // Step 1: Resolve repo_path (explicit or inferred from CWD)
     #[cfg(not(target_arch = "wasm32"))]
@@ -235,23 +204,20 @@ pub async fn build_review_context(
 
     // Step 2: Build AST context if repo_path resolved
     // When `ast-context` feature is enabled, build_ctx_ast returns AstContextOutput
-    // (which carries both the text string and the structural StructuralGraph).
-    // When disabled, it returns a plain String.
+    // (which carries the text string); when disabled, it returns a plain String.
     #[cfg(feature = "ast-context")]
-    let ast_output = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
-    #[cfg(feature = "ast-context")]
-    let ast_context = ast_output.text.clone();
+    let ast_context = build_ctx_ast(repo_path_ref.as_deref(), &pr.files)
+        .await
+        .text;
     #[cfg(not(feature = "ast-context"))]
-    let ast_output = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
-    #[cfg(not(feature = "ast-context"))]
-    let ast_context = ast_output.clone();
+    let ast_context = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
 
     // Step 3: Enrich with dependency release notes
     pr.dep_enrichments = enrich_deps(&pr.files, review_config).await;
 
     // Step 4: Estimate total chars and decide call_graph budget
-    // (call_graph and graph_context not yet built, pass empty strings)
-    let estimated_size = estimate_pr_size(&pr, &ast_context, "", "");
+    // (call_graph not yet built, pass empty string)
+    let estimated_size = estimate_pr_size(&pr, &ast_context, "");
     let max_prompt_chars = review_config.max_prompt_chars;
     let budget_remaining = max_prompt_chars.saturating_sub(estimated_size);
 
@@ -263,12 +229,8 @@ pub async fn build_review_context(
         String::new()
     };
 
-    // Re-estimate with actual call_graph for accurate routing (graph_context still empty here)
-    let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph, "");
-
-    // Step 5b: Build structural graph context if enabled
-    let (mut graph_context, graph_cache_hit) =
-        build_ctx_graph(graph_config, repo_path_ref.as_deref(), &pr, &ast_output).await;
+    // Re-estimate with actual call_graph for accurate routing
+    let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph);
 
     // Step 6: Apply budget drop order
     let mut ast_context = ast_context;
@@ -277,7 +239,6 @@ pub async fn build_review_context(
         &mut pr,
         &mut ast_context,
         &mut call_graph,
-        &mut graph_context,
         deep,
         max_prompt_chars,
         &mut budget_drops,
@@ -315,8 +276,6 @@ pub async fn build_review_context(
         budget_drops,
         prompt_chars_final: 0,
         estimated_size: final_estimated_size,
-        graph_context,
-        graph_cache_hit,
     })
 }
 
@@ -355,18 +314,17 @@ async fn enrich_deps(
     .await
 }
 
-/// Applies budget drop order: `call_graph` -> `graph_context` -> `ast_context` -> `dep_enrichments` -> patches -> `full_content`.
+/// Applies budget drop order: `call_graph` -> `ast_context` -> `dep_enrichments` -> patches -> `full_content`.
 /// Enforces the prompt budget by dropping enrichment sections in priority order.
 ///
 /// When the assembled prompt exceeds `max_prompt_chars`, sections are cleared in
 /// the following order (lowest-priority dropped first):
 ///
 /// 1. `call_graph` -- dropped first unless `deep` is explicitly set
-/// 2. `graph_context` -- dropped second (petgraph blast-radius subgraph; added in #1408)
-/// 3. `ast_context` -- dropped third
-/// 4. `dep_enrichments` -- dropped fourth
-/// 5. file patches -- dropped largest-first
-/// 6. file `full_content` -- dropped largest-first as last resort
+/// 2. `ast_context` -- dropped second
+/// 3. `dep_enrichments` -- dropped third
+/// 4. file patches -- dropped largest-first
+/// 5. file `full_content` -- dropped largest-first as last resort
 ///
 /// Each drop is logged at `WARN` level with the section name and character count.
 /// The function never returns an error; sections that cannot fit are silently cleared.
@@ -374,12 +332,11 @@ fn apply_budget_drops(
     pr: &mut PrDetails,
     ast_context: &mut String,
     call_graph: &mut String,
-    graph_context: &mut String,
     deep: bool,
     max_prompt_chars: usize,
     budget_drops: &mut Vec<String>,
 ) {
-    let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph, graph_context);
+    let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph);
 
     // Drop call_graph if over budget (unless explicitly enabled)
     if estimated_size > max_prompt_chars && !deep {
@@ -393,22 +350,6 @@ fn apply_budget_drops(
         estimated_size -= dropped_chars;
         if dropped_chars > 0 {
             budget_drops.push("call_graph".to_string());
-        }
-    }
-
-    // Drop graph_context second (priority tier 2: between call_graph and ast_context; added in #1408).
-    if estimated_size > max_prompt_chars {
-        tracing::warn!(
-            section = "graph_context",
-            priority_tier = 2,
-            chars = graph_context.len(),
-            "Dropping section: prompt budget exceeded (graph_context tier)"
-        );
-        let dropped_chars = graph_context.len();
-        graph_context.clear();
-        estimated_size -= dropped_chars;
-        if dropped_chars > 0 {
-            budget_drops.push("graph_context".to_string());
         }
     }
 
@@ -547,12 +488,7 @@ fn drop_full_content_by_size(
 /// Sums title, body, file metadata, patches, `full_content`, `dep_enrichments`,
 /// `ast_context`, `call_graph`, and overhead.
 #[must_use]
-pub(crate) fn estimate_pr_size(
-    pr: &PrDetails,
-    ast_context: &str,
-    call_graph: &str,
-    graph_context: &str,
-) -> usize {
+pub(crate) fn estimate_pr_size(pr: &PrDetails, ast_context: &str, call_graph: &str) -> usize {
     let mut size = 0;
 
     // PR metadata
@@ -580,9 +516,6 @@ pub(crate) fn estimate_pr_size(
     // Call graph
     size += call_graph.len();
 
-    // Structural graph context
-    size += graph_context.len();
-
     // Overhead
     size += PROMPT_OVERHEAD_CHARS;
 
@@ -591,8 +524,7 @@ pub(crate) fn estimate_pr_size(
 
 /// Builds AST context for changed files.
 ///
-/// Returns an [`AstContextOutput`] containing the text string and (when the `graph`
-/// feature is also enabled) the structural [`StructuralGraph`] built from the same analysis.
+/// Returns an [`AstContextOutput`] containing the text string built from analysis.
 #[allow(clippy::unused_async)]
 #[cfg(feature = "ast-context")]
 async fn build_ctx_ast(
@@ -635,188 +567,6 @@ async fn build_ctx_call_graph(
         let _ = (path, files);
         String::new()
     }
-}
-
-/// Builds structural graph context from PR-changed files when both `ast-context` and
-/// `graph` features are enabled.
-///
-/// Accepts a pre-built [`AstContextOutput`] containing the structural graph from
-/// `ast_context.rs`, and passes it to `cache::load_or_build` for caching.
-///
-/// Returns `(rendered_text, cache_hit)`. Returns empty string and `false` when the
-/// feature is off, when `graph_config.enabled` is false, or when `repo_path` is absent.
-#[allow(clippy::unused_async)]
-#[cfg(feature = "ast-context")]
-async fn build_ctx_graph(
-    graph_config: &crate::config::GraphConfig,
-    repo_path: Option<&str>,
-    pr: &PrDetails,
-    ast_output: &crate::ast_context::AstContextOutput,
-) -> (String, bool) {
-    #[cfg(feature = "graph")]
-    {
-        if !graph_config.enabled {
-            return (String::new(), false);
-        }
-        let Some(_repo_path_str) = repo_path else {
-            return (String::new(), false);
-        };
-        let sha = pr.head_sha.clone();
-        let owner_str = pr.owner.clone();
-        let repo_str = pr.repo.clone();
-        let graph_config_owned = graph_config.clone();
-        let graph_owned = ast_output.graph.clone();
-        let function_names: Vec<String> = derive_modified_symbols(&pr.files, Some(ast_output));
-
-        let spawn_result = tokio::task::spawn_blocking(move || {
-            let (graph, cache_hit) = crate::graph::cache::load_or_build(
-                &owner_str,
-                &repo_str,
-                &sha,
-                graph_owned,
-                &graph_config_owned,
-            );
-            let fn_refs: Vec<&str> = function_names.iter().map(String::as_str).collect();
-            (
-                crate::graph::render_blast_radius(
-                    &graph,
-                    &fn_refs,
-                    graph_config_owned.max_nodes,
-                    graph_config_owned.max_depth,
-                ),
-                cache_hit,
-            )
-        })
-        .await;
-
-        match spawn_result {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!("graph cache spawn_blocking panicked: {e}");
-                (String::new(), false)
-            }
-        }
-    }
-    #[cfg(not(feature = "graph"))]
-    {
-        let _ = (graph_config, repo_path, pr, ast_output);
-        (String::new(), false)
-    }
-}
-
-/// Stub when `ast-context` feature is off: graph context always empty.
-#[allow(clippy::unused_async)]
-#[cfg(not(feature = "ast-context"))]
-async fn build_ctx_graph(
-    graph_config: &crate::config::GraphConfig,
-    repo_path: Option<&str>,
-    pr: &PrDetails,
-    _ast_text: &str,
-) -> (String, bool) {
-    let _ = (graph_config, repo_path, pr);
-    (String::new(), false)
-}
-
-/// Derives modified symbol names from PR file patches by parsing diff hunks.
-///
-/// Iterates `pr.files`, parses each patch string for `@@` hunk headers to get
-/// changed line ranges, then resolves every changed line to a symbol name via
-/// two complementary paths:
-///
-/// - AST line-range lookup: when `ast_output` is provided, each context/added line's
-///   absolute line number in the new file is checked against that file's
-///   `symbol_ranges` (from AST analysis) to find its enclosing function. This is what
-///   catches diffs that only edit statements inside an existing symbol's body.
-/// - `SYMBOL_RE` fallback: added lines are also matched against
-///   `fn`/`struct`/`enum`/`trait`/`impl` declaration patterns, independent of
-///   `ast_output`, to catch brand-new symbols not yet present in the AST index.
-///
-/// Handles:
-/// - `patch = None` -> empty `Vec`
-/// - `patch_truncated = true` -> partial set (uses what's available)
-/// - Renamed files (status field) -> treated same as modified for extraction
-#[cfg(all(feature = "ast-context", feature = "graph"))]
-fn derive_modified_symbols(
-    files: &[crate::ai::types::PrFile],
-    ast_output: Option<&crate::ast_context::AstContextOutput>,
-) -> Vec<String> {
-    let mut symbols: Vec<String> = Vec::new();
-
-    for file in files {
-        let Some(patch) = &file.patch else {
-            continue;
-        };
-
-        let ranges_for_file = ast_output.and_then(|ao| ao.symbol_ranges.get(&file.filename));
-        let mut new_line: usize = 0;
-
-        for line in patch.lines() {
-            if line.starts_with("+++") {
-                continue;
-            }
-
-            if let Some(caps) = HUNK_HEADER_RE.captures(line) {
-                new_line = caps
-                    .get(1)
-                    .and_then(|m| m.as_str().parse::<usize>().ok())
-                    .unwrap_or(0);
-                continue;
-            } else if line.starts_with("@@") {
-                // Unrecognized hunk header format; stop tracking line numbers for this hunk.
-                new_line = 0;
-                continue;
-            }
-            if line.starts_with('-') || line.starts_with('\\') {
-                // Removed lines don't exist in the new file; "\ No newline..." markers
-                // carry no line of their own. Neither advances the new-file line counter.
-                continue;
-            }
-
-            // Remaining lines are context (' ' prefix) or additions ('+' prefix); both
-            // occupy a line in the new file at `new_line`.
-            if new_line > 0
-                && let Some(ranges) = ranges_for_file
-                && let Some((_, _, name)) = ranges
-                    .iter()
-                    .find(|(start, end, _)| (*start..=*end).contains(&new_line))
-                && !symbols.contains(name)
-            {
-                symbols.push(name.clone());
-            }
-
-            // Match added lines with symbol declarations using regex (fallback for
-            // brand-new symbols not yet reflected in the AST index).
-            if let Some(caps) = SYMBOL_RE.captures(line) {
-                let keyword = caps.get(2).map_or("", |m| m.as_str());
-                let name = caps.get(3).map_or("", |m| m.as_str()).to_string();
-
-                let sym = if keyword == "impl" {
-                    // For "impl Trait for Type", extract the type name after "for"
-                    let trimmed = line.strip_prefix('+').unwrap_or("").trim();
-                    let after_impl = trimmed.strip_prefix("impl ").unwrap_or("");
-                    if let Some(for_pos) = after_impl.find(" for ") {
-                        after_impl[for_pos + 5..]
-                            .split_whitespace()
-                            .next()
-                            .unwrap_or("")
-                            .to_string()
-                    } else {
-                        name
-                    }
-                } else {
-                    name
-                };
-
-                if !sym.is_empty() && !symbols.contains(&sym) {
-                    symbols.push(sym);
-                }
-            }
-
-            new_line += 1;
-        }
-    }
-
-    symbols
 }
 
 /// Infers the repository path from the current working directory.
@@ -1006,15 +756,11 @@ mod tests {
         let max_prompt_chars = 600;
 
         let mut drops = Vec::new();
-        let mut graph_context = String::new();
-        // Updated in #1408: apply_budget_drops now takes graph_context as a new drop tier
-        // between call_graph and ast_context. Priority order:
-        // call_graph -> graph_context -> ast_context -> dep_enrichments -> patches -> full_content
+        // Priority order: call_graph -> ast_context -> dep_enrichments -> patches -> full_content
         apply_budget_drops(
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut graph_context,
             false,
             max_prompt_chars,
             &mut drops,
@@ -1044,12 +790,10 @@ mod tests {
         let max_prompt_chars = 1400;
 
         let mut drops = Vec::new();
-        let mut graph_context = String::new();
         apply_budget_drops(
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut graph_context,
             false,
             max_prompt_chars,
             &mut drops,
@@ -1075,7 +819,6 @@ mod tests {
         // All context sections are empty -- no content to drop
         let mut ast_context = String::new();
         let mut call_graph = String::new();
-        let mut graph_context = String::new();
 
         // Tight budget to trigger drop attempts, but sections are empty
         let max_prompt_chars = 500;
@@ -1085,7 +828,6 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut graph_context,
             false,
             max_prompt_chars,
             &mut drops,
@@ -1096,10 +838,6 @@ mod tests {
         assert!(
             !drops.contains(&"call_graph".to_string()),
             "empty call_graph should not appear in budget_drops"
-        );
-        assert!(
-            !drops.contains(&"graph_context".to_string()),
-            "empty graph_context should not appear in budget_drops"
         );
         assert!(
             !drops.contains(&"ast_context".to_string()),
@@ -1115,7 +853,6 @@ mod tests {
         // Populate all context sections with meaningful content
         let mut ast_context = "a".repeat(300);
         let mut call_graph = "b".repeat(300);
-        let mut graph_context = "c".repeat(300);
 
         // Tight budget to force drops, with populated sections
         let max_prompt_chars = 600;
@@ -1125,19 +862,18 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut graph_context,
             false,
             max_prompt_chars,
             &mut drops,
         );
 
         // Populated sections should appear in budget_drops (in priority order)
-        // Priority order: call_graph -> graph_context -> ast_context
+        // Priority order: call_graph -> ast_context
         assert!(
             drops.contains(&"call_graph".to_string()),
             "populated call_graph should appear in budget_drops"
         );
-        // graph_context and ast_context presence depends on budget constraints,
+        // ast_context presence depends on budget constraints,
         // but at least call_graph must be present for this test
     }
 
@@ -1148,7 +884,6 @@ mod tests {
         let mut pr = make_pr_with_content(500, 500);
         let mut ast_context = String::new();
         let mut call_graph = String::new();
-        let mut graph_context = String::new();
 
         // Budget tight enough to force BOTH patch and full_content drops for the file
         let max_prompt_chars = 50;
@@ -1158,7 +893,6 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut graph_context,
             false,
             max_prompt_chars,
             &mut drops,
@@ -1394,8 +1128,8 @@ mod tests {
         let pr = make_pr_with_content(0, 0);
         let ast_context = "";
         let call_graph = "fn foo() -> bar\nfn baz() -> qux";
-        let size = estimate_pr_size(&pr, ast_context, call_graph, "");
-        let without_call_graph = estimate_pr_size(&pr, ast_context, "", "");
+        let size = estimate_pr_size(&pr, ast_context, call_graph);
+        let without_call_graph = estimate_pr_size(&pr, ast_context, "");
         // Delta between with and without call_graph should be exactly call_graph.len()
         assert_eq!(size - without_call_graph, call_graph.len());
         // Total should include PROMPT_OVERHEAD_CHARS
@@ -1409,7 +1143,7 @@ mod tests {
         let pr = make_pr_with_content(50, 100);
         let ast_context = "fn foo() {}";
         let call_graph = "caller -> callee\nother -> thing";
-        let size = estimate_pr_size(&pr, ast_context, call_graph, "");
+        let size = estimate_pr_size(&pr, ast_context, call_graph);
         assert!(
             size >= call_graph.len() + PROMPT_OVERHEAD_CHARS,
             "estimated size {} should be >= call_graph.len() {} + overhead {}",
@@ -1419,460 +1153,48 @@ mod tests {
         );
     }
 
-    // -----------------------------------------------------------------------
-    // derive_modified_symbols tests
-    // -----------------------------------------------------------------------
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_patch_none_yields_empty() {
-        // Arrange: file with no patch
-        let files = vec![PrFile {
-            filename: "src/lib.rs".to_string(),
+    /// Regression test for #1571 (structural graph removal): `build_review_context()`
+    /// no longer threads a `GraphConfig` or builds `graph_context`/`graph_cache_hit`, but
+    /// its `ast_context` and `call_graph` enrichment paths must be completely unaffected
+    /// by that removal.
+    #[tokio::test]
+    async fn test_build_review_context_preserves_ast_and_call_graph() {
+        // Arrange: a fixture PR touching a real Rust source file in this crate, with
+        // deep=true to force call_graph building regardless of prompt budget (mirrors
+        // the fixture setup pattern used by ast_context.rs's own build_ast_context tests).
+        let repo_path = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+        let mut pr = make_pr_with_content(0, 0);
+        pr.files = vec![PrFile {
+            filename: "src/ast_context.rs".to_string(),
             status: "modified".to_string(),
             patch: None,
             patch_truncated: false,
             full_content: None,
-            additions: 0,
-            deletions: 0,
-        }];
-
-        // Act
-        let symbols = derive_modified_symbols(&files, None);
-
-        // Assert
-        assert!(symbols.is_empty(), "patch=None should yield empty symbols");
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_extracts_from_hunk_lines() {
-        // Arrange: patch with fn, struct, and enum definitions in added lines
-        let patch = "\
-@@ -1,5 +1,10 @@
- fn existing_fn() {}
-+fn new_fn() -> Result<()> {
-+    Ok(())
-+}
-+pub struct NewStruct {
-+    field: i32,
-+}
-+pub enum NewEnum {
-+    VariantA,
-+}
-+impl NewStruct {
-+    fn method(&self) {}
-+}
-";
-        let files = vec![PrFile {
-            filename: "src/lib.rs".to_string(),
-            status: "modified".to_string(),
-            patch: Some(patch.to_string()),
-            patch_truncated: false,
-            full_content: None,
-            additions: 5,
-            deletions: 0,
-        }];
-
-        // Act
-        let mut symbols = derive_modified_symbols(&files, None);
-        symbols.sort();
-
-        // Assert
-        assert!(
-            symbols.contains(&"new_fn".to_string()),
-            "should extract fn name"
-        );
-        assert!(
-            symbols.contains(&"NewStruct".to_string()),
-            "should extract struct name"
-        );
-        assert!(
-            symbols.contains(&"NewEnum".to_string()),
-            "should extract enum name"
-        );
-        // 'impl' block: the type after 'impl' is extracted
-        assert!(
-            symbols.contains(&"NewStruct".to_string()),
-            "impl target should be extracted"
-        );
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_patch_truncated_yields_partial() {
-        // Arrange: truncated patch (patch_truncated=true) with some definitions
-        let patch = "\
-@@ -1,5 +1,8 @@
- fn existing_fn() {}
-+fn visible_fn() {}
-+pub struct VisibleStruct {
-+    field: i32,
-+}
-";
-        let files = vec![PrFile {
-            filename: "src/lib.rs".to_string(),
-            status: "modified".to_string(),
-            patch: Some(patch.to_string()),
-            patch_truncated: true,
-            full_content: None,
-            additions: 3,
-            deletions: 0,
-        }];
-
-        // Act
-        let symbols = derive_modified_symbols(&files, None);
-
-        // Assert: partial set from available patch content
-        assert!(
-            symbols.contains(&"visible_fn".to_string()),
-            "should extract fn from truncated patch"
-        );
-        assert!(
-            symbols.contains(&"VisibleStruct".to_string()),
-            "should extract struct from truncated patch"
-        );
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_renamed_file_treated_as_modified() {
-        // Arrange: renamed file with a function definition
-        let patch = "\
-@@ -1,1 +1,1 @@
--fn old_name() {}
-+fn renamed_fn() {}
-";
-        let files = vec![PrFile {
-            filename: "src/renamed.rs".to_string(),
-            status: "renamed".to_string(),
-            patch: Some(patch.to_string()),
-            patch_truncated: false,
-            full_content: None,
-            additions: 1,
-            deletions: 1,
-        }];
-
-        // Act
-        let symbols = derive_modified_symbols(&files, None);
-
-        // Assert: renamed files are treated same as modified
-        assert!(
-            symbols.contains(&"renamed_fn".to_string()),
-            "should extract fn from renamed file"
-        );
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_async_fn() {
-        // Arrange: patch with async fn declarations
-        let patch = "\
-@@ -1,3 +1,6 @@
- fn sync_fn() {}
-+async fn fetch_data() -> Result<()> {
-+    Ok(())
-+}
-+pub async fn handle_request() -> String {
-+    String::new()
-+}
-";
-        let files = vec![PrFile {
-            filename: "src/lib.rs".to_string(),
-            status: "modified".to_string(),
-            patch: Some(patch.to_string()),
-            patch_truncated: false,
-            full_content: None,
-            additions: 2,
-            deletions: 0,
-        }];
-
-        // Act
-        let mut symbols = derive_modified_symbols(&files, None);
-        symbols.sort();
-
-        // Assert
-        assert!(
-            symbols.contains(&"fetch_data".to_string()),
-            "should extract async fn name"
-        );
-        assert!(
-            symbols.contains(&"handle_request".to_string()),
-            "should extract pub async fn name"
-        );
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_pub_visibility() {
-        // Arrange: patch with pub(crate) and pub(super) visibility
-        let patch = "\
-@@ -1,3 +1,5 @@
- fn existing() {}
-+pub(crate) fn internal_fn() -> i32 { 42 }
-+pub(super) fn super_fn() -> bool { true }
-";
-        let files = vec![PrFile {
-            filename: "src/lib.rs".to_string(),
-            status: "modified".to_string(),
-            patch: Some(patch.to_string()),
-            patch_truncated: false,
-            full_content: None,
-            additions: 2,
-            deletions: 0,
-        }];
-
-        // Act
-        let mut symbols = derive_modified_symbols(&files, None);
-        symbols.sort();
-
-        // Assert
-        assert!(
-            symbols.contains(&"internal_fn".to_string()),
-            "should extract fn with pub(crate) visibility"
-        );
-        assert!(
-            symbols.contains(&"super_fn".to_string()),
-            "should extract fn with pub(super) visibility"
-        );
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_generic_fn() {
-        // Arrange: patch with generic function signatures
-        let patch = "\
-@@ -1,3 +1,5 @@
- fn existing() {}
-+fn generic_fn<T: Debug>(x: T) -> String { format!(\"{:?}\", x) }
-+fn multi_bound_fn<T: Clone + Debug, U: Display>(a: T, b: U) {}
-";
-        let files = vec![PrFile {
-            filename: "src/lib.rs".to_string(),
-            status: "modified".to_string(),
-            patch: Some(patch.to_string()),
-            patch_truncated: false,
-            full_content: None,
-            additions: 2,
-            deletions: 0,
-        }];
-
-        // Act
-        let mut symbols = derive_modified_symbols(&files, None);
-        symbols.sort();
-
-        // Assert
-        assert!(
-            symbols.contains(&"generic_fn".to_string()),
-            "should extract generic fn name without generic params"
-        );
-        assert!(
-            symbols.contains(&"multi_bound_fn".to_string()),
-            "should extract multi-bound generic fn name"
-        );
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_tuple_unit_structs() {
-        // Arrange: patch with tuple struct and unit struct definitions
-        let patch = "\
-@@ -1,3 +1,6 @@
- fn existing() {}
-+struct Point(i32, i32);
-+struct Unit;
-+pub struct Named {
-+    field: i32,
-+}
-";
-        let files = vec![PrFile {
-            filename: "src/lib.rs".to_string(),
-            status: "modified".to_string(),
-            patch: Some(patch.to_string()),
-            patch_truncated: false,
-            full_content: None,
-            additions: 3,
-            deletions: 0,
-        }];
-
-        // Act
-        let mut symbols = derive_modified_symbols(&files, None);
-        symbols.sort();
-
-        // Assert
-        assert!(
-            symbols.contains(&"Point".to_string()),
-            "should extract tuple struct name"
-        );
-        assert!(
-            symbols.contains(&"Unit".to_string()),
-            "should extract unit struct name"
-        );
-        assert!(
-            symbols.contains(&"Named".to_string()),
-            "should extract named struct name"
-        );
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_hunk_line_number_extraction() {
-        // Arrange: hunk header starts the new file at line 10; the added line is the
-        // third line processed (10, 11, 12), so it must resolve to absolute line 12.
-        let patch = "\
-@@ -8,3 +10,5 @@
- fn existing_fn() {
-     let x = 1;
-+    let y = 2;
-     x + y
- }
-";
-        let files = vec![PrFile {
-            filename: "src/lib.rs".to_string(),
-            status: "modified".to_string(),
-            patch: Some(patch.to_string()),
-            patch_truncated: false,
-            full_content: None,
             additions: 1,
             deletions: 0,
         }];
-
-        let mut symbol_ranges = std::collections::HashMap::new();
-        symbol_ranges.insert(
-            "src/lib.rs".to_string(),
-            vec![(12usize, 12usize, "existing_fn".to_string())],
-        );
-        let ast_output = crate::ast_context::AstContextOutput {
-            text: String::new(),
-            graph: aptu_coder_core::graph::StructuralGraph::build_from_analysis(&[]),
-            symbol_ranges,
-        };
+        let review_config = ReviewConfig::default();
 
         // Act
-        let symbols = derive_modified_symbols(&files, Some(&ast_output));
+        let ctx = build_review_context(pr, Some(repo_path), true, &review_config)
+            .await
+            .expect("build_review_context should succeed for a valid repo_path");
 
-        // Assert: only line 12 (the added line) falls in this narrow range, so a match
-        // here proves the hunk-header start (+10) plus two lines of advancement is exact.
+        // Assert: shape is exactly what the standalone builders produce -- empty when
+        // the `ast-context` feature is off, well-formed XML-tagged output when it's on.
         assert!(
-            symbols.contains(&"existing_fn".to_string()),
-            "hunk header +10 should anchor line tracking so the body-edit line (12) resolves"
-        );
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_existing_body_edits() {
-        // Arrange: patch only edits a statement inside an existing function body --
-        // no new fn/struct/enum/trait/impl declaration line anywhere in the hunk.
-        let patch = "\
-@@ -20,3 +20,3 @@
- fn process_data(input: &str) -> String {
--    input.to_string()
-+    input.trim().to_string()
- }
-";
-        let files = vec![PrFile {
-            filename: "src/lib.rs".to_string(),
-            status: "modified".to_string(),
-            patch: Some(patch.to_string()),
-            patch_truncated: false,
-            full_content: None,
-            additions: 1,
-            deletions: 1,
-        }];
-
-        // Act: without AST data, a body-only edit yields nothing (documents the bug).
-        let symbols_without_ast = derive_modified_symbols(&files, None);
-        assert!(
-            symbols_without_ast.is_empty(),
-            "SYMBOL_RE alone cannot resolve a body-only edit to its enclosing symbol"
-        );
-
-        let mut symbol_ranges = std::collections::HashMap::new();
-        symbol_ranges.insert(
-            "src/lib.rs".to_string(),
-            vec![(20usize, 23usize, "process_data".to_string())],
-        );
-        let ast_output = crate::ast_context::AstContextOutput {
-            text: String::new(),
-            graph: aptu_coder_core::graph::StructuralGraph::build_from_analysis(&[]),
-            symbol_ranges,
-        };
-
-        // Act: with AST line-range data, the same patch resolves to its enclosing function.
-        let symbols_with_ast = derive_modified_symbols(&files, Some(&ast_output));
-
-        // Assert
-        assert!(
-            symbols_with_ast.contains(&"process_data".to_string()),
-            "body-only edit should resolve to its enclosing function via AST line ranges"
-        );
-    }
-
-    #[cfg(all(feature = "ast-context", feature = "graph"))]
-    #[test]
-    fn test_modified_symbols_with_ast_output_returns_symbols() {
-        // Arrange: two files -- one with a body-only edit resolved via AST data, one
-        // with a brand-new declaration still caught by the SYMBOL_RE fallback.
-        let patch_a = "\
-@@ -5,2 +5,2 @@
- fn helper_one(a: i32) -> i32 {
--    a + 1
-+    a + 2
- }
-";
-        let patch_b = "\
-@@ -1,1 +1,2 @@
- fn existing() {}
-+fn brand_new_fn() {}
-";
-        let files = vec![
-            PrFile {
-                filename: "src/a.rs".to_string(),
-                status: "modified".to_string(),
-                patch: Some(patch_a.to_string()),
-                patch_truncated: false,
-                full_content: None,
-                additions: 1,
-                deletions: 1,
-            },
-            PrFile {
-                filename: "src/b.rs".to_string(),
-                status: "modified".to_string(),
-                patch: Some(patch_b.to_string()),
-                patch_truncated: false,
-                full_content: None,
-                additions: 1,
-                deletions: 0,
-            },
-        ];
-
-        let mut symbol_ranges = std::collections::HashMap::new();
-        symbol_ranges.insert(
-            "src/a.rs".to_string(),
-            vec![(5usize, 7usize, "helper_one".to_string())],
-        );
-        let ast_output = crate::ast_context::AstContextOutput {
-            text: String::new(),
-            graph: aptu_coder_core::graph::StructuralGraph::build_from_analysis(&[]),
-            symbol_ranges,
-        };
-
-        // Act
-        let symbols = derive_modified_symbols(&files, Some(&ast_output));
-
-        // Assert: modified_nodes is non-empty and includes both resolution paths.
-        assert!(
-            !symbols.is_empty(),
-            "modified_nodes should be non-empty for a PR editing existing code"
+            ctx.ast_context.is_empty() || ctx.ast_context.contains("<ast_context>"),
+            "ast_context should be empty or well-formed XML-tagged output"
         );
         assert!(
-            symbols.contains(&"helper_one".to_string()),
-            "body-edit in file a should resolve via AST line ranges"
+            ctx.call_graph.is_empty() || ctx.call_graph.contains("<call_graph>"),
+            "call_graph should be empty or well-formed XML-tagged output"
         );
+
+        #[cfg(feature = "ast-context")]
         assert!(
-            symbols.contains(&"brand_new_fn".to_string()),
-            "new declaration in file b should still be caught by the SYMBOL_RE fallback"
+            !ctx.ast_context.is_empty(),
+            "ast_context should be populated for a real Rust fixture file when the ast-context feature is enabled"
         );
     }
 }

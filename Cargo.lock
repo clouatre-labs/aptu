@@ -210,7 +210,6 @@ dependencies = [
  "linux-keyutils-keyring-store",
  "octocrab",
  "percent-encoding",
- "postcard",
  "regex",
  "reqwest",
  "schemars",

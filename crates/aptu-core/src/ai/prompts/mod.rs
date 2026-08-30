@@ -442,10 +442,6 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     if !ctx.call_graph.is_empty() {
         prompt.push_str(&ctx.call_graph);
     }
-    if !ctx.graph_context.is_empty() {
-        prompt.push_str("\n\n## Structural Graph Context\n");
-        prompt.push_str(&ctx.graph_context);
-    }
 
     // Inject existing bot review comments so the AI can avoid restating prior feedback.
     if !ctx.pr.review_comments.is_empty() {

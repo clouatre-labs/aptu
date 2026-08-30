@@ -71,10 +71,6 @@ pub struct ReviewContextRecord {
     pub ast_context_chars: usize,
     /// Characters in call graph context.
     pub call_graph_chars: usize,
-    /// Characters in structural graph context (0 when graph feature is disabled).
-    pub graph_chars: usize,
-    /// Whether the structural graph was loaded from the on-disk cache.
-    pub graph_cache_hit: bool,
     /// Number of dependency enrichments applied.
     pub dep_enrichments_count: usize,
     /// Total characters in dependency enrichments.
@@ -287,8 +283,6 @@ mod tests {
             truncated_chars_dropped: 0,
             ast_context_chars: 1000,
             call_graph_chars: 2000,
-            graph_chars: 0,
-            graph_cache_hit: false,
             dep_enrichments_count: 2,
             dep_enrichments_chars: 500,
             budget_drops: vec![],
@@ -320,8 +314,6 @@ mod tests {
             truncated_chars_dropped: 500,
             ast_context_chars: 1000,
             call_graph_chars: 2000,
-            graph_chars: 0,
-            graph_cache_hit: false,
             dep_enrichments_count: 2,
             dep_enrichments_chars: 500,
             budget_drops: vec!["call_graph".to_string()],
@@ -359,8 +351,6 @@ mod tests {
             truncated_chars_dropped: 0,
             ast_context_chars: 100,
             call_graph_chars: 50,
-            graph_chars: 0,
-            graph_cache_hit: false,
             dep_enrichments_count: 2,
             dep_enrichments_chars: 200,
             budget_drops: vec![],

@@ -90,11 +90,6 @@ impl ConfigSource for TomlConfigSource {
             tracing::warn!("{}", warning);
         }
 
-        // Validate graph configuration consistency at load time (non-fatal warnings).
-        for warning in app_config.graph.validate_consistency() {
-            tracing::warn!("{}", warning);
-        }
-
         Ok(app_config)
     }
 }
@@ -202,9 +197,6 @@ pub struct AppConfig {
     /// PR review prompt settings.
     #[serde(default)]
     pub review: ReviewConfig,
-    /// Structural graph settings for PR review context.
-    #[serde(default)]
-    pub graph: crate::config::GraphConfig,
     /// Prompt injection defence settings.
     #[serde(default)]
     pub prompt: PromptConfig,
@@ -845,20 +837,29 @@ model = "gemini-3.1-flash-lite"
     }
 
     #[test]
-    fn test_graph_config_deserializes_from_toml_with_defaults() {
-        // Arrange: TOML with an empty [graph] section (all fields missing)
-        let toml_str = "[graph]\n";
+    fn test_stray_graph_section_ignored_for_backward_compat() {
+        // Arrange: TOML with a legacy [graph] section left over from the
+        // retired structural graph feature. AppConfig no longer has a
+        // `graph` field, so this section is unknown to serde. Since
+        // AppConfig does not use deny_unknown_fields, deserialization must
+        // silently ignore it rather than error, so old config.toml files
+        // don't crash the CLI after upgrade (see issue #1571).
+        let toml_str = r#"
+[graph]
+enabled = true
+
+[ai]
+provider = "gemini"
+model = "gemini-3.1-flash-lite"
+"#;
 
         // Act
-        let app_config: AppConfig = toml::from_str(toml_str).unwrap();
+        let result: Result<AppConfig, _> = toml::from_str(toml_str);
 
-        // Assert: defaults are applied for all missing fields
-        assert!(
-            !app_config.graph.enabled,
-            "graph should default to disabled"
-        );
-        assert_eq!(app_config.graph.cache_ttl_hours, 24);
-        assert_eq!(app_config.graph.max_nodes, 50_000);
+        // Assert: deserialization succeeds and the rest of the config is intact
+        let app_config = result.expect("stray [graph] section must not error");
+        assert_eq!(app_config.ai.provider, "gemini");
+        assert_eq!(app_config.ai.model, "gemini-3.1-flash-lite");
     }
 
     #[test]

@@ -197,7 +197,6 @@ pub async fn analyze_pr(
         repo_path,
         deep,
         &review_config,
-        &app_config.graph,
     )
     .await?;
 
@@ -271,8 +270,6 @@ pub async fn analyze_pr(
         truncated_chars_dropped: ctx.truncated_chars_dropped,
         ast_context_chars: ctx.ast_context.len(),
         call_graph_chars: ctx.call_graph.len(),
-        graph_chars: ctx.graph_context.len(),
-        graph_cache_hit: ctx.graph_cache_hit,
         dep_enrichments_count: ctx.dep_enrichments_count,
         dep_enrichments_chars: ctx.dep_enrichments_chars,
         budget_drops: ctx.budget_drops,

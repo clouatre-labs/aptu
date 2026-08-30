@@ -20,13 +20,11 @@
 
 pub mod ai;
 pub mod cache;
-pub mod graph;
 pub mod loader;
 pub mod review;
 
 pub use ai::{AiConfig, FallbackConfig, FallbackEntry, TaskOverride, TaskType, TasksConfig};
 pub use cache::{CacheConfig, ReposConfig};
-pub use graph::GraphConfig;
 #[cfg(not(target_arch = "wasm32"))]
 pub use loader::TomlConfigSource;
 #[cfg(not(target_arch = "wasm32"))]
