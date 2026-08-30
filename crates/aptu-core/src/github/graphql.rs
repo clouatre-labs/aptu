@@ -152,13 +152,13 @@ pub async fn fetch_issues<R: AsRef<str>>(
             .await
             .context("Failed to execute GraphQL query")?;
 
-    let data = &response;
+    let response_value = &response;
 
     let mut results = Vec::with_capacity(repos.len());
 
     for i in 0..repos.len() {
         let key = format!("repo{i}");
-        if let Some(repo_data) = data.get(&key) {
+        if let Some(repo_data) = response_value.get(&key) {
             // Repository might not exist or be private
             if repo_data.is_null() {
                 debug!(repo = key, "Repository not found or inaccessible");
@@ -459,10 +459,10 @@ pub async fn fetch_issue_with_repo_context(
         }
     };
 
-    let data = &response;
+    let response_value = &response;
 
     // Extract issue from nested structure
-    let issue_data = data.get("issue").and_then(|v| v.get("issue"));
+    let issue_data = response_value.get("issue").and_then(|v| v.get("issue"));
 
     let Some(issue_val) = issue_data.filter(|v| !v.is_null()) else {
         debug!("Issue not found in GraphQL response, checking if reference is a PR");
@@ -484,7 +484,7 @@ pub async fn fetch_issue_with_repo_context(
     let issue: IssueNodeDetailed =
         serde_json::from_value(issue_val.clone()).context("Failed to parse issue data")?;
 
-    let repo_data = data
+    let repo_data = response_value
         .get("repository")
         .context("Repository not found in GraphQL response")?;
 
