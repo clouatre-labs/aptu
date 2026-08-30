@@ -650,7 +650,6 @@ pub async fn resolve_tag_to_commit_sha(
     // Extract the target from the response
     let target = response
         .get("repository")
-        .and_then(|data| data.get("repository"))
         .and_then(|repo| repo.get("ref"))
         .and_then(|ref_obj| ref_obj.get("target"));
 

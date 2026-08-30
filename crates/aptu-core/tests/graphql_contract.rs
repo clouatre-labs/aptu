@@ -96,13 +96,24 @@ async fn fetch_issues_uses_unwrapped_mock_data() {
 
 #[tokio::test]
 async fn resolve_tag_unwrapped_data_and_absent_target_return_none() {
-    let body = r#"{"data":{"repository":{"repository":{"ref":null}}}}"#;
+    let body = r#"{"data":{"repository":{"ref":null}}}"#;
     let (client, _listener) = client_with_server(body);
     let result =
         aptu_core::github::graphql::resolve_tag_to_commit_sha(&client, "owner", "repo", "missing")
             .await
             .unwrap();
     assert_eq!(result, None);
+}
+
+#[tokio::test]
+async fn resolve_tag_unwrapped_data_and_present_target_return_sha() {
+    let body = r#"{"data":{"repository":{"ref":{"target":{"oid":"abc123"}}}}}"#;
+    let (client, _listener) = client_with_server(body);
+    let result =
+        aptu_core::github::graphql::resolve_tag_to_commit_sha(&client, "owner", "repo", "v1.0.0")
+            .await
+            .unwrap();
+    assert_eq!(result, Some("abc123".to_owned()));
 }
 
 #[tokio::test]
