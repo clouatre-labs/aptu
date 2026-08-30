@@ -116,10 +116,21 @@ async fn resolve_tag_unwrapped_data_and_present_target_return_sha() {
     assert_eq!(result, Some("abc123".to_owned()));
 }
 
+// Unauthenticated requests share GitHub's 60/hr rate limit across the whole
+// runner IP and fail intermittently; authenticate so CI gets the higher
+// per-token limit instead.
+fn authenticated_live_client() -> Option<Octocrab> {
+    let token = std::env::var("GITHUB_TOKEN").ok()?;
+    Some(Octocrab::builder().personal_token(token).build().unwrap())
+}
+
 #[tokio::test]
 #[ignore = "live GitHub API; run in CI graphql-contract job"]
 async fn live_octocrab_graphql_returns_unwrapped_data() {
-    let client = Octocrab::builder().build().unwrap();
+    let Some(client) = authenticated_live_client() else {
+        eprintln!("skipping: GITHUB_TOKEN not set");
+        return;
+    };
     let value: Value = client
         .graphql(&json!({"query": "query { viewer { login } }"}))
         .await
@@ -131,10 +142,21 @@ async fn live_octocrab_graphql_returns_unwrapped_data() {
 #[tokio::test]
 #[ignore = "live GitHub API; run in CI graphql-contract job"]
 async fn live_fetch_issues_end_to_end() {
-    let client = Octocrab::builder().build().unwrap();
+    let Some(client) = authenticated_live_client() else {
+        eprintln!("skipping: GITHUB_TOKEN not set");
+        return;
+    };
+    // fetch_issues only returns a repo when it has an open, unassigned
+    // "good first issue"; that backlog changes independently of us, so this
+    // only asserts the live call succeeds and any returned repo is the one
+    // we asked for. The deterministic unwrap-regression coverage lives in
+    // the mocked tests above.
     let results = aptu_core::github::graphql::fetch_issues(&client, &[("aaif-goose", "goose")])
         .await
         .unwrap();
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].0, "aaif-goose/goose");
+    assert!(results.len() <= 1);
+    if let Some((name, issues)) = results.first() {
+        assert_eq!(name, "aaif-goose/goose");
+        assert!(!issues.is_empty());
+    }
 }
