@@ -173,11 +173,9 @@ git commit -s -m "Your commit message"
 
 This adds `Signed-off-by: Your Name <email>` to your commit, certifying you agree to the [DCO](https://developercertificate.org/).
 
-## Issue and Pull Request Templates
-
-When filing a new issue, pick the template that matches: `bug.md`, `feature.md`, `refactor.yml`, or `documentation.md` in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/). Opening a PR pre-fills [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) — keep its sections (`Summary`, `Related Issues`, `Changes`, `Test Plan`, `Checklist`) rather than replacing them.
-
 ## Pull Request Checklist
+
+Pick the matching template under [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) when filing an issue, and keep [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)'s sections when opening a PR.
 
 - [ ] Tests pass (`cargo nextest run --workspace`)
 - [ ] No clippy warnings (`cargo clippy -- -D warnings`)
