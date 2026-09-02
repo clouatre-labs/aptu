@@ -80,4 +80,4 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 - cargo-deny for dependency audits (`advisories` + `licenses`)
 - octocrab JWT backend: `jwt-aws-lc-rs` (not `jwt-rust-crypto`; swapped in #1459 to eliminate RUSTSEC-2023-0071/rsa dependency)
 - Each AI provider requires a `<PROVIDER>_API_KEY` env var; GitHub auth uses OAuth device flow (keyring-backed)
-- Issues use the matching template in `.github/ISSUE_TEMPLATE/` (`bug.md`, `feature.md`, `refactor.yml`, `documentation.md`); PRs use `.github/PULL_REQUEST_TEMPLATE.md` (`Summary`, `Related Issues`, `Changes`, `Test Plan`, `Checklist`) — keep the template's sections, don't replace them
+- Match issue/PR bodies to the matching file under `.github/ISSUE_TEMPLATE/` (`bug.md`, `feature.md`, `refactor.yml`, `documentation.md`) or `.github/PULL_REQUEST_TEMPLATE.md` — `gh` doesn't auto-apply them once a body is passed via flag/file, so reproduce the template's sections by hand
