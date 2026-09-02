@@ -1,8 +1,12 @@
 # Audit: Review-Context Telemetry Aggregation — September 2026
 
+> **Status: Proposed.** Tracked in clouatre-labs/aptu#1581 (per-run anonymized counters, no network call) and clouatre-labs/aptu-github-app#220 (opt-in hosted rollup endpoint).
+
 Date: 2026-09-02
 
 Scope: Whether aptu's PR review pipeline needs an architecture change to avoid context saturation on large pull requests (prompted by a Claude Code Architect exam scenario on subagent delegation), and — since it does not — what evidence infrastructure would let a future decision on that question be made safely and factually instead of speculatively.
+
+Related: clouatre-labs/aptu#1581, clouatre-labs/aptu-github-app#220
 
 Companion documents: [Audit: KG Market Validation](2026-08-29-kg-market-validation.md); [Audit: KG Benchmark v2 — Cost + Value (ROI)](2026-08-28-kg-benchmark-v2-roi.md)
 
@@ -45,6 +49,11 @@ Aggregating this data safely means the aggregate must never carry identifying fi
 1. Add an opt-in rollup step to `action.yml` (or a follow-up composite action) that reads the existing `APTU_CONTEXT_FILE`/`APTU_METRICS_FILE` JSONL already produced this run, computes the anonymized counters above, and appends only those counters to a durable, operator-controlled location — a dedicated branch/artifact in the operator's own repo for self-hosted use, or (since `aptu-github-app` already runs a Cloudflare Worker as a hosted, org-operated service) an aggregate-only endpoint on that Worker for hosted use. Raw per-PR JSONL is never transmitted off the run that produced it.
 2. Pre-register the decision rule before collecting data, following the KG benchmark's own methodology (catch/miss/false-positive framing, explicit thresholds pre-registered before the experiment): e.g., "if truncation events (`files_truncated > 0` or non-empty `budget_drops`) occur in more than X% of reviewed PRs over N weeks, scope a time-boxed map-reduce decomposition experiment; otherwise, the current single-call budget-cap architecture is sufficient and no further work is justified."
 3. Run for a fixed observation window, then revisit this audit with the actual rate. If the rate is low, close this line of investigation the same way the KG audits closed the graph question — with evidence, not intuition.
+
+**Repo split.** `action.yml` — where `APTU_CONTEXT_FILE`/`APTU_METRICS_FILE` are produced, rendered to `GITHUB_STEP_SUMMARY`, and uploaded as artifacts — lives in this repo (`aptu`), not in `aptu-github-app`; `aptu-github-app` only consumes it (`uses: clouatre-labs/aptu@<tag>`) and separately owns the hosted Cloudflare Worker plus the per-repo `.github/aptu.yml` opt-in schema. Point 1 above therefore splits into two independently shippable, independently opt-in pieces so that the core binary never gains an unconditional network call — a hard requirement for self-hosted, air-gapped, and regulated (FedRAMP/SOC 2) users who never touch the hosted app:
+
+- **clouatre-labs/aptu#1581** — the local counter computation, entirely inside `action.yml`, no network call. This is what every self-hosted operator gets, including those with no internet egress.
+- **clouatre-labs/aptu-github-app#220** — an additional, separately opt-in `.github/aptu.yml` toggle and Worker endpoint that accepts only the anonymized counters from #1581, for operators who use the hosted GitHub App and choose to contribute to the aggregate. Depends on #1581.
 
 ### Option B — Build a new dedicated telemetry pipeline (not recommended)
 
