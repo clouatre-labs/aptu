@@ -149,13 +149,14 @@ Each appended line contains only the following counters plus `run_id` and `times
 | `truncation_events_total` | integer | Records where any file was truncated or any budget drop occurred. |
 | `files_truncated_total` | integer | Sum of `files_truncated` across records. |
 | `budget_drop_reason_counts` | object | Count of each `budget_drops` reason string across all records. |
+| `finish_reasons_counts` | object | Count of each `finish_reasons` value across all records. |
 | `model_tier_counts` | object | Count of each `model` value across all records. |
-| `prompt_budget_pct_histogram_bucket` | object | Count of records falling into `prompt_chars_final`/`max_prompt_chars` buckets: `0-25`, `26-50`, `51-75`, `76-90`, `91-100`. |
+| `prompt_budget_pct_histogram` | object | OTel `ExplicitBucketHistogram`-shaped `{explicit_bounds, bucket_counts}` for `prompt_chars_final`/`max_prompt_chars` percentages. `explicit_bounds` is the fixed literal `[25, 50, 75, 90]`; `bucket_counts` has one more entry than `explicit_bounds` (index 4 counts values above 90). |
 
 Sample appended line:
 
 ```json
-{"reviews_total":3,"truncation_events_total":2,"files_truncated_total":3,"budget_drop_reason_counts":{"call_graph":2},"model_tier_counts":{"gpt-4":3},"prompt_budget_pct_histogram_bucket":{"51-75":2,"91-100":1},"run_id":"123456","timestamp":"2026-01-01T00:00:00Z"}
+{"reviews_total":3,"truncation_events_total":2,"files_truncated_total":3,"budget_drop_reason_counts":{"call_graph":2},"finish_reasons_counts":{"stop":3},"model_tier_counts":{"gpt-4":3},"prompt_budget_pct_histogram":{"explicit_bounds":[25,50,75,90],"bucket_counts":[0,0,2,0,1]},"run_id":"123456","timestamp":"2026-01-01T00:00:00Z"}
 ```
 
 ## Scheduled Batch Triage
