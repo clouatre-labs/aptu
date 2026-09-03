@@ -270,6 +270,24 @@ inputs:
     required: false
     default: 'false'
 
+  # --- Telemetry rollup ---
+  telemetry-rollup:
+    description: >
+      Set to 'true' to fold this run's own review context JSONL into anonymized,
+      aggregate-only counters (reviews_total, truncation_events_total,
+      model_tier_counts, and similar) and append them to telemetry-rollup-path.
+      Makes no network call, and discards pr and github_actor before writing.
+      Defaults to 'false' (no behavior change when unset).
+    required: false
+    default: 'false'
+  telemetry-rollup-path:
+    description: >
+      Destination path, relative to the consuming repository's checkout, that
+      the telemetry-rollup counters are appended to. Operator-controlled; not
+      a hosted or central endpoint.
+    required: false
+    default: '.aptu/telemetry-rollup.jsonl'
+
   # --- Routing (legacy) ---
   command:
     description: Command to run (issue or pr)
@@ -774,3 +792,8 @@ runs:
         path: ${{ runner.temp }}/aptu-review-context.jsonl
         retention-days: 7
         if-no-files-found: ignore
+
+    - name: Roll up anonymized review-context telemetry
+      if: always() && inputs.telemetry-rollup == 'true'
+      shell: bash
+      run: ${{ github.action_path }}/scripts/telemetry-rollup.sh "$APTU_CONTEXT_FILE" "${{ inputs.telemetry-rollup-path }}" || true

@@ -130,6 +130,34 @@ Two environment variables control optional output files written during PR review
 
 When running via the GitHub Action, both files are set automatically and uploaded as workflow artifacts (`aptu-review-context.jsonl` and `aptu-token-usage.jsonl`).
 
+### Telemetry Rollup
+
+Opt-in via two Action inputs. Default-off, no network call, and always discards `pr` and `github_actor` before writing.
+
+| Input | Default | Description |
+|-------|---------|--------------|
+| `telemetry-rollup` | `'false'` | Set to `'true'` to fold this run's own `APTU_CONTEXT_FILE` JSONL into anonymized, aggregate-only counters and append them to `telemetry-rollup-path`. |
+| `telemetry-rollup-path` | `.aptu/telemetry-rollup.jsonl` | Destination path, relative to the consuming repository's checkout, that the counters are appended to. Operator-controlled; not a hosted or central endpoint. |
+
+When enabled, a step named "Roll up anonymized review-context telemetry" runs after the review context artifact is uploaded. It never fails the job: internal errors (missing `jq`, malformed JSONL, unwritable destination) are logged to stderr and swallowed.
+
+Each appended line contains only the following counters plus `run_id` and `timestamp`:
+
+| Counter | Type | Description |
+|---------|------|--------------|
+| `reviews_total` | integer | Number of review context records in this run. |
+| `truncation_events_total` | integer | Records where any file was truncated or any budget drop occurred. |
+| `files_truncated_total` | integer | Sum of `files_truncated` across records. |
+| `budget_drop_reason_counts` | object | Count of each `budget_drops` reason string across all records. |
+| `model_tier_counts` | object | Count of each `model` value across all records. |
+| `prompt_budget_pct_histogram_bucket` | object | Count of records falling into `prompt_chars_final`/`max_prompt_chars` buckets: `0-25`, `26-50`, `51-75`, `76-90`, `91-100`. |
+
+Sample appended line:
+
+```json
+{"reviews_total":3,"truncation_events_total":2,"files_truncated_total":3,"budget_drop_reason_counts":{"call_graph":2},"model_tier_counts":{"gpt-4":3},"prompt_budget_pct_histogram_bucket":{"51-75":2,"91-100":1},"run_id":"123456","timestamp":"2026-01-01T00:00:00Z"}
+```
+
 ## Scheduled Batch Triage
 
 Triage all unlabeled issues on a schedule:

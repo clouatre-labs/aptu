@@ -313,7 +313,7 @@ jobs:
           BATS_LIB_PATH: ${{ github.workspace }}/.bats-libs
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: bats tests/integration.bats
+        run: bats tests/integration.bats tests/telemetry_rollup.bats
 
   scan-self:
     name: Scan Self

@@ -108,6 +108,8 @@ aptu pr review owner/repo#123   # token usage appended to metrics.jsonl per run
 
 See [docs/GITHUB_ACTION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_ACTION.md#observability) for full field reference.
 
+The GitHub Action also has an opt-in `telemetry-rollup` input that folds a run's own review context into anonymized, aggregate-only counters; see [Telemetry Rollup](https://github.com/clouatre-labs/aptu/blob/main/docs/GITHUB_ACTION.md#telemetry-rollup).
+
 ## Security Scanning
 
 Aptu includes built-in security pattern detection for PR reviews. Scanning is performed locally, and no code is sent to external services.
