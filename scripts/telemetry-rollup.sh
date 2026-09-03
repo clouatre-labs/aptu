@@ -45,22 +45,27 @@ main() {
                 [.[] | .budget_drops // [] | .[]]
                 | reduce .[] as $reason ({}; .[$reason] = ((.[$reason] // 0) + 1))
             ),
+            finish_reasons_counts: (
+                [.[] | .finish_reasons // [] | .[]]
+                | reduce .[] as $reason ({}; .[$reason] = ((.[$reason] // 0) + 1))
+            ),
             model_tier_counts: (
                 [.[] | .model // "unknown"]
                 | reduce .[] as $model ({}; .[$model] = ((.[$model] // 0) + 1))
             ),
-            prompt_budget_pct_histogram_bucket: (
+            prompt_budget_pct_histogram: (
                 [.[] | (
                     (((.prompt_chars_final // 0) * 100) / (if (.max_prompt_chars // 0) > 0 then .max_prompt_chars else 120000 end)) | round
                 ) | (
-                    if . <= 25 then "0-25"
-                    elif . <= 50 then "26-50"
-                    elif . <= 75 then "51-75"
-                    elif . <= 90 then "76-90"
-                    else "91-100"
+                    if . <= 25 then 0
+                    elif . <= 50 then 1
+                    elif . <= 75 then 2
+                    elif . <= 90 then 3
+                    else 4
                     end
                 )]
-                | reduce .[] as $bucket ({}; .[$bucket] = ((.[$bucket] // 0) + 1))
+                | reduce .[] as $idx ([0,0,0,0,0]; .[$idx] += 1)
+                | {explicit_bounds: [25,50,75,90], bucket_counts: .}
             )
         }
     ' "$context_file" 2>"$jq_err"); then

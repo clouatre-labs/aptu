@@ -57,8 +57,11 @@ write_fixture() {
     run jq -Sc '.model_tier_counts' "$DEST_FILE"
     assert_output '{"claude-3":1,"gpt-4":2}'
 
-    run jq -Sc '.prompt_budget_pct_histogram_bucket' "$DEST_FILE"
-    assert_output '{"0-25":1,"51-75":1,"91-100":1}'
+    run jq -Sc '.prompt_budget_pct_histogram' "$DEST_FILE"
+    assert_output '{"bucket_counts":[1,0,1,0,1],"explicit_bounds":[25,50,75,90]}'
+
+    run jq -Sc '.finish_reasons_counts' "$DEST_FILE"
+    assert_output '{"stop":3}'
 }
 
 @test "fixture JSONL with pr and github_actor: appended line contains neither key" {
