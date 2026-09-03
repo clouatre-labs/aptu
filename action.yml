@@ -796,4 +796,7 @@ runs:
     - name: Roll up anonymized review-context telemetry
       if: always() && inputs.telemetry-rollup == 'true'
       shell: bash
-      run: ${{ github.action_path }}/scripts/telemetry-rollup.sh "$APTU_CONTEXT_FILE" "${{ inputs.telemetry-rollup-path }}" || true
+      env:
+        APTU_CONTEXT_FILE: ${{ runner.temp }}/aptu-review-context.jsonl
+        TELEMETRY_ROLLUP_PATH: ${{ inputs.telemetry-rollup-path }}
+      run: "${{ github.action_path }}/scripts/telemetry-rollup.sh \"$APTU_CONTEXT_FILE\" \"$TELEMETRY_ROLLUP_PATH\" || true"
