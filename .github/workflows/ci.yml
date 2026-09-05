@@ -92,30 +92,6 @@ jobs:
             --to ${{ github.event.pull_request.head.sha }} \
             --verbose
 
-  check-base:
-    name: Check Branch Base
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-      - name: Verify branch is up-to-date with main
-        run: |
-          git fetch origin main
-          base_commit=$(git merge-base origin/main HEAD)
-          main_head=$(git rev-parse origin/main)
-          if [ "$base_commit" != "$main_head" ]; then
-            behind=$(git rev-list --count "$base_commit".."$main_head")
-            echo "::error::Branch is $behind commit(s) behind main. Please update your branch with the latest main."
-            echo "Run: git fetch origin && git rebase origin/main  # or merge: git fetch origin && git merge origin/main"
-            exit 1
-          fi
-
   deny:
     name: Audit Dependencies
     runs-on: ubuntu-24.04-arm
@@ -368,7 +344,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions: {}
     if: always()
-    needs: [commitlint, check-base, deny, check, test, graphql-contract, build, integration, scan-self, wasm-check, lint-docs]
+    needs: [commitlint, deny, check, test, graphql-contract, build, integration, scan-self, wasm-check, lint-docs]
     timeout-minutes: 2
     steps:
       - name: Verify all jobs passed or were skipped

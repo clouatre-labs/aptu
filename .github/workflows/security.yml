@@ -13,12 +13,13 @@ concurrency:
 permissions: {}
 
 jobs:
-  secrets:
-    name: Secret scan
+  security-result:
+    name: Security Result
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
     permissions:
       contents: read
+      security-events: write # needed for SARIF upload on public repos
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,39 +32,11 @@ jobs:
         uses: trufflesecurity/trufflehog@20652fbbdefffcdaa493a5bf57ab2ac6b1db715b # v3.97.1
         with:
           extra_args: --only-verified
-
-  zizmor:
-    name: Workflow SHA pinning
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      security-events: write # needed for SARIF upload on public repos
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Audit GitHub Actions workflows
+        if: always()
         uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         with:
           min-severity: medium
           advanced-security: true
           token: ${{ secrets.GITHUB_TOKEN }}
           config: .github/zizmor.yml
-
-  security-result:
-    name: Security Result
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 2
-    permissions: {}
-    needs: [secrets, zizmor]
-    if: always()
-    steps:
-      - name: Check all security jobs passed
-        run: |
-          for result in "${{ needs.secrets.result }}" "${{ needs.zizmor.result }}"; do
-            if [[ "$result" != "success" ]]; then
-              echo "Security check failed or cancelled: $result"
-              exit 1
-            fi
-          done
-          echo "All security checks passed"
