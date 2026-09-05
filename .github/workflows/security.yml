@@ -25,6 +25,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - name: Detect workflow file changes
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        id: filter
+        with:
+          filters: |
+            workflows:
+              - '.github/workflows/**'
       # TruffleHog is used instead of gitleaks/gitleaks-action because gitleaks-action
       # requires a GITLEAKS_LICENSE org secret for GitHub Organisation repos (free tier
       # available but requires registration). TruffleHog has no per-org licensing gate.
@@ -33,7 +40,7 @@ jobs:
         with:
           extra_args: --only-verified
       - name: Audit GitHub Actions workflows
-        if: always()
+        if: always() && steps.filter.outputs.workflows == 'true'
         uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         with:
           min-severity: medium
