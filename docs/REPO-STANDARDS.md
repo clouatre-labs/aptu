@@ -24,7 +24,7 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 
 `ci.yml` has no dedicated branch-currency ("check-base") job. The main branch ruleset's `strict_required_status_checks_policy: true` already enforces that a PR branch is up to date with `main` before merge, at zero Actions cost, so a job that re-checks the same thing with `git merge-base` would be redundant.
 
-`security.yml`'s two controls (TruffleHog secret scan, zizmor SHA-pin audit) run as sequential steps inside a single `security-result` job rather than as separate jobs feeding an aggregator; the zizmor step is marked `if: always()` so it still runs and reports even if the trufflehog step fails. `security-result` is not currently in the branch ruleset's `required_status_checks` list (only `CI Result` is required) — that predates this change and is unaffected by it.
+`security.yml`'s two controls (TruffleHog secret scan, zizmor SHA-pin audit) run as sequential steps inside a single `security-result` job rather than as separate jobs feeding an aggregator; the zizmor step is marked `if: always()` so it still runs and reports even if the trufflehog step fails, and is additionally gated on a `dorny/paths-filter` check so it only runs when `.github/workflows/**` changed (the weekly `scheduled-security-audit.yml` covers full-repo zizmor audits on every other push). `security-result` is not currently in the branch ruleset's `required_status_checks` list (only `CI Result` is required) — that predates this change and is unaffected by it.
 
 ---
 
@@ -72,7 +72,7 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 | GPG tag signing | `git tag -s`; verified by `git verify-tag` with imported public key in `release.yml` | Guards against tag tampering before any build or publish runs |
 | SHA-pinned Actions | All `uses:` lines pinned to commit SHA | Prevents tag mutation attacks (e.g., `actions/checkout@v4` is mutable) |
 | TruffleHog secret scan | Step in `security-result` job (`security.yml`) | Catches accidental credential commits |
-| zizmor | Step in `security-result` job (`security.yml`), gated `if: always()` so it still runs if the secret scan step fails | Enforces SHA pinning and flags unsafe workflow patterns |
+| zizmor | Step in `security-result` job (`security.yml`), gated `if: always()` so it still runs if the secret scan step fails, and skipped when `.github/workflows/**` didn't change | Enforces SHA pinning and flags unsafe workflow patterns |
 | REUSE compliance | SPDX headers on every source file; checked in `reuse.yml` | Apache-2.0 license attribution is machine-verifiable |
 | Least-privilege permissions | Top-level `permissions: contents: read` in every workflow; elevated scopes declared per-job | Limits blast radius if a step is compromised |
 | OpenSSF Scorecard | `scorecard.yml` on schedule and push to main | Tracks supply-chain security best practices over time |
