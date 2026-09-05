@@ -22,6 +22,10 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 
 The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the sole required status check in the branch ruleset. All other individual jobs are gated through it.
 
+`ci.yml` has no dedicated branch-currency ("check-base") job. The main branch ruleset's `strict_required_status_checks_policy: true` already enforces that a PR branch is up to date with `main` before merge, at zero Actions cost, so a job that re-checks the same thing with `git merge-base` would be redundant.
+
+`security.yml`'s two controls (TruffleHog secret scan, zizmor SHA-pin audit) run as sequential steps inside a single `security-result` job rather than as separate jobs feeding an aggregator; the zizmor step is marked `if: always()` so it still runs and reports even if the trufflehog step fails. `security-result` is not currently in the branch ruleset's `required_status_checks` list (only `CI Result` is required) — that predates this change and is unaffected by it.
+
 ---
 
 ## Cargo Profiles
@@ -67,8 +71,8 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 | OIDC keyless signing | `id-token: write` per-job in `release.yml` | No long-lived credentials; tokens scoped to the run |
 | GPG tag signing | `git tag -s`; verified by `git verify-tag` with imported public key in `release.yml` | Guards against tag tampering before any build or publish runs |
 | SHA-pinned Actions | All `uses:` lines pinned to commit SHA | Prevents tag mutation attacks (e.g., `actions/checkout@v4` is mutable) |
-| gitleaks secret scan | Required check in `ci.yml` | Catches accidental credential commits |
-| zizmor | Required check in `ci.yml` (path-filtered to `workflows/**`) | Enforces SHA pinning and flags unsafe workflow patterns |
+| TruffleHog secret scan | Step in `security-result` job (`security.yml`) | Catches accidental credential commits |
+| zizmor | Step in `security-result` job (`security.yml`), gated `if: always()` so it still runs if the secret scan step fails | Enforces SHA pinning and flags unsafe workflow patterns |
 | REUSE compliance | SPDX headers on every source file; checked in `reuse.yml` | Apache-2.0 license attribution is machine-verifiable |
 | Least-privilege permissions | Top-level `permissions: contents: read` in every workflow; elevated scopes declared per-job | Limits blast radius if a step is compromised |
 | OpenSSF Scorecard | `scorecard.yml` on schedule and push to main | Tracks supply-chain security best practices over time |
