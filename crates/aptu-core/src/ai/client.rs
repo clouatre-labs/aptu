@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use super::circuit_breaker::CircuitBreaker;
 use super::provider::AiProvider;
@@ -431,6 +432,16 @@ impl AiProvider for AiClient {
         self.custom_guidance.as_deref()
     }
 
+    fn session_id(&self, task_type: &str) -> Option<String> {
+        if self.provider.name == PROVIDER_OPENROUTER {
+            let mut hasher = Sha256::new();
+            hasher.update(format!("aptu-{task_type}-{}", self.model()).as_bytes());
+            Some(hex::encode(hasher.finalize()))
+        } else {
+            None
+        }
+    }
+
     fn build_headers(&self) -> reqwest::header::HeaderMap {
         let mut headers = reqwest::header::HeaderMap::new();
         if let Ok(val) = "application/json".parse() {
@@ -455,6 +466,9 @@ impl AiProvider for AiClient {
             }
             if let Ok(val) = "Aptu CLI".parse() {
                 headers.insert("X-Title", val);
+            }
+            if let Ok(val) = "true".parse() {
+                headers.insert("X-OpenRouter-Cache", val);
             }
         }
 
@@ -590,6 +604,38 @@ mod tests {
         assert!(!headers.contains_key("anthropic-version"));
         assert!(headers.contains_key("http-referer"));
         assert!(headers.contains_key("x-title"));
+        assert!(headers.contains_key("x-openrouter-cache"));
+    }
+
+    #[test]
+    fn test_session_id_openrouter_stable_across_calls() {
+        let config = test_config();
+        let client = AiClient::with_api_key(
+            PROVIDER_OPENROUTER,
+            SecretString::from("test_key"),
+            "test-model:free",
+            &config,
+        )
+        .expect("should create openrouter client");
+
+        let first = client.session_id("triage");
+        let second = client.session_id("triage");
+        assert!(first.is_some());
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn test_session_id_non_openrouter_is_none() {
+        let config = test_config();
+        let client = AiClient::with_api_key(
+            PROVIDER_ANTHROPIC,
+            SecretString::from("test_key"),
+            "test-model",
+            &config,
+        )
+        .expect("should create anthropic client");
+
+        assert!(client.session_id("triage").is_none());
     }
 
     #[test]
