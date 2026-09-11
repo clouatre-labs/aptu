@@ -132,6 +132,16 @@ pub enum AptuError {
         /// Optional hint for how to resolve the limit (empty if none).
         hint: String,
     },
+
+    /// Review context ended up with zero surviving file patches on a non-empty PR,
+    /// which would produce a diff-less review that GitHub rejects.
+    #[error(
+        "review context has no surviving patches across {files_total} file(s); refusing to submit a diff-less review"
+    )]
+    EmptyReviewContext {
+        /// Total number of files in the PR.
+        files_total: usize,
+    },
 }
 
 /// GitHub resource type for type mismatch errors.
