@@ -148,6 +148,11 @@ pub fn format_error(error: &Error) -> String {
                     format!("{base}{hint}")
                 }
             }
+            AptuError::EmptyReviewContext { files_total: _ } => {
+                format!(
+                    "{aptu_err}\n\nTip: The PR diff was likely too large for the prompt budget. Try reviewing fewer files at once or increasing max_prompt_chars in your config."
+                )
+            }
         }
     } else {
         // Not an AptuError, return the original error chain

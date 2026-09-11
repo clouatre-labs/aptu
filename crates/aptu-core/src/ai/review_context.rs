@@ -258,6 +258,15 @@ pub async fn build_review_context(
         .map(|d| serde_json::to_string(d).unwrap_or_default().len())
         .sum();
 
+    if !pr.files.is_empty() && files_with_patch == 0 {
+        tracing::warn!(
+            files_total,
+            files_with_patch,
+            "Review context has no surviving patches; refusing diff-less review"
+        );
+        return Err(crate::AptuError::EmptyReviewContext { files_total });
+    }
+
     Ok(ReviewContext {
         pr,
         ast_context,
@@ -314,7 +323,7 @@ async fn enrich_deps(
     .await
 }
 
-/// Applies budget drop order: `call_graph` -> `ast_context` -> `dep_enrichments` -> patches -> `full_content`.
+/// Applies budget drop order: `call_graph` -> `ast_context` -> `dep_enrichments` -> `full_content` -> patches.
 /// Enforces the prompt budget by dropping enrichment sections in priority order.
 ///
 /// When the assembled prompt exceeds `max_prompt_chars`, sections are cleared in
@@ -323,8 +332,9 @@ async fn enrich_deps(
 /// 1. `call_graph` -- dropped first unless `deep` is explicitly set
 /// 2. `ast_context` -- dropped second
 /// 3. `dep_enrichments` -- dropped third
-/// 4. file patches -- dropped largest-first
-/// 5. file `full_content` -- dropped largest-first as last resort
+/// 4. file `full_content` -- dropped largest-first
+/// 5. file patches -- dropped largest-first as last resort, so the diff itself
+///    (the highest-value context for a review) is preserved as long as possible
 ///
 /// Each drop is logged at `WARN` level with the section name and character count.
 /// The function never returns an error; sections that cannot fit are silently cleared.
@@ -370,13 +380,13 @@ fn apply_budget_drops(
 
     drop_dep_enrichments_by_size(pr, &mut estimated_size, max_prompt_chars, budget_drops);
 
-    drop_patches_by_size(
+    drop_full_content_by_size(
         &mut pr.files,
         &mut estimated_size,
         max_prompt_chars,
         budget_drops,
     );
-    drop_full_content_by_size(
+    drop_patches_by_size(
         &mut pr.files,
         &mut estimated_size,
         max_prompt_chars,
@@ -936,6 +946,48 @@ mod tests {
         );
     }
 
+    /// Regression test for issue #1596: `full_content` must be evicted before patches,
+    /// so a PR with a small diff but a large `full_content` still keeps its patch.
+    #[test]
+    fn test_apply_budget_drops_full_content_evicted_before_patch() {
+        // patch is small, full_content alone is large enough to blow the budget.
+        let mut pr = make_pr_with_content(50, 1000);
+        let mut ast_context = String::new();
+        let mut call_graph = String::new();
+
+        // Base without full_content: patch(50) + metadata(~30) + overhead(1000) = ~1080.
+        // With full_content: + 1000 = ~2080. Budget sits between the two, so only
+        // full_content needs dropping to fit; the patch must survive untouched.
+        let max_prompt_chars = 1500;
+
+        let mut drops = Vec::new();
+        apply_budget_drops(
+            &mut pr,
+            &mut ast_context,
+            &mut call_graph,
+            false,
+            max_prompt_chars,
+            &mut drops,
+        );
+
+        assert!(
+            pr.files[0].full_content.is_none(),
+            "full_content should be evicted first when over budget"
+        );
+        assert!(
+            pr.files[0].patch.is_some(),
+            "patch should survive when evicting full_content alone brings the prompt under budget"
+        );
+        assert!(
+            drops.contains(&"file_content:src/lib.rs".to_string()),
+            "budget_drops should record the file_content eviction"
+        );
+        assert!(
+            !drops.contains(&"patch:src/lib.rs".to_string()),
+            "budget_drops should not record a patch eviction"
+        );
+    }
+
     #[test]
     fn test_verbose_summary_all_fields() {
         // Arrange: ReviewContext with repo path (inferred), dep enrichments, ast, call graph
@@ -1167,7 +1219,7 @@ mod tests {
         pr.files = vec![PrFile {
             filename: "src/ast_context.rs".to_string(),
             status: "modified".to_string(),
-            patch: None,
+            patch: Some("+// touched".to_string()),
             patch_truncated: false,
             full_content: None,
             additions: 1,
@@ -1195,6 +1247,68 @@ mod tests {
         assert!(
             !ctx.ast_context.is_empty(),
             "ast_context should be populated for a real Rust fixture file when the ast-context feature is enabled"
+        );
+    }
+
+    /// Regression test for issue #1596: `build_review_context` must refuse to produce
+    /// a diff-less review when a non-empty PR ends up with zero surviving patches
+    /// after budget drops (which would trigger a GitHub HTTP 422 downstream).
+    #[tokio::test]
+    async fn test_build_review_context_errs_when_all_patches_evicted() {
+        // Arrange: a single file with a sizable patch and full_content, and a budget
+        // so tiny that every section (including the patch, as a last resort) is dropped.
+        let pr = make_pr_with_content(2000, 2000);
+        let review_config = ReviewConfig {
+            max_prompt_chars: 1,
+            ..ReviewConfig::default()
+        };
+
+        // Act: repo_path points nowhere so ast_context/call_graph building is a no-op.
+        let result = build_review_context(
+            pr,
+            Some("/nonexistent-aptu-test-repo-path".to_string()),
+            false,
+            &review_config,
+        )
+        .await;
+
+        // Assert
+        match result {
+            Err(crate::AptuError::EmptyReviewContext { files_total }) => {
+                assert_eq!(
+                    files_total, 1,
+                    "files_total should reflect the single PR file"
+                );
+            }
+            other => panic!("expected EmptyReviewContext error, got {other:?}"),
+        }
+    }
+
+    /// Regression test for issue #1596: an empty PR (no files) must not trigger the
+    /// zero-patch guard, since `files_with_patch == 0` is vacuously true there.
+    #[tokio::test]
+    async fn test_build_review_context_no_err_when_files_empty() {
+        // Arrange: a PR with zero files.
+        let mut pr = make_pr_with_content(0, 0);
+        pr.files = vec![];
+        let review_config = ReviewConfig {
+            max_prompt_chars: 1,
+            ..ReviewConfig::default()
+        };
+
+        // Act
+        let result = build_review_context(
+            pr,
+            Some("/nonexistent-aptu-test-repo-path".to_string()),
+            false,
+            &review_config,
+        )
+        .await;
+
+        // Assert
+        assert!(
+            result.is_ok(),
+            "an empty-file PR should not trigger the zero-patch guard: {result:?}"
         );
     }
 }

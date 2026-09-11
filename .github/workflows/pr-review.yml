@@ -48,6 +48,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Review PR
+        id: review
         uses: ./
         continue-on-error: true  # Non-blocking - AI review is advisory
         with:
@@ -62,3 +63,10 @@ jobs:
           fallback-model: 'inception/mercury-2'
           instructions-file: .github/instructions/pr-review.md
           repo-path: ${{ github.workspace }}
+
+      - name: Warn on review failure
+        if: always() && steps.review.outcome == 'failure'
+        run: |
+          echo "::warning::AI review step failed (continue-on-error kept the job green) - check the Review PR step logs"
+          echo "### :warning: AI review failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "The Review PR step failed but did not block this job (continue-on-error: true). See the Review PR step logs for details." >> "$GITHUB_STEP_SUMMARY"
