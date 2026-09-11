@@ -233,6 +233,10 @@ pub async fn build_review_context(
     let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph);
 
     // Step 6: Apply budget drop order
+    let had_patches_pre_drop = pr
+        .files
+        .iter()
+        .any(|f| f.patch.as_deref().is_some_and(|p| !p.is_empty()));
     let mut ast_context = ast_context;
     let mut budget_drops = Vec::new();
     apply_budget_drops(
@@ -258,10 +262,14 @@ pub async fn build_review_context(
         .map(|d| serde_json::to_string(d).unwrap_or_default().len())
         .sum();
 
-    if !pr.files.is_empty() && files_with_patch == 0 {
+    if had_patches_pre_drop && files_with_patch == 0 {
         tracing::warn!(
+            pr_owner = %pr.owner,
+            pr_repo = %pr.repo,
+            pr_number = pr.number,
             files_total,
             files_with_patch,
+            had_patches_pre_drop,
             "Review context has no surviving patches; refusing diff-less review"
         );
         return Err(crate::AptuError::EmptyReviewContext { files_total });
@@ -1350,6 +1358,33 @@ mod tests {
         assert!(
             result.is_ok(),
             "an empty-file PR should not trigger the zero-patch guard: {result:?}"
+        );
+    }
+
+    /// Regression test for issue #1596: a non-empty PR where no file ever had a
+    /// patch (e.g. binary-only content) must not trigger the zero-patch guard,
+    /// since `had_patches_pre_drop` is false rather than an eviction outcome.
+    #[tokio::test]
+    async fn test_build_review_context_no_err_when_no_patches_pre_drop() {
+        // Arrange: a single file with no patch and no full_content from the start,
+        // simulating a binary-only file with no diffable content.
+        let mut pr = make_pr_with_content(0, 0);
+        pr.files[0].patch = None;
+        let review_config = ReviewConfig::default();
+
+        // Act: repo_path points nowhere so ast_context/call_graph building is a no-op.
+        let result = build_review_context(
+            pr,
+            Some("/nonexistent-aptu-test-repo-path".to_string()),
+            false,
+            &review_config,
+        )
+        .await;
+
+        // Assert
+        assert!(
+            result.is_ok(),
+            "a non-empty PR with no pre-drop patches (binary-only) should not trigger the zero-patch guard: {result:?}"
         );
     }
 }
