@@ -988,6 +988,47 @@ mod tests {
         );
     }
 
+    /// Regression test for issue #1596 review feedback: when both `full_content` and
+    /// patches must be dropped across multiple files, `budget_drops` must record every
+    /// `file_content:` entry before any `patch:` entry, matching the call order.
+    #[test]
+    fn test_apply_budget_drops_records_full_content_before_patch_order() {
+        let mut pr = make_pr_with_content(500, 100);
+        pr.files.push(PrFile {
+            filename: "src/b.rs".to_string(),
+            status: "modified".to_string(),
+            patch: Some("x".repeat(500)),
+            patch_truncated: false,
+            full_content: Some("y".repeat(100)),
+            additions: 1,
+            deletions: 0,
+        });
+        let mut ast_context = String::new();
+        let mut call_graph = String::new();
+        let max_prompt_chars = 1900;
+
+        let mut drops = Vec::new();
+        apply_budget_drops(
+            &mut pr,
+            &mut ast_context,
+            &mut call_graph,
+            false,
+            max_prompt_chars,
+            &mut drops,
+        );
+
+        let last_file_content_idx = drops.iter().rposition(|d| d.starts_with("file_content:"));
+        let first_patch_idx = drops.iter().position(|d| d.starts_with("patch:"));
+        assert!(
+            last_file_content_idx.is_some() && first_patch_idx.is_some(),
+            "expected both file_content and patch drops in this scenario: {drops:?}"
+        );
+        assert!(
+            last_file_content_idx < first_patch_idx,
+            "every file_content: entry must precede every patch: entry in budget_drops: {drops:?}"
+        );
+    }
+
     #[test]
     fn test_verbose_summary_all_fields() {
         // Arrange: ReviewContext with repo path (inferred), dep enrichments, ast, call graph
