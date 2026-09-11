@@ -264,6 +264,9 @@ pub async fn build_review_context(
 
     if had_patches_pre_drop && files_with_patch == 0 {
         tracing::warn!(
+            pr_owner = %pr.owner,
+            pr_repo = %pr.repo,
+            pr_number = pr.number,
             files_total,
             files_with_patch,
             had_patches_pre_drop,
