@@ -92,6 +92,7 @@ impl SecurityValidator {
             }),
             max_tokens: Some(self.ai_client.max_tokens()),
             temperature: Some(0.3),
+            session_id: None,
         };
 
         // Send request and parse response

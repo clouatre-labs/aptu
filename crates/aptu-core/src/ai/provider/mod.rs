@@ -128,6 +128,11 @@ pub trait AiProvider: Send + Sync {
         None
     }
 
+    /// Returns a stable session identifier for sticky provider routing, if supported.
+    fn session_id(&self, _task_type: &str) -> Option<String> {
+        None
+    }
+
     /// Sends a chat completion request to the provider's API (HTTP-only, no retry).
     #[allow(private_interfaces)]
     async fn send_request_inner(

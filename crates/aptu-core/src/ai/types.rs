@@ -78,6 +78,9 @@ pub(crate) struct ChatCompletionRequest {
     /// Temperature for response randomness.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
+    /// Stable session identifier for sticky provider routing (`OpenRouter` only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 /// Response format specification for structured output.

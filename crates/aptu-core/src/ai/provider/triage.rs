@@ -82,6 +82,7 @@ pub(super) async fn analyze_issue(
         response_format: provider_response_format(provider),
         max_tokens: Some(provider.max_tokens()),
         temperature: Some(provider.temperature()),
+        session_id: provider.session_id("triage"),
     };
 
     // Send request and parse JSON with retry logic
@@ -109,10 +110,7 @@ mod tests {
     #[test]
     fn test_build_system_prompt_contains_json_schema() {
         let system_prompt = build_triage_system_prompt("");
-        assert!(
-            !system_prompt
-                .contains("A 2-3 sentence summary of what the issue is about and its impact")
-        );
+        assert!(system_prompt.contains("estimated_loc"));
         let issue = IssueDetails::builder()
             .owner("test".to_string())
             .repo("repo".to_string())
@@ -125,8 +123,8 @@ mod tests {
             .build();
         let prompt = crate::ai::prompts::build_user_prompt(&issue);
         assert!(
-            prompt.contains("summary"),
-            "schema should appear in user prompt"
+            !prompt.contains("estimated_loc"),
+            "schema should not appear in user prompt"
         );
     }
 

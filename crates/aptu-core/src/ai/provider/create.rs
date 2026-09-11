@@ -86,6 +86,7 @@ pub(super) async fn create_issue(
         response_format: provider_response_format(provider),
         max_tokens: Some(provider.max_tokens()),
         temperature: Some(provider.temperature()),
+        session_id: provider.session_id("create"),
     };
 
     // Send request and parse JSON with retry logic

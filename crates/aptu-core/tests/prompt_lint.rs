@@ -73,10 +73,11 @@ fn all_embedded_prompts_non_empty() {
 #[test]
 fn all_embedded_prompts_within_max_size() {
     // Ceiling empirically grounded: Goldberg et al. (arXiv:2402.14848) show reasoning
-    // degradation around 3,000 tokens; 5,000 chars (~1,250 tokens at ~4 chars/token)
-    // provides headroom below that threshold while accommodating all current guidelines
-    // without content removal. Triage is the largest prompt at ~4,759 chars.
-    const MAX: usize = 5000;
+    // degradation around 3,000 tokens; 5,500 chars (~1,375 tokens at ~4 chars/token)
+    // provides headroom below that threshold. Raised from 5,000 to accommodate the JSON
+    // schema now embedded directly in each system prompt (examples were removed, not
+    // relocated, so this is not an examples-plus-schema budget).
+    const MAX: usize = 5500;
     for (name, prompt) in all_system_prompts() {
         assert!(
             prompt.len() <= MAX,
@@ -108,11 +109,15 @@ fn system_prompts_do_not_have_examples_section() {
 
 #[test]
 fn system_prompts_have_json_reminder_bookend() {
+    // Window widened from 300 to 700 chars: the JSON schema is now appended after
+    // guidelines (schema-in-system-prompt migration), and the largest schema (triage,
+    // ~611 chars) plus the preamble no longer fits in a 300-char tail.
+    const TAIL_WINDOW: usize = 700;
     for (name, prompt) in all_system_prompts() {
-        let tail = &prompt[prompt.len().saturating_sub(300)..];
+        let tail = &prompt[prompt.len().saturating_sub(TAIL_WINDOW)..];
         assert!(
             tail.contains("valid JSON") || tail.contains("schema"),
-            "prompt '{name}' missing JSON reminder in last 300 chars"
+            "prompt '{name}' missing JSON reminder in last {TAIL_WINDOW} chars"
         );
     }
 }
@@ -142,8 +147,36 @@ fn tooling_context_contains_required_tools() {
 }
 
 #[test]
-fn all_user_prompts_contain_schema() {
-    // triage user prompt
+fn all_system_prompts_contain_schema() {
+    // triage system prompt
+    let triage_system = build_triage_system_prompt(TOOLING_CONTEXT);
+    assert!(
+        triage_system.contains("summary") && triage_system.contains("suggested_labels"),
+        "triage system prompt missing schema fields"
+    );
+
+    // create system prompt
+    let create_system = build_create_system_prompt(TOOLING_CONTEXT);
+    assert!(
+        create_system.contains("formatted_title") && create_system.contains("formatted_body"),
+        "create system prompt missing schema fields"
+    );
+
+    // pr_review system prompt
+    let pr_review_system = build_pr_review_system_prompt(TOOLING_CONTEXT);
+    assert!(
+        pr_review_system.contains("verdict") && pr_review_system.contains("summary"),
+        "pr_review system prompt missing schema fields"
+    );
+
+    // pr_label system prompt
+    let pr_label_system = build_pr_label_system_prompt(TOOLING_CONTEXT);
+    assert!(
+        pr_label_system.contains("suggested_labels"),
+        "pr_label system prompt missing schema fields"
+    );
+
+    // user prompts must NOT contain schema fields anymore
     let issue = IssueDetails::builder()
         .owner("test".to_string())
         .repo("repo".to_string())
@@ -156,19 +189,17 @@ fn all_user_prompts_contain_schema() {
         .build();
     let triage_user = aptu_core::ai::prompts::build_user_prompt(&issue);
     assert!(
-        triage_user.contains("summary") && triage_user.contains("suggested_labels"),
-        "triage user prompt missing schema fields"
+        !triage_user.contains("suggested_labels"),
+        "triage user prompt must not contain schema fields"
     );
 
-    // create user prompt
     let create_user =
         aptu_core::ai::prompts::build_create_user_prompt("My title", "My body", "test/repo");
     assert!(
-        create_user.contains("formatted_title") && create_user.contains("formatted_body"),
-        "create user prompt missing schema fields"
+        !create_user.contains("formatted_title"),
+        "create user prompt must not contain schema fields"
     );
 
-    // pr_review user prompt
     let pr = PrDetails {
         owner: "test".to_string(),
         repo: "repo".to_string(),
@@ -214,19 +245,18 @@ fn all_user_prompts_contain_schema() {
     };
     let pr_review_user = aptu_core::ai::prompts::build_pr_review_user_prompt(&mut ctx);
     assert!(
-        pr_review_user.contains("verdict") && pr_review_user.contains("summary"),
-        "pr_review user prompt missing schema fields"
+        !pr_review_user.contains("verdict"),
+        "pr_review user prompt must not contain schema fields"
     );
 
-    // pr_label user prompt
     let pr_label_user = aptu_core::ai::prompts::build_pr_label_user_prompt(
         "feat: add thing",
         "body",
         &["src/lib.rs".to_string()],
     );
     assert!(
-        pr_label_user.contains("suggested_labels"),
-        "pr_label user prompt missing schema fields"
+        !pr_label_user.contains("suggested_labels"),
+        "pr_label user prompt must not contain schema fields"
     );
 }
 

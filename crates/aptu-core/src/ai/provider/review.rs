@@ -127,6 +127,7 @@ pub(super) async fn review_pr(
         response_format: provider_response_format(provider),
         max_tokens: Some(provider.max_tokens()),
         temperature: Some(provider.temperature()),
+        session_id: provider.session_id("review"),
     };
 
     // Send request and parse JSON with retry logic

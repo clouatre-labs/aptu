@@ -92,6 +92,7 @@ pub(super) async fn suggest_pr_labels(
         response_format: provider_response_format(provider),
         max_tokens: Some(provider.max_tokens()),
         temperature: Some(provider.temperature()),
+        session_id: provider.session_id("label"),
     };
 
     // Send request and parse JSON with retry logic

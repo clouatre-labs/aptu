@@ -375,6 +375,7 @@ mod tests {
             max_tokens: None,
             temperature: None,
             response_format: None,
+            session_id: None,
         };
 
         let result = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
@@ -486,6 +487,7 @@ mod tests {
             max_tokens: None,
             temperature: None,
             response_format: None,
+            session_id: None,
         };
 
         let (parsed, stats, _reasons) = send_and_parse::<
