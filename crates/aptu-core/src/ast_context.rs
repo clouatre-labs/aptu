@@ -223,7 +223,12 @@ fn build_call_graph_context_sync(repo_path: &str, files: &[PrFile]) -> String {
         };
 
         'outer: for fn_name in fn_names.iter().take(5) {
-            match analyze_focused(repo, fn_name, 1, Some(3), None) {
+            // `max_depth` is a directory-walk depth limit (passed straight to
+            // `ignore::WalkBuilder::max_depth`), not a call-graph traversal depth; `None`
+            // walks the full tree so nested `crates/<crate>/src/` files are reachable.
+            // Result volume is bounded by `max_results` and the `.take(5)`/`.take(3)` caps
+            // below, not by directory depth.
+            match analyze_focused(repo, fn_name, 1, None, None) {
                 Ok(focused) => {
                     if focused.prod_chains.is_empty() {
                         continue;
@@ -364,7 +369,10 @@ fn build_symbol_expansions_context_sync(
                 break 'files;
             }
 
-            let focused = match analyze_focused(repo, fn_name, 1, Some(2), None) {
+            // See the analogous `analyze_focused` call in `build_call_graph_context_sync`
+            // above: `max_depth` is a directory-walk depth, not call-graph depth, so `None`
+            // (unrestricted walk) is required to reach nested `crates/<crate>/src/` files.
+            let focused = match analyze_focused(repo, fn_name, 1, None, None) {
                 Ok(focused) => focused,
                 Err(e) => {
                     debug!(
