@@ -485,7 +485,10 @@ fn build_file_outline(repo_path: &str, filename: &str) -> Option<String> {
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("");
-    language_for_extension(ext)?;
+    if language_for_extension(ext).is_none() {
+        tracing::debug!("build_file_outline: unsupported extension for {filename}: {ext:?}");
+        return None;
+    }
     let full_path = std::path::Path::new(repo_path).join(filename);
     let path_str = full_path.to_string_lossy().into_owned();
 
@@ -524,6 +527,10 @@ fn build_file_outline(_repo_path: &str, _filename: &str) -> Option<String> {
 /// compact signature outline (via `build_file_outline`) when `repo_path` is
 /// available and the outline actually brings the prompt back under budget.
 /// Falls back to the existing full-clear behavior otherwise.
+///
+/// The `outline_len < content_size` check is load-bearing, not cosmetic: it
+/// guarantees the substitution never grows the prompt relative to the
+/// full-clear fallback it replaces.
 fn drop_full_content_by_size(
     files: &mut [crate::ai::types::PrFile],
     estimated_size: &mut usize,
