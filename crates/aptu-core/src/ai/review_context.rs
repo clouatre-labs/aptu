@@ -10,6 +10,12 @@ use std::path::PathBuf;
 use crate::ai::types::PrDetails;
 use crate::config::ReviewConfig;
 
+#[cfg(feature = "ast-context")]
+use std::fmt::Write as _;
+
+#[cfg(feature = "ast-context")]
+use aptu_coder_core::{analyze_file, language_for_extension};
+
 /// Estimated overhead for XML tags, section headers, and schema preamble added by
 /// `build_pr_review_user_prompt`. Used to ensure the prompt budget accounts for
 /// non-content characters when estimating total prompt size.
@@ -246,6 +252,7 @@ pub async fn build_review_context(
         deep,
         max_prompt_chars,
         &mut budget_drops,
+        repo_path_ref.as_deref(),
     );
 
     // Collect tracking metrics
@@ -353,6 +360,7 @@ fn apply_budget_drops(
     deep: bool,
     max_prompt_chars: usize,
     budget_drops: &mut Vec<String>,
+    repo_path: Option<&str>,
 ) {
     let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph);
 
@@ -393,6 +401,7 @@ fn apply_budget_drops(
         &mut estimated_size,
         max_prompt_chars,
         budget_drops,
+        repo_path,
     );
     drop_patches_by_size(
         &mut pr.files,
@@ -465,12 +474,69 @@ fn drop_patches_by_size(
     }
 }
 
+/// Builds a compact signature-outline block for a single file, mirroring the
+/// per-function signature and imports summary used by `ast_context.rs`.
+///
+/// Returns `None` when the `ast-context` feature is disabled, the file's
+/// extension is unsupported, or analysis fails.
+#[cfg(feature = "ast-context")]
+fn build_file_outline(repo_path: &str, filename: &str) -> Option<String> {
+    let ext = std::path::Path::new(filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    if language_for_extension(ext).is_none() {
+        tracing::debug!("build_file_outline: unsupported extension for {filename}: {ext:?}");
+        return None;
+    }
+    let full_path = std::path::Path::new(repo_path).join(filename);
+    let path_str = full_path.to_string_lossy().into_owned();
+
+    match analyze_file(&path_str, None) {
+        Ok(analysis) => {
+            let mut outline = format!("## {filename}\n");
+            for func in &analysis.semantic.functions {
+                let _ = writeln!(outline, "  fn {}", func.compact_signature());
+            }
+            if !analysis.semantic.imports.is_empty() {
+                outline.push_str("  imports:");
+                for imp in analysis.semantic.imports.iter().take(5) {
+                    let _ = write!(outline, " {}", imp.module);
+                }
+                outline.push('\n');
+            }
+            Some(outline)
+        }
+        Err(e) => {
+            tracing::debug!("build_file_outline: skipping {filename}: {e}");
+            None
+        }
+    }
+}
+
+/// Stub used when the `ast-context` feature is disabled; always returns `None`
+/// so callers fall through to the existing full-clear behavior.
+#[cfg(not(feature = "ast-context"))]
+fn build_file_outline(_repo_path: &str, _filename: &str) -> Option<String> {
+    None
+}
+
 /// Drops file `full_content` in descending size order until under budget.
+///
+/// Before fully clearing a file's `full_content`, attempts to substitute a
+/// compact signature outline (via `build_file_outline`) when `repo_path` is
+/// available and the outline actually brings the prompt back under budget.
+/// Falls back to the existing full-clear behavior otherwise.
+///
+/// The `outline_len < content_size` check is load-bearing, not cosmetic: it
+/// guarantees the substitution never grows the prompt relative to the
+/// full-clear fallback it replaces.
 fn drop_full_content_by_size(
     files: &mut [crate::ai::types::PrFile],
     estimated_size: &mut usize,
     max_prompt_chars: usize,
     budget_drops: &mut Vec<String>,
+    repo_path: Option<&str>,
 ) {
     if *estimated_size <= max_prompt_chars {
         return;
@@ -487,17 +553,41 @@ fn drop_full_content_by_size(
         if *estimated_size <= max_prompt_chars {
             break;
         }
-        if content_size > 0 {
-            tracing::warn!(
-                file = %files[file_idx].filename,
-                content_chars = content_size,
-                "Dropping full_content: prompt budget exceeded"
-            );
-            let filename = files[file_idx].filename.clone();
-            files[file_idx].full_content = None;
-            *estimated_size -= content_size;
-            budget_drops.push(format!("file_content:{filename}"));
+        if content_size == 0 {
+            continue;
         }
+
+        let filename = files[file_idx].filename.clone();
+
+        if let Some(repo) = repo_path
+            && let Some(outline) = build_file_outline(repo, &filename)
+        {
+            let outline_len = outline.len();
+            let candidate_size = *estimated_size - content_size + outline_len;
+            if outline_len < content_size && candidate_size <= max_prompt_chars {
+                tracing::warn!(
+                    file = %filename,
+                    action = "outline_substituted",
+                    original_chars = content_size,
+                    outline_chars = outline_len,
+                    "Substituting full_content with outline: prompt budget exceeded"
+                );
+                files[file_idx].full_content = Some(outline);
+                *estimated_size = candidate_size;
+                budget_drops.push(format!("file_content_outline:{filename}"));
+                continue;
+            }
+        }
+
+        tracing::warn!(
+            file = %filename,
+            action = "full_content_cleared",
+            content_chars = content_size,
+            "Dropping full_content: prompt budget exceeded"
+        );
+        files[file_idx].full_content = None;
+        *estimated_size -= content_size;
+        budget_drops.push(format!("file_content:{filename}"));
     }
 }
 
@@ -782,6 +872,7 @@ mod tests {
             false,
             max_prompt_chars,
             &mut drops,
+            None,
         );
 
         // call_graph dropped first (deep=false, over budget)
@@ -815,6 +906,7 @@ mod tests {
             false,
             max_prompt_chars,
             &mut drops,
+            None,
         );
 
         // dep_enrichments dropped before patches
@@ -849,6 +941,7 @@ mod tests {
             false,
             max_prompt_chars,
             &mut drops,
+            None,
         );
 
         // Empty sections should NOT appear in budget_drops
@@ -883,6 +976,7 @@ mod tests {
             false,
             max_prompt_chars,
             &mut drops,
+            None,
         );
 
         // Populated sections should appear in budget_drops (in priority order)
@@ -914,6 +1008,7 @@ mod tests {
             false,
             max_prompt_chars,
             &mut drops,
+            None,
         );
 
         // Both patch and full_content should be None (both dropped)
@@ -954,6 +1049,138 @@ mod tests {
         );
     }
 
+    /// Creates a temp directory containing a single fixture file, for tests that
+    /// need `analyze_file` to run against a real file on disk.
+    #[cfg(feature = "ast-context")]
+    fn make_outline_fixture(filename: &str, source: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        std::fs::write(dir.path().join(filename), source).expect("failed to write fixture file");
+        dir
+    }
+
+    /// Verifies that when the signature outline fits within the remaining budget,
+    /// `drop_full_content_by_size` substitutes it into `full_content` and records
+    /// the `file_content_outline:` label instead of clearing the file entirely.
+    #[cfg(feature = "ast-context")]
+    #[test]
+    fn test_drop_full_content_by_size_outline_fits_budget() {
+        let dir = make_outline_fixture(
+            "fixture.rs",
+            "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
+        );
+        let repo_path = dir.path().to_string_lossy().into_owned();
+
+        let mut files = vec![crate::ai::types::PrFile {
+            filename: "fixture.rs".to_string(),
+            status: "modified".to_string(),
+            patch: None,
+            patch_truncated: false,
+            full_content: Some("y".repeat(2000)),
+            additions: 1,
+            deletions: 0,
+        }];
+        let mut estimated_size = 2000;
+        let max_prompt_chars = 100;
+        let mut drops = Vec::new();
+
+        drop_full_content_by_size(
+            &mut files,
+            &mut estimated_size,
+            max_prompt_chars,
+            &mut drops,
+            Some(&repo_path),
+        );
+
+        assert!(
+            files[0]
+                .full_content
+                .as_deref()
+                .is_some_and(|c| c.contains("fn add")),
+            "full_content should be replaced with a signature outline"
+        );
+        assert!(
+            drops.contains(&"file_content_outline:fixture.rs".to_string()),
+            "budget_drops should record the outline substitution"
+        );
+    }
+
+    /// Verifies that when the outline itself still exceeds the remaining budget,
+    /// `drop_full_content_by_size` falls back to fully clearing `full_content`
+    /// without panicking.
+    #[test]
+    fn test_drop_full_content_by_size_outline_still_exceeds_budget() {
+        let mut files = vec![crate::ai::types::PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            patch: None,
+            patch_truncated: false,
+            full_content: Some("y".repeat(2000)),
+            additions: 1,
+            deletions: 0,
+        }];
+        let mut estimated_size = 2000;
+        // A zero budget can never be satisfied by any non-empty outline, so this
+        // exercises the fallback regardless of whether the ast-context feature
+        // is enabled.
+        let max_prompt_chars = 0;
+        let mut drops = Vec::new();
+
+        drop_full_content_by_size(
+            &mut files,
+            &mut estimated_size,
+            max_prompt_chars,
+            &mut drops,
+            Some("/nonexistent/repo/path"),
+        );
+
+        assert!(
+            files[0].full_content.is_none(),
+            "full_content should be fully cleared when the outline cannot fit"
+        );
+        assert!(
+            drops.contains(&"file_content:src/lib.rs".to_string()),
+            "budget_drops should record the full clear, not an outline substitution"
+        );
+    }
+
+    /// Verifies that an unsupported file extension skips `analyze_file` entirely
+    /// and falls back to fully clearing `full_content`.
+    #[test]
+    fn test_drop_full_content_by_size_unsupported_extension_falls_back() {
+        let mut files = vec![crate::ai::types::PrFile {
+            filename: "data.unsupportedext".to_string(),
+            status: "modified".to_string(),
+            patch: None,
+            patch_truncated: false,
+            full_content: Some("y".repeat(200)),
+            additions: 1,
+            deletions: 0,
+        }];
+        let mut estimated_size = 200;
+        let max_prompt_chars = 50;
+        let mut drops = Vec::new();
+
+        // repo_path points at a directory that does not exist; if analyze_file were
+        // called, it would error, but the unsupported extension must short-circuit
+        // before that call happens.
+        drop_full_content_by_size(
+            &mut files,
+            &mut estimated_size,
+            max_prompt_chars,
+            &mut drops,
+            Some("/nonexistent/repo/path"),
+        );
+
+        assert!(
+            files[0].full_content.is_none(),
+            "full_content should be cleared for unsupported extensions"
+        );
+        assert!(
+            drops.contains(&"file_content:data.unsupportedext".to_string()),
+            "budget_drops should record the full clear for the unsupported extension"
+        );
+    }
+
     /// Regression test for issue #1596: `full_content` must be evicted before patches,
     /// so a PR with a small diff but a large `full_content` still keeps its patch.
     #[test]
@@ -976,6 +1203,7 @@ mod tests {
             false,
             max_prompt_chars,
             &mut drops,
+            None,
         );
 
         assert!(
@@ -1023,6 +1251,7 @@ mod tests {
             false,
             max_prompt_chars,
             &mut drops,
+            None,
         );
 
         let last_file_content_idx = drops.iter().rposition(|d| d.starts_with("file_content:"));
