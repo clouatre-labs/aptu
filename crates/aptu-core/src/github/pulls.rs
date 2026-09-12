@@ -589,6 +589,29 @@ async fn fetch_file_contents(
     results
 }
 
+/// Appends GitHub's per-item `errors` detail to a base error `message`.
+///
+/// GitHub's 422 responses often carry a generic top-level `message` (e.g.
+/// "Validation Failed") alongside an `errors` array with the actual cause.
+/// When `errors` is present and non-empty, each entry's string content (or
+/// its compact JSON form, for object-shaped entries) is appended to
+/// `message`, joined with `; `. Otherwise `message` is returned unchanged.
+fn append_github_errors(message: &str, errors: Option<&[serde_json::Value]>) -> String {
+    let Some(errors) = errors.filter(|errors| !errors.is_empty()) else {
+        return message.to_string();
+    };
+
+    let details: Vec<String> = errors
+        .iter()
+        .map(|e| {
+            e.as_str()
+                .map_or_else(|| e.to_string(), ToString::to_string)
+        })
+        .collect();
+
+    format!("{message}; {}", details.join("; "))
+}
+
 /// Posts a PR review to GitHub.
 ///
 /// Uses Octocrab's custom HTTP POST to create a review with the specified event type.
@@ -670,9 +693,10 @@ pub async fn post_pr_review(
             Ok(response.id)
         }
         Err(octocrab::Error::GitHub { source, .. }) => {
+            let detail = append_github_errors(&source.message, source.errors.as_deref());
             tracing::warn!(
                 status = source.status_code.as_u16(),
-                github_message = %source.message,
+                github_message = %detail,
                 "Failed to post review to PR"
             );
             Err(anyhow::anyhow!(
@@ -680,7 +704,7 @@ pub async fn post_pr_review(
                  GitHub API returned HTTP {}: {}. \
                  Check that you have write access to the repository.",
                 source.status_code.as_u16(),
-                source.message,
+                detail,
             ))
         }
         Err(e) => {
@@ -1048,6 +1072,38 @@ mod tests {
         assert!(inline.is_empty());
         let serialized = serde_json::to_string(&inline).unwrap();
         assert_eq!(serialized, "[]");
+    }
+
+    // ---------------------------------------------------------------------------
+    // append_github_errors
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_append_github_errors_with_populated_errors() {
+        // Arrange
+        let message = "Validation Failed";
+        let errors = vec![serde_json::json!("body is too long")];
+
+        // Act
+        let detail = append_github_errors(message, Some(&errors));
+
+        // Assert: both the original message and the error detail are present.
+        assert!(detail.contains(message));
+        assert!(detail.contains("body is too long"));
+    }
+
+    #[test]
+    fn test_append_github_errors_with_no_errors() {
+        // Arrange
+        let message = "Not Found";
+
+        // Act
+        let detail_none = append_github_errors(message, None);
+        let detail_empty = append_github_errors(message, Some(&[]));
+
+        // Assert: no "errors" or "null" noise appended in either case.
+        assert_eq!(detail_none, message);
+        assert_eq!(detail_empty, message);
     }
 
     // ---------------------------------------------------------------------------
