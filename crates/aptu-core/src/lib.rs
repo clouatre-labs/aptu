@@ -120,6 +120,8 @@ pub use facade::{
 pub use github::issues::ApplyResult;
 #[cfg(not(target_arch = "wasm32"))]
 pub use github::pulls::PrCreateResult;
+#[cfg(not(target_arch = "wasm32"))]
+pub use github::pulls::ReviewPostOutcome;
 
 // ============================================================================
 // Security Scanning

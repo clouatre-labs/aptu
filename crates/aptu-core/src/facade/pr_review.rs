@@ -13,6 +13,7 @@ use crate::config::{AiConfig, TaskType};
 use crate::error::AptuError;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::create_client_from_provider;
+pub use crate::github::pulls::ReviewPostOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::pulls::{
     fetch_pr_details, post_pr_review as gh_post_pr_review, update_pr_review_comment,
@@ -358,7 +359,8 @@ fn dedup_outcome(
 ///
 /// # Returns
 ///
-/// Review ID on success.
+/// `ReviewPostOutcome` with the review ID and any per-comment fallback failures
+/// (see [`crate::github::pulls::post_pr_review`] for the 422 fallback behavior).
 ///
 /// # Errors
 ///
@@ -379,7 +381,7 @@ pub async fn post_pr_review(
     comments: &[PrReviewComment],
     commit_id: &str,
     existing_comments: &[crate::ai::types::PrReviewCommentDetails],
-) -> crate::Result<u64> {
+) -> crate::Result<ReviewPostOutcome> {
     use crate::github::pulls::parse_pr_reference;
 
     // Parse PR reference
@@ -463,7 +465,7 @@ pub async fn post_pr_review(
     _comments: &[crate::ai::types::PrReviewComment],
     _commit_id: &str,
     _existing_comments: &[crate::ai::types::PrReviewCommentDetails],
-) -> crate::Result<u64> {
+) -> crate::Result<ReviewPostOutcome> {
     crate::facade::wasm_unsupported!("post_pr_review");
 }
 

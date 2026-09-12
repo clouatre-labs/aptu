@@ -612,10 +612,125 @@ fn append_github_errors(message: &str, errors: Option<&[serde_json::Value]>) -> 
     format!("{message}; {}", details.join("; "))
 }
 
+/// Outcome of a successful [`post_pr_review`] call.
+///
+/// `failed_comments` is populated only when the batched review POST returned
+/// HTTP 422 and the per-comment fallback ran; it lists the `path:line` of each
+/// inline comment that could not be posted individually. It is empty when the
+/// batched POST succeeded normally.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewPostOutcome {
+    /// ID of the created review.
+    pub review_id: u64,
+    /// `path:line` entries for inline comments that failed during the 422
+    /// per-comment fallback (see issue #1603). Best-effort delivery: a
+    /// failure here does not prevent other comments from being attempted.
+    pub failed_comments: Vec<String>,
+}
+
+/// Per-comment data retained alongside the batched JSON payload so the
+/// 422 fallback can re-post each comment individually without rebuilding it.
+struct InlineCommentData {
+    path: String,
+    line: u32,
+    body: String,
+}
+
+/// Response shape shared by the batched review POST and its body-only fallback.
+#[derive(serde::Deserialize)]
+struct ReviewResponse {
+    id: u64,
+}
+
+/// Runs the 422 fallback: posts the review body/event alone (no `comments` field),
+/// then submits each retained inline comment individually via
+/// [`post_single_inline_comment`]. Per-comment failures are collected rather than
+/// aborting the remaining comments (best-effort delivery); see issue #1603.
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::too_many_arguments)]
+async fn run_per_comment_fallback(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    route: &str,
+    body: &str,
+    event: ReviewEvent,
+    commit_id: &str,
+    inline_comment_data: &[InlineCommentData],
+) -> Result<ReviewPostOutcome> {
+    tracing::warn!(
+        comment_count = inline_comment_data.len(),
+        "Batched PR review POST returned 422; falling back to per-comment posting \
+         (see issue #1603; root cause unconfirmed, this is a resilience measure)"
+    );
+
+    let mut fallback_payload = serde_json::json!({
+        "body": body,
+        "event": event.to_string(),
+    });
+    fallback_payload["commit_id"] = serde_json::Value::String(commit_id.to_string());
+
+    let review_id = match client
+        .post::<_, ReviewResponse>(route, Some(&fallback_payload))
+        .await
+    {
+        Ok(response) => response.id,
+        Err(e) => {
+            return Err(e).with_context(|| {
+                format!(
+                    "Failed to post review to PR #{number} in {owner}/{repo}: the batched \
+                     review POST returned 422 and the body-only fallback also failed. \
+                     Check that you have write access to the repository."
+                )
+            });
+        }
+    };
+
+    let mut failed_comments = Vec::new();
+    for c in inline_comment_data {
+        if let Err(e) = post_single_inline_comment(
+            client, owner, repo, number, commit_id, &c.path, c.line, &c.body,
+        )
+        .await
+        {
+            tracing::warn!(
+                path = %c.path,
+                line = c.line,
+                error = %e,
+                "Failed to post inline comment during 422 fallback"
+            );
+            failed_comments.push(format!("{}:{}", c.path, c.line));
+        }
+    }
+
+    Ok(ReviewPostOutcome {
+        review_id,
+        failed_comments,
+    })
+}
+
+/// Determines whether a failed batched review POST should fall back to
+/// per-comment posting. True only for HTTP 422 with a non-empty outgoing
+/// comment set and a non-empty `commit_id` (the per-comment endpoint
+/// requires a commit to anchor to). Any other status code, an empty
+/// comment set, or an empty `commit_id` propagates the original error.
+fn should_fallback_to_per_comment(status_code: u16, comment_count: usize, commit_id: &str) -> bool {
+    status_code == 422 && comment_count > 0 && !commit_id.is_empty()
+}
+
 /// Posts a PR review to GitHub.
 ///
 /// Uses Octocrab's custom HTTP POST to create a review with the specified event type.
 /// Requires write access to the repository.
+///
+/// If the batched POST (body + event + inline comments) returns HTTP 422 with a
+/// non-empty comment set and a non-empty `commit_id`, this falls back to posting
+/// the review body/event alone, then submitting each inline comment individually
+/// via the single review-comment endpoint (see issue #1603). The root cause of
+/// the App-token 422 is unconfirmed; this is a resilience measure, not a verified
+/// fix. Per-comment failures during the fallback are collected and returned
+/// rather than aborting the remaining comments.
 ///
 /// # Arguments
 ///
@@ -630,7 +745,7 @@ fn append_github_errors(message: &str, errors: Option<&[serde_json::Value]>) -> 
 ///
 /// # Returns
 ///
-/// Review ID on success.
+/// `ReviewPostOutcome` with the review ID and any per-comment fallback failures.
 ///
 /// # Errors
 ///
@@ -647,26 +762,36 @@ pub async fn post_pr_review(
     event: ReviewEvent,
     comments: &[PrReviewComment],
     commit_id: &str,
-) -> Result<u64> {
+) -> Result<ReviewPostOutcome> {
     debug!("Posting PR review");
 
     let route = format!("/repos/{owner}/{repo}/pulls/{number}/reviews");
 
-    // Build inline comments array; skip entries without a line number.
-    let inline_comments: Vec<serde_json::Value> = comments
+    // Retain per-comment data (path, line, rendered body) alongside the
+    // serde_json array so the 422 fallback can reuse it without rebuilding.
+    // Comments without a line number cannot be anchored to the diff; skip silently.
+    let inline_comment_data: Vec<InlineCommentData> = comments
         .iter()
-        // Comments without a line number cannot be anchored to the diff; skip silently.
         .filter_map(|c| {
-            c.line.map(|line| {
-                serde_json::json!({
-                    "path": c.file,
-                    "line": line,
-                    // RIGHT = new version of the file (added/changed lines).
-                    // Use line (file line number) rather than the deprecated
-                    // position (diff hunk offset) so no hunk parsing is needed.
-                    "side": "RIGHT",
-                    "body": render_pr_review_comment_body(c),
-                })
+            c.line.map(|line| InlineCommentData {
+                path: c.file.clone(),
+                line,
+                body: render_pr_review_comment_body(c),
+            })
+        })
+        .collect();
+
+    let inline_comments: Vec<serde_json::Value> = inline_comment_data
+        .iter()
+        .map(|d| {
+            serde_json::json!({
+                "path": d.path,
+                "line": d.line,
+                // RIGHT = new version of the file (added/changed lines).
+                // Use line (file line number) rather than the deprecated
+                // position (diff hunk offset) so no hunk parsing is needed.
+                "side": "RIGHT",
+                "body": d.body,
             })
         })
         .collect();
@@ -682,15 +807,33 @@ pub async fn post_pr_review(
         payload["commit_id"] = serde_json::Value::String(commit_id.to_string());
     }
 
-    #[derive(serde::Deserialize)]
-    struct ReviewResponse {
-        id: u64,
-    }
-
-    match client.post::<_, ReviewResponse>(route, Some(&payload)).await {
+    match client.post::<_, ReviewResponse>(&route, Some(&payload)).await {
         Ok(response) => {
             debug!(review_id = response.id, "PR review posted successfully");
-            Ok(response.id)
+            Ok(ReviewPostOutcome {
+                review_id: response.id,
+                failed_comments: Vec::new(),
+            })
+        }
+        Err(octocrab::Error::GitHub { source, .. })
+            if should_fallback_to_per_comment(
+                source.status_code.as_u16(),
+                inline_comment_data.len(),
+                commit_id,
+            ) =>
+        {
+            run_per_comment_fallback(
+                client,
+                owner,
+                repo,
+                number,
+                &route,
+                body,
+                event,
+                commit_id,
+                &inline_comment_data,
+            )
+            .await
         }
         Err(octocrab::Error::GitHub { source, .. }) => {
             let detail = append_github_errors(&source.message, source.errors.as_deref());
@@ -714,6 +857,88 @@ pub async fn post_pr_review(
                 )
             })
         }
+    }
+}
+
+/// Posts a single inline review comment directly, bypassing the batched Reviews API.
+///
+/// Used as a fallback when the batched `POST /reviews` call with inline comments
+/// returns HTTP 422 (see [`post_pr_review`]); each comment is submitted individually
+/// via the single review-comment endpoint so a batch-level validation failure does
+/// not silently drop every inline comment.
+///
+/// # Arguments
+///
+/// * `client` - Authenticated Octocrab client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `number` - PR number
+/// * `commit_id` - Head commit SHA the comment anchors to
+/// * `path` - File path the comment applies to
+/// * `line` - File line number for the inline comment
+/// * `body` - Rendered comment body
+///
+/// # Returns
+///
+/// Comment ID on success.
+///
+/// # Errors
+///
+/// Returns an error if the API call fails or the user lacks write access.
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::too_many_arguments)]
+#[instrument(skip(client, body), fields(owner = %owner, repo = %repo, number = number, path = %path, line = line))]
+pub async fn post_single_inline_comment(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    commit_id: &str,
+    path: &str,
+    line: u32,
+    body: &str,
+) -> Result<u64> {
+    debug!("Posting single inline review comment (422 fallback)");
+
+    let route = format!("/repos/{owner}/{repo}/pulls/{number}/comments");
+    let payload = serde_json::json!({
+        "body": body,
+        "commit_id": commit_id,
+        "path": path,
+        "line": line,
+        "side": "RIGHT",
+    });
+
+    #[derive(serde::Deserialize)]
+    struct CommentResponse {
+        id: u64,
+    }
+
+    match client
+        .post::<_, CommentResponse>(&route, Some(&payload))
+        .await
+    {
+        Ok(response) => {
+            debug!(
+                comment_id = response.id,
+                "Inline comment posted successfully"
+            );
+            Ok(response.id)
+        }
+        Err(octocrab::Error::GitHub { source, .. }) => {
+            let detail = append_github_errors(&source.message, source.errors.as_deref());
+            Err(anyhow::anyhow!(
+                "Failed to post inline comment on {path}:{line} in PR #{number} ({owner}/{repo}). \
+                 GitHub API returned HTTP {}: {}.",
+                source.status_code.as_u16(),
+                detail,
+            ))
+        }
+        Err(e) => Err(e).with_context(|| {
+            format!(
+                "Failed to post inline comment on {path}:{line} in PR #{number} ({owner}/{repo})"
+            )
+        }),
     }
 }
 
@@ -1072,6 +1297,82 @@ mod tests {
         assert!(inline.is_empty());
         let serialized = serde_json::to_string(&inline).unwrap();
         assert_eq!(serialized, "[]");
+    }
+
+    // ---------------------------------------------------------------------------
+    // should_fallback_to_per_comment (422 fallback trigger condition)
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_should_fallback_to_per_comment_triggers_on_422_with_comments_and_commit() {
+        // Arrange / Act
+        let result = should_fallback_to_per_comment(422, 2, "abc123");
+
+        // Assert
+        assert!(result);
+    }
+
+    #[test]
+    fn test_should_fallback_to_per_comment_skips_when_no_comments() {
+        // Arrange: all comments had line=None and were filtered out upstream.
+        // Act
+        let result = should_fallback_to_per_comment(422, 0, "abc123");
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_should_fallback_to_per_comment_skips_when_commit_id_empty() {
+        // Arrange / Act: per-comment endpoint requires a commit_id to anchor to.
+        let result = should_fallback_to_per_comment(422, 2, "");
+
+        // Assert
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_should_fallback_to_per_comment_skips_on_non_422_status() {
+        // Arrange / Act
+        let result = should_fallback_to_per_comment(403, 2, "abc123");
+
+        // Assert
+        assert!(!result);
+    }
+
+    // ---------------------------------------------------------------------------
+    // post_single_inline_comment payload construction
+    // ---------------------------------------------------------------------------
+
+    /// Helper: build the single inline-comment JSON payload using the same shape
+    /// as `post_single_inline_comment`, without making a live HTTP call.
+    fn build_single_comment_payload(
+        commit_id: &str,
+        path: &str,
+        line: u32,
+        body: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "body": body,
+            "commit_id": commit_id,
+            "path": path,
+            "line": line,
+            "side": "RIGHT",
+        })
+    }
+
+    #[test]
+    fn test_post_single_inline_comment_payload_shape() {
+        // Arrange
+        // Act
+        let payload = build_single_comment_payload("abc123", "src/main.rs", 42, "Nice catch.");
+
+        // Assert
+        assert_eq!(payload["body"], "Nice catch.");
+        assert_eq!(payload["commit_id"], "abc123");
+        assert_eq!(payload["path"], "src/main.rs");
+        assert_eq!(payload["line"], 42);
+        assert_eq!(payload["side"], "RIGHT");
     }
 
     // ---------------------------------------------------------------------------
