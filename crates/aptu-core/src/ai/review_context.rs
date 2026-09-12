@@ -1181,6 +1181,52 @@ mod tests {
         );
     }
 
+    /// Automated benchmark for issue #1592: measures the outline's actual size
+    /// reduction against this crate's own real source files (not synthetic
+    /// fixtures), confirming the substitution meaningfully shrinks prompt size
+    /// on typical Rust files with real function counts and import lists.
+    #[cfg(feature = "ast-context")]
+    #[test]
+    fn test_outline_size_reduction_on_real_source_files() {
+        let repo_path = env!("CARGO_MANIFEST_DIR");
+        let candidates = [
+            "src/ai/review_context.rs",
+            "src/ast_context.rs",
+            "src/ai/types.rs",
+        ];
+
+        let mut measured = 0;
+        for filename in candidates {
+            let full_path = std::path::Path::new(repo_path).join(filename);
+            let Ok(full_content) = std::fs::read_to_string(&full_path) else {
+                continue;
+            };
+            let Some(outline) = build_file_outline(repo_path, filename) else {
+                continue;
+            };
+
+            let reduction_pct = 100 - (outline.len() * 100 / full_content.len().max(1));
+            println!(
+                "{filename}: full_content={} chars, outline={} chars, reduction={reduction_pct}%",
+                full_content.len(),
+                outline.len()
+            );
+
+            assert!(
+                outline.len() < full_content.len() / 2,
+                "{filename}: outline ({} chars) should be well under half of full content ({} chars)",
+                outline.len(),
+                full_content.len()
+            );
+            measured += 1;
+        }
+
+        assert!(
+            measured > 0,
+            "expected at least one real source file to produce a measurable outline"
+        );
+    }
+
     /// Regression test for issue #1596: `full_content` must be evicted before patches,
     /// so a PR with a small diff but a large `full_content` still keeps its patch.
     #[test]
