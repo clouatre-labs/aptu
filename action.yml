@@ -317,6 +317,9 @@ outputs:
   cache-hit-ratio:
     description: Cache hit ratio as integer percent (cache_read / (input + cache_read)), or n/a
     value: ${{ steps.metrics-aggregate.outputs.cache_hit_ratio }}
+  pr-review-outcome:
+    description: Real outcome of the aptu PR review step (success or failure), independent of continue-on-error
+    value: ${{ steps.pr-review.outputs.outcome }}
 
 runs:
   using: composite
@@ -560,6 +563,7 @@ runs:
         aptu pr label "${ARGS[@]}" "$PR_REF"
 
     - name: Run aptu PR review
+      id: pr-review
       if: github.event_name == 'pull_request' || (github.event_name == 'repository_dispatch' && inputs.repo != '' && inputs['pull-number'] != '')
       continue-on-error: true  # Non-blocking - AI review is advisory
       shell: bash
@@ -630,7 +634,11 @@ runs:
         fi
 
         echo "Running: aptu pr review ${ARGS[*]} $PR_REF"
-        aptu pr review "${ARGS[@]}" "$PR_REF"
+        if aptu pr review "${ARGS[@]}" "$PR_REF"; then
+          echo "outcome=success" >> "$GITHUB_OUTPUT"
+        else
+          echo "outcome=failure" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Run aptu scan-security
       if: inputs.scan-path != '' || inputs.scan-security-diff != ''

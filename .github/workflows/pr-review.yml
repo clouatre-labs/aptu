@@ -65,7 +65,7 @@ jobs:
           repo-path: ${{ github.workspace }}
 
       - name: Warn on review failure
-        if: always() && steps.review.outcome == 'failure'
+        if: always() && steps.review.outputs.pr-review-outcome == 'failure'
         run: |
           echo "::warning::AI review step failed (continue-on-error kept the job green) - check the Review PR step logs"
           echo "### :warning: AI review failed" >> "$GITHUB_STEP_SUMMARY"
