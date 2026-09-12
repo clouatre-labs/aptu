@@ -150,7 +150,7 @@ pub async fn post(
         }
 
         // Post the review with inline comments and head SHA.
-        let review_id = aptu_core::post_pr_review(
+        let outcome = aptu_core::post_pr_review(
             &provider,
             reference,
             repo_context,
@@ -162,8 +162,15 @@ pub async fn post(
         )
         .await?;
 
-        info!(review_id = review_id, "Review posted successfully");
-        eprintln!("Review posted successfully (ID: {review_id})");
+        info!(review_id = outcome.review_id, "Review posted successfully");
+        eprintln!("Review posted successfully (ID: {})", outcome.review_id);
+        if !outcome.failed_comments.is_empty() {
+            eprintln!(
+                "Warning: {} inline comment(s) failed to post: {}",
+                outcome.failed_comments.len(),
+                outcome.failed_comments.join(", ")
+            );
+        }
     }
 
     Ok(())
