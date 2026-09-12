@@ -646,6 +646,14 @@ struct ReviewResponse {
 /// then submits each retained inline comment individually via
 /// [`post_single_inline_comment`]. Per-comment failures are collected rather than
 /// aborting the remaining comments (best-effort delivery); see issue #1603.
+///
+/// The body-only POST also doubles as a diagnostic: if it succeeds, the original
+/// 422 was caused by the `comments` payload, not the `body`/`event`/`commit_id`. If it
+/// fails too, the fallback is redundant (the root cause is outside the comments
+/// array) and the error below says so instead of implying comments were at fault.
+/// Callers should surface a non-empty `failed_comments` to the user, since the
+/// review itself may have posted successfully while some comments did not
+/// (partial success).
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::too_many_arguments)]
 async fn run_per_comment_fallback(
@@ -680,8 +688,10 @@ async fn run_per_comment_fallback(
             return Err(e).with_context(|| {
                 format!(
                     "Failed to post review to PR #{number} in {owner}/{repo}: the batched \
-                     review POST returned 422 and the body-only fallback also failed. \
-                     Check that you have write access to the repository."
+                     review POST returned 422 and the body-only fallback (no inline comments) \
+                     also failed. This points to the review body, event, or commit_id rather \
+                     than the inline comments; check that you have write access to the \
+                     repository and that the review body is well-formed."
                 )
             });
         }
