@@ -13,20 +13,6 @@ use std::sync::LazyLock;
 
 use crate::ai::provider::AiProvider;
 
-/// Maximum number of characters retained from an AI provider error response body.
-const MAX_ERROR_BODY_LENGTH: usize = 200;
-
-/// Redacts error body to prevent leaking sensitive API details.
-/// Truncates to [`MAX_ERROR_BODY_LENGTH`] characters and appends "[truncated]" if longer.
-pub(crate) fn redact_api_error_body(body: &str) -> String {
-    if body.chars().count() <= MAX_ERROR_BODY_LENGTH {
-        body.to_owned()
-    } else {
-        let truncated: String = body.chars().take(MAX_ERROR_BODY_LENGTH).collect();
-        format!("{truncated} [truncated]")
-    }
-}
-
 /// Parses JSON response from AI provider, detecting truncated responses.
 ///
 /// If the JSON parsing fails with an EOF error (indicating the response was cut off),
@@ -156,22 +142,6 @@ mod tests {
         let json = "not json at all";
         let result = parse_ai_json::<ErrorTestResponse>(json, "test");
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_redact_api_error_body_truncates() {
-        let long_body = "x".repeat(300);
-        let result = redact_api_error_body(&long_body);
-        assert!(result.len() < long_body.len());
-        assert!(result.ends_with("[truncated]"));
-        assert_eq!(result.len(), 200 + " [truncated]".len());
-    }
-
-    #[test]
-    fn test_redact_api_error_body_short() {
-        let short_body = "Short error";
-        let result = redact_api_error_body(short_body);
-        assert_eq!(result, short_body);
     }
 
     #[test]
