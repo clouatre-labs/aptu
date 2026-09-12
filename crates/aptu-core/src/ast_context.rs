@@ -26,6 +26,8 @@
 //! after truncation).
 
 use crate::ai::types::PrFile;
+#[cfg(feature = "ast-context")]
+use crate::ai::types::SymbolExpansion;
 use std::path::Path;
 use tracing::debug;
 
@@ -266,6 +268,172 @@ fn build_call_graph_context_sync(repo_path: &str, files: &[PrFile]) -> String {
     }
 
     output
+}
+
+/// Build targeted symbol expansions for changed functions with exactly one
+/// unambiguous out-of-diff caller.
+///
+/// For each supported changed file, extracts function names and looks up
+/// callers via `analyze_focused`. A symbol is expanded only when exactly one
+/// caller resides outside the PR's changed files (an "unambiguous single
+/// out-of-diff reference"); zero or multiple out-of-diff matches are skipped
+/// silently. The running total of `snippet` + `reference_path` chars never
+/// exceeds `max_chars`; once the budget is exhausted, no further expansions
+/// are added.
+pub async fn build_symbol_expansions_context(
+    repo_path: &str,
+    files: &[PrFile],
+    max_chars: usize,
+) -> Vec<crate::ai::types::SymbolExpansion> {
+    let repo_path = repo_path.to_string();
+    let files: Vec<PrFile> = files.to_vec();
+
+    match tokio::task::spawn_blocking(move || {
+        build_symbol_expansions_context_sync(&repo_path, &files, max_chars)
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::warn!("build_symbol_expansions_context: blocking task panicked: {e}");
+            Vec::new()
+        }
+    }
+}
+
+#[cfg(not(feature = "ast-context"))]
+fn build_symbol_expansions_context_sync(
+    _repo_path: &str,
+    _files: &[PrFile],
+    _max_chars: usize,
+) -> Vec<crate::ai::types::SymbolExpansion> {
+    Vec::new()
+}
+
+/// Number of lines read into a symbol-expansion snippet, starting at the
+/// caller's call-site line. A fixed window is used rather than the caller
+/// function's actual body span, since `analyze_focused` does not report
+/// function end lines; this keeps snippets bounded and predictable.
+#[cfg(feature = "ast-context")]
+const SYMBOL_EXPANSION_SNIPPET_LINES: usize = 15;
+
+#[cfg(feature = "ast-context")]
+fn build_symbol_expansions_context_sync(
+    repo_path: &str,
+    files: &[PrFile],
+    max_chars: usize,
+) -> Vec<SymbolExpansion> {
+    let repo = Path::new(repo_path);
+    let diff_filenames: std::collections::HashSet<&str> =
+        files.iter().map(|f| f.filename.as_str()).collect();
+
+    let mut expansions = Vec::new();
+    let mut running_total = 0usize;
+
+    'files: for file in files {
+        let ext = Path::new(&file.filename)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        if language_for_extension(ext).is_none() {
+            continue;
+        }
+        let full_path = repo.join(&file.filename);
+        let path_str = full_path.to_string_lossy().into_owned();
+
+        let fn_names: Vec<String> = match analyze_file(&path_str, None) {
+            Ok(a) => a
+                .semantic
+                .functions
+                .iter()
+                .map(|f| {
+                    f.compact_signature()
+                        .split('(')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_string()
+                })
+                .filter(|s| !s.is_empty())
+                .collect(),
+            Err(_) => continue,
+        };
+
+        for fn_name in fn_names.iter().take(5) {
+            if running_total >= max_chars {
+                break 'files;
+            }
+
+            let focused = match analyze_focused(repo, fn_name, 1, Some(2), None) {
+                Ok(focused) => focused,
+                Err(e) => {
+                    debug!(
+                        "symbol_expansions: skipping {}/{}: {}",
+                        file.filename, fn_name, e
+                    );
+                    continue;
+                }
+            };
+
+            // `chain.chain.first()` yields caller paths as returned by `analyze_focused`,
+            // which may be absolute (joined against `repo` during the walk) rather than
+            // relative; normalize via `strip_prefix` before comparing against `pr.files`
+            // filenames (always relative) or using the path as provenance.
+            let out_of_diff: Vec<(std::path::PathBuf, usize)> = focused
+                .prod_chains
+                .iter()
+                .filter_map(|chain| chain.chain.first())
+                .map(|(_, caller_file, caller_line)| {
+                    let rel = caller_file
+                        .strip_prefix(repo)
+                        .map_or_else(|_| caller_file.clone(), std::path::Path::to_path_buf);
+                    (rel, *caller_line)
+                })
+                .filter(|(rel, _)| !diff_filenames.contains(rel.to_string_lossy().as_ref()))
+                .collect();
+
+            if out_of_diff.len() != 1 {
+                continue;
+            }
+            let (caller_rel, caller_line) = &out_of_diff[0];
+
+            let caller_full_path = repo.join(caller_rel);
+            let Ok(source) = std::fs::read_to_string(&caller_full_path) else {
+                continue;
+            };
+            let lines: Vec<&str> = source.lines().collect();
+            if lines.is_empty() {
+                continue;
+            }
+            // caller_line is 1-indexed; clamp to file bounds.
+            let start_idx = caller_line.saturating_sub(1).min(lines.len() - 1);
+            let end_idx = (start_idx + SYMBOL_EXPANSION_SNIPPET_LINES).min(lines.len());
+            let snippet = lines[start_idx..end_idx].join("\n");
+            let reference_path = caller_rel.to_string_lossy().into_owned();
+
+            let expansion_chars = snippet.len() + reference_path.len();
+            if running_total + expansion_chars > max_chars {
+                tracing::warn!(
+                    section = "symbol_expansions",
+                    symbol = %fn_name,
+                    chars = expansion_chars,
+                    "Skipping symbol expansion: budget exhausted"
+                );
+                break 'files;
+            }
+            running_total += expansion_chars;
+
+            #[allow(clippy::cast_possible_truncation)]
+            expansions.push(SymbolExpansion {
+                symbol: fn_name.clone(),
+                reference_path,
+                reference_lines: (start_idx as u32 + 1, end_idx as u32),
+                snippet,
+            });
+        }
+    }
+
+    expansions
 }
 
 #[cfg(test)]

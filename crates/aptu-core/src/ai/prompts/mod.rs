@@ -426,6 +426,24 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         prompt.push_str(&ctx.call_graph);
     }
 
+    // Inject symbol expansions with explicit provenance so the model can distinguish
+    // this caller/reference context from the diff content proper.
+    if !ctx.symbol_expansions.is_empty() {
+        prompt.push_str("\n<symbol_expansions>\n");
+        for expansion in &ctx.symbol_expansions {
+            let _ = writeln!(
+                prompt,
+                "### {} (referenced in {}:{}-{})\n{}\n",
+                sanitize_prompt_field(&expansion.symbol),
+                sanitize_prompt_field(&expansion.reference_path),
+                expansion.reference_lines.0,
+                expansion.reference_lines.1,
+                sanitize_prompt_field(&expansion.snippet)
+            );
+        }
+        prompt.push_str("</symbol_expansions>\n");
+    }
+
     // Inject existing bot review comments so the AI can avoid restating prior feedback.
     if !ctx.pr.review_comments.is_empty() {
         prompt.push_str("\n<existing_review_comments>\n");

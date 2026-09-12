@@ -53,10 +53,22 @@ pub struct ReviewConfig {
     /// Maximum number of dependency packages to enrich (default: 3).
     #[serde(default = "default_max_dep_packages")]
     pub max_dep_packages: usize,
+    /// Maximum characters across all symbol-expansion snippets (default: `5_000`).
+    ///
+    /// Symbol expansion is only built when `deep` is explicitly requested; this
+    /// budget caps the running total of `snippet` + `reference_path` chars added
+    /// during construction, independent of the overall `apply_budget_drops` pass
+    /// which may still clear the section entirely if the prompt is over budget.
+    #[serde(default = "default_max_symbol_expansion_chars")]
+    pub max_symbol_expansion_chars: usize,
 }
 
 fn default_max_instructions_chars() -> usize {
     1_500
+}
+
+fn default_max_symbol_expansion_chars() -> usize {
+    5_000
 }
 
 fn default_min_budget_for_call_graph() -> usize {
@@ -141,6 +153,7 @@ impl Default for ReviewConfig {
             min_budget_for_call_graph: 20_000,
             max_dep_release_chars: 2_000,
             max_dep_packages: 3,
+            max_symbol_expansion_chars: 5_000,
         }
     }
 }

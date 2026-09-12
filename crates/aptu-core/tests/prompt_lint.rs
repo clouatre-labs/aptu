@@ -228,6 +228,7 @@ fn all_system_prompts_contain_schema() {
         pr,
         ast_context: String::new(),
         call_graph: String::new(),
+        symbol_expansions: Vec::new(),
         inferred_repo_path: None,
         cwd_inferred: false,
         max_chars_per_file: 32_000,
