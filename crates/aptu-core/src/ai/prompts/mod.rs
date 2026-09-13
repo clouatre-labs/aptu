@@ -233,9 +233,237 @@ pub fn build_create_user_prompt(title: &str, body: &str, _repo: &str) -> String 
     prompt
 }
 
+/// Outcome of writing a single file's section into the review prompt.
+enum FileSectionOutcome {
+    /// The file was dropped for exceeding the total diff budget.
+    Skipped,
+    /// The file was included; carries the diff chars it added (0 if no patch was written).
+    Included { diff_chars_added: usize },
+}
+
+/// Writes one file's `File:`, patch, and full-content sections into `prompt`.
+fn write_pr_file_section(
+    prompt: &mut String,
+    file: &super::types::PrFile,
+    ctx: &ReviewContext,
+    dropped_patches: &HashSet<&str>,
+    dropped_full_content: &HashSet<&str>,
+    total_diff_size: usize,
+) -> FileSectionOutcome {
+    let filename = &file.filename;
+    let _ = writeln!(prompt, "File: {filename} ({})", file.status);
+
+    let patch_was_budget_dropped =
+        file.patch.is_none() && dropped_patches.contains(filename.as_str());
+    let full_content_was_budget_dropped =
+        file.full_content.is_none() && dropped_full_content.contains(filename.as_str());
+
+    let mut diff_chars_added = 0;
+
+    // Include patch if available.
+    // Skip the patch for added files that already have full_content: the patch
+    // is redundant and its 2000-char truncation produces hallucinations.
+    if let Some(patch) = &file.patch
+        && !(file.status == "added" && file.full_content.is_some())
+    {
+        let mut sanitized_patch = sanitize_prompt_field(patch);
+        let mut patch_size = sanitized_patch.len();
+
+        // Truncate patch if it exceeds per-file max (instead of dropping silently)
+        if patch_size > ctx.max_patch_chars_per_file {
+            tracing::warn!(
+                file = %filename,
+                patch_chars = patch_size,
+                "patch truncated to budget",
+            );
+            let truncated: String = sanitized_patch
+                .chars()
+                .take(ctx.max_patch_chars_per_file)
+                .collect();
+            let _ = writeln!(
+                prompt,
+                "[APTU: patch truncated from {} to {} chars]",
+                patch_size, ctx.max_patch_chars_per_file
+            );
+            sanitized_patch = truncated;
+            patch_size = sanitized_patch.len();
+        }
+
+        // Check if adding this patch would exceed total diff size limit
+        if total_diff_size + patch_size > ctx.max_diff_chars {
+            return FileSectionOutcome::Skipped;
+        }
+
+        // Add annotation if patch was truncated by GitHub API
+        if file.patch_truncated {
+            let _ = writeln!(
+                prompt,
+                "[APTU: patch truncated by GitHub API -- do not speculate on missing content]\n```diff\n{sanitized_patch}\n```\n"
+            );
+        } else {
+            let _ = writeln!(prompt, "```diff\n{sanitized_patch}\n```\n");
+        }
+        diff_chars_added = patch_size;
+    } else if patch_was_budget_dropped {
+        let _ = writeln!(
+            prompt,
+            "[APTU: patch dropped due to prompt budget -- do not speculate on missing content]"
+        );
+    }
+
+    // Include full file content if available (cap at ctx.max_chars_per_file)
+    if let Some(content) = &file.full_content {
+        let sanitized = sanitize_prompt_field(content);
+        if sanitized.chars().count() > ctx.max_chars_per_file {
+            let truncated = truncate_at_line_boundary(&sanitized, ctx.max_chars_per_file);
+            let _ = writeln!(
+                prompt,
+                "<file_content path=\"{}\">\n{}\n[APTU: file content truncated by size budget -- do not speculate on missing content]\n</file_content>\n",
+                sanitize_prompt_field(filename),
+                truncated
+            );
+        } else {
+            let _ = writeln!(
+                prompt,
+                "<file_content path=\"{}\">\n{}\n</file_content>\n",
+                sanitize_prompt_field(filename),
+                sanitized
+            );
+        }
+    } else if full_content_was_budget_dropped {
+        let _ = writeln!(
+            prompt,
+            "[APTU: file content dropped due to prompt budget -- do not speculate on missing content]"
+        );
+    }
+
+    FileSectionOutcome::Included { diff_chars_added }
+}
+
+/// Writes the `<pull_request>` files section (patches and full content) into `prompt`.
+fn write_pr_files_section(prompt: &mut String, ctx: &ReviewContext) {
+    let dropped_patches: HashSet<&str> = ctx
+        .budget_drops
+        .iter()
+        .filter_map(|s| s.strip_prefix("patch:"))
+        .collect();
+    let dropped_full_content: HashSet<&str> = ctx
+        .budget_drops
+        .iter()
+        .filter_map(|s| s.strip_prefix("file_content:"))
+        .collect();
+
+    let mut files_included = 0;
+    let mut files_skipped = 0;
+    let mut total_diff_size = 0;
+
+    for file in &ctx.pr.files {
+        if files_included >= MAX_FILES {
+            files_skipped = ctx.pr.files.len() - files_included;
+            break;
+        }
+
+        match write_pr_file_section(
+            prompt,
+            file,
+            ctx,
+            &dropped_patches,
+            &dropped_full_content,
+            total_diff_size,
+        ) {
+            FileSectionOutcome::Skipped => files_skipped += 1,
+            FileSectionOutcome::Included { diff_chars_added } => {
+                total_diff_size += diff_chars_added;
+                files_included += 1;
+            }
+        }
+    }
+
+    if files_skipped > 0 {
+        let _ = writeln!(
+            prompt,
+            "\n[{files_skipped} files omitted due to size limits (file count, patch size, or per-file content budget)]",
+        );
+    }
+}
+
+/// Writes the `<dependency_release_notes>` section into `prompt`, if any enrichments exist.
+fn write_dep_enrichments_section(prompt: &mut String, ctx: &ReviewContext) {
+    if ctx.pr.dep_enrichments.is_empty() {
+        return;
+    }
+    prompt.push_str("\n<dependency_release_notes>\n");
+    for dep in &ctx.pr.dep_enrichments {
+        let _ = writeln!(
+            prompt,
+            "Package: {} ({})\nOld: {} -> New: {}\nGitHub: {}\n",
+            sanitize_prompt_field(&dep.package_name),
+            dep.registry,
+            dep.old_version,
+            dep.new_version,
+            sanitize_prompt_field(&dep.github_url)
+        );
+        if !dep.body.is_empty() {
+            let _ = writeln!(
+                prompt,
+                "Release Notes:\n{}\n",
+                sanitize_prompt_field(&dep.body)
+            );
+        } else if !dep.fetch_note.is_empty() {
+            let _ = writeln!(prompt, "Note: {}\n", dep.fetch_note);
+        }
+    }
+    prompt.push_str("</dependency_release_notes>\n");
+}
+
+/// Writes the `<symbol_expansions>` section into `prompt`, if any expansions exist.
+fn write_symbol_expansions_section(prompt: &mut String, ctx: &ReviewContext) {
+    if ctx.symbol_expansions.is_empty() {
+        return;
+    }
+    prompt.push_str("\n<symbol_expansions>\n");
+    for expansion in &ctx.symbol_expansions {
+        let _ = writeln!(
+            prompt,
+            "### {} (referenced in {}:{}-{})\n{}\n",
+            sanitize_prompt_field(&expansion.symbol),
+            sanitize_prompt_field(&expansion.reference_path),
+            expansion.reference_lines.0,
+            expansion.reference_lines.1,
+            sanitize_prompt_field(&expansion.snippet)
+        );
+    }
+    prompt.push_str("</symbol_expansions>\n");
+}
+
+/// Writes the `<existing_review_comments>` section into `prompt`, if any comments exist.
+fn write_existing_review_comments_section(prompt: &mut String, ctx: &ReviewContext) {
+    if ctx.pr.review_comments.is_empty() {
+        return;
+    }
+    prompt.push_str("\n<existing_review_comments>\n");
+    for comment in &ctx.pr.review_comments {
+        let path = sanitize_prompt_field(&comment.path);
+        let line = comment
+            .line
+            .map_or_else(|| "none".to_string(), |l| l.to_string());
+        let side = comment
+            .side
+            .as_deref()
+            .unwrap_or(crate::facade::pr_review::DEFAULT_COMMENT_SIDE);
+        let body = sanitize_prompt_field(&comment.body);
+        let _ = writeln!(
+            prompt,
+            "<comment path=\"{path}\" line=\"{line}\" side=\"{side}\">{body}</comment>"
+        );
+    }
+    prompt.push_str(
+        "Do not repeat or rephrase feedback already present in <existing_review_comments>.\n</existing_review_comments>\n",
+    );
+}
+
 /// Builds the user prompt for PR review.
 #[must_use]
-#[allow(clippy::too_many_lines)]
 pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     let mut prompt = String::new();
 
@@ -261,163 +489,11 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     };
     let _ = writeln!(prompt, "Description:\n{body}\n");
 
-    let dropped_patches: HashSet<&str> = ctx
-        .budget_drops
-        .iter()
-        .filter_map(|s| s.strip_prefix("patch:"))
-        .collect();
-    let dropped_full_content: HashSet<&str> = ctx
-        .budget_drops
-        .iter()
-        .filter_map(|s| s.strip_prefix("file_content:"))
-        .collect();
-
-    let mut files_included = 0;
-    let mut files_skipped = 0;
-    let mut total_diff_size = 0;
-
-    // Include files
-    for i in 0..ctx.pr.files.len() {
-        if files_included >= MAX_FILES {
-            files_skipped = ctx.pr.files.len() - files_included;
-            break;
-        }
-
-        let (filename, status, patch, patch_truncated, full_content) = {
-            let file = &ctx.pr.files[i];
-            (
-                file.filename.clone(),
-                file.status.clone(),
-                file.patch.clone(),
-                file.patch_truncated,
-                file.full_content.clone(),
-            )
-        };
-
-        let _ = writeln!(prompt, "File: {filename} ({status})");
-
-        let patch_was_budget_dropped =
-            patch.is_none() && dropped_patches.contains(filename.as_str());
-        let full_content_was_budget_dropped =
-            full_content.is_none() && dropped_full_content.contains(filename.as_str());
-
-        // Include patch if available
-        // Skip the patch for added files that already have full_content: the patch
-        // is redundant and its 2000-char truncation produces hallucinations.
-        if let Some(patch) = patch
-            && !(status == "added" && full_content.is_some())
-        {
-            let mut sanitized_patch = sanitize_prompt_field(&patch);
-            let mut patch_size = sanitized_patch.len();
-
-            // Truncate patch if it exceeds per-file max (instead of dropping silently)
-            if patch_size > ctx.max_patch_chars_per_file {
-                tracing::warn!(
-                    file = %filename,
-                    patch_chars = patch_size,
-                    "patch truncated to budget",
-                );
-                let truncated: String = sanitized_patch
-                    .chars()
-                    .take(ctx.max_patch_chars_per_file)
-                    .collect();
-                let _ = writeln!(
-                    prompt,
-                    "[APTU: patch truncated from {} to {} chars]",
-                    patch_size, ctx.max_patch_chars_per_file
-                );
-                sanitized_patch = truncated;
-                patch_size = sanitized_patch.len();
-            }
-
-            // Check if adding this patch would exceed total diff size limit
-            if total_diff_size + patch_size > ctx.max_diff_chars {
-                files_skipped += 1;
-                continue;
-            }
-
-            // Add annotation if patch was truncated by GitHub API
-            if patch_truncated {
-                let _ = writeln!(
-                    prompt,
-                    "[APTU: patch truncated by GitHub API -- do not speculate on missing content]\n```diff\n{sanitized_patch}\n```\n"
-                );
-            } else {
-                let _ = writeln!(prompt, "```diff\n{sanitized_patch}\n```\n");
-            }
-            total_diff_size += patch_size;
-        } else if patch_was_budget_dropped {
-            let _ = writeln!(
-                prompt,
-                "[APTU: patch dropped due to prompt budget -- do not speculate on missing content]"
-            );
-        }
-
-        // Include full file content if available (cap at ctx.max_chars_per_file)
-        // Include full file content if available (cap at ctx.max_chars_per_file)
-        if let Some(content) = full_content {
-            let sanitized = sanitize_prompt_field(&content);
-            if sanitized.chars().count() > ctx.max_chars_per_file {
-                let truncated = truncate_at_line_boundary(&sanitized, ctx.max_chars_per_file);
-                let _ = writeln!(
-                    prompt,
-                    "<file_content path=\"{}\">\n{}\n[APTU: file content truncated by size budget -- do not speculate on missing content]\n</file_content>\n",
-                    sanitize_prompt_field(&filename),
-                    truncated
-                );
-                files_included += 1;
-                continue;
-            }
-            let _ = writeln!(
-                prompt,
-                "<file_content path=\"{}\">\n{}\n</file_content>\n",
-                sanitize_prompt_field(&filename),
-                sanitized
-            );
-        } else if full_content_was_budget_dropped {
-            let _ = writeln!(
-                prompt,
-                "[APTU: file content dropped due to prompt budget -- do not speculate on missing content]"
-            );
-        }
-
-        files_included += 1;
-    }
-
-    if files_skipped > 0 {
-        let _ = writeln!(
-            prompt,
-            "\n[{files_skipped} files omitted due to size limits (file count, patch size, or per-file content budget)]",
-        );
-    }
+    write_pr_files_section(&mut prompt, ctx);
 
     prompt.push_str("</pull_request>\n");
 
-    // Inject dependency release notes if available
-    if !ctx.pr.dep_enrichments.is_empty() {
-        prompt.push_str("\n<dependency_release_notes>\n");
-        for dep in &ctx.pr.dep_enrichments {
-            let _ = writeln!(
-                prompt,
-                "Package: {} ({})\nOld: {} -> New: {}\nGitHub: {}\n",
-                sanitize_prompt_field(&dep.package_name),
-                dep.registry,
-                dep.old_version,
-                dep.new_version,
-                sanitize_prompt_field(&dep.github_url)
-            );
-            if !dep.body.is_empty() {
-                let _ = writeln!(
-                    prompt,
-                    "Release Notes:\n{}\n",
-                    sanitize_prompt_field(&dep.body)
-                );
-            } else if !dep.fetch_note.is_empty() {
-                let _ = writeln!(prompt, "Note: {}\n", dep.fetch_note);
-            }
-        }
-        prompt.push_str("</dependency_release_notes>\n");
-    }
+    write_dep_enrichments_section(&mut prompt, ctx);
 
     if !ctx.ast_context.is_empty() {
         prompt.push_str(&ctx.ast_context);
@@ -426,46 +502,8 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         prompt.push_str(&ctx.call_graph);
     }
 
-    // Inject symbol expansions with explicit provenance so the model can distinguish
-    // this caller/reference context from the diff content proper.
-    if !ctx.symbol_expansions.is_empty() {
-        prompt.push_str("\n<symbol_expansions>\n");
-        for expansion in &ctx.symbol_expansions {
-            let _ = writeln!(
-                prompt,
-                "### {} (referenced in {}:{}-{})\n{}\n",
-                sanitize_prompt_field(&expansion.symbol),
-                sanitize_prompt_field(&expansion.reference_path),
-                expansion.reference_lines.0,
-                expansion.reference_lines.1,
-                sanitize_prompt_field(&expansion.snippet)
-            );
-        }
-        prompt.push_str("</symbol_expansions>\n");
-    }
-
-    // Inject existing bot review comments so the AI can avoid restating prior feedback.
-    if !ctx.pr.review_comments.is_empty() {
-        prompt.push_str("\n<existing_review_comments>\n");
-        for comment in &ctx.pr.review_comments {
-            let path = sanitize_prompt_field(&comment.path);
-            let line = comment
-                .line
-                .map_or_else(|| "none".to_string(), |l| l.to_string());
-            let side = comment
-                .side
-                .as_deref()
-                .unwrap_or(crate::facade::pr_review::DEFAULT_COMMENT_SIDE);
-            let body = sanitize_prompt_field(&comment.body);
-            let _ = writeln!(
-                prompt,
-                "<comment path=\"{path}\" line=\"{line}\" side=\"{side}\">{body}</comment>"
-            );
-        }
-        prompt.push_str(
-            "Do not repeat or rephrase feedback already present in <existing_review_comments>.\n</existing_review_comments>\n",
-        );
-    }
+    write_symbol_expansions_section(&mut prompt, ctx);
+    write_existing_review_comments_section(&mut prompt, ctx);
 
     prompt
 }
