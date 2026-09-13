@@ -987,6 +987,102 @@ large_model = "anthropic/claude-sonnet-4.6"
     }
 
     #[test]
+    fn test_resolve_for_task_routing_boundary_at_threshold() {
+        // estimated_size exactly equal to routing_threshold_chars => large_model returned
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"
+
+[ai.tasks.review]
+small_model = "mistralai/mistral-small-2603"
+large_model = "anthropic/claude-sonnet-4.6"
+routing_threshold_chars = 60000
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Review, Some(60000));
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "anthropic/claude-sonnet-4.6");
+    }
+
+    #[test]
+    fn test_resolve_for_task_routing_custom_threshold() {
+        // Non-default routing_threshold_chars is honored below and at-or-above threshold
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"
+
+[ai.tasks.review]
+small_model = "mistralai/mistral-small-2603"
+large_model = "anthropic/claude-sonnet-4.6"
+routing_threshold_chars = 40000
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Review, Some(35000));
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistralai/mistral-small-2603");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Review, Some(45000));
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "anthropic/claude-sonnet-4.6");
+    }
+
+    #[test]
+    fn test_resolve_for_task_triage_routing() {
+        // TaskType::Triage routes the same way TaskType::Review does
+        let config_str = r#"
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"
+
+[ai.tasks.triage]
+small_model = "mistralai/mistral-small-2603"
+large_model = "anthropic/claude-sonnet-4.6"
+routing_threshold_chars = 8192
+"#;
+
+        let config = Config::builder()
+            .add_source(config::File::from_str(config_str, config::FileFormat::Toml))
+            .build()
+            .expect("should build config");
+
+        let app_config: AppConfig = config.try_deserialize().expect("should deserialize");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Triage, Some(4000));
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "mistralai/mistral-small-2603");
+
+        let (provider, model) = app_config
+            .ai
+            .resolve_for_task(super::super::ai::TaskType::Triage, Some(9000));
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "anthropic/claude-sonnet-4.6");
+    }
+
+    #[test]
     fn test_resolve_for_task_model_override_bypasses_routing() {
         // task_override.model set => returns directly regardless of routing fields
         let config_str = r#"
