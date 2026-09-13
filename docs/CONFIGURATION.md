@@ -94,6 +94,27 @@ large_model = "anthropic/claude-sonnet-4.6"   # more capable for large PRs
 routing_threshold_chars = 60000
 ```
 
+### Threshold Sweep (2026-09-12)
+
+A live sweep of `routing_threshold_chars` was run against real fixtures from this
+repository to evaluate whether the default thresholds (60000 for review, 8192 for
+triage) should change. The sweep used `aptu` itself via OpenRouter, with
+`mistralai/mistral-small-2603` as the small tier and `mistralai/mistral-medium-3-5`
+as the large tier (each the newest OpenRouter release for its family at the time).
+Six real fixtures were used: three triage issues bracketing the 8192-character
+threshold, and three PRs bracketing the 60000-character threshold, sized using the
+actual `estimate_pr_size` output (`ai_stats.prompt_chars`).
+
+**Outcome:** no quality regression was observed at any tested size in either
+direction, but the evidence is weak rather than conclusive. The review fixtures
+happened to produce zero findings from both model tiers, leaving nothing to
+discriminate quality on. The triage label sets showed partial disagreement between
+tiers, but this disagreement was uncorrelated with prompt size; repeated calls to
+the same model at temperature 0.3 were themselves non-deterministic in the labels
+returned. Given this, the defaults are kept unchanged: the sweep supports the
+current thresholds as reasonable, but does not prove a better value exists in
+either direction.
+
 ## AI Provider Fallback Chain
 
 Configure a fallback chain to automatically try alternative providers when the primary provider fails with a non-retryable error:
