@@ -43,7 +43,7 @@ jobs:
         env:
           ENABLE_SARIF: "1"
           GITHUB_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./scorecard --repo=github.com/${{ github.repository }} --format=sarif --show-details > results.sarif
+        run: ./scorecard --repo=github.com/${{ github.repository }} --format=sarif --show-details --policy=.github/scorecard-policy.yml > results.sarif
 
       - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
