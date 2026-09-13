@@ -7,6 +7,8 @@
 
 use anyhow::{Context, Result};
 #[cfg(not(target_arch = "wasm32"))]
+use backon::Retryable;
+#[cfg(not(target_arch = "wasm32"))]
 use octocrab::Octocrab;
 use tracing::{debug, instrument};
 
@@ -14,6 +16,8 @@ use super::{ReferenceKind, parse_github_reference};
 use crate::ai::review_context::truncate_at_line_boundary;
 use crate::ai::types::{PrDetails, PrFile, PrReviewComment, ReviewEvent};
 use crate::error::{AptuError, ResourceType};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::retry::retry_backoff;
 use crate::triage::render_pr_review_comment_body;
 
 /// Result from creating a pull request.
@@ -699,11 +703,25 @@ async fn run_per_comment_fallback(
 
     let mut failed_comments = Vec::new();
     for c in inline_comment_data {
-        if let Err(e) = post_single_inline_comment(
-            client, owner, repo, number, commit_id, &c.path, c.line, &c.body,
-        )
-        .await
-        {
+        let result = (|| async {
+            post_single_inline_comment(
+                client, owner, repo, number, commit_id, &c.path, c.line, &c.body,
+            )
+            .await
+        })
+        .retry(retry_backoff())
+        .notify(|err, dur| {
+            tracing::warn!(
+                path = %c.path,
+                line = c.line,
+                error = %err,
+                retry_after = ?dur,
+                "Retrying inline comment during 422 fallback"
+            );
+        })
+        .await;
+
+        if let Err(e) = result {
             tracing::warn!(
                 path = %c.path,
                 line = c.line,
