@@ -27,7 +27,6 @@ toml = { workspace = true }
 # HTTP/API
 reqwest = { workspace = true }
 secrecy = { workspace = true }
-zeroize = { workspace = true }
 # Configuration
 config = { workspace = true }
 dirs = { workspace = true }

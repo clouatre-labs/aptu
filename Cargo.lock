@@ -225,7 +225,6 @@ dependencies = [
  "tracing",
  "uuid",
  "windows-native-keyring-store",
- "zeroize",
 ]
 
 [[package]]
