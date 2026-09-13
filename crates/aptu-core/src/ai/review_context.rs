@@ -1822,6 +1822,65 @@ mod tests {
         );
     }
 
+    /// Creates a temp directory containing multiple fixture files nested under a
+    /// subdirectory tree, for symbol-expansion tests that need `analyze_focused` to
+    /// walk beyond a flat top-level layout (mimicking `crates/<crate>/src/...`).
+    #[cfg(feature = "ast-context")]
+    fn make_nested_symbol_expansion_fixture(
+        sub_dir: &str,
+        files: &[(&str, &str)],
+    ) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let nested = dir.path().join(sub_dir);
+        std::fs::create_dir_all(&nested).expect("failed to create nested fixture dir");
+        for (name, content) in files {
+            std::fs::write(nested.join(name), content).expect("failed to write fixture file");
+        }
+        dir
+    }
+
+    /// Regression test for the directory-walk depth bug fixed in 8366dc5: `analyze_focused`'s
+    /// `max_depth` parameter is a directory-walk depth limit (`ignore::WalkBuilder::max_depth`),
+    /// not a call-graph traversal depth. Passing `Some(2)`/`Some(3)` silently truncated the walk
+    /// before reaching files nested under a realistic `crates/<crate>/src/` layout, so both the
+    /// symbol-expansion pass and the pre-existing call-graph pass found zero callers on any
+    /// normally-nested Rust repo. All other symbol-expansion fixtures above use flat files, so
+    /// this test is the only one that would catch a future regression (e.g. someone re-adding a
+    /// depth cap to the `analyze_focused` call in `build_symbol_expansions_context_sync`).
+    #[cfg(feature = "ast-context")]
+    #[tokio::test]
+    async fn test_build_ctx_symbol_expansions_finds_caller_in_nested_directory() {
+        let dir = make_nested_symbol_expansion_fixture(
+            "crates/foo/src",
+            &[
+                ("changed.rs", "pub fn target_fn() {}\n"),
+                ("caller_a.rs", "fn call_it() {\n    target_fn();\n}\n"),
+            ],
+        );
+        let repo_path = dir.path().to_string_lossy().into_owned();
+        let files = vec![PrFile {
+            filename: "crates/foo/src/changed.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 0,
+            patch: None,
+            patch_truncated: false,
+            full_content: None,
+        }];
+
+        let expansions = build_ctx_symbol_expansions(Some(&repo_path), &files, true, 5_000).await;
+
+        assert_eq!(
+            expansions.len(),
+            1,
+            "expected exactly one expansion for an out-of-diff caller nested under crates/foo/src, got {expansions:?}"
+        );
+        assert_eq!(expansions[0].symbol, "target_fn");
+        assert_eq!(expansions[0].reference_path, "crates/foo/src/caller_a.rs");
+        assert_eq!(expansions[0].reference_lines, (2, 3));
+        assert!(expansions[0].snippet.contains("target_fn();"));
+    }
+
     /// Verifies that `apply_budget_drops` clears `symbol_expansions` and records the
     /// drop when the prompt is still over budget after `ast_context` is cleared,
     /// consistent with the documented drop-order position.
