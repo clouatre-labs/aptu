@@ -17,7 +17,7 @@ Core library for Aptu - AI-powered issue-triage and PR-review harness.
 - **AI Triage** - Analyze issues with summaries, labels, and contributor guidance
 - **PR Review** - AI-powered pull request analysis with full file content and multi-language AST context (Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
 - **Security Scanning** - Built-in security pattern detection with SARIF output
-- **Multiple Providers** - `OpenRouter` (default), Cerebras, Groq, Gemini, `Z.AI`, and `ZenMux`
+- **Multiple Providers** - Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux
 - **GitHub Integration** - Auth, issues, PRs, and GraphQL queries
 - **Resilient** - Exponential backoff, circuit breaker, rate limit handling
 

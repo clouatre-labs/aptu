@@ -125,10 +125,35 @@ Two environment variables control optional output files written during PR review
 
 | Variable | Description |
 |----------|-------------|
-| `APTU_CONTEXT_FILE` | Path to write a per-review context JSONL. Each record contains `pr_url`, `repo`, `total_chars`, `budget_drops`, `files_truncated`, `truncated_chars_dropped`, and `prompt_chars_final`. Useful for debugging which enrichments were dropped. When set via the Action, the context budget (files reviewed/truncated, chars dropped, budget %) is appended to `$GITHUB_STEP_SUMMARY`. |
+| `APTU_CONTEXT_FILE` | Path to write a per-review context JSONL. See field reference below for the full record schema. Useful for debugging which enrichments were dropped. When set via the Action, the context budget (files reviewed/truncated, chars dropped, budget %) is appended to `$GITHUB_STEP_SUMMARY`. |
 | `APTU_METRICS_FILE` | Path to write per-review token usage JSONL. Each record includes `effective_token_units` alongside raw token counts. |
 
 When running via the GitHub Action, both files are set automatically and uploaded as workflow artifacts (`aptu-review-context.jsonl` and `aptu-token-usage.jsonl`).
+
+### `APTU_CONTEXT_FILE` record schema
+
+Each line is a JSON object (`ReviewContextRecord`) with the following fields:
+
+| Field | Type | Description |
+|-------|------|--------------|
+| `trace_id` | string | Unique trace ID correlating with the corresponding `APTU_METRICS_FILE` record. |
+| `operation` | string | Operation type (e.g. `pr_review`). |
+| `pr` | string | PR identifier (`owner/repo#number`). |
+| `model` | string | Model used for analysis. |
+| `github_actor` | string \| null | GitHub actor, if available from the environment. |
+| `files_total` | integer | Total number of files in the PR. |
+| `files_with_patch` | integer | Number of files with a non-empty diff patch. |
+| `files_truncated` | integer | Number of files whose full content was truncated. |
+| `truncated_chars_dropped` | integer | Total characters dropped from truncated files. |
+| `ast_context_chars` | integer | Characters in AST context. |
+| `call_graph_chars` | integer | Characters in call graph context. |
+| `dep_enrichments_count` | integer | Number of dependency enrichments applied. |
+| `dep_enrichments_chars` | integer | Total characters in dependency enrichments. |
+| `budget_drops` | string[] | Names of context items dropped due to budget (e.g. `call_graph`, `symbol_expansions`, `dep_enrichments`, `file_content:<path>`, `patch:<path>`). |
+| `cwd_inferred` | boolean | Whether the repository path was inferred from CWD. |
+| `prompt_chars_final` | integer | Final assembled prompt character count. |
+| `finish_reasons` | string[] | Finish reasons from the AI response. |
+| `max_prompt_chars` | integer | Maximum prompt character budget from review config. |
 
 ### Telemetry Rollup
 

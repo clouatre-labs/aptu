@@ -70,7 +70,7 @@ Aptu does not execute remote code, evaluate arbitrary expressions, or write to t
 - GitHub Webhook to Cloudflare Worker: HMAC-SHA256 signature validation; invalid signatures rejected with `401`. The webhook secret is stored as a Wrangler secret and never logged.
 - Cloudflare Worker to Central Workflow: `repository_dispatch` events sent via GitHub API with installation token; the worker reads `.github/aptu.yml` from the repository to determine enabled features and credential requirements.
 - Central Workflow to Repository Secrets: the workflow reads AI API keys from repository secrets named in `.github/aptu.yml` (`ai.api-key-secret`). Secrets are never logged or exposed in workflow output.
-- Installation permissions: the GitHub App requests minimal scopes (`contents: read`, `issues: write`, `pull_requests: write`, `metadata: read`). Each installation can restrict repository access.
+- Installation permissions: the GitHub App requests minimal scopes (Contents, Issues, Pull requests, Code scanning alerts, and Commit statuses, plus Metadata read required by GitHub for all Apps); see [docs/GITHUB_APP.md](GITHUB_APP.md#permissions) for the authoritative per-permission table and rationale. Each installation can restrict repository access.
 
 ## Input Validation
 

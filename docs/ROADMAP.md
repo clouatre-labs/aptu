@@ -15,7 +15,6 @@ This document describes the project direction across three time horizons. Items 
 ## Recently Shipped
 
 - **GitHub App** (#94): `aptu-dev` GitHub App with config-as-code opt-in, mention commands, automatic security scanning, per-installation quotas, and per-repository AI key model. Installed from [github.com/apps/aptu-dev](https://github.com/apps/aptu-dev).
-- **Structural graph context for `pr review`** (#1420): petgraph BFS blast-radius from changed files, opt-in via `graph` Cargo feature, disk-cached by commit SHA
 - **Model-tier routing** (#1416): routes large PRs to a higher-capability model tier automatically based on estimated prompt size
 - **Prompt optimisation** (#1415): minified schemas, examples moved to user turn (~2.6k chars saved per call)
 - **PR creation automation** (#1130): `aptu pr create --diff <file>` applies a unified diff to a new branch, commits with optional DCO sign-off, and opens a pull request. Includes a security validation pipeline (size cap, path-traversal rejection, `SecurityScanner::scan_diff()` gate) and collision-resistant branch naming.

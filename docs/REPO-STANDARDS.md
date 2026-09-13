@@ -46,7 +46,6 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 | `cargo clippy` | `cargo clippy --profile ci -- -D warnings` | Lint; all warnings are errors in CI |
 | `cargo fmt` | `cargo fmt --check` | Format enforcement |
 | `cargo deny` | `cargo deny check advisories licenses` | Dependency audit (CVEs and license policy) |
-| `actionlint` | `actionlint` | GitHub Actions workflow syntax validation |
 | `zizmor` | `zizmor .github/workflows/` | SHA pinning and security pattern enforcement for Actions |
 | `gitleaks` | `gitleaks detect` | Secret detection in source history |
 | `reuse` | `reuse lint` | SPDX header compliance |
