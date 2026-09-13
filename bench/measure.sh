@@ -1,5 +1,5 @@
 #!/bin/bash
-# Measures system prompt sizes before/after prompt compression (#1096).
+# Measures system prompt sizes before/after prompt compression (#1103).
 # Persona strings are extracted directly from crates/aptu-core/src/ai/prompts/mod.rs
 # so this script always reflects the actual production prompts without duplication.
 set -euo pipefail
@@ -95,7 +95,7 @@ jq -n \
   --arg     date                 "$(date -u +%Y-%m-%d)" \
   '{
     generated_at: $date,
-    note: "Baseline measured pre-#1096; after values are null placeholders (pending #1096 merge).",
+    note: "Baseline measured pre-#1103; after values are null placeholders (pending #1103 merge).",
     operations: {
       triage:    { before: { persona_chars: $triage_persona,    tooling_chars: $tooling, guidelines_chars: $triage_guidelines,    total_chars: $triage_total    }, after: null, reduction_pct: null },
       pr_review: { before: { persona_chars: $pr_review_persona, tooling_chars: $tooling, guidelines_chars: $pr_review_guidelines, total_chars: $pr_review_total }, after: null, reduction_pct: null },

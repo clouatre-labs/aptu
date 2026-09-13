@@ -173,14 +173,9 @@ OpenRouter exposes pricing data for each model. Models with zero prompt and comp
 
 ## Security
 
-This policy is backed by enforced controls: GPG-signed commits, Developer Certificate of Origin, required code owner review, SLSA Level 3 build provenance, and OpenSSF Best Practices Silver. These are not decorative. They ensure that a named, verified human is accountable for every change that reaches users.
+Aptu ships with SLSA Level 3 build provenance, REUSE/SPDX license compliance, signed commits, and automated dependency scanning.
 
-- **SLSA Level 3** - Provenance attestations for all releases
-- **REUSE/SPDX** - License compliance for all files
-- **Signed Commits** - GPG-signed commits required
-- **Dependency Scanning** - Automated updates via Renovate
-
-See [SECURITY.md](https://github.com/clouatre-labs/aptu/blob/main/SECURITY.md) for reporting and verification.
+See [SECURITY.md](https://github.com/clouatre-labs/aptu/blob/main/SECURITY.md) for reporting, verification, and the full supply chain security details.
 
 ## Architecture
 

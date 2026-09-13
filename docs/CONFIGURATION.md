@@ -44,7 +44,7 @@ All task-specific overrides are optional. If not specified, the default `provide
   - `model`: Optional model override
   - `small_model`: Optional model for small prompts (used with `large_model` for routing)
   - `large_model`: Optional model for large prompts (used with `small_model` for routing)
-  - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 60000 for review)
+  - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 8192 for triage)
 
 - **`[ai.tasks.review]`**: Configuration for code review operations
   - `provider`: Optional provider override
@@ -58,7 +58,7 @@ All task-specific overrides are optional. If not specified, the default `provide
   - `model`: Optional model override
   - `small_model`: Optional model for small prompts (used with `large_model` for routing)
   - `large_model`: Optional model for large prompts (used with `small_model` for routing)
-  - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 60000 for review)
+  - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 8192 for create)
 
 ### Model-Tier Routing
 
@@ -320,13 +320,14 @@ Control how much context `aptu pr review` fetches and injects into the AI prompt
 [review]
 max_prompt_chars = 120000          # Total prompt character budget (default: 120 000)
 max_full_content_files = 10        # Max files fetched in full via GitHub Contents API (default: 10)
-max_chars_per_file = 16000         # Max chars of full file content per file (default: 16 000)
+max_chars_per_file = 32000         # Max chars of full file content per file (default: 32 000)
 max_diff_chars = 200000            # Max total diff characters across all files in the prompt (default: 200 000)
 max_patch_chars_per_file = 25000   # Max chars per individual file patch; patches exceeding this are dropped entirely (default: 25 000)
 max_instructions_chars = 1500      # Max chars of instructions file content included in review prompt (default: 1 500)
 min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
 max_dep_packages = 3               # Max dependency bump packages for which upstream release notes are fetched (default: 3)
 max_dep_release_chars = 2000       # Max chars of upstream release notes included per dependency package (default: 2 000)
+max_symbol_expansion_chars = 5000  # Max chars of expanded caller/callee symbol snippets; only applies when review depth is `deep` (default: 5 000)
 ```
 
 The call graph is enabled only when `budget_remaining > min_budget_for_call_graph`, where
@@ -336,7 +337,7 @@ Setting it above half of `max_prompt_chars` means call graph will only be built 
 The prefix section "When the assembled prompt exceeds..." describes how call graph is the first section dropped,
 so a value that rarely enables call graph is typically acceptable.
 
-When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, dependency enrichments, diff patches (largest first), full file content (largest first). The system prompt and PR metadata are never dropped.
+When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, expanded symbol snippets (`symbol_expansions`, only present for `deep` reviews), dependency enrichments, full file content (largest first), diff patches (largest first). The system prompt and PR metadata are never dropped.
 
 ## Cache Configuration
 
@@ -502,5 +503,5 @@ Built-in prompt fragments live in `crates/aptu-core/src/ai/prompts/` (guidelines
 
 | Variable | Description |
 |----------|-------------|
-| `APTU_CONTEXT_FILE` | Path to write a JSONL file containing per-review context records for explainability and debugging. Each line is a JSON object with fields: `pr_url`, `repo`, `total_chars`, `budget_drops` (list of enrichment steps skipped due to budget), and `prompt_chars_final`. If unset, no file is written. |
+| `APTU_CONTEXT_FILE` | Path to write a JSONL file containing per-review context records for explainability and debugging. Each line is a JSON object recording fields such as `pr`, `model`, `files_total`, `budget_drops` (list of enrichment steps skipped due to budget), and `prompt_chars_final`; see [docs/GITHUB_ACTION.md](GITHUB_ACTION.md) for the full field-by-field schema. If unset, no file is written. |
 | `APTU_METRICS_FILE` | Path to write a JSONL file containing per-review token usage metrics. Used by the GitHub Action to capture `aptu-token-usage.jsonl` as an artifact. |

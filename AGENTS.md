@@ -24,7 +24,8 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 
 ```bash
 cargo build
-cargo test
+cargo nextest run --workspace --locked --no-fail-fast
+cargo nextest run -p aptu-core --locked --no-fail-fast --features ast-context
 cargo clippy -- -W clippy::cognitive_complexity
 cargo fmt --check
 cargo deny check advisories licenses
@@ -68,11 +69,6 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 - `aptu-core` compiles to `wasm32-unknown-unknown` (no default features); OS-dependent code is `#[cfg(not(target_arch = "wasm32"))]`-gated
 - Facade functions that require OS I/O carry the same gate; `wasm_unsupported!` macro in `facade/mod.rs` provides stub bodies
 - CI job `wasm-check`: `cargo check -p aptu-core --target wasm32-unknown-unknown --no-default-features`; gate all new OS-only code the same way
-
-### Known Debt
-
-- `build.warnings = "deny"` (.cargo/config.toml) is deferred: aptu-core emits 107 warnings under wasm32-unknown-unknown that would become hard errors; WASM cleanup required before this gate can be enabled.
-- 33 pre-existing clippy warnings in `auth.rs`, `metrics.rs`, `crates/aptu-core/src/ai/provider/` remain unfixed (confirmed pre-existing via git-stash A/B in #1462); these are not regressions but are tracked for cleanup.
 
 ### Conventions
 
