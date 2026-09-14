@@ -6,7 +6,19 @@
 //! and parsing triage responses.
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Treats an explicit JSON `null` the same as a missing key: falls back to `Default`.
+///
+/// `#[serde(default)]` alone only covers a missing key; some models emit `null` for an
+/// empty array field instead of `[]`, which otherwise fails deserialization outright.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::deserialize(deserializer)?.unwrap_or_default())
+}
 
 /// Account credits status for `OpenRouter`.
 #[derive(Debug, Clone)]
@@ -534,16 +546,16 @@ pub struct PrReviewResponse {
     /// Overall assessment: one of approve, request-changes, or comment.
     pub verdict: String,
     /// Key strengths of the PR.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub strengths: Vec<String>,
     /// Areas of concern or improvement.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub concerns: Vec<String>,
     /// Specific line-level comments.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub comments: Vec<PrReviewComment>,
     /// Suggested improvements (not blocking).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub suggestions: Vec<String>,
     /// Optional disclaimer about limitations (e.g., platform version validation).
     #[serde(default)]
@@ -597,6 +609,16 @@ mod tests {
         let json = r#"{"summary":"Test","suggested_labels":[],"clarifying_questions":[],"potential_duplicates":[],"related_issues":[]}"#;
         let tr: TriageResponse = serde_json::from_str(json).unwrap();
         assert!(tr.complexity.is_none());
+    }
+
+    #[test]
+    fn test_pr_review_response_null_vec_fields() {
+        let json = r#"{"summary":"Test","verdict":"approve","strengths":null,"concerns":null,"comments":null,"suggestions":null}"#;
+        let review: PrReviewResponse = serde_json::from_str(json).unwrap();
+        assert!(review.strengths.is_empty());
+        assert!(review.concerns.is_empty());
+        assert!(review.comments.is_empty());
+        assert!(review.suggestions.is_empty());
     }
 
     #[test]
