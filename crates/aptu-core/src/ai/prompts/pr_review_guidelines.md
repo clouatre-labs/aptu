@@ -2,7 +2,7 @@
 - verdict: "approve", "request_changes", "comment"
 - strengths: PR strengths (patterns, clarity)
 - concerns: Issues/risks (bugs, performance, security, maintainability)
-- comments: Line-level feedback. Severity: "info", "suggestion", "warning", "issue", "suggested_code" (1-10 lines, no markers). null for multi-file or uncertain.
+- comments: Line-level feedback. Severity: "info", "suggestion", "warning", "issue", "suggested_code" (1-10 lines, no markers). Empty array ([]) for multi-file or uncertain.
 - suggestions: Non-blocking improvements
 - disclaimer: If PR involves platform versions (iOS, Android, Node, Rust, Python, Java, simulator, packages, frameworks), explain validation skipped. Otherwise null.
 
