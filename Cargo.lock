@@ -151,13 +151,12 @@ dependencies = [
 
 [[package]]
 name = "aptu-coder-core"
-version = "0.32.6"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98a2fff0538182690bfd81773f7976ce9d53dbeb054662555c58f93a120e0e2d"
+checksum = "7070b1a176144f202c3f0fb3378c065e9d91db624d67c42b0e91ac3eeed40895"
 dependencies = [
  "base64 0.23.1",
  "blake3",
- "fs2",
  "ignore",
  "lru",
  "petgraph",
@@ -1009,16 +1008,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
-]
-
-[[package]]
-name = "fs2"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
