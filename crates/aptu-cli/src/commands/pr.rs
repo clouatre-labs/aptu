@@ -308,16 +308,7 @@ pub async fn run_label(
 
     if outcome.is_skipped() {
         eprintln!("No write access to this repository - labels not applied");
-        return Ok((
-            PrLabelResult {
-                pr_number: 0,
-                pr_title: String::new(),
-                pr_url: String::new(),
-                labels: Vec::new(),
-                dry_run,
-            },
-            AiStats::default(),
-        ));
+        return Ok((PrLabelResult::empty(dry_run), AiStats::default()));
     }
 
     let (pr_number, pr_title, pr_url, labels, ai_stats) =

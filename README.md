@@ -53,6 +53,7 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 | Multiple Outputs | - | Yes | - |
 | Local History | - | Yes | - |
 | Claude OAuth | - | Yes | - |
+| Permission-Aware Writes | Yes | Yes | Yes |
 
 `aptu pr create --diff <file>` applies a patch, commits, and opens a PR. `--deep` (CLI) / `deep: true` (Action) adds AST and cross-file call-graph context to `pr review` prompts. CLI and Action support seven providers: Anthropic, Cerebras, Gemini, Groq, OpenRouter (default), Z.AI, and ZenMux; the App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names). Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required.
 
