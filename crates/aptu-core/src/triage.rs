@@ -286,13 +286,20 @@ pub fn check_already_triaged(issue: &IssueDetails) -> TriageStatus {
     )
 }
 
+/// HTML marker embedded in every rendered inline review comment body so existing
+/// comments can be identified without resolving the bot identity (GitHub App
+/// installation tokens cannot use `current().user()`).
+pub const REVIEW_COMMENT_MARKER: &str = "<!-- APTU_REVIEW_COMMENT -->";
+
 /// Formats an inline PR review comment body.
 ///
 /// When the comment includes `suggested_code`, appends a GitHub suggestion block
 /// that renders as a one-click "Apply suggestion" button in the PR diff view.
 #[must_use]
 pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
-    let mut body = comment.comment.clone();
+    let mut body = String::from(REVIEW_COMMENT_MARKER);
+    body.push('\n');
+    body.push_str(&comment.comment);
     if let Some(code) = &comment.suggested_code
         && !code.is_empty()
     {

@@ -329,7 +329,7 @@ mod fallback_tests {
     }
 
     /// Arrange: primary call rate limited, fallback call succeeds.
-    /// Act: run try_with_fallback.
+    /// Act: run `try_with_fallback`.
     /// Assert: the fallback entry executes and the operation succeeds.
     #[tokio::test]
     async fn test_rate_limited_primary_uses_fallback_entry() {
@@ -346,6 +346,7 @@ mod fallback_tests {
                     })) as anyhow::Result<u32>
                 } else {
                     let _ = client;
+                    #[allow(clippy::cast_possible_truncation)]
                     Ok(n as u32)
                 }
             }
@@ -372,8 +373,8 @@ mod fallback_tests {
     }
 
     /// Arrange: primary rate limited with no fallback chain configured.
-    /// Act: run try_with_fallback.
-    /// Assert: the original RateLimited error is surfaced via downcast,
+    /// Act: run `try_with_fallback`.
+    /// Assert: the original `RateLimited` error is surfaced via downcast,
     /// preserving the original error instance (not a reconstruction).
     #[tokio::test]
     async fn test_rate_limited_without_chain_surfaces_error() {
@@ -414,8 +415,8 @@ mod fallback_tests {
         assert_eq!(calls.load(Ordering::SeqCst), 1, "no fallback attempted");
     }
 
-    /// Arrange: primary returns TruncatedResponse with a fallback chain configured.
-    /// Act: run try_with_fallback.
+    /// Arrange: primary returns `TruncatedResponse` with a fallback chain configured.
+    /// Act: run `try_with_fallback`.
     /// Assert: returns early without consulting the fallback chain.
     #[tokio::test]
     async fn test_truncated_response_returns_early() {

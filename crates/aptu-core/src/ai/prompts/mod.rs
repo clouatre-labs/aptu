@@ -1086,11 +1086,13 @@ mod tests {
         let comments = vec![PrReviewCommentDetails {
             id: 1,
             author: "aptu[bot]".to_string(),
+            is_bot: true,
             body: "Use a const instead of a magic number.".to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
             side: Some(crate::facade::pr_review::DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
+            original_line: None,
         }];
         let mut ctx = make_test_pr(comments, 7);
 
