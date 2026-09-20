@@ -2,7 +2,7 @@
 
 Config file: `~/.config/aptu/config.toml`
 
-> **Note:** Model names in examples are illustrative and may not reflect current defaults or available models. See your provider's model catalog (Anthropic Console, Google AI Studio, or openrouter.ai/models) for current model IDs.
+> **Note:** Model names in examples are illustrative and may not reflect current defaults or available models. See your provider's model catalog (Anthropic Console, Google AI Studio, openrouter.ai/models, or the Z.AI model docs at docs.z.ai) for current model IDs.
 
 ```toml
 [ai]
