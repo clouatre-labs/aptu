@@ -173,6 +173,142 @@ pub async fn fetch_issue_with_comments(
     Ok(details)
 }
 
+/// A single issue comment entry retained for summary-comment dedup.
+#[derive(Debug, Clone)]
+pub struct IssueCommentEntry {
+    /// Comment ID.
+    pub id: u64,
+    /// Comment body (markdown).
+    pub body: String,
+    /// Whether the comment author is a bot (`user.type == "Bot"`).
+    pub is_bot: bool,
+}
+
+/// Lists all comments on an issue with pagination (`per_page=100`, max 300
+/// items), mirroring the review-comment listing in `github/pulls.rs`.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails.
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
+pub async fn list_issue_comments(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+) -> Result<Vec<IssueCommentEntry>> {
+    let mut comments: Vec<IssueCommentEntry> = Vec::new();
+    let mut page = client
+        .issues(owner, repo)
+        .list_comments(number)
+        .per_page(100)
+        .send()
+        .await
+        .with_context(|| format!("Failed to list comments for issue #{number}"))?;
+
+    loop {
+        comments.extend(page.items.into_iter().map(|c| IssueCommentEntry {
+            id: c.id.0,
+            body: c.body.unwrap_or_default(),
+            is_bot: c.user.r#type.as_str() == "Bot",
+        }));
+
+        // Cap at 300 to mirror the review-comment listing limit.
+        if comments.len() >= 300 {
+            tracing::warn!(
+                "Issue #{} has reached 300-comment cap; stopping pagination",
+                number
+            );
+            comments.truncate(300);
+            break;
+        }
+
+        match client
+            .get_page::<octocrab::models::issues::Comment>(&page.next)
+            .await
+        {
+            Ok(Some(next_page)) => page = next_page,
+            Ok(None) => break,
+            Err(e) => {
+                // A failed page fetch is an error, not an empty listing: treating
+                // it as complete could miss an existing summary marker and cause
+                // a duplicate post.
+                return Err(anyhow::anyhow!(e).context(format!(
+                    "Failed to fetch next page of comments for issue #{number}"
+                )));
+            }
+        }
+    }
+
+    debug!(count = comments.len(), "Listed issue comments");
+    Ok(comments)
+}
+
+/// Creates a comment on an issue and returns its ID.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails.
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
+pub async fn create_issue_comment(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    body: &str,
+) -> Result<u64> {
+    let comment = client
+        .issues(owner, repo)
+        .create_comment(number, body)
+        .await
+        .with_context(|| format!("Failed to create comment on issue #{number}"))?;
+    debug!(comment_id = comment.id.0, "Issue comment created");
+    Ok(comment.id.0)
+}
+
+/// Updates the body of an existing issue comment.
+///
+/// Used when the Aptu review summary marker comment exists but its head SHA
+/// differs; the existing comment is `PATCH`ed in place rather than posting a
+/// duplicate.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails. 404 errors (comment not found)
+/// are treated as success (idempotent), matching
+/// [`crate::github::pulls::update_pr_review_comment`].
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, comment_id = comment_id))]
+pub async fn update_issue_comment(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    comment_id: u64,
+    body: &str,
+) -> Result<()> {
+    let route = format!("/repos/{owner}/{repo}/issues/comments/{comment_id}");
+    let payload = serde_json::json!({ "body": body });
+    let result: std::result::Result<serde_json::Value, _> =
+        client.patch(&route, Some(&payload)).await;
+
+    match result {
+        Ok(_) => {
+            debug!("Issue comment updated successfully");
+            Ok(())
+        }
+        Err(e)
+            if let octocrab::Error::GitHub { source, .. } = &e
+                && source.status_code.as_u16() == 404 =>
+        {
+            debug!("Issue comment not found (404); treating as success");
+            Ok(())
+        }
+        Err(e) => Err(e).with_context(|| format!("Failed to update issue comment #{comment_id}")),
+    }
+}
+
 /// Extracts significant keywords from an issue title for search.
 ///
 /// Filters out common stop words and returns lowercase keywords.

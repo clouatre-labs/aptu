@@ -35,6 +35,7 @@ pub(crate) struct ReviewOptions {
     pub dry_run: bool,
     pub yes: bool,
     pub no_comment: bool,
+    pub no_dedup_summary: bool,
 }
 
 /// Convert a core bulk outcome into a CLI single outcome, reporting
@@ -429,6 +430,7 @@ async fn review_single_pr(
                 opts.dry_run,
                 opts.yes,
                 ctx.is_verbose(),
+                opts.no_dedup_summary,
             )
             .await?;
         }
@@ -578,6 +580,7 @@ async fn run_pr_command(
             repo_path,
             deep,
             instructions_file,
+            no_dedup_summary,
         } => {
             pr::run_review(
                 references,
@@ -595,6 +598,7 @@ async fn run_pr_command(
                 ctx,
                 config,
                 inferred_repo,
+                no_dedup_summary,
             )
             .await
         }

@@ -16,6 +16,7 @@ use aptu_core::ai::types::PrReviewComment;
 use aptu_core::history::AiStats;
 use aptu_core::{
     PrDetails, PrReviewResponse, render_pr_review_comment_body, render_pr_review_markdown,
+    render_pr_review_review_body,
 };
 use tracing::{debug, info, instrument, warn};
 
@@ -97,6 +98,7 @@ pub(crate) fn format_comment_header(comment: &PrReviewComment) -> String {
 
 /// Post a PR review to GitHub.
 #[instrument(skip_all, fields(pr_number = analyze_result.pr_details.number))]
+#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 pub async fn post(
     analyze_result: &AnalyzeResult,
     reference: &str,
@@ -105,11 +107,19 @@ pub async fn post(
     dry_run: bool,
     skip_confirm: bool,
     verbose: bool,
+    no_dedup_summary: bool,
 ) -> Result<()> {
     // Create CLI token provider
     let provider = CliTokenProvider;
 
-    let review_body = render_pr_review_markdown(
+    // Summary lives ONLY in the marker issue comment; the PR review body carries
+    // non-summary content so a fresh or updated post never shows two summaries.
+    let summary_body = render_pr_review_markdown(
+        &analyze_result.review,
+        analyze_result.pr_details.files.len(),
+        &analyze_result.pr_details.head_sha,
+    );
+    let review_body = render_pr_review_review_body(
         &analyze_result.review,
         analyze_result.pr_details.files.len(),
     );
@@ -121,6 +131,7 @@ pub async fn post(
             event, analyze_result.pr_details.number
         );
         eprintln!("Review body:\n{review_body}");
+        eprintln!("Summary comment:\n{summary_body}");
         if verbose && !analyze_result.review.comments.is_empty() {
             eprintln!(
                 "\nInline comments ({}):",
@@ -158,11 +169,13 @@ pub async fn post(
             &provider,
             reference,
             repo_context,
+            &summary_body,
             &review_body,
             event,
             &analyze_result.review.comments,
             &analyze_result.pr_details.head_sha,
             &analyze_result.pr_details.review_comments,
+            !no_dedup_summary,
         )
         .await?;
 
@@ -173,8 +186,25 @@ pub async fn post(
 
         let outcome = outcome.applied().expect("outcome checked for skip above");
 
-        info!(review_id = outcome.review_id, "Review posted successfully");
-        eprintln!("Review posted successfully (ID: {})", outcome.review_id);
+        match outcome.summary {
+            aptu_core::SummaryPostOutcome::Skipped => {
+                eprintln!(
+                    "Review summary already up to date for head SHA {}; nothing posted",
+                    analyze_result.pr_details.head_sha
+                );
+            }
+            aptu_core::SummaryPostOutcome::Updated => {
+                info!(review_id = outcome.review_id, "Review updated successfully");
+                eprintln!(
+                    "Review updated in place (ID: {}); summary comment updated",
+                    outcome.review_id
+                );
+            }
+            aptu_core::SummaryPostOutcome::Posted => {
+                info!(review_id = outcome.review_id, "Review posted successfully");
+                eprintln!("Review posted successfully (ID: {})", outcome.review_id);
+            }
+        }
         if !outcome.failed_comments.is_empty() {
             eprintln!(
                 "Warning: {} inline comment(s) failed to post: {}",
@@ -442,6 +472,7 @@ pub async fn run_review(
     ctx: crate::cli::OutputContext,
     config: &aptu_core::AppConfig,
     inferred_repo: Option<String>,
+    no_dedup_summary: bool,
 ) -> Result<()> {
     use crate::cli::OutputFormat;
 
@@ -500,6 +531,7 @@ pub async fn run_review(
                         dry_run,
                         yes: !ctx.is_interactive() || force,
                         no_comment,
+                        no_dedup_summary,
                     },
                     &ctx,
                     &config,

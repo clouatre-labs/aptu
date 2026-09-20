@@ -649,6 +649,18 @@ fn append_github_errors(message: &str, errors: Option<&[serde_json::Value]>) -> 
     format!("{message}; {}", details.join("; "))
 }
 
+/// Outcome of posting the Aptu review summary comment (issue comment carrying
+/// the `<!-- APTU_REVIEW:<sha> -->` marker).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SummaryPostOutcome {
+    /// No existing summary comment; a new one was created.
+    Posted,
+    /// An existing summary comment was patched in place (head SHA changed).
+    Updated,
+    /// Head SHA unchanged; the existing summary comment was left as-is.
+    Skipped,
+}
+
 /// Outcome of a successful [`post_pr_review`] call.
 ///
 /// `failed_comments` is populated only when the batched review POST returned
@@ -657,12 +669,15 @@ fn append_github_errors(message: &str, errors: Option<&[serde_json::Value]>) -> 
 /// batched POST succeeded normally.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReviewPostOutcome {
-    /// ID of the created review.
+    /// ID of the created review. `0` when the run was skipped because the
+    /// summary already covered the current head SHA (no review was posted).
     pub review_id: u64,
     /// `path:line` entries for inline comments that failed during the 422
     /// per-comment fallback (see issue #1603). Best-effort delivery: a
     /// failure here does not prevent other comments from being attempted.
     pub failed_comments: Vec<String>,
+    /// How the review summary comment was handled (see [`SummaryPostOutcome`]).
+    pub summary: SummaryPostOutcome,
 }
 
 /// Per-comment data retained alongside the batched JSON payload so the
@@ -768,6 +783,7 @@ async fn run_per_comment_fallback(
     Ok(ReviewPostOutcome {
         review_id,
         failed_comments,
+        summary: SummaryPostOutcome::Posted,
     })
 }
 
@@ -874,6 +890,7 @@ pub async fn post_pr_review(
             Ok(ReviewPostOutcome {
                 review_id: response.id,
                 failed_comments: Vec::new(),
+                summary: SummaryPostOutcome::Posted,
             })
         }
         Err(octocrab::Error::GitHub { source, .. })
