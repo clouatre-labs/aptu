@@ -246,17 +246,23 @@ pub struct RepoMilestonesConnection {
 pub struct IssueCommentNode {
     /// Comment ID.
     pub id: u64,
-    /// Comment author login.
-    pub author: Author,
+    /// Comment author login. GitHub returns `null` for deleted users, which
+    /// deserializes to `None` and maps to the "ghost" placeholder.
+    pub author: Option<Author>,
     /// Comment body.
     pub body: String,
 }
+
+/// Placeholder login used when a comment author has been deleted.
+const GHOST_LOGIN: &str = "ghost";
 
 impl From<IssueCommentNode> for IssueComment {
     fn from(node: IssueCommentNode) -> Self {
         IssueComment {
             id: node.id,
-            author: node.author.login,
+            author: node
+                .author
+                .map_or_else(|| GHOST_LOGIN.to_owned(), |a| a.login),
             body: node.body,
         }
     }

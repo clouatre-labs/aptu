@@ -214,7 +214,10 @@ pub async fn fetch_issue_for_triage(
         .iter()
         .map(|comment| crate::ai::types::IssueComment {
             id: comment.id,
-            author: comment.author.login.clone(),
+            author: comment
+                .author
+                .as_ref()
+                .map_or_else(|| "ghost".to_owned(), |a| a.login.clone()),
             body: comment.body.clone(),
         })
         .collect();
