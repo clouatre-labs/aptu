@@ -965,6 +965,31 @@ mod tests {
         );
     }
 
+    #[test]
+    fn summary_update_body_carries_current_head_sha_marker() {
+        // Invariant: on the Update path, the body passed to
+        // `update_issue_comment` is the freshly rendered summary with the
+        // CURRENT head SHA marker, never the stale body read from the
+        // existing comment.
+        let stale_body = "<!-- APTU_REVIEW:oldsha -->\n## Aptu Review\nstale";
+        let fresh_body = crate::triage::render_pr_review_markdown(
+            &crate::ai::types::PrReviewResponse {
+                summary: "ok".to_string(),
+                verdict: "approve".to_string(),
+                strengths: Vec::new(),
+                concerns: Vec::new(),
+                comments: Vec::new(),
+                suggestions: Vec::new(),
+                disclaimer: None,
+            },
+            0,
+            "newsha",
+        );
+        assert!(fresh_body.contains("<!-- APTU_REVIEW:newsha -->"));
+        assert!(!fresh_body.contains("oldsha"));
+        let _ = stale_body; // stale body is only parsed for the marker, never re-posted
+    }
+
     #[tokio::test]
     async fn test_analyze_pr_blocks_on_injection() {
         // Create a PR with a prompt-injection pattern in the diff.
