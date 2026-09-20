@@ -146,27 +146,7 @@ See [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs
 
 ## Models
 
-Use `aptu models list` to discover available models from all configured providers.
-
-### Discovering models
-
-```bash
-aptu models list                                # all providers
-aptu models list --provider openrouter          # OpenRouter only
-```
-
-### Filtering and sorting
-
-| Flag | Description |
-|------|-------------|
-| `--provider` | Filter to a specific provider |
-| `--sort name\|context` | Sort by name or context window size |
-| `--min-context N` | Show only models with at least N tokens of context |
-| `--filter TEXT` | Filter by name or ID (case-insensitive substring match) |
-
-### Free-tier models
-
-OpenRouter exposes pricing data for each model. Models with zero prompt and completion cost are labeled **free** in the output. Use `--provider openrouter` to browse free models.
+Available models come from each provider's published model list. Configure models in the `[ai]` section of `~/.config/aptu/config.toml`; see [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/CONFIGURATION.md) for provider-specific model IDs and free-tier details.
 
 ## Security
 

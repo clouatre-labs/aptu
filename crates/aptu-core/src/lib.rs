@@ -47,7 +47,7 @@ pub use config::{
 pub use ai::types::{
     IssueComment, IssueDetails, PrDetails, PrFile, PrReviewResponse, ReviewEvent, TriageResponse,
 };
-pub use ai::{AiClient, AiModel, ModelProvider, ProviderConfig, all_providers, get_provider};
+pub use ai::{AiClient, ProviderConfig, all_providers, get_provider};
 
 // ============================================================================
 // GitHub Integration
@@ -104,7 +104,7 @@ pub use facade::issues::WriteOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 pub use facade::{
     analyze_issue, analyze_pr, apply_triage_labels, fetch_issue_for_triage, fetch_pr_for_review,
-    label_pr, list_models, post_pr_review, post_triage_comment, validate_model,
+    label_pr, post_pr_review, post_triage_comment,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use github::issues::ApplyResult;

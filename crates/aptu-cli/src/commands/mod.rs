@@ -6,7 +6,6 @@ pub mod auth;
 pub mod common;
 pub mod completion;
 pub mod issue;
-pub mod models;
 pub mod pr;
 pub mod scan_security;
 pub mod triage;
@@ -610,40 +609,6 @@ async fn run_pr_command(
     }
 }
 
-/// Run the models command.
-async fn run_models_command(
-    models_cmd: crate::cli::ModelsCommand,
-    ctx: OutputContext,
-) -> Result<()> {
-    match models_cmd {
-        crate::cli::ModelsCommand::List {
-            provider,
-            sort,
-            min_context,
-            filter,
-        } => {
-            let spinner = maybe_spinner(&ctx, "Fetching models...");
-            if let Some(provider_name) = provider {
-                // Single provider
-                let result =
-                    models::run_list(&provider_name, sort, min_context, filter.as_deref()).await?;
-                if let Some(s) = spinner {
-                    s.finish_and_clear();
-                }
-                output::render(&result, &ctx)?;
-            } else {
-                // All providers
-                let result = models::run_list_all(filter.as_deref()).await?;
-                if let Some(s) = spinner {
-                    s.finish_and_clear();
-                }
-                output::render(&result, &ctx)?;
-            }
-            Ok(())
-        }
-    }
-}
-
 /// Run the completion command.
 fn run_completion_command(completion_cmd: &CompletionCommand, _ctx: OutputContext) -> Result<()> {
     match completion_cmd {
@@ -664,7 +629,6 @@ pub async fn run(
             run_issue_command(issue_cmd, ctx, config, inferred_repo).await
         }
         Commands::Pr(pr_cmd) => run_pr_command(pr_cmd, ctx, config, inferred_repo).await,
-        Commands::Models(models_cmd) => run_models_command(models_cmd, ctx).await,
         Commands::Completion(completion_cmd) => run_completion_command(&completion_cmd, ctx),
         Commands::ScanSecurity {
             path,

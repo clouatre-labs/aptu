@@ -2,7 +2,7 @@
 
 Config file: `~/.config/aptu/config.toml`
 
-> **Note:** Model names in examples are illustrative and may not reflect current defaults or available models. Use `aptu models list` to discover currently available models from your configured providers.
+> **Note:** Model names in examples are illustrative and may not reflect current defaults or available models. See your provider's published model list to discover currently available models from your configured providers.
 
 ```toml
 [ai]
@@ -172,7 +172,7 @@ Flags can be used independently (`--model` alone uses configured provider). CLI 
 
 ## AI Provider Setup
 
-Model IDs and pricing change frequently. Use `aptu models list` to discover available models from any configured provider.
+Model IDs and pricing change frequently. See your provider's published model list to discover available models from any configured provider.
 
 Aptu supports multiple AI providers. Choose the one that works best for you:
 
@@ -214,7 +214,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    model = "gemini-3.1-flash-lite"
    ```
 
-Use `aptu models list --provider gemini` to discover current model IDs.
+See Google's published Gemini model list to discover current model IDs.
 
 **Free Tier:** Available with Google AI Studio account; see Google AI Studio for current limits
 

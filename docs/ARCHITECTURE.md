@@ -79,7 +79,6 @@ The `ReviewContext` struct centralises all enrichment decisions: AST context, ca
 |------|-------------|
 | `ai_client.rs` | AI client construction and fallback-chain helpers |
 | `issues.rs` | `analyze_issue()`, `fetch_issue_for_triage()`, `post_triage_comment()`, `apply_triage_labels()` |
-| `models.rs` | `list_models()`, `validate_model()` |
 | `pr_review.rs` | `fetch_pr_for_review()`, `analyze_pr()`, `post_pr_review()`, `label_pr()` |
 
 Each function accepts a `&dyn TokenProvider` for credential resolution. Functions that require OS I/O (keyring, filesystem, process spawning) are `#[cfg(not(target_arch = "wasm32"))]`-gated; the `wasm_unsupported!` macro in `facade/mod.rs` provides uniform stub bodies for the wasm32 target.

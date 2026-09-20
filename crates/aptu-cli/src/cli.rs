@@ -35,21 +35,6 @@ const COMPLETION_GENERATE_HELP: &str = r#"EXAMPLES
       aptu completion generate powershell | Out-String | Invoke-Expression
 "#;
 
-/// Extended help text for the models list subcommand with usage examples.
-const MODELS_LIST_HELP: &str = "EXAMPLES
-
-  List models from all providers:
-    aptu models list
-
-  List models from a specific provider:
-    aptu models list --provider openrouter
-
-  Sort by context window size:
-    aptu models list --provider gemini --sort context
-
-  Filter to models with at least 100k context:
-    aptu models list --provider gemini --min-context 100000";
-
 /// Output format for CLI results.
 #[derive(Clone, Copy, Default, ValueEnum)]
 pub enum OutputFormat {
@@ -198,10 +183,6 @@ pub enum Commands {
     /// Work with pull requests
     #[command(subcommand)]
     Pr(PrCommand),
-
-    /// List AI models from providers
-    #[command(subcommand)]
-    Models(ModelsCommand),
 
     /// Generate or install shell completion scripts
     #[command(subcommand)]
@@ -385,38 +366,5 @@ pub enum PrCommand {
         /// Maximum number of PRs to display (0 = no limit)
         #[arg(long, default_value = "10")]
         limit: u32,
-    },
-}
-
-/// Sort order for models list
-#[derive(Clone, Copy, Default, ValueEnum)]
-pub enum SortBy {
-    /// Sort alphabetically by model name (default)
-    #[default]
-    Name,
-    /// Sort by context window size (largest first)
-    Context,
-}
-
-/// AI models subcommands
-#[derive(Subcommand)]
-pub enum ModelsCommand {
-    /// List available AI models from a provider (or all providers if not specified)
-    #[command(after_long_help = MODELS_LIST_HELP)]
-    List {
-        /// AI provider name (e.g., "openrouter", "openai"). If not specified, shows all providers.
-        #[arg(long)]
-        provider: Option<String>,
-
-        /// Sort models by field (name or context)
-        #[arg(long, value_enum, default_value = "name")]
-        sort: SortBy,
-
-        /// Filter models by minimum context window size (in tokens)
-        #[arg(long)]
-        min_context: Option<u32>,
-        /// Filter models by name or id (case-insensitive substring match)
-        #[arg(long)]
-        filter: Option<String>,
     },
 }
