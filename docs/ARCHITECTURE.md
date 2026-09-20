@@ -56,6 +56,7 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Z.A
 - Manages provider-specific API endpoints and authentication
 - Handles rate limiting via `backon` retry strategy
 - Model-tier routing selects `small_model` or `large_model` based on estimated prompt size, enabling automatic escalation for large PRs
+- When a response is truncated (`finish_reason=length`), the HTTP layer retries the same request with an escalated `max_tokens` budget (capped at a conservative provider-agnostic ceiling) instead of failing
 
 ### PR Review Pipeline
 
@@ -68,6 +69,7 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Z.A
 5. Dependency enrichment: if the PR bumps dependencies, fetch upstream GitHub Release notes for up to `max_dep_packages` packages and include summaries in context (controlled by `ReviewConfig`)
 6. Enforce prompt budget (`max_prompt_chars`): drop sections in order (`call_graph` -> `ast_context` -> `dep_enrichments` -> file `full_content` -> file patches) until budget is met
 7. Post inline review comments via GitHub REST API
+8. Post or update the review summary as an issue comment: the summary carries an `<!-- APTU_REVIEW:<sha> -->` marker keyed to the PR head SHA. An existing Aptu bot summary for the same head SHA is left untouched (dedup); a summary for a different or unknown SHA is updated in place; a missing summary is created after the review posts
 
 The `ReviewContext` struct centralises all enrichment decisions: AST context, call graph, instructions, dependency release notes, and budget enforcement are all managed there before the prompt is assembled. Repo-path is inferred from CWD when not explicitly supplied via `--repo-path`.
 
@@ -84,6 +86,8 @@ The `ReviewContext` struct centralises all enrichment decisions: AST context, ca
 Each function accepts a `&dyn TokenProvider` for credential resolution. Functions that require OS I/O (keyring, filesystem, process spawning) are `#[cfg(not(target_arch = "wasm32"))]`-gated; the `wasm_unsupported!` macro in `facade/mod.rs` provides uniform stub bodies for the wasm32 target.
 
 Write operations (triage comment, labels, PR review) are gated on viewer permission and yield `WriteOutcome::Skipped` when the viewer lacks write access. Permission lookups are memoized process-wide with a 60s TTL.
+
+AI client construction and fallback-provider resolution live in `facade/ai_client.rs`: the `[ai.fallback]` config section defines an ordered chain of fallback entries (provider name or `{provider, model}`), each with its own client so a failing primary provider can be retried downstream.
 
 ### AstContextOutput
 

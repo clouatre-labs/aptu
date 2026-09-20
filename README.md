@@ -50,7 +50,6 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 | Observability | - | Yes | Yes |
 | Model-Tier Routing | - | Yes | Yes |
 | Multiple Outputs | - | Yes | - |
-| Local History | - | Yes | - |
 | Claude OAuth | - | Yes | - |
 | Permission-Aware Triage/Review Writes | Yes | Yes | Yes |
 
@@ -146,7 +145,15 @@ See [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs
 
 ## Models
 
-Available models come from each provider's published model list. Configure models in the `[ai]` section of `~/.config/aptu/config.toml`; see [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/CONFIGURATION.md) for provider-specific model IDs and free-tier details.
+The interactive `aptu models list` command has been removed. To choose a model, see your provider's model catalog (Anthropic Console, Google AI Studio, openrouter.ai/models, or the Z.AI model docs at docs.z.ai) and set `provider` and `model` in the `[ai]` section of `~/.config/aptu/config.toml`:
+
+```toml
+[ai]
+provider = "openrouter"
+model = "mistralai/mistral-small-2603"
+```
+
+See [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs/CONFIGURATION.md) for provider setup and task-specific model overrides.
 
 ## Security
 

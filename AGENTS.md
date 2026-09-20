@@ -12,7 +12,7 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 
 - `aptu-cli` - CLI interface (Clap derive); binary: `aptu`
 - `aptu-core` - Core library: AI providers, GitHub API, security scanner, triage engine, cache, contribution recording, retry, bulk processing
-  - `facade/` - High-level CLI/FFI entry points (ai_client, issues, models, pr_create, pr_review, revert)
+  - `facade/` - High-level CLI/FFI entry points (ai_client, issues, models, pr_review)
 
 ## Config & Data Paths (XDG)
 
@@ -38,7 +38,7 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 ### AI & Transport
 
 - All providers share an OpenAI-compatible interface; registry in `aptu-core::ai::registry`; circuit breaker in `aptu-core::ai::circuit_breaker`
-- `AiProvider` trait (`ai/provider/mod.rs`) splits operation logic across `provider/{triage,review,label,create,http,parse}.rs`
+- `AiProvider` trait (`ai/provider/mod.rs`) splits operation logic across `provider/{triage,review,label,http,parse}.rs`
 - User-prompt builders live in `ai/prompts/mod.rs`; do not inline them in provider files
 - Exponential backoff retry with `is_retryable_*` helpers in `aptu-core::retry`
 - Bulk processing via `aptu-core::process_bulk` (concurrent triage/review with progress callbacks)
