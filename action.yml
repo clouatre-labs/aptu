@@ -51,22 +51,6 @@ inputs:
     required: false
     default: 'inception/mercury-2'
 
-  # --- Privacy controls ---
-  openrouter-data-collection:
-    description: >
-      OpenRouter data collection policy: "deny" (default) or "allow".
-      When set to "deny", OpenRouter is instructed not to retain or use
-      prompts and outputs for training. Only affects the OpenRouter provider.
-    required: false
-    default: 'deny'
-  openrouter-zdr:
-    description: >
-      OpenRouter Zero Data Retention flag (default: true).
-      When true, OpenRouter is instructed to enforce zero data retention.
-      Only affects the OpenRouter provider.
-    required: false
-    default: 'true'
-
   # --- Behavior flags (alphabetical) ---
   apply-labels:
     description: Apply AI-suggested labels and milestone (issue triage and PR review)
@@ -138,14 +122,6 @@ inputs:
       Set to an explicit path to override CWD inference.
     required: false
     default: ''
-  deep:
-    description: >
-      Force cross-file call graph context in PR review unconditionally. When omitted, call
-      graph is auto-enabled when budget_remaining (= max_prompt_chars minus the pre-call-graph
-      prompt size estimate) exceeds min-budget-for-call-graph. Set to 'true' to always
-      include call graph regardless of available budget.
-    required: false
-    default: 'false'
   max-prompt-chars:
     description: >
       Total prompt character budget for PR review. When the assembled prompt exceeds
@@ -160,64 +136,6 @@ inputs:
       Maps to [review] max_full_content_files in config.toml.
     required: false
     default: '10'
-  max-chars-per-file:
-    description: >
-      Maximum characters of full file content included per file in the review prompt.
-      Maps to [review] max_chars_per_file in config.toml.
-    required: false
-    default: '16000'
-  max-diff-chars:
-    description: >
-      Maximum total diff characters across all files in the review prompt.
-      Diffs exceeding this limit are dropped from the prompt before assembly.
-      Maps to [review] max_diff_chars in config.toml.
-    required: false
-    default: '200000'
-  max-patch-chars-per-file:
-    description: >
-      Maximum characters for an individual file patch in the review prompt.
-      File patches exceeding this limit are dropped entirely rather than sliced mid-hunk.
-      Maps to [review] max_patch_chars_per_file in config.toml.
-    required: false
-    default: '10000'
-  max-instructions-chars:
-    description: >
-      Maximum characters of instructions file content included in the review prompt.
-      Maps to [review] max_instructions_chars in config.toml.
-    required: false
-    default: '1500'
-  min-budget-for-call-graph:
-    description: >
-      Minimum remaining prompt budget (chars) to auto-enable call-graph enrichment.
-      budget_remaining = max-prompt-chars minus the pre-call-graph prompt size estimate;
-      call graph is built only when budget_remaining > this value (strict greater-than).
-      Setting this above half of max-prompt-chars means call graph rarely fires;
-      setting it >= max-prompt-chars disables auto-enable entirely (use deep: true instead).
-      Set to 0 to always include call graph when repo-path is available.
-      Maps to [review] min_budget_for_call_graph in config.toml.
-    required: false
-    default: '20000'
-  max-dep-packages:
-    description: >
-      Maximum number of dependency bump packages for which upstream release notes
-      are fetched and included in the review prompt.
-      Maps to [review] max_dep_packages in config.toml.
-    required: false
-    default: '3'
-  max-dep-release-chars:
-    description: >
-      Maximum characters of upstream release notes included per dependency package.
-      Maps to [review] max_dep_release_chars in config.toml.
-    required: false
-    default: '2000'
-  max-diff-bytes:
-    description: >
-      Maximum bytes for the raw PR diff; prompt-injection defence pre-check applied
-      before prompt assembly. Raise for large refactor PRs.
-      Maps to [prompt] max_diff_bytes in config.toml.
-    required: false
-    default: '524288'
-
   # --- Scan security ---
   scan-path:
     description: >
@@ -238,13 +156,6 @@ inputs:
       threshold. Leave empty to keep the scan non-blocking (advisory only).
     required: false
     default: ''
-  scan-exclude:
-    description: >
-      Comma-or-newline-separated path prefixes to exclude from aptu scan-security
-      (e.g. examples/,vendor/). Each entry is passed as a separate --exclude flag.
-      Leave empty to scan every non-ignored path.
-    required: false
-    default: ''
   sarif-upload:
     description: >
       Set to 'false' to skip uploading the SARIF report to code scanning. Use when
@@ -252,14 +163,6 @@ inputs:
       that uploads SARIF itself). Defaults to 'true'.
     required: false
     default: 'true'
-
-  # --- PR queue ---
-  pr-queue:
-    description: >
-      Run aptu pr queue to output a ranked reviewability list of open PRs.
-      Useful for workflow_dispatch or scheduled summary workflows.
-    required: false
-    default: 'false'
 
   # --- Telemetry rollup ---
   telemetry-rollup:
@@ -279,35 +182,8 @@ inputs:
     required: false
     default: '.aptu/telemetry-rollup.jsonl'
 
-  # --- Routing (legacy) ---
-  command:
-    description: Command to run (issue or pr)
-    required: false
-    default: 'issue'
-  subcommand:
-    description: Subcommand to run (triage for issue, label or review for pr)
-    required: false
-    default: 'triage'
 
 outputs:
-  input-tokens:
-    description: Total input tokens consumed across all AI calls in this run
-    value: ${{ steps.metrics-aggregate.outputs.input_tokens }}
-  output-tokens:
-    description: Total output tokens consumed across all AI calls in this run
-    value: ${{ steps.metrics-aggregate.outputs.output_tokens }}
-  duration-ms:
-    description: Total AI call duration in milliseconds
-    value: ${{ steps.metrics-aggregate.outputs.duration_ms }}
-  cost-usd:
-    description: Estimated total cost in USD (provider-dependent, may be empty)
-    value: ${{ steps.metrics-aggregate.outputs.cost_usd }}
-  effective-token-units:
-    description: Effective Token Units (normalized throughput signal)
-    value: ${{ steps.metrics-aggregate.outputs.effective_token_units }}
-  cache-hit-ratio:
-    description: Cache hit ratio as integer percent (cache_read / (input + cache_read)), or n/a
-    value: ${{ steps.metrics-aggregate.outputs.cache_hit_ratio }}
   pr-review-outcome:
     description: Real outcome of the aptu PR review step (success or failure), independent of continue-on-error
     value: ${{ steps.pr-review.outputs.outcome }}
@@ -341,6 +217,10 @@ runs:
         INPUT_FALLBACK_MODEL: ${{ inputs.fallback-model }}
       run: |
         mkdir -p "$HOME/.config/aptu"
+        if [[ -f "$HOME/.config/aptu/config.toml" ]]; then
+          echo "Config file already exists, skipping (user-managed config wins)"
+          exit 0
+        fi
         printf '[ai.fallback]\nchain = [{ provider = "%s", model = "%s" }]\n' \
           "$INPUT_FALLBACK_PROVIDER" "$INPUT_FALLBACK_MODEL" \
           > "$HOME/.config/aptu/config.toml"
@@ -436,8 +316,6 @@ runs:
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
-        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
-        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         DRY_RUN: ${{ inputs.dry-run }}
         NO_COMMENT: ${{ inputs.no-comment }}
@@ -480,8 +358,6 @@ runs:
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
-        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
-        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         DRY_RUN: ${{ inputs.dry-run }}
         ISSUE_STATE: ${{ inputs.issue-state }}
@@ -522,8 +398,6 @@ runs:
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
-        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
-        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
         DRY_RUN: ${{ inputs.dry-run }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
@@ -559,24 +433,13 @@ runs:
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
-        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
-        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
-        DEEP: ${{ inputs.deep }}
         DRY_RUN: ${{ inputs.dry-run }}
         INSTRUCTIONS_FILE: ${{ inputs.instructions-file }}
         NO_COMMENT: ${{ inputs.no-comment }}
         REPO_PATH: ${{ inputs.repo-path }}
         APTU_REVIEW__MAX_PROMPT_CHARS: ${{ inputs.max-prompt-chars }}
         APTU_REVIEW__MAX_FULL_CONTENT_FILES: ${{ inputs.max-full-content-files }}
-        APTU_REVIEW__MAX_CHARS_PER_FILE: ${{ inputs.max-chars-per-file }}
-        APTU_REVIEW__MAX_DIFF_CHARS: ${{ inputs.max-diff-chars }}
-        APTU_REVIEW__MAX_PATCH_CHARS_PER_FILE: ${{ inputs.max-patch-chars-per-file }}
-        APTU_REVIEW__MAX_INSTRUCTIONS_CHARS: ${{ inputs.max-instructions-chars }}
-        APTU_REVIEW__MIN_BUDGET_FOR_CALL_GRAPH: ${{ inputs.min-budget-for-call-graph }}
-        APTU_REVIEW__MAX_DEP_PACKAGES: ${{ inputs.max-dep-packages }}
-        APTU_REVIEW__MAX_DEP_RELEASE_CHARS: ${{ inputs.max-dep-release-chars }}
-        APTU_PROMPT__MAX_DIFF_BYTES: ${{ inputs.max-diff-bytes }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
         APTU_CONTEXT_FILE: ${{ runner.temp }}/aptu-review-context.jsonl
       run: |
@@ -605,9 +468,6 @@ runs:
         if [[ -n "$REPO_PATH" ]]; then
           ARGS+=(--repo-path "$REPO_PATH")
         fi
-        if [[ "$DEEP" == "true" && -n "$REPO_PATH" ]]; then
-          ARGS+=(--deep)
-        fi
         if [[ -n "$INSTRUCTIONS_FILE" ]]; then
           ARGS+=(--instructions-file "$INSTRUCTIONS_FILE")
         fi
@@ -634,25 +494,18 @@ runs:
         SCAN_DIFF: ${{ inputs.scan-security-diff }}
         SCAN_PATH: ${{ inputs.scan-path }}
         FAIL_ON: ${{ inputs.fail-on }}
-        SCAN_EXCLUDE: ${{ inputs.scan-exclude }}
       run: |
         set -e
         FAIL_ON_ARGS=()
         if [[ -n "$FAIL_ON" ]]; then
           FAIL_ON_ARGS+=(--fail-on "$FAIL_ON")
         fi
-        EXCLUDE_ARGS=()
-        if [[ -n "$SCAN_EXCLUDE" ]]; then
-          while IFS= read -r prefix; do
-            [[ -n "$prefix" ]] && EXCLUDE_ARGS+=(--exclude "$prefix")
-          done < <(echo "$SCAN_EXCLUDE" | tr ',' '\n')
-        fi
         if [[ -n "$SCAN_DIFF" ]]; then
-          echo "Running: aptu scan-security --diff $SCAN_DIFF --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]} ${EXCLUDE_ARGS[*]}"
-          aptu scan-security --diff "$SCAN_DIFF" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}" "${EXCLUDE_ARGS[@]}"
+          echo "Running: aptu scan-security --diff $SCAN_DIFF --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]}"
+          aptu scan-security --diff "$SCAN_DIFF" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}"
         else
-          echo "Running: aptu scan-security $SCAN_PATH --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]} ${EXCLUDE_ARGS[*]}"
-          aptu scan-security "$SCAN_PATH" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}" "${EXCLUDE_ARGS[@]}"
+          echo "Running: aptu scan-security $SCAN_PATH --output github-annotations --sarif-output findings.sarif ${FAIL_ON_ARGS[*]}"
+          aptu scan-security "$SCAN_PATH" --output github-annotations --sarif-output findings.sarif "${FAIL_ON_ARGS[@]}"
         fi
 
     - name: Upload SARIF report
@@ -663,66 +516,6 @@ runs:
         sarif_file: findings.sarif
         category: aptu-scan-security
         token: ${{ inputs.github-token || github.token }}
-
-    - name: Run aptu pr queue
-      if: inputs.pr-queue == 'true'
-      continue-on-error: true
-      shell: bash
-      env:
-        REPO: ${{ github.repository }}
-        GH_TOKEN: ${{ inputs.github-token || github.token }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        APTU_AI__PROVIDER: ${{ inputs.provider }}
-        APTU_AI__MODEL: ${{ inputs.model }}
-        APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
-        APTU_AI__OPENROUTER_ZDR: ${{ inputs.openrouter-zdr }}
-      run: |
-        set -e
-        echo "Running: aptu pr queue --repo $REPO"
-        aptu pr queue --repo "$REPO"
-
-    - name: Aggregate metrics outputs
-      id: metrics-aggregate
-      if: always()
-      shell: bash
-      run: |
-        if ! command -v jq >/dev/null 2>&1; then
-          echo "::warning::aptu: jq not found; token usage metrics will be unavailable" >&2
-        fi
-        if [ -f "$RUNNER_TEMP/aptu-token-usage.jsonl" ]; then
-          input_tokens=$(jq -s '[.[].input_tokens] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl")
-          output_tokens=$(jq -s '[.[].output_tokens] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl")
-          duration_ms=$(jq -s '[.[].duration_ms] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl")
-          cost_usd=$(jq -s '[.[].cost_usd | select(. != null)] | if length > 0 then add else empty end' "$RUNNER_TEMP/aptu-token-usage.jsonl" 2>/dev/null || echo "")
-          echo "input_tokens=$input_tokens" >> "$GITHUB_OUTPUT"
-          echo "output_tokens=$output_tokens" >> "$GITHUB_OUTPUT"
-          echo "duration_ms=$duration_ms" >> "$GITHUB_OUTPUT"
-          echo "cost_usd=$cost_usd" >> "$GITHUB_OUTPUT"
-          
-          # Effective Token Units (sum across all records)
-          ETU=$(jq -s '[.[].effective_token_units // 0] | add // 0 | ceil' "$RUNNER_TEMP/aptu-token-usage.jsonl" 2>/tmp/jq-etu-err || { echo "::warning::aptu: jq parse failed for effective_token_units: $(cat /tmp/jq-etu-err 2>/dev/null)" >&2; echo "0"; })
-          echo "effective_token_units=$ETU" >> "$GITHUB_OUTPUT"
-          
-          # Cache hit ratio (cache_read / (input + cache_read)), as integer percent, or n/a
-          TOTAL_INPUT=$(jq -s '[.[].input_tokens // 0] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl" 2>/dev/null || echo "0")
-          TOTAL_CACHE_READ=$(jq -s '[.[].cache_read_tokens // 0] | add // 0' "$RUNNER_TEMP/aptu-token-usage.jsonl" 2>/dev/null || echo "0")
-          if [ "$TOTAL_INPUT" -gt 0 ] || [ "$TOTAL_CACHE_READ" -gt 0 ]; then
-            CACHE_PCT=$(jq -n "($TOTAL_CACHE_READ / ($TOTAL_INPUT + $TOTAL_CACHE_READ) * 100) | round" 2>/tmp/jq-cache-err || { echo "::warning::aptu: jq parse failed for cache_hit_ratio: $(cat /tmp/jq-cache-err 2>/dev/null)" >&2; echo "0"; })
-            echo "cache_hit_ratio=${CACHE_PCT}%" >> "$GITHUB_OUTPUT"
-          else
-            echo "cache_hit_ratio=n/a" >> "$GITHUB_OUTPUT"
-          fi
-        else
-          echo "input_tokens=0" >> "$GITHUB_OUTPUT"
-          echo "output_tokens=0" >> "$GITHUB_OUTPUT"
-          echo "duration_ms=0" >> "$GITHUB_OUTPUT"
-          echo "cost_usd=" >> "$GITHUB_OUTPUT"
-          echo "effective_token_units=0" >> "$GITHUB_OUTPUT"
-          echo "cache_hit_ratio=n/a" >> "$GITHUB_OUTPUT"
-        fi
 
     - name: Write token usage summary
       if: always()
