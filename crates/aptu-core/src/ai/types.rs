@@ -457,6 +457,11 @@ pub struct PrReviewCommentDetails {
     pub id: u64,
     /// Comment author username.
     pub author: String,
+    /// True when the author account is a bot/GitHub App (`user.type == "Bot"`).
+    /// GitHub only sets this type on bot accounts, so it cannot be spoofed by a
+    /// human posting a marker comment.
+    #[serde(default)]
+    pub is_bot: bool,
     /// Comment body.
     pub body: String,
     /// File path the comment applies to.

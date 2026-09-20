@@ -307,6 +307,7 @@ async fn fetch_pr_comments(
             Some(crate::ai::types::PrReviewCommentDetails {
                 id: c.id.0,
                 author: c.user.as_ref().map(|u| u.login.clone()).unwrap_or_default(),
+                is_bot: c.user.as_ref().is_some_and(|u| u.r#type.as_str() == "Bot"),
                 body: c.body.clone(),
                 path: c.path,
                 line: c.line,
@@ -2110,6 +2111,7 @@ mod tests {
         let bot = PrReviewCommentDetails {
             id: 42,
             author: "aptu[bot]".to_string(),
+            is_bot: true,
             body: "suggestion".to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(15),
@@ -2120,6 +2122,7 @@ mod tests {
         let human = PrReviewCommentDetails {
             id: 99,
             author: "human-user".to_string(),
+            is_bot: true,
             body: "looks good".to_string(),
             path: "src/main.rs".to_string(),
             line: Some(30),

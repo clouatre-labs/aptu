@@ -339,10 +339,16 @@ fn resolve_key(
 /// `(comment id, body)` so a duplicate can be updated in place when the rendered
 /// body differs from what was previously posted.
 ///
-/// A comment is only treated as owned by Aptu when it carries the marker AND was
-/// authored by the authenticated actor (`authenticated_login`). The marker alone
-/// is spoofable: any user can post a comment starting with it. When the login
-/// cannot be resolved (`None`), nothing is treated as owned (fail safe).
+/// A comment is only treated as owned by Aptu when it carries the marker AND
+/// its author is a bot (`user.type == "Bot"`, surfaced as the `is_bot` flag on
+/// `PrReviewCommentDetails`). GitHub
+/// only assigns the `Bot` type to GitHub App / bot accounts, so a human cannot
+/// spoof ownership by posting the marker. When the authenticated login is
+/// resolvable (user PAT / OAuth token), the author must additionally match it —
+/// this keeps multiple bot accounts from clobbering each other. When the login
+/// cannot be resolved (GitHub App installation token), any Bot-type author
+/// carrying the marker is accepted; the worst case is another bot's marker
+/// comment being updated in place, a documented and acceptable tradeoff.
 fn build_dedup_map(
     comments: &[crate::ai::types::PrReviewCommentDetails],
     authenticated_login: Option<&str>,
@@ -354,7 +360,8 @@ fn build_dedup_map(
                 .trim_start()
                 .starts_with(crate::triage::REVIEW_COMMENT_MARKER)
         })
-        .filter(|c| authenticated_login.is_some_and(|login| c.author == login))
+        .filter(|c| c.is_bot)
+        .filter(|c| authenticated_login.is_none_or(|login| c.author == login))
         .filter_map(|c| {
             resolve_key(&c.path, c.line, c.original_line, c.side.clone())
                 .map(|key| (key, (c.id, c.body.clone())))
@@ -456,14 +463,17 @@ pub async fn post_pr_review(
     // Comments with no usable line (line=None and original_line=None; general PR
     // comments) are excluded from the dedup map (they will never match an inline
     // comment which always has a line). Ownership requires BOTH the body marker
-    // AND authorship by the authenticated actor; if the login cannot be resolved,
-    // nothing is treated as owned (fail safe, no PATCHing of foreign comments).
+    // AND a Bot-type author (`user.type == "Bot"`, which GitHub only assigns to
+    // bot/GitHub App accounts, so humans cannot spoof it). When the authenticated
+    // login is resolvable (user PAT / OAuth token), the author must additionally
+    // match it; when it is not (installation token), any Bot-type author carrying
+    // the marker is accepted so dedup still works (see #1639).
     let authenticated_login = match client.current().user().await {
         Ok(user) => Some(user.login),
         Err(e) => {
             tracing::warn!(
                 error = %e,
-                "Could not resolve authenticated user; treating no existing comments as owned"
+                "Could not resolve authenticated user; accepting any Bot-type marker comment as owned"
             );
             None
         }
@@ -912,6 +922,7 @@ mod tests {
         let quoted = PrReviewCommentDetails {
             id: 1,
             author: "human".to_string(),
+            is_bot: false,
             body: "Why does this say <!-- APTU_REVIEW_COMMENT --> in the middle?".to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
@@ -926,6 +937,7 @@ mod tests {
 
         let anchored = PrReviewCommentDetails {
             author: TEST_BOT_LOGIN.to_string(),
+            is_bot: true,
             body: format!(
                 "{}\nReal bot feedback",
                 crate::triage::REVIEW_COMMENT_MARKER
@@ -945,6 +957,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 1,
             author: "aptu[bot]".to_string(),
+            is_bot: true,
             body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
@@ -989,6 +1002,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 1,
             author: "aptu[bot]".to_string(),
+            is_bot: true,
             body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
             path: "src/old.rs".to_string(),
             line: Some(10),
@@ -1021,6 +1035,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 1,
             author: "aptu[bot]".to_string(),
+            is_bot: true,
             body: "Existing general PR comment".to_string(),
             path: "src/lib.rs".to_string(),
             line: None,
@@ -1056,6 +1071,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 42,
             author: "aptu[bot]".to_string(),
+            is_bot: true,
             body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
@@ -1099,6 +1115,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 7,
             author: "aptu[bot]".to_string(),
+            is_bot: true,
             body: format!("{}\nSame feedback", crate::triage::REVIEW_COMMENT_MARKER),
             path: "src/lib.rs".to_string(),
             line: Some(10),
@@ -1128,11 +1145,13 @@ mod tests {
 
     #[test]
     fn test_dedup_excludes_foreign_author_with_marker() {
-        // Marker alone is spoofable: a comment authored by a foreign user but
-        // carrying the marker must NOT be treated as owned.
-        let foreign = vec![PrReviewCommentDetails {
+        // Ownership requires a Bot-type author: a comment authored by a human
+        // user carrying the marker must NOT be treated as owned, even when the
+        // login matches or is unresolvable.
+        let spoof = vec![PrReviewCommentDetails {
             id: 9,
             author: "spoofing-user".to_string(),
+            is_bot: false,
             body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Revised feedback").to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
@@ -1140,20 +1159,25 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: None,
         }];
-        let dedup = build_dedup_map(&foreign, Some(TEST_BOT_LOGIN));
         assert!(
-            dedup.is_empty(),
-            "foreign author with marker must not populate map"
+            build_dedup_map(&spoof, Some(TEST_BOT_LOGIN)).is_empty(),
+            "human author with marker must not populate map"
+        );
+        assert!(
+            build_dedup_map(&spoof, None).is_empty(),
+            "human author with marker must not populate map even without a resolvable login"
         );
     }
 
     #[test]
-    fn test_dedup_fails_safe_when_login_unresolvable() {
-        // Fail safe: when the authenticated login cannot be resolved (API error),
-        // no comment is treated as owned and the map stays empty.
+    fn test_dedup_bot_author_with_unresolvable_login_is_owned() {
+        // Installation-token path (#1639): `current().user()` fails under a
+        // GitHub App installation token, but a Bot-type comment carrying the
+        // marker must still be treated as owned so dedup works.
         let existing = vec![PrReviewCommentDetails {
             id: 10,
             author: TEST_BOT_LOGIN.to_string(),
+            is_bot: true,
             body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
@@ -1162,19 +1186,22 @@ mod tests {
             original_line: None,
         }];
         let dedup = build_dedup_map(&existing, None);
-        assert!(
-            dedup.is_empty(),
-            "unresolvable login must yield an empty dedup map"
+        assert_eq!(
+            dedup.len(),
+            1,
+            "Bot-type author with marker must populate the map when the login is unresolvable"
         );
     }
 
     #[test]
-    fn test_dedup_under_user_token_login() {
-        // Under a user PAT the authenticated actor is the user's own login; a
-        // comment authored by that same login and carrying the marker is owned.
+    fn test_dedup_bot_author_with_matching_login_is_owned() {
+        // User-token path: when the authenticated login is resolvable, a
+        // Bot-type comment carrying the marker is owned only when the author
+        // matches the authenticated login (multi-app safety).
         let existing = vec![PrReviewCommentDetails {
             id: 11,
-            author: "human-reviewer".to_string(),
+            author: TEST_BOT_LOGIN.to_string(),
+            is_bot: true,
             body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
@@ -1182,11 +1209,14 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: None,
         }];
-        let dedup = build_dedup_map(&existing, Some("human-reviewer"));
         assert_eq!(
-            dedup.len(),
+            build_dedup_map(&existing, Some(TEST_BOT_LOGIN)).len(),
             1,
-            "comment authored by the authenticated user login must populate the map"
+            "Bot-type author matching the authenticated login must populate the map"
+        );
+        assert!(
+            build_dedup_map(&existing, Some("other-bot")).is_empty(),
+            "Bot-type author NOT matching the authenticated login must not populate the map"
         );
     }
 
@@ -1213,6 +1243,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 3,
             author: "aptu[bot]".to_string(),
+            is_bot: true,
             body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Old body").to_string(),
             path: "src/lib.rs".to_string(),
             line: None,
@@ -1248,6 +1279,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 1,
             author: "aptu[bot]".to_string(),
+            is_bot: true,
             body: "General PR comment".to_string(),
             path: "src/lib.rs".to_string(),
             line: None,
