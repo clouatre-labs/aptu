@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use aptu_core::triage::render_triage_markdown;
 use console::style;
 use std::io::{self, Write};
 
@@ -220,17 +219,6 @@ impl Renderable for TriageResult {
                 writeln!(w, "  - {warning}")?;
             }
         }
-        Ok(())
-    }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        // Include issue title/number in header for CLI markdown output
-        writeln!(
-            w,
-            "## Triage for #{}: {}\n",
-            self.issue_number, self.issue_title
-        )?;
-        write!(w, "{}", render_triage_markdown(&self.triage))?;
         Ok(())
     }
 }

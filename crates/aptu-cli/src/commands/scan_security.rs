@@ -163,12 +163,7 @@ fn emit_output(
                 .map_err(|e| anyhow::anyhow!("Failed to serialize findings to JSON: {e}"))?;
             println!("{json}");
         }
-        OutputFormat::Yaml => {
-            let yaml = serde_saphyr::to_string(&findings.to_vec())
-                .map_err(|e| anyhow::anyhow!("Failed to serialize findings to YAML: {e}"))?;
-            println!("{yaml}");
-        }
-        OutputFormat::Text | OutputFormat::Markdown => {
+        OutputFormat::Text => {
             if findings.is_empty() {
                 println!("No security findings.");
             } else {

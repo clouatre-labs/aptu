@@ -30,22 +30,6 @@ impl Renderable for AuthStatusResult {
         writeln!(w)?;
         Ok(())
     }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "## Authentication Status\n")?;
-        if self.authenticated {
-            writeln!(w, "**Status:** Authenticated")?;
-            if let Some(ref method) = self.method {
-                writeln!(w, "**Method:** {method}")?;
-            }
-            if let Some(ref username) = self.username {
-                writeln!(w, "**Username:** {username}")?;
-            }
-        } else {
-            writeln!(w, "**Status:** Not authenticated")?;
-        }
-        Ok(())
-    }
 }
 
 impl Renderable for AuthActionResult {

@@ -40,34 +40,6 @@ impl Renderable for RevertResult {
         Ok(())
     }
 
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "## {}", self.summary)?;
-        writeln!(w)?;
-
-        if !self.labels_removed.is_empty() {
-            writeln!(w, "### Labels Removed")?;
-            writeln!(w)?;
-            for label in &self.labels_removed {
-                writeln!(w, "- `{label}`")?;
-            }
-            writeln!(w)?;
-        }
-
-        if !self.comment_ids.is_empty() {
-            writeln!(w, "### Comments Removed")?;
-            writeln!(w)?;
-            for comment_id in &self.comment_ids {
-                writeln!(w, "- #{comment_id}")?;
-            }
-            writeln!(w)?;
-        }
-
-        if self.dry_run {
-            writeln!(w, "**(dry-run: no changes were made)**")?;
-        }
-
-        Ok(())
-    }
     // Note: JSON output is handled by the generic Renderable impl via serde serialization.
     // RevertResult derives Serialize, so serde_json::to_string_pretty is used automatically
     // in the render function (crates/aptu-cli/src/output/mod.rs:30).

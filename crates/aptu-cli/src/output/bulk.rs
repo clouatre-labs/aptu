@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use comfy_table::{ContentArrangement, Table, presets::ASCII_MARKDOWN};
+use comfy_table::{ContentArrangement, Table};
 use console::style;
 use std::io::{self, Write};
 
@@ -52,28 +52,6 @@ impl Renderable for BulkTriageResult {
 
         Ok(())
     }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w)?;
-        writeln!(w, "## Bulk Triage Summary")?;
-        writeln!(w)?;
-        writeln!(w, "- Succeeded: {}", self.succeeded)?;
-        writeln!(w, "- Failed: {}", self.failed)?;
-        writeln!(w, "- Skipped: {}", self.skipped)?;
-        writeln!(
-            w,
-            "- Total: {}",
-            self.succeeded + self.failed + self.skipped
-        )?;
-        writeln!(w)?;
-
-        // Render markdown table if dry-run
-        if self.has_dry_run() {
-            render_dry_run_markdown_table(w, self)?;
-        }
-
-        Ok(())
-    }
 }
 
 /// Collect dry-run outcomes from bulk result.
@@ -105,35 +83,6 @@ fn render_dry_run_table(w: &mut dyn Write, result: &BulkTriageResult) -> io::Res
     let mut table = Table::new();
     table
         .set_content_arrangement(ContentArrangement::Dynamic)
-        .set_header(vec!["Issue", "Title", "Labels", "Milestone"]);
-
-    for triage_result in dry_runs {
-        table.add_row(vec![
-            format!("#{}", triage_result.issue_number),
-            triage_result.issue_title.clone(),
-            format_labels(&triage_result.triage.suggested_labels),
-            format_milestone(triage_result.triage.suggested_milestone.as_ref()),
-        ]);
-    }
-
-    writeln!(w, "{table}")?;
-    writeln!(w)?;
-    Ok(())
-}
-
-/// Render dry-run summary table in markdown format.
-fn render_dry_run_markdown_table(w: &mut dyn Write, result: &BulkTriageResult) -> io::Result<()> {
-    let dry_runs = collect_dry_runs(result);
-    if dry_runs.is_empty() {
-        return Ok(());
-    }
-
-    writeln!(w, "### Proposed Changes (Dry Run)")?;
-    writeln!(w)?;
-
-    let mut table = Table::new();
-    table
-        .load_style(ASCII_MARKDOWN)
         .set_header(vec!["Issue", "Title", "Labels", "Milestone"]);
 
     for triage_result in dry_runs {

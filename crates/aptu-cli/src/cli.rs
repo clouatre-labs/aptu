@@ -58,10 +58,6 @@ pub enum OutputFormat {
     Text,
     /// JSON output for programmatic consumption
     Json,
-    /// YAML output for programmatic consumption
-    Yaml,
-    /// Markdown output for GitHub comments
-    Markdown,
     /// SARIF output for security scanning tools
     Sarif,
     /// GitHub Actions annotation output (`::error file=...,line=...,title=...::message`)
@@ -84,7 +80,7 @@ pub enum IssueState {
 /// Global output configuration passed to commands.
 #[derive(Clone)]
 pub struct OutputContext {
-    /// Output format (text, json, yaml)
+    /// Output format (json, github-annotations, sarif)
     pub format: OutputFormat,
     /// Suppress non-essential output (spinners, progress)
     pub quiet: bool,
@@ -96,15 +92,11 @@ pub struct OutputContext {
 
 impl OutputContext {
     /// Creates an `OutputContext` from CLI arguments.
-    /// Quiet mode is automatically enabled for structured formats (Json, Yaml, Markdown, Sarif).
+    /// Quiet mode is automatically enabled for structured formats (Json, Sarif).
     pub fn from_cli(format: OutputFormat, verbose: bool) -> Self {
         let quiet = matches!(
             format,
-            OutputFormat::Json
-                | OutputFormat::Yaml
-                | OutputFormat::Markdown
-                | OutputFormat::Sarif
-                | OutputFormat::GithubAnnotations
+            OutputFormat::Json | OutputFormat::Sarif | OutputFormat::GithubAnnotations
         );
         Self {
             format,
@@ -167,7 +159,7 @@ pub fn parse_date_to_rfc3339(date_str: &str) -> anyhow::Result<String> {
 #[command(version, about, long_about = None)]
 #[command(arg_required_else_help = true)]
 pub struct Cli {
-    /// Output format (text, json, yaml, sarif, github-annotations)
+    /// Output format (text, json, sarif, github-annotations)
     #[arg(long, short = 'o', global = true, value_enum, default_value = "text")]
     pub output: OutputFormat,
 

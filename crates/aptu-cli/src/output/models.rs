@@ -124,33 +124,6 @@ impl Renderable for ModelsResult {
         writeln!(w)?;
         Ok(())
     }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "## Models from {}\n", self.provider)?;
-
-        if self.models.is_empty() {
-            writeln!(w, "No models found.")?;
-        } else {
-            writeln!(w, "| ID | Name | Free | Context Window |")?;
-            writeln!(w, "|---|---|---|---|")?;
-
-            for model in &self.models {
-                let name = model.name.as_deref().unwrap_or("N/A");
-                let free = match model.is_free {
-                    Some(true) => "Yes",
-                    Some(false) => "No",
-                    None => "Unknown",
-                };
-                let context = model
-                    .context_window
-                    .map_or_else(|| "N/A".to_string(), |cw| format!("{cw} tokens"));
-
-                writeln!(w, "| {} | {} | {} | {} |", model.id, name, free, context)?;
-            }
-        }
-
-        Ok(())
-    }
 }
 
 impl Renderable for ModelsResultMulti {
@@ -192,42 +165,6 @@ impl Renderable for ModelsResultMulti {
                     )?;
                 }
                 writeln!(w)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "# Available AI Models\n")?;
-
-        if self.results.is_empty() {
-            writeln!(w, "No models found.")?;
-        } else {
-            for result in &self.results {
-                writeln!(w, "## {}\n", result.provider)?;
-
-                if result.models.is_empty() {
-                    writeln!(w, "No models found.\n")?;
-                } else {
-                    writeln!(w, "| ID | Name | Free | Context Window |")?;
-                    writeln!(w, "|---|---|---|---|")?;
-
-                    for model in &result.models {
-                        let name = model.name.as_deref().unwrap_or("N/A");
-                        let free = match model.is_free {
-                            Some(true) => "Yes",
-                            Some(false) => "No",
-                            None => "Unknown",
-                        };
-                        let context = model
-                            .context_window
-                            .map_or_else(|| "N/A".to_string(), |cw| format!("{cw} tokens"));
-
-                        writeln!(w, "| {} | {} | {} | {} |", model.id, name, free, context)?;
-                    }
-                    writeln!(w)?;
-                }
             }
         }
 
