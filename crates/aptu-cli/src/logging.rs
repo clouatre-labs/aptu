@@ -60,10 +60,7 @@ pub fn init_logging(format: OutputFormat, _verbose: bool) {
     let fmt_layer = fmt::layer().with_target(false).with_writer(std::io::stderr);
 
     // Derive quiet mode from format (structured formats are quiet)
-    let quiet = matches!(
-        format,
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Markdown
-    );
+    let quiet = matches!(format, OutputFormat::Json);
 
     // Default filter: suppress tracing unless RUST_LOG is set
     // Users can enable info-level metrics with RUST_LOG=aptu=info

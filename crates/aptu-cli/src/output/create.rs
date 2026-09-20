@@ -40,20 +40,4 @@ impl Renderable for CreateResult {
         writeln!(w)?;
         Ok(())
     }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "## Issue Created\n")?;
-        writeln!(w, "**Title:** {}\n", self.title)?;
-        writeln!(w, "**URL:** {}\n", self.issue_url)?;
-        if !self.suggested_labels.is_empty() {
-            writeln!(
-                w,
-                "**Suggested Labels:** {}\n",
-                self.suggested_labels.join(", ")
-            )?;
-        }
-        writeln!(w, "### Description\n")?;
-        writeln!(w, "{}", self.body)?;
-        Ok(())
-    }
 }

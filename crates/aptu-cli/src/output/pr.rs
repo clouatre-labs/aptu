@@ -117,47 +117,6 @@ impl Renderable for PrQueueResult {
 
         Ok(())
     }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        if self.prs.is_empty() {
-            writeln!(w, "No open PRs found.")?;
-            return Ok(());
-        }
-
-        writeln!(w, "## Pull Request Queue\n")?;
-        writeln!(w, "Ranked by reviewability score (60% size, 40% age)\n")?;
-
-        writeln!(w, "| Rank | Title | Author | Age | Changes | Score |")?;
-        writeln!(w, "|------|-------|--------|-----|---------|-------|")?;
-
-        for (idx, pr) in self.prs.iter().enumerate() {
-            let rank = idx + 1;
-            let title = aptu_core::utils::truncate(&pr.title, QUEUE_TITLE_MAX_CHARS);
-            let age_str = format_age(pr.age_days);
-            let changes = format!("+{}-{}", pr.additions, pr.deletions);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let score_int = (pr.score * 100.0).round() as u32;
-
-            writeln!(
-                w,
-                "| {} | {} | {} | {} | {} | {} |",
-                rank, title, pr.author, age_str, changes, score_int
-            )?;
-        }
-
-        writeln!(w)?;
-        writeln!(
-            w,
-            "Showing {} of {} open PR{} ({} draft{} excluded)",
-            self.prs.len(),
-            self.total_open,
-            if self.total_open == 1 { "" } else { "s" },
-            self.drafts_excluded,
-            if self.drafts_excluded == 1 { "" } else { "s" }
-        )?;
-
-        Ok(())
-    }
 }
 
 fn render_security_findings_text(
@@ -370,102 +329,6 @@ impl Renderable for PrReviewResult {
 
         Ok(())
     }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "## PR Review: #{} - {}", self.pr_number, self.pr_title)?;
-        writeln!(w)?;
-        writeln!(w, "**Verdict:** {}", self.review.verdict)?;
-        writeln!(w)?;
-
-        if self.files_with_patch < self.files_total {
-            writeln!(
-                w,
-                "**Coverage:** {}/{} file patches included in review context",
-                self.files_with_patch, self.files_total
-            )?;
-            writeln!(w)?;
-        }
-
-        writeln!(w, "### Summary")?;
-        writeln!(w, "{}", self.review.summary)?;
-        writeln!(w)?;
-
-        // Security Findings
-        if let Some(findings) = &self.security_findings {
-            if findings.is_empty() {
-                writeln!(w, "### Security Scan")?;
-                writeln!(w, "No issues found")?;
-                writeln!(w)?;
-            } else {
-                writeln!(w, "### Security Findings")?;
-                for finding in findings {
-                    writeln!(
-                        w,
-                        "- **[{}]** `{}:{}`",
-                        match finding.severity {
-                            aptu_core::Severity::Critical => "CRITICAL",
-                            aptu_core::Severity::High => "HIGH",
-                            aptu_core::Severity::Medium => "MEDIUM",
-                            aptu_core::Severity::Low => "LOW",
-                        },
-                        finding.file_path,
-                        finding.line_number
-                    )?;
-                    writeln!(w, "  {}", finding.description)?;
-                    if let Some(cwe) = &finding.cwe {
-                        writeln!(w, "  {cwe}")?;
-                    }
-                }
-                writeln!(w)?;
-            }
-        }
-
-        if let Some(disclaimer) = &self.review.disclaimer {
-            writeln!(w, "### Disclaimer")?;
-            writeln!(w, "> {disclaimer}")?;
-            writeln!(w)?;
-        }
-
-        if !self.review.strengths.is_empty() {
-            writeln!(w, "### Strengths")?;
-            for strength in &self.review.strengths {
-                writeln!(w, "- {strength}")?;
-            }
-            writeln!(w)?;
-        }
-
-        if !self.review.concerns.is_empty() {
-            writeln!(w, "### Concerns")?;
-            for concern in &self.review.concerns {
-                writeln!(w, "- {concern}")?;
-            }
-            writeln!(w)?;
-        }
-
-        if !self.review.comments.is_empty() {
-            writeln!(w, "### Comments")?;
-            for comment in &self.review.comments {
-                let line_info = comment.line.map_or(String::new(), |l| format!(":{l}"));
-                writeln!(
-                    w,
-                    "- **[{}]** `{}{}`",
-                    comment.severity, comment.file, line_info
-                )?;
-                writeln!(w, "  {}", comment.comment)?;
-            }
-            writeln!(w)?;
-        }
-
-        if !self.review.suggestions.is_empty() {
-            writeln!(w, "### Suggestions")?;
-            for suggestion in &self.review.suggestions {
-                writeln!(w, "- {suggestion}")?;
-            }
-            writeln!(w)?;
-        }
-
-        Ok(())
-    }
 }
 
 impl Renderable for BulkPrReviewResult {
@@ -528,38 +391,6 @@ impl Renderable for BulkPrReviewResult {
 
         Ok(())
     }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "## PR Review Summary")?;
-        writeln!(w)?;
-
-        writeln!(
-            w,
-            "- **Succeeded:** {}\n- **Failed:** {}\n- **Skipped:** {}",
-            self.succeeded, self.failed, self.skipped
-        )?;
-        writeln!(w)?;
-
-        if !self.outcomes.is_empty() {
-            writeln!(w, "### Outcomes")?;
-            for (pr_ref, outcome) in &self.outcomes {
-                match outcome {
-                    SinglePrReviewOutcome::Success(result) => {
-                        writeln!(w, "- ✓ `{pr_ref}` ({})", result.review.verdict)?;
-                    }
-                    SinglePrReviewOutcome::Skipped(reason) => {
-                        writeln!(w, "- ⊘ `{pr_ref}` ({reason})")?;
-                    }
-                    SinglePrReviewOutcome::Failed(error) => {
-                        writeln!(w, "- ✗ `{pr_ref}` ({error})")?;
-                    }
-                }
-            }
-            writeln!(w)?;
-        }
-
-        Ok(())
-    }
 }
 
 impl Renderable for PrLabelResult {
@@ -592,28 +423,6 @@ impl Renderable for PrLabelResult {
 
         Ok(())
     }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "## PR Labels: #{} - {}", self.pr_number, self.pr_title)?;
-        writeln!(w)?;
-
-        if self.dry_run {
-            writeln!(w, "**DRY RUN MODE**")?;
-            writeln!(w)?;
-        }
-
-        if self.labels.is_empty() {
-            writeln!(w, "No labels extracted")?;
-        } else {
-            writeln!(w, "### Labels")?;
-            for label in &self.labels {
-                writeln!(w, "- `{label}`")?;
-            }
-        }
-        writeln!(w)?;
-
-        Ok(())
-    }
 }
 
 impl Renderable for PrCreateResult {
@@ -630,12 +439,6 @@ impl Renderable for PrCreateResult {
             style(&self.branch).green(),
             style(&self.base).cyan()
         )?;
-        Ok(())
-    }
-
-    fn render_markdown(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w, "PR #{} created: {}", self.pr_number, self.url)?;
-        writeln!(w, "  {} -> {}", self.branch, self.base)?;
         Ok(())
     }
 }
@@ -680,59 +483,6 @@ mod tests {
             files_total: 5,
             files_with_patch: 5,
         }
-    }
-
-    #[test]
-    fn test_render_markdown_security_findings_none() {
-        let result = build_test_result(None);
-        let mut output = Vec::new();
-        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
-
-        result.render_markdown(&mut output, &ctx).unwrap();
-        let text = String::from_utf8(output).unwrap();
-
-        assert!(!text.contains("Security Scan"));
-        assert!(!text.contains("Security Findings"));
-    }
-
-    #[test]
-    fn test_render_markdown_security_findings_empty() {
-        let result = build_test_result(Some(vec![]));
-        let mut output = Vec::new();
-        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
-
-        result.render_markdown(&mut output, &ctx).unwrap();
-        let text = String::from_utf8(output).unwrap();
-
-        assert!(text.contains("### Security Scan"));
-        assert!(text.contains("No issues found"));
-    }
-
-    #[test]
-    fn test_render_markdown_security_findings_populated() {
-        let finding = aptu_core::Finding {
-            pattern_id: "test-pattern".to_string(),
-            description: "Test vulnerability".to_string(),
-            severity: aptu_core::Severity::High,
-            confidence: aptu_core::Confidence::High,
-            file_path: "src/main.rs".to_string(),
-            line_number: 42,
-            matched_text: "unsafe { }".to_string(),
-            cwe: Some("CWE-123".to_string()),
-        };
-
-        let result = build_test_result(Some(vec![finding]));
-        let mut output = Vec::new();
-        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
-
-        result.render_markdown(&mut output, &ctx).unwrap();
-        let text = String::from_utf8(output).unwrap();
-
-        assert!(text.contains("### Security Findings"));
-        assert!(text.contains("[HIGH]"));
-        assert!(text.contains("src/main.rs:42"));
-        assert!(text.contains("Test vulnerability"));
-        assert!(text.contains("CWE-123"));
     }
 
     #[test]
@@ -810,34 +560,5 @@ mod tests {
         let text = String::from_utf8(output).unwrap();
 
         assert!(!text.contains("Coverage:"));
-    }
-
-    #[test]
-    fn test_render_markdown_coverage_shown_when_patches_dropped() {
-        let mut result = build_test_result(None);
-        result.files_total = 5;
-        result.files_with_patch = 2;
-
-        let mut output = Vec::new();
-        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
-
-        result.render_markdown(&mut output, &ctx).unwrap();
-        let text = String::from_utf8(output).unwrap();
-
-        assert!(text.contains("**Coverage:** 2/5 file patches included in review context"));
-    }
-
-    #[test]
-    fn test_render_markdown_coverage_hidden_when_all_patches_included() {
-        let result = build_test_result(None);
-        // files_total: 5, files_with_patch: 5 from build_test_result
-
-        let mut output = Vec::new();
-        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Markdown, false);
-
-        result.render_markdown(&mut output, &ctx).unwrap();
-        let text = String::from_utf8(output).unwrap();
-
-        assert!(!text.contains("**Coverage:**"));
     }
 }
