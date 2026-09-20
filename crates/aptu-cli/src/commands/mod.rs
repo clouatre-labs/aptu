@@ -5,6 +5,7 @@
 pub mod auth;
 pub mod common;
 pub mod completion;
+pub mod issue;
 pub mod models;
 pub mod pr;
 pub mod scan_security;
@@ -24,17 +25,35 @@ use crate::cli::{
     OutputFormat, PrCommand,
 };
 use crate::commands::common::maybe_spinner;
-use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewOutcome};
+use crate::commands::types::{OutcomeInfo, PrReviewResult};
 use crate::output;
 use aptu_core::{AppConfig, State, check_already_triaged};
 
 /// Options for PR review behavior.
 #[allow(clippy::struct_excessive_bools)]
-struct ReviewOptions {
-    dry_run: bool,
-    yes: bool,
-    no_comment: bool,
-    no_dedup_summary: bool,
+pub(crate) struct ReviewOptions {
+    pub dry_run: bool,
+    pub yes: bool,
+    pub no_comment: bool,
+    pub no_dedup_summary: bool,
+}
+
+/// Convert a core bulk outcome into a CLI single outcome, reporting
+/// per-item errors only in Text format (silent in JSON).
+pub(crate) fn report_outcome<T: OutcomeInfo>(
+    outcome: aptu_core::BulkOutcome<T::Inner>,
+    ctx: &OutputContext,
+) -> T {
+    match outcome {
+        aptu_core::BulkOutcome::Success(result) => T::from_success(result),
+        aptu_core::BulkOutcome::Skipped(msg) => T::from_skipped(msg),
+        aptu_core::BulkOutcome::Failed(err) => {
+            if matches!(ctx.format, OutputFormat::Text) {
+                println!("  {}", style(format!("Error: {err}")).red());
+            }
+            T::from_failed(err)
+        }
+    }
 }
 
 /// Should we post a comment based on configuration and user interaction?
@@ -110,7 +129,7 @@ struct TriageConfig<'a> {
 
 #[allow(clippy::fn_params_excessive_bools)]
 #[allow(clippy::too_many_arguments)]
-async fn triage_single_issue(
+pub(crate) async fn triage_single_issue(
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
@@ -466,7 +485,7 @@ async fn run_auth_command(
 }
 
 /// Resolve issue references from --since flag.
-async fn resolve_triage_refs(
+pub(crate) async fn resolve_triage_refs(
     since: Option<String>,
     state: IssueState,
     repo_context: Option<&str>,
@@ -531,134 +550,16 @@ async fn resolve_triage_refs(
 }
 
 /// Run the issue command.
-#[allow(clippy::too_many_lines)]
 async fn run_issue_command(
     issue_cmd: IssueCommand,
     ctx: OutputContext,
     config: &AppConfig,
     inferred_repo: Option<String>,
 ) -> Result<()> {
-    match issue_cmd {
-        IssueCommand::Triage {
-            references,
-            repo,
-            since,
-            state,
-            dry_run,
-            no_apply,
-            no_comment,
-            force,
-        } => {
-            // Determine repo context: --repo flag > inferred_repo > default_repo config
-            let repo_context = repo
-                .as_deref()
-                .or(inferred_repo.as_deref())
-                .or(config.user.default_repo.as_deref());
-
-            // Resolve issue numbers from references or --since flag
-            let issue_refs = if references.is_empty() {
-                resolve_triage_refs(since, state, repo_context, force, &ctx).await?
-            } else {
-                references
-            };
-
-            if issue_refs.is_empty() {
-                if matches!(ctx.format, OutputFormat::Text) {
-                    println!("{}", style("No issues to triage.").yellow());
-                }
-                return Ok(());
-            }
-
-            // Check GitHub rate limit before triaging (only when we have issues)
-            if aptu_core::github::auth::is_authenticated() {
-                let spinner = maybe_spinner(&ctx, "Checking GitHub rate limit...");
-                let gh_client = aptu_core::github::auth::create_client()
-                    .context("Failed to create GitHub client")?;
-                let rate_limit = aptu_core::check_rate_limit(&gh_client).await?;
-                if let Some(s) = spinner {
-                    s.finish_and_clear();
-                }
-
-                if rate_limit.is_low() && matches!(ctx.format, OutputFormat::Text) {
-                    println!(
-                        "{}",
-                        style(format!("Warning: {}", rate_limit.message())).yellow()
-                    );
-                }
-            }
-
-            // Bulk triage using core processor
-            let items: Vec<(String, ())> = issue_refs.iter().map(|r| (r.clone(), ())).collect();
-
-            let ctx_for_processor = ctx.clone();
-            let ctx_for_progress = ctx.clone();
-            let repo_context_owned = repo_context.map(std::string::ToString::to_string);
-            let config_clone = config.clone();
-
-            let core_result = aptu_core::process_bulk(
-                items,
-                move |(issue_ref, ())| {
-                    let ctx = ctx_for_processor.clone();
-                    let repo_context = repo_context_owned.clone();
-                    let config = config_clone.clone();
-                    async move {
-                        triage_single_issue(
-                            &issue_ref,
-                            repo_context.as_deref(),
-                            dry_run,
-                            no_apply,
-                            no_comment,
-                            force,
-                            &ctx,
-                            &config,
-                        )
-                        .await
-                    }
-                },
-                move |current, total, action| {
-                    crate::output::common::show_progress(&ctx_for_progress, current, total, action);
-                },
-            )
-            .await;
-
-            // Convert core BulkResult to CLI BulkTriageResult
-            let mut bulk_result = types::BulkTriageResult {
-                succeeded: core_result.succeeded,
-                failed: core_result.failed,
-                skipped: core_result.skipped,
-                outcomes: Vec::new(),
-            };
-
-            for (issue_ref, outcome) in core_result.outcomes {
-                let cli_outcome = match outcome {
-                    aptu_core::BulkOutcome::Success(triage_result) => {
-                        types::SingleTriageOutcome::Success(Box::new(triage_result))
-                    }
-                    aptu_core::BulkOutcome::Skipped(msg) => {
-                        types::SingleTriageOutcome::Skipped(msg)
-                    }
-                    aptu_core::BulkOutcome::Failed(err) => {
-                        if matches!(ctx.format, OutputFormat::Text) {
-                            println!("  {}", style(format!("Error: {err}")).red());
-                        }
-                        types::SingleTriageOutcome::Failed(err)
-                    }
-                };
-                bulk_result.outcomes.push((issue_ref, cli_outcome));
-            }
-
-            // Render bulk summary (only for multiple issues)
-            if issue_refs.len() > 1 {
-                output::render(&bulk_result, &ctx)?;
-            }
-
-            Ok(())
-        }
-    }
+    issue::run(issue_cmd, ctx, config, inferred_repo).await
 }
 
 /// Run the PR command.
-#[allow(clippy::too_many_lines)]
 async fn run_pr_command(
     pr_cmd: PrCommand,
     ctx: OutputContext,
@@ -673,7 +574,7 @@ async fn run_pr_command(
             approve,
             request_changes,
             dry_run,
-            no_apply: _,
+            no_apply,
             no_comment,
             force,
             repo_path,
@@ -681,148 +582,33 @@ async fn run_pr_command(
             instructions_file,
             no_dedup_summary,
         } => {
-            let repo_path_str = repo_path.map(|p| p.to_string_lossy().into_owned());
-            let repo_context = repo
-                .as_deref()
-                .or(inferred_repo.as_deref())
-                .or(config.user.default_repo.as_deref());
-
-            // Determine review type from flags
-            let review_type = if comment {
-                Some(aptu_core::ReviewEvent::Comment)
-            } else if approve {
-                Some(aptu_core::ReviewEvent::Approve)
-            } else if request_changes {
-                Some(aptu_core::ReviewEvent::RequestChanges)
-            } else {
-                None
-            };
-
-            if references.is_empty() {
-                if matches!(ctx.format, OutputFormat::Text) {
-                    println!("{}", style("No PRs to review.").yellow());
-                }
-                return Ok(());
-            }
-
-            // Bulk PR review using core processor
-            let items: Vec<(String, ())> = references.iter().map(|r| (r.clone(), ())).collect();
-
-            let ctx_for_processor = ctx.clone();
-            let ctx_for_progress = ctx.clone();
-            let repo_context_owned = repo_context.map(std::string::ToString::to_string);
-            let mut config_clone = config.clone();
-            let repo_path_str_owned = repo_path_str.clone();
-            let instructions_file_str = instructions_file.map(|p| p.to_string_lossy().into_owned());
-
-            // Override instructions_file in config if provided via CLI
-            if let Some(path) = &instructions_file_str {
-                config_clone.review.instructions_file = Some(path.clone());
-            }
-
-            let core_result = aptu_core::process_bulk(
-                items,
-                move |(pr_ref, ())| {
-                    let ctx = ctx_for_processor.clone();
-                    let repo_context = repo_context_owned.clone();
-                    let config = config_clone.clone();
-                    let repo_path_for_review = repo_path_str_owned.clone();
-                    async move {
-                        review_single_pr(
-                            &pr_ref,
-                            repo_context.as_deref(),
-                            review_type,
-                            ReviewOptions {
-                                dry_run,
-                                yes: !ctx.is_interactive() || force,
-                                no_comment,
-                                no_dedup_summary,
-                            },
-                            &ctx,
-                            &config,
-                            repo_path_for_review,
-                            deep,
-                        )
-                        .await
-                    }
-                },
-                move |current, total, action| {
-                    crate::output::common::show_progress(&ctx_for_progress, current, total, action);
-                },
+            pr::run_review(
+                references,
+                repo,
+                comment,
+                approve,
+                request_changes,
+                dry_run,
+                no_apply,
+                no_comment,
+                force,
+                repo_path,
+                deep,
+                instructions_file,
+                ctx,
+                config,
+                inferred_repo,
+                no_dedup_summary,
             )
-            .await;
-
-            // Convert core BulkResult to CLI BulkPrReviewResult
-            let mut bulk_result = BulkPrReviewResult {
-                succeeded: core_result.succeeded,
-                failed: core_result.failed,
-                skipped: core_result.skipped,
-                outcomes: Vec::new(),
-            };
-
-            for (pr_ref, outcome) in core_result.outcomes {
-                let cli_outcome = match outcome {
-                    aptu_core::BulkOutcome::Success(review_result) => {
-                        SinglePrReviewOutcome::Success(Box::new(review_result))
-                    }
-                    aptu_core::BulkOutcome::Skipped(msg) => SinglePrReviewOutcome::Skipped(msg),
-                    aptu_core::BulkOutcome::Failed(err) => {
-                        if matches!(ctx.format, OutputFormat::Text) {
-                            println!("  {}", style(format!("Error: {err}")).red());
-                        }
-                        SinglePrReviewOutcome::Failed(err)
-                    }
-                };
-                bulk_result.outcomes.push((pr_ref, cli_outcome));
-            }
-
-            // Render bulk summary (only for multiple PRs)
-            if references.len() > 1 {
-                output::render(&bulk_result, &ctx)?;
-            }
-
-            Ok(())
+            .await
         }
         PrCommand::Label {
             reference,
             repo,
             dry_run,
-        } => {
-            let repo_context = repo
-                .as_deref()
-                .or(inferred_repo.as_deref())
-                .or(config.user.default_repo.as_deref());
-
-            let spinner = maybe_spinner(&ctx, "Fetching PR and extracting labels...");
-            let (result, ai_stats) =
-                pr::run_label(&reference, repo_context, dry_run, &config.ai).await?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            aptu_core::metrics::append_jsonl(&ai_stats);
-            output::render(&result, &ctx)?;
-            Ok(())
-        }
+        } => pr::run_label_command(reference, repo, dry_run, ctx, config, inferred_repo).await,
         PrCommand::Queue { repo, limit } => {
-            let repo_context = repo
-                .as_deref()
-                .or(inferred_repo.as_deref())
-                .or(config.user.default_repo.as_deref());
-
-            let repo_str = repo_context.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Could not determine owner/repo; use --repo or set default_repo in config"
-                )
-            })?;
-            let (owner, repo_name) = aptu_core::github::parse_owner_repo(repo_str)?;
-
-            let spinner = maybe_spinner(&ctx, "Fetching open PRs...");
-            let result = pr::run_queue(config, &owner, &repo_name, limit).await?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            output::render(&result, &ctx)?;
-            Ok(())
+            pr::run_queue_command(repo, limit, ctx, config, inferred_repo).await
         }
     }
 }
