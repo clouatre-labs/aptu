@@ -590,7 +590,7 @@ mod tests {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    /// Serves canned 200 responses (body: finish_reason + content) and records
+    /// Serves canned 200 responses (body: `finish_reason` + content) and records
     /// the `max_tokens` value of each incoming request body.
     async fn spawn_max_tokens_server(
         responses: Vec<(&'static str, &'static str)>,
@@ -615,9 +615,11 @@ mod tests {
                 if let Some(body_start) = raw.find("\r\n\r\n")
                     && let Ok(body) =
                         serde_json::from_str::<serde_json::Value>(raw[body_start + 4..].trim())
-                    && let Some(mt) = body.get("max_tokens").and_then(|v| v.as_u64())
+                    && let Some(mt) = body.get("max_tokens").and_then(serde_json::Value::as_u64)
                 {
-                    seen.lock().expect("lock").push(mt as u32);
+                    seen.lock()
+                        .expect("lock")
+                        .push(u32::try_from(mt).unwrap_or(u32::MAX));
                 }
                 let body = serde_json::json!({
                     "choices": [{
