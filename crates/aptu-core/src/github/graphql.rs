@@ -35,6 +35,19 @@ pub enum ViewerPermission {
     Read,
 }
 
+impl std::fmt::Display for ViewerPermission {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::Admin => "Admin",
+            Self::Maintain => "Maintain",
+            Self::Write => "Write",
+            Self::Triage => "Triage",
+            Self::Read => "Read",
+        };
+        write!(f, "{name}")
+    }
+}
+
 /// A GitHub issue from the GraphQL response.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IssueNode {
@@ -310,6 +323,50 @@ pub struct IssueNodeDetailed {
     pub updated_at: String,
 }
 
+/// Builds the GraphQL query fetching the viewer permission for a repository.
+#[cfg(not(target_arch = "wasm32"))]
+fn build_viewer_permission_query(owner: &str, repo: &str) -> Value {
+    let query = format!(
+        r#"query {{ repository(owner: "{owner}", name: "{repo}") {{ viewerPermission }} }}"#
+    );
+    json!({ "query": query })
+}
+
+/// Fetches the viewer permission level for a repository via GraphQL.
+///
+/// Returns `None` when the field is null or holds an unrecognized value; callers
+/// treat unknown permissions as allowed.
+///
+/// # Errors
+///
+/// Returns an error if the GraphQL query fails.
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo))]
+pub async fn fetch_repo_viewer_permission(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+) -> Result<Option<ViewerPermission>> {
+    let query = build_viewer_permission_query(owner, repo);
+    debug!("Executing GraphQL query for viewer permission");
+
+    let response: Value = match client.graphql(&query).await {
+        Ok(value) => value,
+        Err(e) => {
+            debug!(error = %e, "Viewer permission query failed; treating as unknown");
+            return Ok(None);
+        }
+    };
+
+    let perm = response["data"]["repository"]["viewerPermission"]
+        .as_str()
+        .and_then(|s| {
+            serde_json::from_value::<ViewerPermission>(Value::String(s.to_string())).ok()
+        });
+    debug!(viewer_permission = ?perm, "Fetched viewer permission");
+    Ok(perm)
+}
+
 /// Repository data from GraphQL response for triage.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RepositoryData {
@@ -550,6 +607,14 @@ mod tests {
 
         assert!(query_str.contains("repo0: repository(owner: \"block\", name: \"goose\")"));
         assert!(query_str.contains("repo1: repository(owner: \"astral-sh\", name: \"ruff\")"));
+    }
+
+    #[test]
+    fn build_viewer_permission_query_includes_field() {
+        let query = build_viewer_permission_query("block", "goose");
+        let query_str = query["query"].as_str().unwrap();
+        assert!(query_str.contains("repository(owner: \"block\", name: \"goose\")"));
+        assert!(query_str.contains("viewerPermission"));
     }
 
     #[test]

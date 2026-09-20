@@ -162,6 +162,13 @@ pub async fn post(
         )
         .await?;
 
+        if outcome.is_skipped() {
+            eprintln!("No write access to this repository - review not posted");
+            return Ok(());
+        }
+
+        let outcome = outcome.applied().expect("outcome checked for skip above");
+
         info!(review_id = outcome.review_id, "Review posted successfully");
         eprintln!("Review posted successfully (ID: {})", outcome.review_id);
         if !outcome.failed_comments.is_empty() {
@@ -296,18 +303,35 @@ pub async fn run_label(
     let provider = crate::provider::CliTokenProvider;
 
     // Call facade for PR label
-    let (pr_number, pr_title, pr_url, labels, ai_stats) =
+    let outcome =
         aptu_core::label_pr(&provider, reference, repo_context, dry_run, ai_config).await?;
+
+    if outcome.is_skipped() {
+        eprintln!("No write access to this repository - labels not applied");
+        return Ok((
+            PrLabelResult {
+                pr_number: 0,
+                pr_title: String::new(),
+                pr_url: String::new(),
+                labels: Vec::new(),
+                dry_run,
+            },
+            AiStats::default(),
+        ));
+    }
+
+    let (pr_number, pr_title, pr_url, labels, ai_stats) =
+        outcome.applied().expect("outcome checked for skip above");
 
     Ok((
         PrLabelResult {
-            pr_number,
-            pr_title,
-            pr_url,
-            labels,
+            pr_number: *pr_number,
+            pr_title: pr_title.clone(),
+            pr_url: pr_url.clone(),
+            labels: labels.clone(),
             dry_run,
         },
-        ai_stats,
+        ai_stats.clone(),
     ))
 }
 

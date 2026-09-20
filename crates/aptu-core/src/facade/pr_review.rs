@@ -4,6 +4,7 @@
 
 use tracing::{debug, error, instrument};
 
+use super::issues::{WriteOutcome, permission_allows};
 use crate::ai::provider::AiProvider;
 use crate::ai::types::{PrDetails, PrReviewComment, ReviewEvent};
 use crate::auth::TokenProvider;
@@ -13,6 +14,8 @@ use crate::config::{AiConfig, TaskType};
 use crate::error::AptuError;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::create_client_from_provider;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::github::graphql::fetch_repo_viewer_permission;
 pub use crate::github::pulls::ReviewPostOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::pulls::{
@@ -381,7 +384,7 @@ pub async fn post_pr_review(
     comments: &[PrReviewComment],
     commit_id: &str,
     existing_comments: &[crate::ai::types::PrReviewCommentDetails],
-) -> crate::Result<ReviewPostOutcome> {
+) -> crate::Result<WriteOutcome<ReviewPostOutcome>> {
     use crate::github::pulls::parse_pr_reference;
 
     // Parse PR reference
@@ -392,6 +395,19 @@ pub async fn post_pr_review(
 
     // Create GitHub client from provider
     let client = create_client_from_provider(provider)?;
+
+    // Gate on viewer permission: skip with an informational signal when denied
+    let perm = fetch_repo_viewer_permission(&client, &owner, &repo)
+        .await
+        .ok()
+        .flatten();
+    if !permission_allows(perm.map(|p| p.to_string()).as_deref()) {
+        tracing::info!(
+            repo = %format!("{owner}/{repo}"),
+            "Viewer lacks write access; skipping PR review"
+        );
+        return Ok(WriteOutcome::Skipped);
+    }
 
     // Build dedup map from existing bot-authored review comments keyed on (path, line, side).
     // Comments with line=None (general PR comments) are not inline duplicates, so they are excluded
@@ -449,6 +465,7 @@ pub async fn post_pr_review(
         &client, &owner, &repo, number, body, event, &filtered, commit_id,
     )
     .await
+    .map(WriteOutcome::Applied)
     .map_err(|e| AptuError::GitHub {
         message: e.to_string(),
     })
@@ -465,9 +482,12 @@ pub async fn post_pr_review(
     _comments: &[crate::ai::types::PrReviewComment],
     _commit_id: &str,
     _existing_comments: &[crate::ai::types::PrReviewCommentDetails],
-) -> crate::Result<ReviewPostOutcome> {
+) -> crate::Result<WriteOutcome<ReviewPostOutcome>> {
     crate::facade::wasm_unsupported!("post_pr_review");
 }
+
+/// Outcome payload for [`label_pr`]: PR number, title, URL, applied labels, and AI stats.
+pub type LabelPrOutcome = (u64, String, String, Vec<String>, crate::history::AiStats);
 
 /// Auto-label a pull request based on conventional commit prefix and file paths.
 ///
@@ -493,13 +513,14 @@ pub async fn post_pr_review(
 /// - API call fails
 #[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(reference = %reference))]
+#[allow(clippy::too_many_lines)]
 pub async fn label_pr(
     provider: &dyn TokenProvider,
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
     ai_config: &AiConfig,
-) -> crate::Result<(u64, String, String, Vec<String>, crate::history::AiStats)> {
+) -> crate::Result<WriteOutcome<LabelPrOutcome>> {
     use crate::github::issues::apply_labels_to_number;
     use crate::github::pulls::{fetch_pr_details, labels_from_pr_metadata, parse_pr_reference};
 
@@ -601,6 +622,19 @@ pub async fn label_pr(
 
     // Apply labels if not dry-run
     if !dry_run && !labels.is_empty() {
+        // Gate on viewer permission: skip with an informational signal when denied
+        let perm = fetch_repo_viewer_permission(&client, &owner, &repo)
+            .await
+            .ok()
+            .flatten();
+        if !permission_allows(perm.map(|p| p.to_string()).as_deref()) {
+            tracing::info!(
+                repo = %format!("{owner}/{repo}"),
+                "Viewer lacks write access; skipping PR labeling"
+            );
+            return Ok(WriteOutcome::Skipped);
+        }
+
         apply_labels_to_number(&client, &owner, &repo, number, &labels)
             .await
             .map_err(|e| AptuError::GitHub {
@@ -608,7 +642,13 @@ pub async fn label_pr(
             })?;
     }
 
-    Ok((number, pr_details.title, pr_details.url, labels, stats))
+    Ok(WriteOutcome::Applied((
+        number,
+        pr_details.title,
+        pr_details.url,
+        labels,
+        stats,
+    )))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -618,7 +658,7 @@ pub async fn label_pr(
     _repo_context: Option<&str>,
     _dry_run: bool,
     _ai_config: &crate::config::AiConfig,
-) -> crate::Result<(u64, String, String, Vec<String>, crate::history::AiStats)> {
+) -> crate::Result<WriteOutcome<LabelPrOutcome>> {
     crate::facade::wasm_unsupported!("label_pr");
 }
 

@@ -216,11 +216,25 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
     // Phase 2: Post the comment (if not skipped)
     let comment_url = if should_post_comment {
         let spinner = maybe_spinner(cfg.ctx, "Posting comment...");
-        let url = triage::post(&analyze_result).await?;
+        let outcome = triage::post(&analyze_result).await?;
         if let Some(s) = spinner {
             s.finish_and_clear();
         }
-        Some(url)
+        if outcome.is_skipped() {
+            if matches!(cfg.ctx.format, OutputFormat::Text) {
+                println!(
+                    "{}",
+                    style(format!(
+                        "No write access to {}/{} - triage not posted",
+                        issue_details.owner, issue_details.repo
+                    ))
+                    .yellow()
+                );
+            }
+            None
+        } else {
+            outcome.applied().cloned()
+        }
     } else {
         if matches!(cfg.ctx.format, OutputFormat::Text) && !cfg.no_comment {
             println!("{}", style("Triage not posted.").yellow());
@@ -233,18 +247,31 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
     // Phase 3: Apply labels and milestone if requested (independent of comment posting)
     if !cfg.no_apply {
         let spinner = maybe_spinner(cfg.ctx, "Applying labels and milestone...");
-        let apply_result = triage::apply(&issue_details, &analyze_result.triage).await?;
+        let apply_outcome = triage::apply(&issue_details, &analyze_result.triage).await?;
         if let Some(s) = spinner {
             s.finish_and_clear();
         }
 
-        result
-            .applied_labels
-            .clone_from(&apply_result.applied_labels);
-        result
-            .applied_milestone
-            .clone_from(&apply_result.applied_milestone);
-        result.apply_warnings.clone_from(&apply_result.warnings);
+        if apply_outcome.is_skipped() {
+            if matches!(cfg.ctx.format, OutputFormat::Text) {
+                println!(
+                    "{}",
+                    style(format!(
+                        "No write access to {}/{} - labels not applied",
+                        issue_details.owner, issue_details.repo
+                    ))
+                    .yellow()
+                );
+            }
+        } else if let Some(apply_result) = apply_outcome.applied() {
+            result
+                .applied_labels
+                .clone_from(&apply_result.applied_labels);
+            result
+                .applied_milestone
+                .clone_from(&apply_result.applied_milestone);
+            result.apply_warnings.clone_from(&apply_result.warnings);
+        }
     }
 
     // Record to history only if comment was posted
