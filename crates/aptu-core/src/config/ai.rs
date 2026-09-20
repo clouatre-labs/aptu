@@ -102,7 +102,7 @@ fn default_retry_max_attempts() -> u32 {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct AiConfig {
-    /// AI provider: one of `"gemini"`, `"openrouter"`, `"groq"`, `"cerebras"`, `"zenmux"`, or `"zai"`.
+    /// AI provider: one of `"gemini"`, `"openrouter"`, `"zai"`, or `"anthropic"`.
     pub provider: String,
     /// Model identifier.
     pub model: String,

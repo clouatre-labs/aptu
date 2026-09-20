@@ -284,7 +284,7 @@ scan:
 | `review.instructions-file` | No | string | Path to custom PR review instructions within this repository (e.g., `.github/instructions/pr-review.md`). |
 | `review.skip-labeled` | No | boolean | Skip PR review dispatch if PR has any labels (default: `false`). |
 | `review.paths` | No | string[] | Glob patterns for PR review dispatch. Use `!`-prefixed patterns for exclusions. |
-| `ai.provider` | See note | string | AI provider (`anthropic`, `cerebras`, `gemini`, `groq`, `openrouter`, `zai`, `zenmux`). Both `ai` fields are required when the `ai` block is present. |
+| `ai.provider` | See note | string | AI provider (`anthropic`, `gemini`, `openrouter`, `zai`). Both `ai` fields are required when the `ai` block is present. |
 | `ai.model` | See note | string | Model identifier for your configured AI provider. Both `ai` fields are required when the `ai` block is present. |
 | `scan.enabled` | No | boolean | Enable automatic security scanning on PR push events (default: `false`). Scanning is local pattern matching only and does not require an `ai` block. |
 | `scan.fail-on` | No | string | Comma-separated severities that fail the scan (`critical`, `high`, `medium`, `low`). |

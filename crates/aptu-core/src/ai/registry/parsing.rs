@@ -8,10 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
 
-use super::consts::{
-    PROVIDER_ANTHROPIC, PROVIDER_CEREBRAS, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_OPENROUTER,
-    PROVIDER_ZAI, PROVIDER_ZENMUX,
-};
+use super::consts::{PROVIDER_ANTHROPIC, PROVIDER_GEMINI, PROVIDER_OPENROUTER, PROVIDER_ZAI};
 use crate::auth::TokenProvider;
 use crate::cache::FileCache;
 
@@ -282,9 +279,6 @@ impl CachedModelRegistry<'_> {
         match provider {
             PROVIDER_OPENROUTER => Some("https://openrouter.ai/api/v1/models"),
             PROVIDER_GEMINI => Some("https://generativelanguage.googleapis.com/v1beta/models"),
-            PROVIDER_GROQ => Some("https://api.groq.com/openai/v1/models"),
-            PROVIDER_CEREBRAS => Some("https://api.cerebras.ai/v1/models"),
-            PROVIDER_ZENMUX => Some("https://zenmux.ai/api/v1/models"),
             PROVIDER_ZAI => Some("https://api.z.ai/api/paas/v4/models"),
             PROVIDER_ANTHROPIC => Some("https://api.anthropic.com/v1/models"),
             _ => None,
@@ -309,8 +303,7 @@ impl CachedModelRegistry<'_> {
                     .get(url)
                     .header("x-goog-api-key", api_key.expose_secret())
             }
-            PROVIDER_OPENROUTER | PROVIDER_GROQ | PROVIDER_CEREBRAS | PROVIDER_ZENMUX
-            | PROVIDER_ZAI => {
+            PROVIDER_OPENROUTER | PROVIDER_ZAI => {
                 // These providers use Bearer token authentication
                 self.client.get(url).header(
                     "Authorization",
@@ -341,8 +334,7 @@ impl CachedModelRegistry<'_> {
         let models = match provider {
             PROVIDER_OPENROUTER => Self::parse_openrouter_models(&data, provider),
             PROVIDER_GEMINI => Self::parse_gemini_models(&data, provider),
-            PROVIDER_GROQ | PROVIDER_CEREBRAS | PROVIDER_ZENMUX | PROVIDER_ZAI
-            | PROVIDER_ANTHROPIC => Self::parse_generic_models(&data, provider),
+            PROVIDER_ZAI | PROVIDER_ANTHROPIC => Self::parse_generic_models(&data, provider),
             _ => vec![],
         };
 

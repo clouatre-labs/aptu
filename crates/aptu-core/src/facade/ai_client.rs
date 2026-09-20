@@ -353,7 +353,7 @@ mod fallback_tests {
 
         let config = test_config(Some(FallbackConfig {
             chain: vec![FallbackEntry {
-                provider: "groq".to_string(),
+                provider: "openrouter".to_string(),
                 model: None,
             }],
         }));
@@ -433,7 +433,7 @@ mod fallback_tests {
 
         let config = test_config(Some(FallbackConfig {
             chain: vec![FallbackEntry {
-                provider: "groq".to_string(),
+                provider: "openrouter".to_string(),
                 model: None,
             }],
         }));
