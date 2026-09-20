@@ -338,8 +338,14 @@ fn resolve_key(
 /// from existing review comments keyed on `(path, line, side)`. The map value is
 /// `(comment id, body)` so a duplicate can be updated in place when the rendered
 /// body differs from what was previously posted.
+///
+/// A comment is only treated as owned by Aptu when it carries the marker AND was
+/// authored by the authenticated actor (`authenticated_login`). The marker alone
+/// is spoofable: any user can post a comment starting with it. When the login
+/// cannot be resolved (`None`), nothing is treated as owned (fail safe).
 fn build_dedup_map(
     comments: &[crate::ai::types::PrReviewCommentDetails],
+    authenticated_login: Option<&str>,
 ) -> std::collections::HashMap<(String, u64, String), (u64, String)> {
     comments
         .iter()
@@ -348,6 +354,7 @@ fn build_dedup_map(
                 .trim_start()
                 .starts_with(crate::triage::REVIEW_COMMENT_MARKER)
         })
+        .filter(|c| authenticated_login.is_some_and(|login| c.author == login))
         .filter_map(|c| {
             resolve_key(&c.path, c.line, c.original_line, c.side.clone())
                 .map(|key| (key, (c.id, c.body.clone())))
@@ -448,10 +455,20 @@ pub async fn post_pr_review(
     // Build dedup map from existing review comments keyed on (path, line, side).
     // Comments with no usable line (line=None and original_line=None; general PR
     // comments) are excluded from the dedup map (they will never match an inline
-    // comment which always has a line). Existing APTU comments are identified by
-    // body marker in fetch_pr_comments, not by author, so dedup works under
-    // GitHub App installation tokens where bot identity cannot be resolved (#1639).
-    let dedup = build_dedup_map(existing_comments);
+    // comment which always has a line). Ownership requires BOTH the body marker
+    // AND authorship by the authenticated actor; if the login cannot be resolved,
+    // nothing is treated as owned (fail safe, no PATCHing of foreign comments).
+    let authenticated_login = match client.current().user().await {
+        Ok(user) => Some(user.login),
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "Could not resolve authenticated user; treating no existing comments as owned"
+            );
+            None
+        }
+    };
+    let dedup = build_dedup_map(existing_comments, authenticated_login.as_deref());
 
     // Filter out outgoing comments that match an existing bot-authored comment.
     // General PR comments (line=None) are never checked against the dedup map.
@@ -758,6 +775,10 @@ fn pr_write_allowed(perm: Option<ViewerPermission>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// Bot login used by the test harness; matches the author set on owned
+    /// comments and passed as the authenticated login to `build_dedup_map`.
+    const TEST_BOT_LOGIN: &str = "aptu[bot]";
+
     use super::{DEFAULT_COMMENT_SIDE, DedupOutcome, analyze_pr, dedup_outcome, pr_write_allowed};
     use super::{build_dedup_map, resolve_key};
     use crate::ai::types::{
@@ -899,11 +920,12 @@ mod tests {
             original_line: None,
         };
         assert!(
-            build_dedup_map(std::slice::from_ref(&quoted)).is_empty(),
+            build_dedup_map(std::slice::from_ref(&quoted), Some(TEST_BOT_LOGIN)).is_empty(),
             "mid-body marker quote must not be classified as aptu-owned"
         );
 
         let anchored = PrReviewCommentDetails {
+            author: TEST_BOT_LOGIN.to_string(),
             body: format!(
                 "{}\nReal bot feedback",
                 crate::triage::REVIEW_COMMENT_MARKER
@@ -911,7 +933,7 @@ mod tests {
             ..quoted
         };
         assert_eq!(
-            build_dedup_map(&[anchored]).len(),
+            build_dedup_map(&[anchored], Some(TEST_BOT_LOGIN)).len(),
             1,
             "body starting with the marker must populate the dedup map"
         );
@@ -930,7 +952,7 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: None,
         }];
-        let dedup = build_dedup_map(&existing);
+        let dedup = build_dedup_map(&existing, Some(TEST_BOT_LOGIN));
 
         let incoming = PrReviewComment {
             file: "src/lib.rs".to_string(),
@@ -974,7 +996,7 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: None,
         }];
-        let dedup = build_dedup_map(&existing);
+        let dedup = build_dedup_map(&existing, Some(TEST_BOT_LOGIN));
         assert!(
             !dedup.contains_key(&(
                 "src/new.rs".to_string(),
@@ -985,7 +1007,7 @@ mod tests {
         );
 
         // Sub-case 2: empty existing comments produce an empty dedup set
-        let dedup = build_dedup_map(&[]);
+        let dedup = build_dedup_map(&[], Some(TEST_BOT_LOGIN));
         assert!(
             dedup.is_empty(),
             "dedup set must be empty when no existing comments"
@@ -1006,7 +1028,7 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: None,
         }];
-        let dedup = build_dedup_map(&existing);
+        let dedup = build_dedup_map(&existing, Some(TEST_BOT_LOGIN));
 
         let incoming = PrReviewComment {
             file: "src/lib.rs".to_string(),
@@ -1041,7 +1063,7 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: None,
         }];
-        let dedup = build_dedup_map(&existing);
+        let dedup = build_dedup_map(&existing, Some(TEST_BOT_LOGIN));
 
         let incoming = PrReviewComment {
             file: "src/lib.rs".to_string(),
@@ -1084,7 +1106,7 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: None,
         }];
-        let dedup = build_dedup_map(&existing);
+        let dedup = build_dedup_map(&existing, Some(TEST_BOT_LOGIN));
 
         let incoming = PrReviewComment {
             file: "src/lib.rs".to_string(),
@@ -1105,13 +1127,12 @@ mod tests {
     }
 
     #[test]
-    fn test_dedup_unknown_author_with_marker_still_dedups() {
-        // Regression for #1639: under GitHub App installation tokens the bot login
-        // cannot be resolved; an existing comment authored by an unknown login but
-        // carrying the marker must still populate the map and yield Skip/Update.
-        let existing = vec![PrReviewCommentDetails {
+    fn test_dedup_excludes_foreign_author_with_marker() {
+        // Marker alone is spoofable: a comment authored by a foreign user but
+        // carrying the marker must NOT be treated as owned.
+        let foreign = vec![PrReviewCommentDetails {
             id: 9,
-            author: "unknown-login".to_string(),
+            author: "spoofing-user".to_string(),
             body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Revised feedback").to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
@@ -1119,23 +1140,53 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: None,
         }];
-        let dedup = build_dedup_map(&existing);
+        let dedup = build_dedup_map(&foreign, Some(TEST_BOT_LOGIN));
         assert!(
-            !dedup.is_empty(),
-            "unknown author with line must populate map"
+            dedup.is_empty(),
+            "foreign author with marker must not populate map"
         );
+    }
 
-        let incoming = PrReviewComment {
-            file: "src/lib.rs".to_string(),
+    #[test]
+    fn test_dedup_fails_safe_when_login_unresolvable() {
+        // Fail safe: when the authenticated login cannot be resolved (API error),
+        // no comment is treated as owned and the map stays empty.
+        let existing = vec![PrReviewCommentDetails {
+            id: 10,
+            author: TEST_BOT_LOGIN.to_string(),
+            body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
+            path: "src/lib.rs".to_string(),
             line: Some(10),
-            comment: "Revised feedback".to_string(),
-            severity: CommentSeverity::Suggestion,
-            suggested_code: None,
-        };
-        let outcome = dedup_outcome(&dedup, &incoming);
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
+            commit_id: "abc123".to_string(),
+            original_line: None,
+        }];
+        let dedup = build_dedup_map(&existing, None);
         assert!(
-            matches!(outcome, DedupOutcome::Skip) || matches!(outcome, DedupOutcome::Update { .. }),
-            "Expected Skip or Update, got {outcome:?}"
+            dedup.is_empty(),
+            "unresolvable login must yield an empty dedup map"
+        );
+    }
+
+    #[test]
+    fn test_dedup_under_user_token_login() {
+        // Under a user PAT the authenticated actor is the user's own login; a
+        // comment authored by that same login and carrying the marker is owned.
+        let existing = vec![PrReviewCommentDetails {
+            id: 11,
+            author: "human-reviewer".to_string(),
+            body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
+            path: "src/lib.rs".to_string(),
+            line: Some(10),
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
+            commit_id: "abc123".to_string(),
+            original_line: None,
+        }];
+        let dedup = build_dedup_map(&existing, Some("human-reviewer"));
+        assert_eq!(
+            dedup.len(),
+            1,
+            "comment authored by the authenticated user login must populate the map"
         );
     }
 
@@ -1169,7 +1220,7 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: Some(10),
         }];
-        let dedup = build_dedup_map(&existing);
+        let dedup = build_dedup_map(&existing, Some(TEST_BOT_LOGIN));
         let incoming = PrReviewComment {
             file: "src/lib.rs".to_string(),
             line: Some(10),
@@ -1204,7 +1255,7 @@ mod tests {
             commit_id: "abc123".to_string(),
             original_line: None,
         }];
-        let dedup = build_dedup_map(&existing);
+        let dedup = build_dedup_map(&existing, Some(TEST_BOT_LOGIN));
         assert!(
             dedup.is_empty(),
             "fully-None line entries must stay out of the map"
