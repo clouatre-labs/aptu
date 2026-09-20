@@ -67,7 +67,7 @@ fn graphql_response_deserializes_unwrapped_data() {
 #[test]
 fn issue_comment_node_null_author_deserializes_to_ghost() {
     let node: aptu_core::github::graphql::IssueCommentNode = serde_json::from_value(json!({
-        "id": 1,
+        "id": "1",
         "author": null,
         "body": "deleted user"
     }))
@@ -79,7 +79,7 @@ fn issue_comment_node_null_author_deserializes_to_ghost() {
 #[test]
 fn issue_comment_node_present_author_keeps_login() {
     let node: aptu_core::github::graphql::IssueCommentNode = serde_json::from_value(json!({
-        "id": 2,
+        "id": "2",
         "author": {"login": "octocat"},
         "body": "hello"
     }))
