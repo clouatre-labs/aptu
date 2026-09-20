@@ -1,6 +1,6 @@
 # Aptu - Rust CLI [Production]
 
-AI-powered OSS issue triage and PR review with contribution history tracking.
+AI-powered OSS issue triage and PR review. Contributions are recorded to history.json; there is no viewer command.
 
 Smart defaults (TTY, rate limits, permissions); `--output json` for automation (schema is a contract); KISS; clean refactors over deprecation.
 
@@ -11,14 +11,14 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 ## Workspace Crates
 
 - `aptu-cli` - CLI interface (Clap derive); binary: `aptu`
-- `aptu-core` - Core library: AI providers, GitHub API, security scanner, triage engine, cache, history, retry, bulk processing
+- `aptu-core` - Core library: AI providers, GitHub API, security scanner, triage engine, cache, contribution recording, retry, bulk processing
   - `facade/` - High-level CLI/FFI entry points (ai_client, issues, models, pr_create, pr_review, repos, revert)
 
 ## Config & Data Paths (XDG)
 
 - `~/.config/aptu/config.toml` - provider, model, defaults, `[prompt]` byte limits, `[review]` budgets
 - `~/.config/aptu/repos.toml` - curated repo list
-- `~/.local/share/aptu/history.json` - contribution history
+- `~/.local/share/aptu/history.json` - contribution history (recorded automatically; no viewer command)
 
 ## Commands
 

@@ -6,7 +6,6 @@ pub mod auth;
 pub mod common;
 pub mod completion;
 pub mod create;
-pub mod history;
 pub mod issue;
 pub mod models;
 pub mod pr;
@@ -1144,11 +1143,6 @@ pub async fn run(
         Commands::Repo(repo_cmd) => run_repo_command(repo_cmd, ctx).await,
         Commands::Issue(issue_cmd) => {
             run_issue_command(issue_cmd, ctx, config, inferred_repo).await
-        }
-        Commands::History => {
-            let result = history::run()?;
-            output::render(&result, &ctx)?;
-            Ok(())
         }
         Commands::Pr(pr_cmd) => run_pr_command(pr_cmd, ctx, config, inferred_repo).await,
         Commands::Models(models_cmd) => run_models_command(models_cmd, ctx).await,
