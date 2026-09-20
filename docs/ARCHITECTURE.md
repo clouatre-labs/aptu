@@ -103,7 +103,7 @@ Returns the branch name that was pushed, or a `PatchError` variant on any failur
 
 Each function accepts a `&dyn TokenProvider` for credential resolution. Functions that require OS I/O (keyring, filesystem, process spawning) are `#[cfg(not(target_arch = "wasm32"))]`-gated; the `wasm_unsupported!` macro in `facade/mod.rs` provides uniform stub bodies for the wasm32 target.
 
-Write operations (triage comment, labels, PR review) are gated on viewer permission and yield `WriteOutcome::Skipped` when the viewer lacks write access. Permission lookups are memoized process-wide with a 60s TTL.
+Write operations (triage comment, labels, PR review) are gated on viewer permission and yield `WriteOutcome::Skipped` when the viewer lacks write access. Permission lookups are memoized process-wide with a 60s TTL. `revert` is the exception: it applies no local gate and relies on GitHub server-side authorization instead.
 
 ### AstContextOutput
 

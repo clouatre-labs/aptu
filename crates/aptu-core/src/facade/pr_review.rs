@@ -668,6 +668,17 @@ type ViewerPermissionCache =
 /// process and are dropped on exit. Within the 60s TTL a cached entry may
 /// serve a stale permission result during very long-running bulk
 /// operations; this is an accepted tradeoff.
+///
+/// # Assumption: one authenticated viewer per process
+///
+/// The cache key is not scoped to the authenticated identity because
+/// `octocrab::Octocrab` does not expose its credential for fingerprinting.
+/// The cache therefore assumes a single authenticated viewer per process,
+/// which holds for all current consumers (the `aptu` CLI and the GitHub
+/// Action each resolve one `TokenProvider` per execution). Library embedders
+/// that rotate tokens across multiple viewers within one process must not
+/// rely on this cache; a second viewer would observe the first viewer's
+/// cached permission for the same `owner/repo` within the TTL window.
 #[cfg(not(target_arch = "wasm32"))]
 fn viewer_permission_cache() -> &'static std::sync::Mutex<ViewerPermissionCache> {
     use std::collections::HashMap;
