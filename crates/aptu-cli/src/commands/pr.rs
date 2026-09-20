@@ -8,6 +8,10 @@
 //! before AI spinner).
 
 use anyhow::{Context, Result};
+use console::style;
+
+use super::ReviewOptions;
+use super::types::BulkPrReviewResult;
 use aptu_core::ai::types::PrReviewComment;
 use aptu_core::history::AiStats;
 use aptu_core::{
@@ -416,6 +420,175 @@ pub async fn run_queue(
         total_open,
         drafts_excluded: draft_count,
     })
+}
+
+/// Run the PR review command.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::fn_params_excessive_bools)]
+#[allow(clippy::too_many_arguments)]
+pub async fn run_review(
+    references: Vec<String>,
+    repo: Option<String>,
+    comment: bool,
+    approve: bool,
+    request_changes: bool,
+    dry_run: bool,
+    _no_apply: bool,
+    no_comment: bool,
+    force: bool,
+    repo_path: Option<std::path::PathBuf>,
+    deep: bool,
+    instructions_file: Option<std::path::PathBuf>,
+    ctx: crate::cli::OutputContext,
+    config: &aptu_core::AppConfig,
+    inferred_repo: Option<String>,
+) -> Result<()> {
+    use crate::cli::OutputFormat;
+
+    let repo_path_str = repo_path.map(|p| p.to_string_lossy().into_owned());
+    let repo_context = repo
+        .as_deref()
+        .or(inferred_repo.as_deref())
+        .or(config.user.default_repo.as_deref());
+
+    // Determine review type from flags
+    let review_type = if comment {
+        Some(aptu_core::ReviewEvent::Comment)
+    } else if approve {
+        Some(aptu_core::ReviewEvent::Approve)
+    } else if request_changes {
+        Some(aptu_core::ReviewEvent::RequestChanges)
+    } else {
+        None
+    };
+
+    if references.is_empty() {
+        if matches!(ctx.format, OutputFormat::Text) {
+            println!("{}", style("No PRs to review.").yellow());
+        }
+        return Ok(());
+    }
+
+    // Bulk PR review using core processor
+    let items: Vec<(String, ())> = references.iter().map(|r| (r.clone(), ())).collect();
+
+    let ctx_for_processor = ctx.clone();
+    let ctx_for_progress = ctx.clone();
+    let repo_context_owned = repo_context.map(std::string::ToString::to_string);
+    let mut config_clone = config.clone();
+    let repo_path_str_owned = repo_path_str.clone();
+    let instructions_file_str = instructions_file.map(|p| p.to_string_lossy().into_owned());
+
+    // Override instructions_file in config if provided via CLI
+    if let Some(path) = &instructions_file_str {
+        config_clone.review.instructions_file = Some(path.clone());
+    }
+
+    let core_result = aptu_core::process_bulk(
+        items,
+        move |(pr_ref, ())| {
+            let ctx = ctx_for_processor.clone();
+            let repo_context = repo_context_owned.clone();
+            let config = config_clone.clone();
+            let repo_path_for_review = repo_path_str_owned.clone();
+            async move {
+                super::review_single_pr(
+                    &pr_ref,
+                    repo_context.as_deref(),
+                    review_type,
+                    ReviewOptions {
+                        dry_run,
+                        yes: !ctx.is_interactive() || force,
+                        no_comment,
+                    },
+                    &ctx,
+                    &config,
+                    repo_path_for_review,
+                    deep,
+                )
+                .await
+            }
+        },
+        move |current, total, action| {
+            crate::output::common::show_progress(&ctx_for_progress, current, total, action);
+        },
+    )
+    .await;
+
+    // Convert core BulkResult to CLI BulkPrReviewResult
+    let mut bulk_result = BulkPrReviewResult {
+        succeeded: core_result.succeeded,
+        failed: core_result.failed,
+        skipped: core_result.skipped,
+        outcomes: Vec::new(),
+    };
+
+    for (pr_ref, outcome) in core_result.outcomes {
+        let cli_outcome = super::report_outcome(outcome, &ctx);
+        bulk_result.outcomes.push((pr_ref, cli_outcome));
+    }
+
+    // Render bulk summary (only for multiple PRs)
+    if references.len() > 1 {
+        crate::output::render(&bulk_result, &ctx)?;
+    }
+
+    Ok(())
+}
+
+/// Run the PR label command (spinner, metrics, rendering wrapper).
+pub async fn run_label_command(
+    reference: String,
+    repo: Option<String>,
+    dry_run: bool,
+    ctx: crate::cli::OutputContext,
+    config: &aptu_core::AppConfig,
+    inferred_repo: Option<String>,
+) -> Result<()> {
+    use crate::commands::common::maybe_spinner;
+
+    let repo_context = repo
+        .as_deref()
+        .or(inferred_repo.as_deref())
+        .or(config.user.default_repo.as_deref());
+
+    let spinner = maybe_spinner(&ctx, "Fetching PR and extracting labels...");
+    let (result, ai_stats) = run_label(&reference, repo_context, dry_run, &config.ai).await?;
+    if let Some(s) = spinner {
+        s.finish_and_clear();
+    }
+    aptu_core::metrics::append_jsonl(&ai_stats);
+    crate::output::render(&result, &ctx)?;
+    Ok(())
+}
+
+/// Run the PR queue command (spinner and rendering wrapper).
+pub async fn run_queue_command(
+    repo: Option<String>,
+    limit: u32,
+    ctx: crate::cli::OutputContext,
+    config: &aptu_core::AppConfig,
+    inferred_repo: Option<String>,
+) -> Result<()> {
+    use crate::commands::common::maybe_spinner;
+
+    let repo_context = repo
+        .as_deref()
+        .or(inferred_repo.as_deref())
+        .or(config.user.default_repo.as_deref());
+
+    let repo_str = repo_context.ok_or_else(|| {
+        anyhow::anyhow!("Could not determine owner/repo; use --repo or set default_repo in config")
+    })?;
+    let (owner, repo_name) = aptu_core::github::parse_owner_repo(repo_str)?;
+
+    let spinner = maybe_spinner(&ctx, "Fetching open PRs...");
+    let result = run_queue(config, &owner, &repo_name, limit).await?;
+    if let Some(s) = spinner {
+        s.finish_and_clear();
+    }
+    crate::output::render(&result, &ctx)?;
+    Ok(())
 }
 
 #[cfg(test)]
