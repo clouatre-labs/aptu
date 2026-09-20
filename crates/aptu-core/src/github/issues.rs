@@ -158,7 +158,7 @@ pub async fn fetch_issue_with_comments(
         .items
         .iter()
         .map(|c| IssueComment {
-            id: c.id.0,
+            id: c.id.0.to_string(),
             author: c.user.login.clone(),
             body: c.body.clone().unwrap_or_default(),
         })
