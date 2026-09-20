@@ -13,7 +13,6 @@ aptu/
     ├── ai/           # AI provider abstraction and routing
     ├── git/          # Patch application, branch management, git utilities
     ├── github/       # GitHub API integration (Octocrab wrapper)
-    ├── repos/        # Repository discovery and management
     └── ...           # Config, cache, history, triage logic
 ```
 
@@ -98,7 +97,6 @@ Returns the branch name that was pushed, or a `PatchError` variant on any failur
 | `models.rs` | `list_models()`, `validate_model()` |
 | `pr_create.rs` | `create_pr()` |
 | `pr_review.rs` | `fetch_pr_for_review()`, `analyze_pr()`, `post_pr_review()`, `label_pr()` |
-| `repos.rs` | `fetch_issues()`, `list_curated_repos()`, `add_custom_repo()`, `remove_custom_repo()`, `list_repos()`, `discover_repos()` |
 | `revert.rs` | `revert_issue()`, `revert_pr()` |
 
 Each function accepts a `&dyn TokenProvider` for credential resolution. Functions that require OS I/O (keyring, filesystem, process spawning) are `#[cfg(not(target_arch = "wasm32"))]`-gated; the `wasm_unsupported!` macro in `facade/mod.rs` provides uniform stub bodies for the wasm32 target.

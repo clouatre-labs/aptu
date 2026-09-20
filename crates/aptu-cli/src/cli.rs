@@ -199,10 +199,6 @@ pub enum Commands {
     #[command(subcommand)]
     Auth(AuthCommand),
 
-    /// Manage curated repositories
-    #[command(subcommand)]
-    Repo(RepoCommand),
-
     /// Work with GitHub issues
     #[command(subcommand)]
     Issue(IssueCommand),
@@ -252,62 +248,9 @@ pub enum AuthCommand {
     Status,
 }
 
-/// Repository subcommands
-#[derive(Subcommand)]
-pub enum RepoCommand {
-    /// List repositories available for contribution
-    List {
-        /// Include only curated repositories
-        #[arg(long)]
-        curated: bool,
-
-        /// Include only custom repositories
-        #[arg(long)]
-        custom: bool,
-    },
-
-    /// Discover welcoming repositories on GitHub
-    Discover {
-        /// Programming language to filter by (e.g., Rust, Python)
-        #[arg(long)]
-        language: Option<String>,
-
-        /// Minimum number of stars
-        #[arg(long, default_value = "10")]
-        min_stars: u32,
-
-        /// Maximum number of results to return
-        #[arg(long, default_value = "20")]
-        limit: u32,
-    },
-
-    /// Add a custom repository
-    Add {
-        /// Repository in owner/name format
-        repo: String,
-    },
-
-    /// Remove a custom repository
-    Remove {
-        /// Repository in owner/name format
-        repo: String,
-    },
-}
-
 /// Issue subcommands
 #[derive(Subcommand)]
 pub enum IssueCommand {
-    /// List open issues suitable for contribution
-    List {
-        /// Repository (OWNER/REPO) to filter issues
-        #[arg(long, short = 'r')]
-        repo: Option<String>,
-
-        /// Disable caching of issue data
-        #[arg(long)]
-        no_cache: bool,
-    },
-
     /// Triage an issue with AI assistance
     Triage {
         /// Issue references (URL, owner/repo#number, or number)
@@ -577,21 +520,6 @@ pub enum ModelsCommand {
 #[cfg(test)]
 mod clap_conflict_tests {
     use super::*;
-
-    #[test]
-    fn test_issue_list_with_repo_flag() {
-        let result = Cli::try_parse_from(["prog", "issue", "list", "--repo", "owner/repo"]);
-        match result {
-            Ok(cli) => {
-                if let Commands::Issue(IssueCommand::List { repo, .. }) = cli.command {
-                    assert_eq!(repo, Some("owner/repo".to_string()));
-                }
-            }
-            Err(e) => {
-                panic!("Failed to parse issue list with --repo flag: {e}");
-            }
-        }
-    }
 
     #[test]
     fn test_issue_create_with_repo_flag() {

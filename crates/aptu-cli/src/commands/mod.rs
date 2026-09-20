@@ -6,10 +6,8 @@ pub mod auth;
 pub mod common;
 pub mod completion;
 pub mod create;
-pub mod issue;
 pub mod models;
 pub mod pr;
-pub mod repo;
 pub mod scan_security;
 pub mod triage;
 pub mod types;
@@ -24,7 +22,7 @@ use tracing::debug;
 
 use crate::cli::{
     AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
-    OutputFormat, PrCommand, RepoCommand,
+    OutputFormat, PrCommand,
 };
 use crate::commands::common::maybe_spinner;
 use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewOutcome};
@@ -466,62 +464,6 @@ async fn run_auth_command(
     }
 }
 
-/// Run the repo command.
-async fn run_repo_command(repo_cmd: RepoCommand, ctx: OutputContext) -> Result<()> {
-    match repo_cmd {
-        RepoCommand::List { curated, custom } => {
-            let spinner = maybe_spinner(&ctx, "Fetching repositories...");
-            let result = repo::run_list(curated, custom).await?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            result.render_with_context(&ctx)?;
-            Ok(())
-        }
-        RepoCommand::Discover {
-            language,
-            min_stars,
-            limit,
-        } => {
-            let spinner = maybe_spinner(&ctx, "Discovering repositories...");
-            let result = repo::run_discover(language, min_stars, limit).await?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            result.render_with_context(&ctx)?;
-            Ok(())
-        }
-        RepoCommand::Add { repo } => {
-            let spinner = maybe_spinner(&ctx, "Adding repository...");
-            let message = repo::run_add(&repo).await?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            let result = types::RepoMutateResult {
-                action: "add".to_string(),
-                repo: repo.clone(),
-                message,
-            };
-            output::render(&result, &ctx)?;
-            Ok(())
-        }
-        RepoCommand::Remove { repo } => {
-            let spinner = maybe_spinner(&ctx, "Removing repository...");
-            let message = repo::run_remove(&repo)?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            let result = types::RepoMutateResult {
-                action: "remove".to_string(),
-                repo: repo.clone(),
-                message,
-            };
-            output::render(&result, &ctx)?;
-            Ok(())
-        }
-    }
-}
-
 /// Resolve issue references from --since flag.
 async fn resolve_triage_refs(
     since: Option<String>,
@@ -596,15 +538,6 @@ async fn run_issue_command(
     inferred_repo: Option<String>,
 ) -> Result<()> {
     match issue_cmd {
-        IssueCommand::List { repo, no_cache } => {
-            let spinner = maybe_spinner(&ctx, "Fetching issues...");
-            let result = issue::run(repo, no_cache).await?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            result.render_with_context(&ctx)?;
-            Ok(())
-        }
         IssueCommand::Triage {
             references,
             repo,
@@ -1140,7 +1073,6 @@ pub async fn run(
 ) -> Result<()> {
     match command {
         Commands::Auth(auth_cmd) => run_auth_command(auth_cmd, &ctx, config).await,
-        Commands::Repo(repo_cmd) => run_repo_command(repo_cmd, ctx).await,
         Commands::Issue(issue_cmd) => {
             run_issue_command(issue_cmd, ctx, config, inferred_repo).await
         }
@@ -1171,7 +1103,7 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use crate::cli::{OutputContext, OutputFormat};
-    use crate::commands::types::{AuthActionResult, RepoMutateResult};
+    use crate::commands::types::AuthActionResult;
 
     // UX-006/007: AuthActionResult renders correct text
     #[test]
@@ -1209,27 +1141,5 @@ mod tests {
         // Assert
         assert!(json.contains("\"action\":\"logout\""));
         assert!(json.contains("Logged out from GitHub"));
-    }
-
-    // UX-006/007: RepoMutateResult renders correct text (happy path)
-    #[test]
-    fn test_repo_mutate_result_render_text() {
-        use crate::output::Renderable;
-
-        // Arrange
-        let result = RepoMutateResult {
-            action: "add".to_string(),
-            repo: "owner/name".to_string(),
-            message: "Added repository: owner/name (Rust)".to_string(),
-        };
-        let ctx = OutputContext::from_cli(OutputFormat::Text, false);
-        let mut buf = Vec::new();
-
-        // Act
-        result.render_text(&mut buf, &ctx).unwrap();
-
-        // Assert
-        let output = String::from_utf8(buf).unwrap();
-        assert!(output.contains("Added repository: owner/name (Rust)"));
     }
 }

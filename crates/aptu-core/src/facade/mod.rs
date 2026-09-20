@@ -28,7 +28,6 @@ pub mod issues;
 pub mod models;
 pub mod pr_create;
 pub mod pr_review;
-pub mod repos;
 pub mod revert;
 
 pub use issues::format_issue;
@@ -42,11 +41,6 @@ pub use models::{list_models, validate_model};
 pub use pr_create::create_pr;
 #[cfg(not(target_arch = "wasm32"))]
 pub use pr_review::{analyze_pr, fetch_pr_for_review, label_pr, post_pr_review};
-#[cfg(not(target_arch = "wasm32"))]
-pub use repos::{
-    add_custom_repo, discover_repos, fetch_issues, list_curated_repos, list_repos,
-    remove_custom_repo,
-};
 pub use revert::RevertOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 pub use revert::{revert_issue, revert_pr};

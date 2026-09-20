@@ -12,12 +12,11 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 
 - `aptu-cli` - CLI interface (Clap derive); binary: `aptu`
 - `aptu-core` - Core library: AI providers, GitHub API, security scanner, triage engine, cache, contribution recording, retry, bulk processing
-  - `facade/` - High-level CLI/FFI entry points (ai_client, issues, models, pr_create, pr_review, repos, revert)
+  - `facade/` - High-level CLI/FFI entry points (ai_client, issues, models, pr_create, pr_review, revert)
 
 ## Config & Data Paths (XDG)
 
 - `~/.config/aptu/config.toml` - provider, model, defaults, `[prompt]` byte limits, `[review]` budgets
-- `~/.config/aptu/repos.toml` - curated repo list
 - `~/.local/share/aptu/history.json` - contribution history (recorded automatically; no viewer command)
 
 ## Commands

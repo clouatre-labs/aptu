@@ -381,24 +381,8 @@ enable sign-off for every repository:
 dco_signoff = true
 ```
 
-### Per-repository override (repos.toml)
-
-Override the global default for a specific repository in `~/.config/aptu/repos.toml`:
-
-```toml
-[[repo]]
-owner = "clouatre-labs"
-name = "aptu"
-dco_signoff = true   # require DCO for this repo regardless of global default
-
-[[repo]]
-owner = "some-org"
-name = "permissive-project"
-dco_signoff = false  # opt out even if global default is true
-```
-
-The per-repo value always takes precedence over the global default. The `--dco-signoff`
-CLI flag on `aptu pr create` overrides both.
+The `--dco-signoff`
+CLI flag on `aptu pr create` overrides the global default.
 
 ## Prompt Customization
 
