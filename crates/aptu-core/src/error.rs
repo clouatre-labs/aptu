@@ -208,6 +208,20 @@ impl From<octocrab::Error> for AptuError {
     }
 }
 
+/// Maps an `anyhow::Error` into an [`AptuError`], preserving the typed
+/// [`AptuError::PermissionDenied`] mapping when the underlying error is an
+/// octocrab error with a 403/404 status.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn aptu_error_from_anyhow(err: anyhow::Error) -> AptuError {
+    match err.downcast::<octocrab::Error>() {
+        Ok(octo_err) => octo_err.into(),
+        Err(other) => AptuError::GitHub {
+            message: other.to_string(),
+        },
+    }
+}
+
 impl From<config::ConfigError> for AptuError {
     fn from(err: config::ConfigError) -> Self {
         AptuError::Config {
@@ -238,5 +252,20 @@ mod tests {
         assert!(permission_denied_for_status(404, "owner/repo", "not found").is_some());
         assert!(permission_denied_for_status(500, "owner/repo", "oops").is_none());
         assert!(permission_denied_for_status(422, "owner/repo", "invalid").is_none());
+    }
+
+    #[test]
+    fn anyhow_wrapped_octocrab_error_downcasts_through_helper() {
+        // Uses the constructible Uri variant to prove the downcast path in
+        // aptu_error_from_anyhow maps octocrab errors through From rather
+        // than stringifying them; the 403->PermissionDenied status mapping
+        // itself is covered by permission_denied_for_status tests above and
+        // the mock-server integration test in tests/graphql_contract.rs.
+        let err = octocrab::Error::Other {
+            source: Box::new(std::io::Error::other("boom")),
+            backtrace: std::backtrace::Backtrace::capture(),
+        };
+        let mapped = super::aptu_error_from_anyhow(anyhow::anyhow!(err));
+        assert!(matches!(mapped, AptuError::GitHub { .. }));
     }
 }

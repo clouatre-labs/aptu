@@ -14,6 +14,7 @@ use crate::config::{AiConfig, TaskType};
 use crate::error::AptuError;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::create_client_from_provider;
+use crate::github::graphql::ViewerPermission;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::graphql::fetch_repo_viewer_permission;
 pub use crate::github::pulls::ReviewPostOutcome;
@@ -397,11 +398,8 @@ pub async fn post_pr_review(
     let client = create_client_from_provider(provider)?;
 
     // Gate on viewer permission: skip with an informational signal when denied
-    let perm = fetch_repo_viewer_permission(&client, &owner, &repo)
-        .await
-        .ok()
-        .flatten();
-    if !permission_allows(perm.map(|p| p.to_string()).as_deref()) {
+    let perm = fetch_repo_viewer_permission_cached(&client, &owner, &repo).await;
+    if !pr_write_allowed(perm) {
         tracing::info!(
             repo = %format!("{owner}/{repo}"),
             "Viewer lacks write access; skipping PR review"
@@ -466,9 +464,7 @@ pub async fn post_pr_review(
     )
     .await
     .map(WriteOutcome::Applied)
-    .map_err(|e| AptuError::GitHub {
-        message: e.to_string(),
-    })
+    .map_err(crate::error::aptu_error_from_anyhow)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -623,11 +619,8 @@ pub async fn label_pr(
     // Apply labels if not dry-run
     if !dry_run && !labels.is_empty() {
         // Gate on viewer permission: skip with an informational signal when denied
-        let perm = fetch_repo_viewer_permission(&client, &owner, &repo)
-            .await
-            .ok()
-            .flatten();
-        if !permission_allows(perm.map(|p| p.to_string()).as_deref()) {
+        let perm = fetch_repo_viewer_permission_cached(&client, &owner, &repo).await;
+        if !pr_write_allowed(perm) {
             tracing::info!(
                 repo = %format!("{owner}/{repo}"),
                 "Viewer lacks write access; skipping PR labeling"
@@ -637,9 +630,7 @@ pub async fn label_pr(
 
         apply_labels_to_number(&client, &owner, &repo, number, &labels)
             .await
-            .map_err(|e| AptuError::GitHub {
-                message: e.to_string(),
-            })?;
+            .map_err(crate::error::aptu_error_from_anyhow)?;
     }
 
     Ok(WriteOutcome::Applied((
@@ -662,9 +653,63 @@ pub async fn label_pr(
     crate::facade::wasm_unsupported!("label_pr");
 }
 
+/// Cache TTL for viewer permission lookups; short enough that revocations are
+/// picked up quickly while avoiding redundant GraphQL calls when multiple write
+/// operations target the same repository in one execution.
+#[cfg(not(target_arch = "wasm32"))]
+const VIEWER_PERMISSION_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+#[cfg(not(target_arch = "wasm32"))]
+type ViewerPermissionCache =
+    std::collections::HashMap<(String, String), (std::time::Instant, Option<ViewerPermission>)>;
+
+/// Process-wide cache of viewer permission lookups keyed by `(owner, repo)`.
+#[cfg(not(target_arch = "wasm32"))]
+fn viewer_permission_cache() -> &'static std::sync::Mutex<ViewerPermissionCache> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<ViewerPermissionCache>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Fetches the viewer permission for `owner/repo`, memoizing the result across
+/// calls within the cache TTL to avoid redundant GraphQL round-trips when
+/// several write operations (e.g. posting a review and applying labels) run
+/// against the same repository in a single execution.
+#[cfg(not(target_arch = "wasm32"))]
+async fn fetch_repo_viewer_permission_cached(
+    client: &octocrab::Octocrab,
+    owner: &str,
+    repo: &str,
+) -> Option<ViewerPermission> {
+    let key = (owner.to_string(), repo.to_string());
+    if let Ok(cache) = viewer_permission_cache().lock()
+        && let Some((fetched_at, perm)) = cache.get(&key)
+        && fetched_at.elapsed() < VIEWER_PERMISSION_CACHE_TTL
+    {
+        debug!(repo = %format!("{owner}/{repo}"), "Viewer permission cache hit");
+        return *perm;
+    }
+
+    let perm = fetch_repo_viewer_permission(client, owner, repo)
+        .await
+        .ok()
+        .flatten();
+    if let Ok(mut cache) = viewer_permission_cache().lock() {
+        cache.insert(key, (std::time::Instant::now(), perm));
+    }
+    perm
+}
+
+/// Gate predicate for PR write paths: denies only explicitly below-WRITE
+/// viewer permissions (same semantics as [`super::issues::can_write`]).
+fn pr_write_allowed(perm: Option<ViewerPermission>) -> bool {
+    permission_allows(perm.map(|p| p.to_string()).as_deref())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_COMMENT_SIDE, DedupOutcome, analyze_pr, dedup_outcome};
+    use super::{DEFAULT_COMMENT_SIDE, DedupOutcome, analyze_pr, dedup_outcome, pr_write_allowed};
     use crate::ai::types::{
         CommentSeverity, PrDetails, PrFile, PrReviewComment, PrReviewCommentDetails,
     };
@@ -681,6 +726,19 @@ mod tests {
         fn ai_api_key(&self, _provider: &str) -> Option<SecretString> {
             Some(SecretString::new("dummy-ai-key".to_string().into()))
         }
+    }
+
+    #[test]
+    fn pr_write_gate_denies_below_write_on_pr_path() {
+        use crate::github::graphql::ViewerPermission;
+        // Same gate as post_pr_review and label_pr: READ/TRIAGE deny writes,
+        // while None/unknown and WRITE-or-above allow them.
+        assert!(!pr_write_allowed(Some(ViewerPermission::Read)));
+        assert!(!pr_write_allowed(Some(ViewerPermission::Triage)));
+        assert!(pr_write_allowed(Some(ViewerPermission::Write)));
+        assert!(pr_write_allowed(Some(ViewerPermission::Maintain)));
+        assert!(pr_write_allowed(Some(ViewerPermission::Admin)));
+        assert!(pr_write_allowed(None));
     }
 
     #[tokio::test]
