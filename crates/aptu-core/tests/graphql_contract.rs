@@ -140,6 +140,63 @@ async fn resolve_tag_unwrapped_data_and_present_target_return_sha() {
     assert_eq!(result, Some("abc123".to_owned()));
 }
 
+#[tokio::test]
+async fn fetch_repo_viewer_permission_reads_unwrapped_data() {
+    // The wire body uses the full GraphQL envelope; octocrab unwraps `data`,
+    // so fetch_repo_viewer_permission must read repository.viewerPermission
+    // from the unwrapped response (same contract as fetch_issues).
+    let body = r#"{"data":{"repository":{"viewerPermission":"READ"}}}"#;
+    let (client, _listener) = client_with_server(body);
+    let perm = aptu_core::github::graphql::fetch_repo_viewer_permission(&client, "owner", "repo")
+        .await
+        .unwrap();
+    assert_eq!(
+        perm,
+        Some(aptu_core::github::graphql::ViewerPermission::Read)
+    );
+}
+
+fn serve_forbidden_once(listener: std::net::TcpListener) {
+    thread::spawn(move || {
+        for stream in listener.incoming().take(1) {
+            let Ok(mut stream) = stream else { continue };
+            let mut request = [0; 4096];
+            let _ = stream.read(&mut request);
+            let body = r#"{"message":"Must have write access"}"#;
+            let response = format!(
+                "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+}
+
+#[tokio::test]
+async fn label_write_403_maps_to_permission_denied() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let uri = format!("http://{}", listener.local_addr().unwrap());
+    let client = Octocrab::builder().base_uri(uri).unwrap().build().unwrap();
+    serve_forbidden_once(listener);
+
+    let err = aptu_core::github::issues::apply_labels_to_number(
+        &client,
+        "owner",
+        "repo",
+        1,
+        &["bug".to_string()],
+    )
+    .await
+    .expect_err("a 403 write must fail");
+
+    let mapped = aptu_core::error::aptu_error_from_anyhow(err);
+    assert!(matches!(
+        mapped,
+        aptu_core::AptuError::PermissionDenied { .. }
+    ));
+}
+
 // Unauthenticated requests share GitHub's 60/hr rate limit across the whole
 // runner IP and fail intermittently; authenticate so CI gets the higher
 // per-token limit instead.

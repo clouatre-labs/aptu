@@ -22,6 +22,47 @@ use crate::github::issues::{create_issue as gh_create_issue, filter_labels_by_re
 use crate::sanitize::{redact_secrets, sanitise_user_field};
 use crate::security::SecurityScanner;
 
+/// Outcome of a gated write operation on GitHub.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WriteOutcome<T> {
+    /// The write was performed; carries the operation result.
+    Applied(T),
+    /// The write was skipped because the viewer lacks write access.
+    Skipped,
+}
+
+impl<T> WriteOutcome<T> {
+    /// Returns true if the write was skipped due to missing permissions.
+    pub fn is_skipped(&self) -> bool {
+        matches!(self, Self::Skipped)
+    }
+
+    /// Returns the operation result if the write was performed.
+    pub fn applied(&self) -> Option<&T> {
+        match self {
+            Self::Applied(value) => Some(value),
+            Self::Skipped => None,
+        }
+    }
+}
+
+/// Whether a viewer permission level allows posting comments or labels.
+///
+/// `None` (null permission, common for some org/token combos) and unknown values
+/// are treated as allowed; only explicit below-`WRITE` levels (`READ`, `TRIAGE`)
+/// are denied.
+pub(crate) fn permission_allows(perm: Option<&str>) -> bool {
+    !matches!(
+        perm.map(str::to_ascii_uppercase).as_deref(),
+        Some("READ" | "TRIAGE")
+    )
+}
+
+/// Whether the viewer can write comments/labels on the given issue.
+pub(crate) fn can_write(details: &IssueDetails) -> bool {
+    permission_allows(details.viewer_permission.as_deref())
+}
+
 /// Analyzes a GitHub issue and generates triage suggestions.
 ///
 /// This function abstracts the credential resolution and API client creation,
@@ -261,6 +302,7 @@ pub async fn fetch_issue_for_triage(
     issue_details.author = issue_node.author.as_ref().map(|a| a.login.clone());
     issue_details.created_at = Some(issue_node.created_at.clone());
     issue_details.updated_at = Some(issue_node.updated_at.clone());
+    issue_details.viewer_permission = repo_data.viewer_permission.map(|p| p.to_string());
 
     // Extract keywords and language for parallel calls
     let keywords = crate::github::issues::extract_keywords(&issue_details.title);
@@ -348,7 +390,16 @@ pub async fn post_triage_comment(
     provider: &dyn TokenProvider,
     issue_details: &IssueDetails,
     triage: &TriageResponse,
-) -> crate::Result<String> {
+) -> crate::Result<WriteOutcome<String>> {
+    // Gate on viewer permission: skip with an informational signal when denied
+    if !can_write(issue_details) {
+        tracing::info!(
+            repo = %format!("{}/{}", issue_details.owner, issue_details.repo),
+            "Viewer lacks write access; skipping triage comment"
+        );
+        return Ok(WriteOutcome::Skipped);
+    }
+
     // Create GitHub client from provider
     let client = create_client_from_provider(provider)?;
 
@@ -367,7 +418,7 @@ pub async fn post_triage_comment(
     })?;
 
     debug!(comment_url = %comment_url, "Triage comment posted");
-    Ok(comment_url)
+    Ok(WriteOutcome::Applied(comment_url))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -375,7 +426,7 @@ pub async fn post_triage_comment(
     _provider: &dyn crate::auth::TokenProvider,
     _issue_details: &crate::ai::types::IssueDetails,
     _triage: &crate::ai::types::TriageResponse,
-) -> crate::Result<String> {
+) -> crate::Result<WriteOutcome<String>> {
     crate::facade::wasm_unsupported!("post_triage_comment");
 }
 
@@ -406,7 +457,16 @@ pub async fn apply_triage_labels(
     provider: &dyn TokenProvider,
     issue_details: &IssueDetails,
     triage: &TriageResponse,
-) -> crate::Result<crate::github::issues::ApplyResult> {
+) -> crate::Result<WriteOutcome<crate::github::issues::ApplyResult>> {
+    // Gate on viewer permission: skip with an informational signal when denied
+    if !can_write(issue_details) {
+        tracing::info!(
+            repo = %format!("{}/{}", issue_details.owner, issue_details.repo),
+            "Viewer lacks write access; skipping label application"
+        );
+        return Ok(WriteOutcome::Skipped);
+    }
+
     debug!("Applying labels and milestone to issue");
 
     // Create GitHub client from provider
@@ -437,7 +497,7 @@ pub async fn apply_triage_labels(
         "Labels and milestone applied"
     );
 
-    Ok(result)
+    Ok(WriteOutcome::Applied(result))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -445,7 +505,7 @@ pub async fn apply_triage_labels(
     _provider: &dyn crate::auth::TokenProvider,
     _issue_details: &crate::ai::types::IssueDetails,
     _triage: &crate::ai::types::TriageResponse,
-) -> crate::Result<crate::github::issues::ApplyResult> {
+) -> crate::Result<WriteOutcome<crate::github::issues::ApplyResult>> {
     crate::facade::wasm_unsupported!("apply_triage_labels");
 }
 
@@ -562,6 +622,7 @@ pub async fn post_issue(
 #[cfg(test)]
 mod tests {
     use super::analyze_issue;
+    use super::{can_write, permission_allows};
     use crate::ai::types::IssueDetails;
     use crate::auth::TokenProvider;
     use crate::config::AiConfig;
@@ -576,6 +637,47 @@ mod tests {
         fn ai_api_key(&self, _provider: &str) -> Option<SecretString> {
             Some(SecretString::new("dummy-ai-key".to_string().into()))
         }
+    }
+
+    fn issue_with_permission(permission: Option<&str>) -> IssueDetails {
+        IssueDetails {
+            owner: "test-owner".to_string(),
+            repo: "test-repo".to_string(),
+            number: 1,
+            title: "Test Issue".to_string(),
+            body: "Body".to_string(),
+            labels: vec![],
+            available_labels: vec![],
+            milestone: None,
+            comments: vec![],
+            url: "https://github.com/test-owner/test-repo/issues/1".to_string(),
+            repo_context: vec![],
+            repo_tree: vec![],
+            available_milestones: vec![],
+            viewer_permission: permission.map(std::string::ToString::to_string),
+            author: None,
+            created_at: None,
+            updated_at: None,
+        }
+    }
+
+    #[test]
+    fn test_can_write_below_write_denied() {
+        // READ and TRIAGE are below WRITE: denied
+        assert!(!can_write(&issue_with_permission(Some("READ"))));
+        assert!(!can_write(&issue_with_permission(Some("TRIAGE"))));
+        // WRITE/MAINTAIN/ADMIN allowed
+        assert!(can_write(&issue_with_permission(Some("WRITE"))));
+        assert!(can_write(&issue_with_permission(Some("MAINTAIN"))));
+        assert!(can_write(&issue_with_permission(Some("ADMIN"))));
+    }
+
+    #[test]
+    fn test_can_write_none_and_unknown_allowed() {
+        // None (null permission) and unknown values must not regress behavior
+        assert!(can_write(&issue_with_permission(None)));
+        assert!(can_write(&issue_with_permission(Some("SOMETHING_NEW"))));
+        assert!(permission_allows(None));
     }
 
     #[tokio::test]

@@ -215,12 +215,7 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
 
     // Phase 2: Post the comment (if not skipped)
     let comment_url = if should_post_comment {
-        let spinner = maybe_spinner(cfg.ctx, "Posting comment...");
-        let url = triage::post(&analyze_result).await?;
-        if let Some(s) = spinner {
-            s.finish_and_clear();
-        }
-        Some(url)
+        post_triage_comment(&analyze_result, &issue_details, cfg.ctx).await?
     } else {
         if matches!(cfg.ctx.format, OutputFormat::Text) && !cfg.no_comment {
             println!("{}", style("Triage not posted.").yellow());
@@ -232,19 +227,7 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
 
     // Phase 3: Apply labels and milestone if requested (independent of comment posting)
     if !cfg.no_apply {
-        let spinner = maybe_spinner(cfg.ctx, "Applying labels and milestone...");
-        let apply_result = triage::apply(&issue_details, &analyze_result.triage).await?;
-        if let Some(s) = spinner {
-            s.finish_and_clear();
-        }
-
-        result
-            .applied_labels
-            .clone_from(&apply_result.applied_labels);
-        result
-            .applied_milestone
-            .clone_from(&apply_result.applied_milestone);
-        result.apply_warnings.clone_from(&apply_result.warnings);
+        apply_triage_labels(&issue_details, &analyze_result.triage, cfg.ctx, &mut result).await?;
     }
 
     // Record to history only if comment was posted
@@ -267,6 +250,73 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
     show_triage_success(cfg.ctx, comment_url.as_deref(), &result, cfg.no_apply);
 
     Ok(Some(result))
+}
+
+/// Post a triage comment, returning the comment URL if posted.
+///
+/// Returns `None` with a warning when the viewer lacks write access.
+async fn post_triage_comment(
+    analyze_result: &triage::AnalyzeResult,
+    issue_details: &aptu_core::IssueDetails,
+    ctx: &OutputContext,
+) -> Result<Option<String>> {
+    let spinner = maybe_spinner(ctx, "Posting comment...");
+    let outcome = triage::post(analyze_result).await?;
+    if let Some(s) = spinner {
+        s.finish_and_clear();
+    }
+    if outcome.is_skipped() {
+        if matches!(ctx.format, OutputFormat::Text) {
+            println!(
+                "{}",
+                style(format!(
+                    "No write access to {}/{} - triage not posted",
+                    issue_details.owner, issue_details.repo
+                ))
+                .yellow()
+            );
+        }
+        return Ok(None);
+    }
+    Ok(outcome.applied().cloned())
+}
+
+/// Apply AI-suggested labels and milestone, updating the triage result.
+///
+/// Warns instead of applying when the viewer lacks write access.
+async fn apply_triage_labels(
+    issue_details: &aptu_core::IssueDetails,
+    triage: &aptu_core::TriageResponse,
+    ctx: &OutputContext,
+    result: &mut types::TriageResult,
+) -> Result<()> {
+    let spinner = maybe_spinner(ctx, "Applying labels and milestone...");
+    let apply_outcome = triage::apply(issue_details, triage).await?;
+    if let Some(s) = spinner {
+        s.finish_and_clear();
+    }
+
+    if apply_outcome.is_skipped() {
+        if matches!(ctx.format, OutputFormat::Text) {
+            println!(
+                "{}",
+                style(format!(
+                    "No write access to {}/{} - labels not applied",
+                    issue_details.owner, issue_details.repo
+                ))
+                .yellow()
+            );
+        }
+    } else if let Some(apply_result) = apply_outcome.applied() {
+        result
+            .applied_labels
+            .clone_from(&apply_result.applied_labels);
+        result
+            .applied_milestone
+            .clone_from(&apply_result.applied_milestone);
+        result.apply_warnings.clone_from(&apply_result.warnings);
+    }
+    Ok(())
 }
 
 /// Review a single PR and return the result.

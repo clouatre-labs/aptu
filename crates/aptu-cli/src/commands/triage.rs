@@ -79,26 +79,32 @@ pub async fn analyze(
 }
 
 /// Post a triage comment to GitHub.
+///
+/// Returns `WriteOutcome::Skipped` when the viewer lacks write access.
 #[instrument(skip_all, fields(issue_number = analyze_result.issue_details.number))]
-pub async fn post(analyze_result: &AnalyzeResult) -> Result<String> {
+pub async fn post(
+    analyze_result: &AnalyzeResult,
+) -> Result<aptu_core::facade::issues::WriteOutcome<String>> {
     // Create CLI token provider
     let provider = CliTokenProvider;
 
     // Call facade to post comment
-    let comment_url = aptu_core::post_triage_comment(
+    let outcome = aptu_core::post_triage_comment(
         &provider,
         &analyze_result.issue_details,
         &analyze_result.triage,
     )
     .await?;
 
-    info!(comment_url = %comment_url, "Triage comment posted");
-    debug!(
-        "Triage complete for issue #{}",
-        analyze_result.issue_details.number
-    );
+    if let aptu_core::facade::issues::WriteOutcome::Applied(comment_url) = &outcome {
+        info!(comment_url = %comment_url, "Triage comment posted");
+        debug!(
+            "Triage complete for issue #{}",
+            analyze_result.issue_details.number
+        );
+    }
 
-    Ok(comment_url)
+    Ok(outcome)
 }
 
 /// Apply AI-suggested labels and milestone to an issue.
@@ -117,21 +123,23 @@ pub async fn post(analyze_result: &AnalyzeResult) -> Result<String> {
 pub async fn apply(
     issue_details: &IssueDetails,
     triage: &TriageResponse,
-) -> Result<aptu_core::github::issues::ApplyResult> {
+) -> Result<aptu_core::facade::issues::WriteOutcome<aptu_core::github::issues::ApplyResult>> {
     // Create CLI token provider
     let provider = CliTokenProvider;
 
     debug!("Applying labels and milestone to issue");
 
     // Call facade to apply labels
-    let result = aptu_core::apply_triage_labels(&provider, issue_details, triage).await?;
+    let outcome = aptu_core::apply_triage_labels(&provider, issue_details, triage).await?;
 
-    info!(
-        labels = ?result.applied_labels,
-        milestone = ?result.applied_milestone,
-        warnings = ?result.warnings,
-        "Labels and milestone applied"
-    );
+    if let aptu_core::facade::issues::WriteOutcome::Applied(result) = &outcome {
+        info!(
+            labels = ?result.applied_labels,
+            milestone = ?result.applied_milestone,
+            warnings = ?result.warnings,
+            "Labels and milestone applied"
+        );
+    }
 
-    Ok(result)
+    Ok(outcome)
 }

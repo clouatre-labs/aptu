@@ -109,6 +109,7 @@ pub use utils::{
 // ============================================================================
 
 pub use facade::format_issue;
+pub use facade::issues::WriteOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 pub use facade::{
     add_custom_repo, analyze_issue, analyze_pr, apply_triage_labels, create_pr, discover_repos,

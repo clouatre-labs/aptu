@@ -36,6 +36,9 @@ pub fn format_error(error: &Error) -> String {
             AptuError::NotAuthenticated => {
                 "Authentication required - run `aptu auth login` first".to_string()
             }
+            AptuError::PermissionDenied { resource, message } => format!(
+                "Permission denied for {resource}: {message}\n\nTip: verify your token has write access to this repository."
+            ),
             AptuError::AiProviderNotAuthenticated { provider, env_var } => {
                 let mut msg = format!("AI provider '{provider}' is not authenticated\n");
                 let _ = write!(

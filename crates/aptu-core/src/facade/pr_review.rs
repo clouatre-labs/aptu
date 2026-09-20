@@ -4,6 +4,7 @@
 
 use tracing::{debug, error, instrument};
 
+use super::issues::{WriteOutcome, permission_allows};
 use crate::ai::provider::AiProvider;
 use crate::ai::types::{PrDetails, PrReviewComment, ReviewEvent};
 use crate::auth::TokenProvider;
@@ -13,6 +14,9 @@ use crate::config::{AiConfig, TaskType};
 use crate::error::AptuError;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::auth::create_client_from_provider;
+use crate::github::graphql::ViewerPermission;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::github::graphql::fetch_repo_viewer_permission;
 pub use crate::github::pulls::ReviewPostOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::pulls::{
@@ -381,7 +385,7 @@ pub async fn post_pr_review(
     comments: &[PrReviewComment],
     commit_id: &str,
     existing_comments: &[crate::ai::types::PrReviewCommentDetails],
-) -> crate::Result<ReviewPostOutcome> {
+) -> crate::Result<WriteOutcome<ReviewPostOutcome>> {
     use crate::github::pulls::parse_pr_reference;
 
     // Parse PR reference
@@ -392,6 +396,16 @@ pub async fn post_pr_review(
 
     // Create GitHub client from provider
     let client = create_client_from_provider(provider)?;
+
+    // Gate on viewer permission: skip with an informational signal when denied
+    let perm = fetch_repo_viewer_permission_cached(&client, &owner, &repo).await;
+    if !pr_write_allowed(perm) {
+        tracing::info!(
+            repo = %format!("{owner}/{repo}"),
+            "Viewer lacks write access; skipping PR review"
+        );
+        return Ok(WriteOutcome::Skipped);
+    }
 
     // Build dedup map from existing bot-authored review comments keyed on (path, line, side).
     // Comments with line=None (general PR comments) are not inline duplicates, so they are excluded
@@ -449,9 +463,8 @@ pub async fn post_pr_review(
         &client, &owner, &repo, number, body, event, &filtered, commit_id,
     )
     .await
-    .map_err(|e| AptuError::GitHub {
-        message: e.to_string(),
-    })
+    .map(WriteOutcome::Applied)
+    .map_err(crate::error::aptu_error_from_anyhow)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -465,9 +478,12 @@ pub async fn post_pr_review(
     _comments: &[crate::ai::types::PrReviewComment],
     _commit_id: &str,
     _existing_comments: &[crate::ai::types::PrReviewCommentDetails],
-) -> crate::Result<ReviewPostOutcome> {
+) -> crate::Result<WriteOutcome<ReviewPostOutcome>> {
     crate::facade::wasm_unsupported!("post_pr_review");
 }
+
+/// Outcome payload for [`label_pr`]: PR number, title, URL, applied labels, and AI stats.
+pub type LabelPrOutcome = (u64, String, String, Vec<String>, crate::history::AiStats);
 
 /// Auto-label a pull request based on conventional commit prefix and file paths.
 ///
@@ -493,13 +509,14 @@ pub async fn post_pr_review(
 /// - API call fails
 #[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider), fields(reference = %reference))]
+#[allow(clippy::too_many_lines)]
 pub async fn label_pr(
     provider: &dyn TokenProvider,
     reference: &str,
     repo_context: Option<&str>,
     dry_run: bool,
     ai_config: &AiConfig,
-) -> crate::Result<(u64, String, String, Vec<String>, crate::history::AiStats)> {
+) -> crate::Result<WriteOutcome<LabelPrOutcome>> {
     use crate::github::issues::apply_labels_to_number;
     use crate::github::pulls::{fetch_pr_details, labels_from_pr_metadata, parse_pr_reference};
 
@@ -601,14 +618,28 @@ pub async fn label_pr(
 
     // Apply labels if not dry-run
     if !dry_run && !labels.is_empty() {
+        // Gate on viewer permission: skip with an informational signal when denied
+        let perm = fetch_repo_viewer_permission_cached(&client, &owner, &repo).await;
+        if !pr_write_allowed(perm) {
+            tracing::info!(
+                repo = %format!("{owner}/{repo}"),
+                "Viewer lacks write access; skipping PR labeling"
+            );
+            return Ok(WriteOutcome::Skipped);
+        }
+
         apply_labels_to_number(&client, &owner, &repo, number, &labels)
             .await
-            .map_err(|e| AptuError::GitHub {
-                message: e.to_string(),
-            })?;
+            .map_err(crate::error::aptu_error_from_anyhow)?;
     }
 
-    Ok((number, pr_details.title, pr_details.url, labels, stats))
+    Ok(WriteOutcome::Applied((
+        number,
+        pr_details.title,
+        pr_details.url,
+        labels,
+        stats,
+    )))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -618,13 +649,67 @@ pub async fn label_pr(
     _repo_context: Option<&str>,
     _dry_run: bool,
     _ai_config: &crate::config::AiConfig,
-) -> crate::Result<(u64, String, String, Vec<String>, crate::history::AiStats)> {
+) -> crate::Result<WriteOutcome<LabelPrOutcome>> {
     crate::facade::wasm_unsupported!("label_pr");
+}
+
+/// Cache TTL for viewer permission lookups; short enough that revocations are
+/// picked up quickly while avoiding redundant GraphQL calls when multiple write
+/// operations target the same repository in one execution.
+#[cfg(not(target_arch = "wasm32"))]
+const VIEWER_PERMISSION_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+#[cfg(not(target_arch = "wasm32"))]
+type ViewerPermissionCache =
+    std::collections::HashMap<(String, String), (std::time::Instant, Option<ViewerPermission>)>;
+
+/// Process-wide cache of viewer permission lookups keyed by `(owner, repo)`.
+#[cfg(not(target_arch = "wasm32"))]
+fn viewer_permission_cache() -> &'static std::sync::Mutex<ViewerPermissionCache> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<ViewerPermissionCache>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Fetches the viewer permission for `owner/repo`, memoizing the result across
+/// calls within the cache TTL to avoid redundant GraphQL round-trips when
+/// several write operations (e.g. posting a review and applying labels) run
+/// against the same repository in a single execution.
+#[cfg(not(target_arch = "wasm32"))]
+async fn fetch_repo_viewer_permission_cached(
+    client: &octocrab::Octocrab,
+    owner: &str,
+    repo: &str,
+) -> Option<ViewerPermission> {
+    let key = (owner.to_string(), repo.to_string());
+    if let Ok(cache) = viewer_permission_cache().lock()
+        && let Some((fetched_at, perm)) = cache.get(&key)
+        && fetched_at.elapsed() < VIEWER_PERMISSION_CACHE_TTL
+    {
+        debug!(repo = %format!("{owner}/{repo}"), "Viewer permission cache hit");
+        return *perm;
+    }
+
+    let perm = fetch_repo_viewer_permission(client, owner, repo)
+        .await
+        .ok()
+        .flatten();
+    if let Ok(mut cache) = viewer_permission_cache().lock() {
+        cache.insert(key, (std::time::Instant::now(), perm));
+    }
+    perm
+}
+
+/// Gate predicate for PR write paths: denies only explicitly below-WRITE
+/// viewer permissions (same semantics as [`super::issues::can_write`]).
+fn pr_write_allowed(perm: Option<ViewerPermission>) -> bool {
+    permission_allows(perm.map(|p| p.to_string()).as_deref())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_COMMENT_SIDE, DedupOutcome, analyze_pr, dedup_outcome};
+    use super::{DEFAULT_COMMENT_SIDE, DedupOutcome, analyze_pr, dedup_outcome, pr_write_allowed};
     use crate::ai::types::{
         CommentSeverity, PrDetails, PrFile, PrReviewComment, PrReviewCommentDetails,
     };
@@ -641,6 +726,19 @@ mod tests {
         fn ai_api_key(&self, _provider: &str) -> Option<SecretString> {
             Some(SecretString::new("dummy-ai-key".to_string().into()))
         }
+    }
+
+    #[test]
+    fn pr_write_gate_denies_below_write_on_pr_path() {
+        use crate::github::graphql::ViewerPermission;
+        // Same gate as post_pr_review and label_pr: READ/TRIAGE deny writes,
+        // while None/unknown and WRITE-or-above allow them.
+        assert!(!pr_write_allowed(Some(ViewerPermission::Read)));
+        assert!(!pr_write_allowed(Some(ViewerPermission::Triage)));
+        assert!(pr_write_allowed(Some(ViewerPermission::Write)));
+        assert!(pr_write_allowed(Some(ViewerPermission::Maintain)));
+        assert!(pr_write_allowed(Some(ViewerPermission::Admin)));
+        assert!(pr_write_allowed(None));
     }
 
     #[tokio::test]

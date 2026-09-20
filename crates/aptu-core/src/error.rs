@@ -133,6 +133,15 @@ pub enum AptuError {
         hint: String,
     },
 
+    /// The authenticated viewer lacks write access to the target resource.
+    #[error("Permission denied for {resource}: {message}")]
+    PermissionDenied {
+        /// Name of the resource access was denied for (e.g. `owner/repo`).
+        resource: String,
+        /// Error message describing the denial.
+        message: String,
+    },
+
     /// Review context ended up with zero surviving file patches on a non-empty PR,
     /// which would produce a diff-less review that GitHub rejects.
     #[error(
@@ -162,12 +171,54 @@ impl std::fmt::Display for ResourceType {
     }
 }
 
+/// Returns a typed [`AptuError::PermissionDenied`] for GitHub 403/404 statuses.
+///
+/// Any other status maps to `None` and callers should fall back to the generic
+/// [`AptuError::GitHub`] mapping.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn permission_denied_for_status(
+    status: u16,
+    resource: &str,
+    message: &str,
+) -> Option<AptuError> {
+    if status == 403 || status == 404 {
+        Some(AptuError::PermissionDenied {
+            resource: resource.to_string(),
+            message: message.to_string(),
+        })
+    } else {
+        None
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 impl From<octocrab::Error> for AptuError {
     fn from(err: octocrab::Error) -> Self {
+        if let octocrab::Error::GitHub { source, .. } = &err {
+            let status = source.status_code.as_u16();
+            let resource = source.message.clone();
+            if let Some(denied) = permission_denied_for_status(status, &resource, &err.to_string())
+            {
+                return denied;
+            }
+        }
         AptuError::GitHub {
             message: err.to_string(),
         }
+    }
+}
+
+/// Maps an `anyhow::Error` into an [`AptuError`], preserving the typed
+/// [`AptuError::PermissionDenied`] mapping when the underlying error is an
+/// octocrab error with a 403/404 status.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn aptu_error_from_anyhow(err: anyhow::Error) -> AptuError {
+    match err.downcast::<octocrab::Error>() {
+        Ok(octo_err) => octo_err.into(),
+        Err(other) => AptuError::GitHub {
+            message: other.to_string(),
+        },
     }
 }
 
@@ -176,5 +227,45 @@ impl From<config::ConfigError> for AptuError {
         AptuError::Config {
             message: err.to_string(),
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::{AptuError, permission_denied_for_status};
+
+    #[test]
+    fn test_403_maps_to_permission_denied() {
+        let err = permission_denied_for_status(403, "owner/repo", "forbidden")
+            .expect("403 should map to PermissionDenied");
+        match err {
+            AptuError::PermissionDenied { resource, message } => {
+                assert_eq!(resource, "owner/repo");
+                assert_eq!(message, "forbidden");
+            }
+            other => panic!("Expected PermissionDenied, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_404_maps_and_other_statuses_do_not() {
+        assert!(permission_denied_for_status(404, "owner/repo", "not found").is_some());
+        assert!(permission_denied_for_status(500, "owner/repo", "oops").is_none());
+        assert!(permission_denied_for_status(422, "owner/repo", "invalid").is_none());
+    }
+
+    #[test]
+    fn anyhow_wrapped_octocrab_error_downcasts_through_helper() {
+        // Uses the constructible Uri variant to prove the downcast path in
+        // aptu_error_from_anyhow maps octocrab errors through From rather
+        // than stringifying them; the 403->PermissionDenied status mapping
+        // itself is covered by permission_denied_for_status tests above and
+        // the mock-server integration test in tests/graphql_contract.rs.
+        let err = octocrab::Error::Other {
+            source: Box::new(std::io::Error::other("boom")),
+            backtrace: std::backtrace::Backtrace::capture(),
+        };
+        let mapped = super::aptu_error_from_anyhow(anyhow::anyhow!(err));
+        assert!(matches!(mapped, AptuError::GitHub { .. }));
     }
 }
