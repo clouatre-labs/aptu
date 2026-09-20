@@ -277,44 +277,6 @@ pub enum IssueCommand {
         #[arg(short, long)]
         force: bool,
     },
-
-    /// Create a GitHub issue with AI assistance
-    Create {
-        /// Repository (OWNER/REPO) for the issue
-        #[arg(long, short = 'r')]
-        repo: Option<String>,
-
-        /// Issue title (interactive prompt if not provided)
-        #[arg(long)]
-        title: Option<String>,
-
-        /// Issue body/description (interactive prompt if not provided)
-        #[arg(long)]
-        body: Option<String>,
-
-        /// Read issue content from file (text or markdown)
-        #[arg(long)]
-        from: Option<String>,
-
-        /// Preview issue creation without posting to GitHub
-        #[arg(long)]
-        dry_run: bool,
-    },
-
-    /// Revert all comments and labels posted by aptu on an issue
-    Revert {
-        /// Issue reference (URL, owner/repo#number, or number)
-        #[arg(value_name = "ISSUE")]
-        issue: String,
-
-        /// Repository for bare issue numbers (e.g., "block/goose")
-        #[arg(long, short = 'r')]
-        repo: Option<String>,
-
-        /// Preview revert without making deletions
-        #[arg(long)]
-        dry_run: bool,
-    },
 }
 
 /// Completion subcommands
@@ -408,41 +370,6 @@ pub enum PrCommand {
         dry_run: bool,
     },
 
-    /// Create a pull request
-    Create {
-        /// Repository in owner/repo format (inferred from git if not provided)
-        #[arg(long)]
-        repo: Option<String>,
-
-        /// PR title
-        #[arg(long)]
-        title: String,
-
-        /// PR body
-        #[arg(long)]
-        body: Option<String>,
-
-        /// Head branch. Defaults to current git branch.
-        #[arg(long)]
-        branch: Option<String>,
-
-        /// Base branch. Defaults to main.
-        #[arg(long, default_value = "main")]
-        base: String,
-
-        /// Unified diff file to apply and commit before creating the PR
-        #[arg(long, value_name = "FILE")]
-        diff: Option<std::path::PathBuf>,
-
-        /// Create PR as draft
-        #[arg(long)]
-        draft: bool,
-
-        /// Force patch application despite security findings
-        #[arg(long, short = 'f')]
-        force: bool,
-    },
-
     /// List and rank open pull requests by reviewability
     ///
     /// Fetches open PRs for a repository and ranks them by a composite score:
@@ -458,21 +385,6 @@ pub enum PrCommand {
         /// Maximum number of PRs to display (0 = no limit)
         #[arg(long, default_value = "10")]
         limit: u32,
-    },
-
-    /// Revert all comments and labels posted by aptu on a PR
-    Revert {
-        /// PR reference (URL, owner/repo#number, or number)
-        #[arg(value_name = "PR")]
-        pr: String,
-
-        /// Repository for bare PR numbers (e.g., "block/goose")
-        #[arg(long, short = 'r')]
-        repo: Option<String>,
-
-        /// Preview revert without making deletions
-        #[arg(long)]
-        dry_run: bool,
     },
 }
 
@@ -507,24 +419,4 @@ pub enum ModelsCommand {
         #[arg(long)]
         filter: Option<String>,
     },
-}
-
-#[cfg(test)]
-mod clap_conflict_tests {
-    use super::*;
-
-    #[test]
-    fn test_issue_create_with_repo_flag() {
-        let result = Cli::try_parse_from(["prog", "issue", "create", "--repo", "owner/repo"]);
-        match result {
-            Ok(cli) => {
-                if let Commands::Issue(IssueCommand::Create { repo, .. }) = cli.command {
-                    assert_eq!(repo, Some("owner/repo".to_string()));
-                }
-            }
-            Err(e) => {
-                panic!("Failed to parse issue create with --repo flag: {e}");
-            }
-        }
-    }
 }

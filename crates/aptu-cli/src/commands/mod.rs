@@ -5,7 +5,6 @@
 pub mod auth;
 pub mod common;
 pub mod completion;
-pub mod create;
 pub mod models;
 pub mod pr;
 pub mod scan_security;
@@ -27,7 +26,7 @@ use crate::cli::{
 use crate::commands::common::maybe_spinner;
 use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewOutcome};
 use crate::output;
-use aptu_core::{AppConfig, State, check_already_triaged, history::ContributionStatus};
+use aptu_core::{AppConfig, State, check_already_triaged};
 
 /// Options for PR review behavior.
 #[allow(clippy::struct_excessive_bools)]
@@ -653,104 +652,6 @@ async fn run_issue_command(
 
             Ok(())
         }
-        IssueCommand::Create {
-            repo,
-            title,
-            body,
-            from,
-            dry_run,
-        } => {
-            let Some(effective_repo) = repo else {
-                anyhow::bail!("repository is required; use --repo OWNER/REPO");
-            };
-            let spinner = maybe_spinner(&ctx, "Creating issue...");
-            let result = create::run(effective_repo, title, body, from, dry_run).await?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            output::render(&result, &ctx)?;
-            Ok(())
-        }
-        IssueCommand::Revert {
-            issue,
-            repo,
-            dry_run,
-        } => {
-            let spinner = maybe_spinner(&ctx, "Reverting issue...");
-
-            // Determine repo context: --repo flag > inferred_repo > default_repo config
-            let repo_context = repo
-                .as_deref()
-                .or(inferred_repo.as_deref())
-                .or(config.user.default_repo.as_deref());
-
-            // Parse issue reference
-            let (owner, repo_name, issue_number) =
-                aptu_core::github::issues::parse_issue_reference(&issue, repo_context)
-                    .context("Failed to parse issue reference")?;
-
-            // Create GitHub client
-            let gh_client = aptu_core::github::auth::create_client()
-                .context("Failed to create GitHub client")?;
-
-            // Call revert_issue facade function
-            let outcome = aptu_core::facade::revert_issue(
-                &gh_client,
-                &owner,
-                &repo_name,
-                issue_number,
-                dry_run,
-            )
-            .await
-            .context("Failed to revert issue")?;
-
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-
-            // Record history entry
-            let action_name = if dry_run {
-                "revert-dry-run".to_string()
-            } else {
-                "revert".to_string()
-            };
-            aptu_core::history::add_contribution(aptu_core::history::Contribution {
-                id: uuid::Uuid::new_v4(),
-                repo: format!("{owner}/{repo_name}"),
-                issue: issue_number,
-                action: action_name,
-                timestamp: chrono::Utc::now(),
-                comment_url: String::new(),
-                status: ContributionStatus::default(),
-                ai_stats: None,
-            })
-            .ok();
-
-            // Format result
-            let comments_count = outcome.comment_ids.len();
-            let result = types::RevertResult {
-                dry_run,
-                labels_removed: outcome.labels_removed.clone(),
-                comments_removed: comments_count,
-                comment_ids: outcome.comment_ids,
-                summary: if dry_run {
-                    format!(
-                        "Would remove {} comments and {} labels from issue #{issue_number}",
-                        comments_count,
-                        outcome.labels_removed.len()
-                    )
-                } else {
-                    format!(
-                        "Removed {} comments and {} labels from issue #{issue_number}",
-                        comments_count,
-                        outcome.labels_removed.len()
-                    )
-                },
-            };
-
-            output::render(&result, &ctx)?;
-            Ok(())
-        }
     }
 }
 
@@ -898,36 +799,6 @@ async fn run_pr_command(
             output::render(&result, &ctx)?;
             Ok(())
         }
-        PrCommand::Create {
-            repo,
-            title,
-            body,
-            branch,
-            base,
-            diff,
-            draft,
-            force,
-        } => {
-            let spinner = maybe_spinner(&ctx, "Creating pull request...");
-            let result = pr::run_pr_create(
-                repo,
-                inferred_repo,
-                config.user.default_repo.clone(),
-                title,
-                body,
-                branch,
-                base,
-                diff,
-                draft,
-                force,
-            )
-            .await?;
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-            output::render(&result, &ctx)?;
-            Ok(())
-        }
         PrCommand::Queue { repo, limit } => {
             let repo_context = repo
                 .as_deref()
@@ -946,77 +817,6 @@ async fn run_pr_command(
             if let Some(s) = spinner {
                 s.finish_and_clear();
             }
-            output::render(&result, &ctx)?;
-            Ok(())
-        }
-        PrCommand::Revert { pr, repo, dry_run } => {
-            let spinner = maybe_spinner(&ctx, "Reverting PR...");
-
-            // Determine repo context: --repo flag > inferred_repo > default_repo config
-            let repo_context = repo
-                .as_deref()
-                .or(inferred_repo.as_deref())
-                .or(config.user.default_repo.as_deref());
-
-            // Parse PR reference
-            let (owner, repo_name, pr_number) =
-                aptu_core::github::pulls::parse_pr_reference(&pr, repo_context)
-                    .context("Failed to parse PR reference")?;
-
-            // Create GitHub client
-            let gh_client = aptu_core::github::auth::create_client()
-                .context("Failed to create GitHub client")?;
-
-            // Call revert_pr facade function
-            let outcome =
-                aptu_core::facade::revert_pr(&gh_client, &owner, &repo_name, pr_number, dry_run)
-                    .await
-                    .context("Failed to revert PR")?;
-
-            if let Some(s) = spinner {
-                s.finish_and_clear();
-            }
-
-            // Record history entry
-            let action_name = if dry_run {
-                "revert-dry-run".to_string()
-            } else {
-                "revert".to_string()
-            };
-            aptu_core::history::add_contribution(aptu_core::history::Contribution {
-                id: uuid::Uuid::new_v4(),
-                repo: format!("{owner}/{repo_name}"),
-                issue: pr_number,
-                action: action_name,
-                timestamp: chrono::Utc::now(),
-                comment_url: String::new(),
-                status: ContributionStatus::default(),
-                ai_stats: None,
-            })
-            .ok();
-
-            // Format result
-            let comments_count = outcome.comment_ids.len();
-            let result = types::RevertResult {
-                dry_run,
-                labels_removed: outcome.labels_removed.clone(),
-                comments_removed: comments_count,
-                comment_ids: outcome.comment_ids,
-                summary: if dry_run {
-                    format!(
-                        "Would remove {} comments and {} labels from PR #{pr_number}",
-                        comments_count,
-                        outcome.labels_removed.len()
-                    )
-                } else {
-                    format!(
-                        "Removed {} comments and {} labels from PR #{pr_number}",
-                        comments_count,
-                        outcome.labels_removed.len()
-                    )
-                },
-            };
-
             output::render(&result, &ctx)?;
             Ok(())
         }

@@ -6,7 +6,7 @@ use secrecy::SecretString;
 use tracing::{debug, error, instrument};
 
 use crate::ai::provider::MAX_LABELS;
-use crate::ai::types::{CreateIssueResponse, IssueDetails, TriageResponse};
+use crate::ai::types::{IssueDetails, TriageResponse};
 use crate::ai::{AiProvider, AiResponse};
 use crate::auth::TokenProvider;
 #[cfg(not(target_arch = "wasm32"))]
@@ -18,7 +18,7 @@ use crate::github::auth::{create_client_from_provider, create_client_with_token}
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::graphql::fetch_issue_with_repo_context;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::github::issues::{create_issue as gh_create_issue, filter_labels_by_relevance};
+use crate::github::issues::filter_labels_by_relevance;
 use crate::sanitize::{redact_secrets, sanitise_user_field};
 use crate::security::SecurityScanner;
 
@@ -507,116 +507,6 @@ pub async fn apply_triage_labels(
     _triage: &crate::ai::types::TriageResponse,
 ) -> crate::Result<WriteOutcome<crate::github::issues::ApplyResult>> {
     crate::facade::wasm_unsupported!("apply_triage_labels");
-}
-
-/// Formats a GitHub issue with AI assistance.
-///
-/// This function takes raw issue title and body, and uses AI to format them
-/// according to project conventions. Returns formatted title, body, and suggested labels.
-///
-/// This is the first step of the two-step issue creation process. Use `post_issue()`
-/// to post the formatted issue to GitHub.
-///
-/// # Arguments
-///
-/// * `provider` - Token provider for AI provider credentials
-/// * `title` - Raw issue title
-/// * `body` - Raw issue body
-/// * `repo` - Repository name (owner/repo format) for context
-/// * `ai_config` - AI configuration (provider, model, etc.)
-///
-/// # Returns
-///
-/// `CreateIssueResponse` with formatted title, body, and suggested labels.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - AI provider token is not available from the provider
-/// - AI API call fails
-/// - Response parsing fails
-#[instrument(skip(provider, ai_config), fields(repo = %repo))]
-pub async fn format_issue(
-    provider: &dyn TokenProvider,
-    title: &str,
-    body: &str,
-    repo: &str,
-    ai_config: &AiConfig,
-) -> crate::Result<CreateIssueResponse> {
-    // Resolve task-specific provider and model
-    let (provider_name, model_name) = ai_config.resolve_for_task(TaskType::Create, None);
-
-    // Use fallback chain if configured
-    super::ai_client::try_with_fallback(
-        provider,
-        &provider_name,
-        &model_name,
-        ai_config,
-        |client| {
-            let title = title.to_string();
-            let body = body.to_string();
-            let repo = repo.to_string();
-            async move {
-                let (response, _stats) = client.create_issue(&title, &body, &repo).await?;
-                Ok(response)
-            }
-        },
-    )
-    .await
-}
-
-/// Posts a formatted issue to GitHub.
-///
-/// This function takes formatted issue content and posts it to GitHub.
-/// It is the second step of the two-step issue creation process.
-/// Use `format_issue()` first to format the issue content.
-///
-/// # Arguments
-///
-/// * `provider` - Token provider for GitHub credentials
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-/// * `title` - Formatted issue title
-/// * `body` - Formatted issue body
-///
-/// # Returns
-///
-/// Tuple of (`issue_url`, `issue_number`).
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - GitHub token is not available from the provider
-/// - GitHub API call fails
-#[cfg(not(target_arch = "wasm32"))]
-#[instrument(skip(provider), fields(owner = %owner, repo = %repo))]
-pub async fn post_issue(
-    provider: &dyn TokenProvider,
-    owner: &str,
-    repo: &str,
-    title: &str,
-    body: &str,
-) -> crate::Result<(String, u64)> {
-    // Create GitHub client from provider
-    let client = create_client_from_provider(provider)?;
-
-    // Post issue to GitHub
-    Box::pin(gh_create_issue(&client, owner, repo, title, body))
-        .await
-        .map_err(|e| AptuError::GitHub {
-            message: e.to_string(),
-        })
-}
-
-#[cfg(target_arch = "wasm32")]
-pub async fn post_issue(
-    _provider: &dyn crate::auth::TokenProvider,
-    _owner: &str,
-    _repo: &str,
-    _title: &str,
-    _body: &str,
-) -> crate::Result<(String, u64)> {
-    crate::facade::wasm_unsupported!("post_issue");
 }
 
 #[cfg(test)]

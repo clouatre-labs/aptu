@@ -6,7 +6,6 @@
 //! along with default implementations for shared logic like prompt building,
 //! request sending, and response parsing.
 
-pub mod create;
 pub mod http;
 pub mod label;
 pub mod parse;
@@ -20,8 +19,7 @@ use secrecy::SecretString;
 
 use crate::ai::registry::ProviderConfig;
 use crate::ai::types::{
-    ChatCompletionRequest, ChatCompletionResponse, CreateIssueResponse, IssueDetails,
-    PrReviewResponse,
+    ChatCompletionRequest, ChatCompletionResponse, IssueDetails, PrReviewResponse,
 };
 use crate::history::AiStats;
 
@@ -160,22 +158,6 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_system_prompt(custom_guidance: Option<&str>) -> String {
         self::triage::build_system_prompt(custom_guidance)
-    }
-
-    /// Builds the system prompt for issue creation/formatting.
-    #[must_use]
-    fn build_create_system_prompt(custom_guidance: Option<&str>) -> String {
-        self::create::build_create_system_prompt_fn(custom_guidance)
-    }
-
-    /// Creates a formatted GitHub issue using the provider's API.
-    async fn create_issue(
-        &self,
-        title: &str,
-        body: &str,
-        repo: &str,
-    ) -> Result<(CreateIssueResponse, AiStats)> {
-        self::create::create_issue(self, title, body, repo).await
     }
 
     /// Reviews a pull request using the provider's API.

@@ -21,7 +21,7 @@ pub use dep_enrichment::enrich_dep_releases;
 pub use models::{AiModel, ModelProvider};
 pub use provider::AiProvider;
 pub use registry::{PROVIDER_ANTHROPIC, ProviderConfig, all_providers, get_provider};
-pub use types::{CreateIssueResponse, CreditsStatus, DepReleaseNote, TriageResponse};
+pub use types::{CreditsStatus, DepReleaseNote, TriageResponse};
 
 use crate::history::AiStats;
 
@@ -56,31 +56,4 @@ pub fn setup_primary_client(config: &crate::config::AppConfig) -> anyhow::Result
 
     // Fall back to environment variable for non-Anthropic providers
     AiClient::new(&config.ai.provider, &config.ai)
-}
-
-/// Creates a formatted GitHub issue using AI assistance.
-///
-/// Takes raw issue title and body, formats them professionally using the configured AI provider.
-/// Returns formatted title, body, and suggested labels.
-///
-/// # Arguments
-///
-/// * `title` - Raw issue title from user
-/// * `body` - Raw issue body/description from user
-/// * `repo` - Repository name for context (owner/repo format)
-///
-/// # Errors
-///
-/// Returns an error if AI formatting fails or API is unavailable.
-#[cfg(not(target_arch = "wasm32"))]
-pub async fn create_issue(
-    title: &str,
-    body: &str,
-    repo: &str,
-) -> anyhow::Result<(CreateIssueResponse, AiStats)> {
-    let config = crate::config::load_config()?;
-
-    // Create generic client for the configured provider
-    let client = setup_primary_client(&config)?;
-    client.create_issue(title, body, repo).await
 }
