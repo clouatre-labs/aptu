@@ -270,9 +270,9 @@ Configure a GPG key for signing commits and tags:
 
 ### Release Steps
 
-1. Update version in `Cargo.toml`
-2. Commit: `git commit -S -s -m "chore: bump version to X.Y.Z"`
-3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"` -- must be a GPG-signed annotated tag; a lightweight tag (`git tag vX.Y.Z`) will be rejected by the `verify-tag-signature` gate and no assets will be built. Verify before pushing: `git tag -v vX.Y.Z`
+1. On a branch, update version in `Cargo.toml` and refresh `Cargo.lock` (`cargo update -w`)
+2. Commit: `git commit -S -s -m "chore(release): bump version to X.Y.Z"`, push, and open a PR to `main` (`main` is protected; merges go through PRs). Merge once all checks pass
+3. Tag the merge commit on `main`: `git tag -a -s vX.Y.Z -m "vX.Y.Z" <sha>` -- must be a GPG-signed annotated tag; a lightweight tag (`git tag vX.Y.Z`) will be rejected by the `verify-tag-signature` gate and no assets will be built. Verify before pushing: `git tag -v vX.Y.Z`
 4. **First release of a new minor version only** (e.g. `vX.Y.0`, `vX.0.0`): pre-create the
    floating tag before pushing, otherwise the release workflow fails (the `Release Tag Protection`
    ruleset blocks `GITHUB_TOKEN` from creating new `refs/tags/v*` refs via POST, but allows
@@ -292,47 +292,37 @@ Configure a GPG key for signing commits and tags:
      -f sha="$(git rev-parse HEAD)"
    ```
 
-5. Push: `git push origin main --tags`
+5. Push the tag: `git push origin vX.Y.Z` — this triggers the release workflow
    - For any `vX.Y.Z` release, the workflow automatically moves the `vX.Y` floating tag
      used by the GitHub Action (`clouatre-labs/aptu@vX.Y`) to the new commit.
-6. Edit the release to add highlights (see below)
+6. Edit the release to replace the auto-generated notes with the curated format (see below)
 
 The workflow builds binaries (macOS ARM64, Linux ARM64/x86_64), signs artifacts with cosign, generates SLSA attestations, creates a GitHub release with auto-generated notes, publishes to crates.io, updates the Homebrew formula, and moves the `vX.Y` floating tag to the new commit (for any `vX.Y.Z` release).
 
 ### Release Notes
 
-We use a hybrid approach: GitHub auto-generates a changelog from conventional commits, and maintainers add a curated "Highlights" section for user-facing communication.
-
-After the workflow completes, edit the release on GitHub to prepend:
+Notes are fully curated: after the workflow creates the release, edit it (`gh release edit vX.Y.Z --notes ...`) to replace the auto-generated body with the format used by recent releases (e.g. v0.10.21):
 
 ```markdown
-## [Theme or Summary]
+## What's Changed
 
-Brief description of what this release delivers.
+### Features
 
-### Highlights
+- **Core:** One-line description (#PR)
 
-- **Feature Name** - One-line description
-- **Another Feature** - One-line description
+### Fixes
 
----
+- **Core:** One-line description (#PR)
 
-## Installation
+### Chores
 
-**Homebrew (macOS/Linux)**
-\`\`\`bash
-brew install clouatre-labs/tap/aptu
-\`\`\`
+- **Deps:** One-line description (#PR)
+- Bump version to X.Y.Z (#PR)
 
-**Cargo**
-\`\`\`bash
-cargo install aptu-cli
-\`\`\`
-
----
-
-[Auto-generated changelog follows]
+**Full changelog:** https://github.com/clouatre-labs/aptu/compare/vX.Y.(Z-1)...vX.Y.Z
 ```
+
+Group headings are included only when non-empty. The `**Scope:**` prefix comes from the conventional-commit scope, capitalized (`feat(core)` → **Core:**, `chore(deps)` → **Deps:**); commits without a scope have no prefix.
 
 ### Dry Run
 
