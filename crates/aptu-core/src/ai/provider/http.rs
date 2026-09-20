@@ -17,6 +17,9 @@ use crate::error::AptuError;
 use crate::history::AiStats;
 use crate::retry::{extract_retry_after, is_retryable_anyhow};
 
+/// Conservative provider-agnostic ceiling for escalated `max_tokens`.
+const MAX_ESCALATED_MAX_TOKENS: u32 = 16384;
+
 fn map_http_error(
     status: u16,
     provider_name: &str,
@@ -128,13 +131,47 @@ pub(super) async fn send_request_inner(
 
 /// Try a single HTTP send + JSON parse.  Separated from `send_and_parse`
 /// to avoid closure-in-expression clippy warning.
+///
+/// `max_tokens_override` replaces the request's `max_tokens` for this attempt,
+/// used by `send_and_parse` to escalate the token budget after truncation.
+/// A response with `finish_reason == "length"` is treated as truncated and
+/// returned as `TruncatedResponse` before JSON parsing (the parse.rs EOF
+/// heuristic remains as a fallback for providers that omit `finish_reason`).
 #[allow(clippy::items_after_statements)]
 pub(super) async fn try_request<T: serde::de::DeserializeOwned>(
     provider: &(impl AiProvider + ?Sized),
     request: &ChatCompletionRequest,
+    max_tokens_override: Option<u32>,
 ) -> Result<(T, ChatCompletionResponse)> {
+    // Rebuild the request for this attempt when the token budget is escalated
+    let effective_request;
+    let request = if max_tokens_override.is_some() && max_tokens_override != request.max_tokens {
+        let mut rebuilt = request.clone();
+        rebuilt.max_tokens = max_tokens_override;
+        effective_request = rebuilt;
+        &effective_request
+    } else {
+        request
+    };
+
     // Send HTTP request
     let completion = send_request_inner(provider, request).await?;
+
+    // Detect explicit provider truncation before attempting to parse the body
+    let truncated = completion
+        .choices
+        .iter()
+        .any(|c| c.finish_reason.as_deref() == Some("length"));
+    if truncated {
+        tracing::warn!(
+            provider = provider.name(),
+            "Response hit max_tokens limit (finish_reason=length); \
+             retrying with an escalated max_tokens budget"
+        );
+        return Err(anyhow::anyhow!(AptuError::TruncatedResponse {
+            provider: provider.name().to_string(),
+        }));
+    }
 
     // Extract message content
     let content = completion
@@ -176,6 +213,7 @@ pub(super) async fn try_request<T: serde::de::DeserializeOwned>(
 /// - API request fails (network, timeout, rate limit)
 /// - Response cannot be parsed as valid JSON (including truncated responses)
 #[instrument(skip(provider, request), fields(provider = provider.name(), model = provider.model()))]
+#[allow(clippy::too_many_lines)]
 pub(super) async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
     provider: &(impl AiProvider + ?Sized),
     request: &ChatCompletionRequest,
@@ -196,10 +234,17 @@ pub(super) async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
     let mut attempt: u32 = 0;
     let max_attempts: u32 = provider.max_attempts();
 
+    // Current token budget for the request; escalated (x2) after each
+    // truncation retry, capped at MAX_ESCALATED_MAX_TOKENS.
+    let mut current_max_tokens: Option<u32> = request.max_tokens;
+    // finish_reason values observed across all attempts (telemetry keeps
+    // `length` occurrences from failed attempts even after a later success).
+    let mut observed_finish_reasons: Vec<String> = Vec::new();
+
     let (parsed, completion): (T, ChatCompletionResponse) = loop {
         attempt += 1;
 
-        let result = try_request(provider, request).await;
+        let result = try_request::<T>(provider, request, current_max_tokens).await;
 
         match result {
             Ok(success) => break success,
@@ -207,6 +252,46 @@ pub(super) async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
                 // Check if error is retryable
                 if !is_retryable_anyhow(&err) || attempt >= max_attempts {
                     return Err(err);
+                }
+
+                // On truncation, escalate the token budget before retrying.
+                // A budget already at (or beyond) the cap is not retried:
+                // escalating further would only risk provider-side 4xx errors.
+                if err
+                    .downcast_ref::<AptuError>()
+                    .is_some_and(|e| matches!(e, AptuError::TruncatedResponse { .. }))
+                {
+                    // The truncated attempt observed finish_reason == "length";
+                    // keep it for finish_reasons telemetry.
+                    observed_finish_reasons.push("length".to_string());
+                    match current_max_tokens {
+                        Some(mt)
+                            if mt >= MAX_ESCALATED_MAX_TOKENS
+                                || mt.saturating_mul(2) > MAX_ESCALATED_MAX_TOKENS =>
+                        {
+                            return Err(anyhow::anyhow!(AptuError::AI {
+                                message: format!(
+                                    "AI response truncated and max_tokens escalation cap of {MAX_ESCALATED_MAX_TOKENS} reached; \
+                                     reduce the review scope or increase the provider's max_tokens budget"
+                                ),
+                                status: None,
+                                provider: provider.name().to_string(),
+                            }));
+                        }
+                        Some(mt) => {
+                            let escalated = mt.saturating_mul(2);
+                            debug!(
+                                previous_max_tokens = mt,
+                                escalated_max_tokens = escalated,
+                                "Escalating max_tokens after truncated response"
+                            );
+                            current_max_tokens = Some(escalated);
+                        }
+                        None => {
+                            // No budget to escalate; fall through to the
+                            // default backoff retry below.
+                        }
+                    }
                 }
 
                 // Extract retry_after if present, otherwise use exponential backoff
@@ -281,12 +366,14 @@ pub(super) async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
     }
     .with_computed_etu();
 
-    // Extract finish_reasons from choices
-    let finish_reasons: Vec<String> = completion
+    // Extract finish_reasons from choices, preserving values observed on
+    // failed attempts (e.g. `length`) alongside the successful attempt's.
+    let mut finish_reasons: Vec<String> = completion
         .choices
         .iter()
         .filter_map(|c| c.finish_reason.clone())
         .collect();
+    finish_reasons.extend(observed_finish_reasons);
 
     // Emit structured metrics
     info!(
@@ -384,7 +471,9 @@ mod tests {
         .await;
 
         let err = result.unwrap_err();
-        let aptu_err = err.downcast_ref::<AptuError>().expect("expected AptuError");
+        let aptu_err = err
+            .downcast_ref::<AptuError>()
+            .unwrap_or_else(|| panic!("unexpected error: {err:#}"));
         assert!(matches!(aptu_err, AptuError::CircuitOpen));
     }
 
@@ -498,5 +587,165 @@ mod tests {
 
         assert_eq!(parsed.message, "ok");
         assert_eq!(stats.provider, "test");
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Serves canned 200 responses (body: finish_reason + content) and records
+    /// the `max_tokens` value of each incoming request body.
+    async fn spawn_max_tokens_server(
+        responses: Vec<(&'static str, &'static str)>,
+    ) -> (String, std::sync::Arc<std::sync::Mutex<Vec<u32>>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+        let seen_max_tokens = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = seen_max_tokens.clone();
+
+        tokio::spawn(async move {
+            for (finish_reason, content) in responses {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    break;
+                };
+                let mut buf = [0u8; 8192];
+                let n = stream.read(&mut buf).await.unwrap_or(0);
+                let raw = String::from_utf8_lossy(&buf[..n]).to_string();
+                if let Some(body_start) = raw.find("\r\n\r\n")
+                    && let Ok(body) =
+                        serde_json::from_str::<serde_json::Value>(raw[body_start + 4..].trim())
+                    && let Some(mt) = body.get("max_tokens").and_then(|v| v.as_u64())
+                {
+                    seen.lock().expect("lock").push(mt as u32);
+                }
+                let body = serde_json::json!({
+                    "choices": [{
+                        "message": {"role": "assistant", "content": content},
+                        "finish_reason": finish_reason,
+                    }]
+                })
+                .to_string();
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        (format!("http://{addr}"), seen_max_tokens)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn truncation_test_request(
+        max_tokens: Option<u32>,
+        url: String,
+        client: reqwest::Client,
+        max_attempts: u32,
+    ) -> (HttpMockProvider, ChatCompletionRequest) {
+        let provider = HttpMockProvider {
+            client,
+            key: secrecy::SecretString::from("test-key".to_string()),
+            url,
+            max_attempts,
+        };
+        let request = ChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            max_tokens,
+            temperature: None,
+            response_format: None,
+            session_id: None,
+        };
+        (provider, request)
+    }
+
+    // Arrange: provider responds with finish_reason "length" even though the
+    // JSON body is complete and parseable.
+    // Act/Assert: send_and_parse fails with TruncatedResponse before parsing.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_finish_reason_length_returns_truncated_before_parse() {
+        let (url, seen) = spawn_max_tokens_server(vec![("length", "{\"_message\":\"ok\"}")]).await;
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .build()
+            .expect("build client");
+        let (provider, request) = truncation_test_request(Some(4096), url, client, 1);
+
+        let err = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
+            &provider, &request,
+        )
+        .await
+        .unwrap_err();
+
+        let aptu_err = err
+            .downcast_ref::<AptuError>()
+            .unwrap_or_else(|| panic!("unexpected error: {err:#}"));
+        assert!(matches!(aptu_err, AptuError::TruncatedResponse { .. }));
+        assert_eq!(*seen.lock().expect("lock"), vec![4096]);
+    }
+
+    // Arrange: first attempt returns finish_reason "length", second succeeds.
+    // Act/Assert: the retry sends an escalated (x2) max_tokens and the
+    // finish_reasons telemetry records the "length" occurrence.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_truncation_retry_sends_escalated_max_tokens() {
+        let (url, seen) = spawn_max_tokens_server(vec![
+            ("length", "{\"_message\":\"partial\"}"),
+            ("stop", "{\"_message\":\"ok\"}"),
+        ])
+        .await;
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .build()
+            .expect("build client");
+        let (provider, request) = truncation_test_request(Some(4096), url, client, 2);
+
+        let (parsed, _stats, finish_reasons) = send_and_parse::<
+            crate::ai::provider::test_utils::ErrorTestResponse,
+        >(&provider, &request)
+        .await
+        .expect("should succeed after escalated retry");
+
+        assert_eq!(parsed.message, "ok");
+        assert_eq!(*seen.lock().expect("lock"), vec![4096, 8192]);
+        assert!(finish_reasons.contains(&"length".to_string()));
+        assert!(finish_reasons.contains(&"stop".to_string()));
+    }
+
+    // Arrange: max_tokens starts at half the escalation cap, so a single
+    // doubling would exceed MAX_ESCALATED_MAX_TOKENS.
+    // Act/Assert: a distinct non-retryable AI error is returned instead of
+    // retrying at (or beyond) the cap.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_truncation_cap_reached_is_non_retryable() {
+        let (url, seen) =
+            spawn_max_tokens_server(vec![("length", "{\"_message\":\"partial\"}")]).await;
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .build()
+            .expect("build client");
+        let (provider, request) = truncation_test_request(Some(10000), url, client, 3);
+        let err = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
+            &provider, &request,
+        )
+        .await
+        .unwrap_err();
+
+        let aptu_err = err
+            .downcast_ref::<AptuError>()
+            .unwrap_or_else(|| panic!("unexpected error: {err:#}"));
+        match aptu_err {
+            AptuError::AI { message, .. } => assert!(message.contains("cap")),
+            other => panic!("expected non-retryable AI error, got: {other:?}"),
+        }
+        // No second attempt was made after the cap was hit.
+        assert_eq!(*seen.lock().expect("lock"), vec![10000]);
     }
 }
