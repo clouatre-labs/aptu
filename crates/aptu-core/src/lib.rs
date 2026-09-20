@@ -99,18 +99,14 @@ pub use utils::{
 // Platform-Agnostic Facade
 // ============================================================================
 
-pub use facade::format_issue;
 pub use facade::issues::WriteOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 pub use facade::{
-    analyze_issue, analyze_pr, apply_triage_labels, create_pr, fetch_issue_for_triage,
-    fetch_pr_for_review, label_pr, list_models, post_issue, post_pr_review, post_triage_comment,
-    revert_issue, revert_pr, validate_model,
+    analyze_issue, analyze_pr, apply_triage_labels, fetch_issue_for_triage, fetch_pr_for_review,
+    label_pr, list_models, post_pr_review, post_triage_comment, validate_model,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use github::issues::ApplyResult;
-#[cfg(not(target_arch = "wasm32"))]
-pub use github::pulls::PrCreateResult;
 #[cfg(not(target_arch = "wasm32"))]
 pub use github::pulls::ReviewPostOutcome;
 
@@ -138,8 +134,6 @@ pub mod cache;
 pub mod config;
 pub mod error;
 pub mod facade;
-/// Git utilities: patch application, branch management, and version gating.
-pub mod git;
 pub mod github;
 pub mod history;
 pub mod metrics;
@@ -148,6 +142,3 @@ pub mod sanitize;
 pub mod security;
 pub mod triage;
 pub mod utils;
-
-#[cfg(not(target_arch = "wasm32"))]
-pub use git::patch::{PatchError, PatchStep, apply_patch_and_push};

@@ -7,8 +7,8 @@
 //! therefore validate the exact strings the AI receives, not a copy.
 
 use aptu_core::ai::prompts::{
-    TOOLING_CONTEXT, build_create_system_prompt, build_pr_label_system_prompt,
-    build_pr_review_system_prompt, build_triage_system_prompt,
+    TOOLING_CONTEXT, build_pr_label_system_prompt, build_pr_review_system_prompt,
+    build_triage_system_prompt,
 };
 use aptu_core::ai::provider::AiProvider;
 use aptu_core::ai::types::{IssueDetails, PrDetails, PrFile};
@@ -52,7 +52,6 @@ impl AiProvider for StubProvider {
 fn all_system_prompts() -> Vec<(&'static str, String)> {
     vec![
         ("triage", build_triage_system_prompt(TOOLING_CONTEXT)),
-        ("create", build_create_system_prompt(TOOLING_CONTEXT)),
         ("pr_review", build_pr_review_system_prompt(TOOLING_CONTEXT)),
         ("pr_label", build_pr_label_system_prompt(TOOLING_CONTEXT)),
     ]
@@ -155,13 +154,6 @@ fn all_system_prompts_contain_schema() {
         "triage system prompt missing schema fields"
     );
 
-    // create system prompt
-    let create_system = build_create_system_prompt(TOOLING_CONTEXT);
-    assert!(
-        create_system.contains("formatted_title") && create_system.contains("formatted_body"),
-        "create system prompt missing schema fields"
-    );
-
     // pr_review system prompt
     let pr_review_system = build_pr_review_system_prompt(TOOLING_CONTEXT);
     assert!(
@@ -191,13 +183,6 @@ fn all_system_prompts_contain_schema() {
     assert!(
         !triage_user.contains("suggested_labels"),
         "triage user prompt must not contain schema fields"
-    );
-
-    let create_user =
-        aptu_core::ai::prompts::build_create_user_prompt("My title", "My body", "test/repo");
-    assert!(
-        !create_user.contains("formatted_title"),
-        "create user prompt must not contain schema fields"
     );
 
     let pr = PrDetails {

@@ -11,7 +11,6 @@ aptu/
 ├── aptu-cli          # CLI entry point, command routing, user I/O
 └── aptu-core         # Domain logic, GitHub API, AI providers
     ├── ai/           # AI provider abstraction and routing
-    ├── git/          # Patch application, branch management, git utilities
     ├── github/       # GitHub API integration (Octocrab wrapper)
     └── ...           # Config, cache, history, triage logic
 ```
@@ -72,20 +71,6 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Z.A
 
 The `ReviewContext` struct centralises all enrichment decisions: AST context, call graph, instructions, dependency release notes, and budget enforcement are all managed there before the prompt is assembled. Repo-path is inferred from CWD when not explicitly supplied via `--repo-path`.
 
-### apply_patch_and_push (`aptu-core::git::patch`)
-
-`apply_patch_and_push` drives the full patch-to-PR pipeline:
-
-1. Git version gate (minimum version enforced at runtime)
-2. Patch validation: 50 MB size cap, path-traversal rejection, symlink-mode rejection
-3. Security scan via `SecurityScanner::scan_diff()` (bypassable with `--force`)
-4. Dry-run apply check (`git apply --check`) before any branch is created
-5. Branch creation from `origin/<base>` with collision-resistant naming (date suffix, then hex suffix)
-6. Patch application, staging, and commit (with optional DCO `--signoff` and GPG `-S` when `commit.gpgSign=true`)
-7. Push to `origin`
-
-Returns the branch name that was pushed, or a `PatchError` variant on any failure.
-
 ### Facade Functions
 
 `aptu-core/facade/` is a module directory of high-level entry points for CLI and FFI consumers, one file per concern:
@@ -93,15 +78,13 @@ Returns the branch name that was pushed, or a `PatchError` variant on any failur
 | File | Key exports |
 |------|-------------|
 | `ai_client.rs` | AI client construction and fallback-chain helpers |
-| `issues.rs` | `analyze_issue()`, `fetch_issue_for_triage()`, `post_triage_comment()`, `apply_triage_labels()`, `post_issue()`, `format_issue()` |
+| `issues.rs` | `analyze_issue()`, `fetch_issue_for_triage()`, `post_triage_comment()`, `apply_triage_labels()` |
 | `models.rs` | `list_models()`, `validate_model()` |
-| `pr_create.rs` | `create_pr()` |
 | `pr_review.rs` | `fetch_pr_for_review()`, `analyze_pr()`, `post_pr_review()`, `label_pr()` |
-| `revert.rs` | `revert_issue()`, `revert_pr()` |
 
 Each function accepts a `&dyn TokenProvider` for credential resolution. Functions that require OS I/O (keyring, filesystem, process spawning) are `#[cfg(not(target_arch = "wasm32"))]`-gated; the `wasm_unsupported!` macro in `facade/mod.rs` provides uniform stub bodies for the wasm32 target.
 
-Write operations (triage comment, labels, PR review) are gated on viewer permission and yield `WriteOutcome::Skipped` when the viewer lacks write access. Permission lookups are memoized process-wide with a 60s TTL. `revert` is the exception: it applies no local gate and relies on GitHub server-side authorization instead.
+Write operations (triage comment, labels, PR review) are gated on viewer permission and yield `WriteOutcome::Skipped` when the viewer lacks write access. Permission lookups are memoized process-wide with a 60s TTL.
 
 ### AstContextOutput
 

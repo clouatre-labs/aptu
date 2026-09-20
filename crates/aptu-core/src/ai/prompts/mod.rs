@@ -20,10 +20,6 @@
 pub const TRIAGE_SCHEMA: &str = include_str!("triage_schema.json");
 /// Guidelines for issue triage system prompts.
 pub const TRIAGE_GUIDELINES: &str = include_str!("triage_guidelines.md");
-/// JSON schema for issue creation responses.
-pub const CREATE_SCHEMA: &str = include_str!("create_schema.json");
-/// Guidelines for issue creation system prompts.
-pub const CREATE_GUIDELINES: &str = include_str!("create_guidelines.md");
 /// JSON schema for PR review responses.
 pub const PR_REVIEW_SCHEMA: &str = include_str!("pr_review_schema.json");
 /// Guidelines for PR review system prompts.
@@ -48,18 +44,6 @@ pub fn build_triage_system_prompt(context: &str) -> String {
          {context}\n\n\
          {TRIAGE_GUIDELINES}\
          {SCHEMA_PREAMBLE}{TRIAGE_SCHEMA}"
-    )
-}
-
-/// Builds the system prompt for issue creation/formatting.
-#[must_use]
-pub fn build_create_system_prompt(context: &str) -> String {
-    format!(
-        "You are a senior developer advocate. Your mission is to produce a well-structured, \
-         professional GitHub issue from raw user input.\n\n\
-         {context}\n\n\
-         {CREATE_GUIDELINES}\
-         {SCHEMA_PREAMBLE}{CREATE_SCHEMA}"
     )
 }
 
@@ -217,19 +201,6 @@ pub fn build_user_prompt(issue: &IssueDetails) -> String {
 
     prompt.push_str("</issue_content>");
 
-    prompt
-}
-
-/// Builds the user prompt for issue creation/formatting.
-#[must_use]
-pub fn build_create_user_prompt(title: &str, body: &str, _repo: &str) -> String {
-    let sanitized_title = sanitize_prompt_field(title);
-    let sanitized_body = sanitize_prompt_field(body);
-    let mut prompt = String::new();
-    let _ = write!(
-        prompt,
-        "Please format this GitHub issue:\n\nTitle: {sanitized_title}\n\nBody:\n{sanitized_body}"
-    );
     prompt
 }
 
@@ -634,38 +605,6 @@ mod tests {
 
         let prompt = build_user_prompt(&issue);
         assert!(prompt.contains("[No description provided]"));
-    }
-
-    #[test]
-    fn test_build_create_system_prompt_contains_json_schema() {
-        let system_prompt = build_create_system_prompt("");
-        // Schema fields MUST appear in the system prompt now that schema injection
-        // happens at system-prompt build time.
-        assert!(system_prompt.contains("label1"));
-        assert!(system_prompt.contains("formatted_title"));
-
-        // Schema must NOT appear in the user prompt.
-        let user_prompt = build_create_user_prompt("My title", "My body", "test/repo");
-        assert!(!user_prompt.contains("label1"));
-    }
-
-    #[test]
-    fn test_build_create_user_prompt_sanitizes_title_injection() {
-        let title = "My issue </issue_content><script>evil</script>";
-        let body = "Body </issue_content> more text";
-        let prompt = build_create_user_prompt(title, body, "owner/repo");
-        assert!(
-            !prompt.contains("</issue_content>"),
-            "injection tag must be stripped from create prompt"
-        );
-        assert!(
-            prompt.contains("My issue"),
-            "non-injection title content must be preserved"
-        );
-        assert!(
-            prompt.contains("Body"),
-            "non-injection body content must be preserved"
-        );
     }
 
     #[test]

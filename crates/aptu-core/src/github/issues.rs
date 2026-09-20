@@ -408,45 +408,6 @@ pub async fn remove_issue_label(
     }
 }
 
-/// Creates a new GitHub issue.
-///
-/// Posts a new issue with the given title and body to the repository.
-/// Returns the issue URL and issue number.
-///
-/// # Arguments
-///
-/// * `client` - Authenticated Octocrab client
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-/// * `title` - Issue title
-/// * `body` - Issue body (markdown)
-///
-/// # Errors
-///
-/// Returns an error if the GitHub API call fails.
-#[cfg(not(target_arch = "wasm32"))]
-#[instrument(skip(client), fields(owner = %owner, repo = %repo))]
-pub async fn create_issue(
-    client: &Octocrab,
-    owner: &str,
-    repo: &str,
-    title: &str,
-    body: &str,
-) -> Result<(String, u64)> {
-    debug!("Creating GitHub issue");
-
-    let issue = Box::pin(client.issues(owner, repo).create(title).body(body).send())
-        .await
-        .with_context(|| format!("Failed to create issue in {owner}/{repo}"))?;
-
-    let issue_url = issue.html_url.to_string();
-    let issue_number = issue.number;
-
-    debug!(number = issue_number, url = %issue_url, "Issue created successfully");
-
-    Ok((issue_url, issue_number))
-}
-
 /// Result of applying labels and milestone to an issue.
 #[derive(Debug, Clone)]
 pub struct ApplyResult {

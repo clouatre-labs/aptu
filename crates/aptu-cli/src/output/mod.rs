@@ -88,8 +88,6 @@ pub fn render_pr_review(
 mod auth;
 mod bulk;
 pub mod common;
-mod create;
-mod issues;
 mod models;
 pub mod pr;
 mod triage;

@@ -54,7 +54,7 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 | Claude OAuth | - | Yes | - |
 | Permission-Aware Triage/Review Writes | Yes | Yes | Yes |
 
-`aptu pr create --diff <file>` applies a patch, commits, and opens a PR. `--deep` (CLI) / `deep: true` (Action) adds AST and cross-file call-graph context to `pr review` prompts. CLI and Action support four providers: Anthropic, Gemini, OpenRouter (default), and Z.AI; the App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names). Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required.
+`--deep` (CLI) / `deep: true` (Action) adds AST and cross-file call-graph context to `pr review` prompts. CLI and Action support four providers: Anthropic, Gemini, OpenRouter (default), and Z.AI; the App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names). Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required.
 
 ## Architecture Benchmark
 
