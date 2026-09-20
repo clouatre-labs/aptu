@@ -679,6 +679,8 @@ type ViewerPermissionCache =
 /// that rotate tokens across multiple viewers within one process must not
 /// rely on this cache; a second viewer would observe the first viewer's
 /// cached permission for the same `owner/repo` within the TTL window.
+/// If multi-token support is ever needed, extend the cache key with a
+/// credential fingerprint (e.g. a token hash) rather than removing the cache.
 #[cfg(not(target_arch = "wasm32"))]
 fn viewer_permission_cache() -> &'static std::sync::Mutex<ViewerPermissionCache> {
     use std::collections::HashMap;
