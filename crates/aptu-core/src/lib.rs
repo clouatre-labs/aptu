@@ -73,15 +73,6 @@ pub use ai::types::CreditsStatus;
 pub use history::{AiStats, Contribution, ContributionStatus, HistoryData};
 
 // ============================================================================
-// Repository Discovery
-// ============================================================================
-
-#[cfg(not(target_arch = "wasm32"))]
-pub use repos::discovery::search_repositories;
-pub use repos::discovery::{DiscoveredRepo, DiscoveryFilter};
-pub use repos::{CuratedRepo, RepoFilter};
-
-// ============================================================================
 // Triage Detection
 // ============================================================================
 
@@ -112,9 +103,8 @@ pub use facade::format_issue;
 pub use facade::issues::WriteOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 pub use facade::{
-    add_custom_repo, analyze_issue, analyze_pr, apply_triage_labels, create_pr, discover_repos,
-    fetch_issue_for_triage, fetch_issues, fetch_pr_for_review, label_pr, list_curated_repos,
-    list_models, list_repos, post_issue, post_pr_review, post_triage_comment, remove_custom_repo,
+    analyze_issue, analyze_pr, apply_triage_labels, create_pr, fetch_issue_for_triage,
+    fetch_pr_for_review, label_pr, list_models, post_issue, post_pr_review, post_triage_comment,
     revert_issue, revert_pr, validate_model,
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -153,7 +143,6 @@ pub mod git;
 pub mod github;
 pub mod history;
 pub mod metrics;
-pub mod repos;
 pub mod retry;
 pub mod sanitize;
 pub mod security;

@@ -19,62 +19,8 @@ fn test_help_contains_all_commands() {
         .assert()
         .success()
         .stdout(predicate::str::contains("auth"))
-        .stdout(predicate::str::contains("repo"))
         .stdout(predicate::str::contains("issue"))
         .stdout(predicate::str::contains("completion"));
-}
-
-#[test]
-fn test_repo_list_json_output() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("repo")
-        .arg("list")
-        .arg("--output")
-        .arg("json")
-        .assert()
-        .success();
-
-    let output = cargo_bin_cmd!("aptu")
-        .arg("repo")
-        .arg("list")
-        .arg("--output")
-        .arg("json")
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
-    assert!(
-        parsed.is_ok(),
-        "repo list --output json should produce valid JSON"
-    );
-
-    let json = parsed.unwrap();
-    assert!(json.is_array(), "repo list JSON output should be an array");
-}
-
-#[test]
-fn test_repo_list_yaml_output() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("repo")
-        .arg("list")
-        .arg("--output")
-        .arg("yaml")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("-").or(predicate::str::contains("repositories")));
-}
-
-#[test]
-fn test_repo_list_markdown_output() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("repo")
-        .arg("list")
-        .arg("--output")
-        .arg("markdown")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("|").or(predicate::str::contains("#")));
 }
 
 #[test]
@@ -117,29 +63,6 @@ fn test_completion_install_dry_run() {
 fn test_invalid_command() {
     let mut cmd = cargo_bin_cmd!("aptu");
     cmd.arg("invalidcmd")
-        .assert()
-        .failure()
-        .code(predicate::eq(2));
-}
-
-#[test]
-fn test_repo_list_invalid_format() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("repo")
-        .arg("list")
-        .arg("--output")
-        .arg("xml")
-        .assert()
-        .failure()
-        .code(predicate::eq(2))
-        .stderr(predicate::str::contains("invalid").or(predicate::str::contains("format")));
-}
-
-#[test]
-fn test_repo_invalid_subcommand() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("repo")
-        .arg("invalid")
         .assert()
         .failure()
         .code(predicate::eq(2));
@@ -287,55 +210,6 @@ fn test_issue_triage_dry_run_json_output() {
             assert!(
                 json.get("dry_run").is_some(),
                 "issue triage JSON should have 'dry_run' field"
-            );
-        }
-    }
-}
-
-#[test]
-fn test_issue_list_json_output() {
-    let output = cargo_bin_cmd!("aptu")
-        .arg("issue")
-        .arg("list")
-        .arg("--output")
-        .arg("json")
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8(output.stdout).unwrap();
-
-    // If authentication fails, the command will exit with error
-    // In that case, we just verify the test runs without panic
-    if !stdout.is_empty() {
-        let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
-        if let Ok(json) = parsed {
-            assert!(json.is_array(), "issue list JSON output should be an array");
-        }
-    }
-}
-
-#[test]
-fn test_repo_discover_json_output() {
-    let output = cargo_bin_cmd!("aptu")
-        .arg("repo")
-        .arg("discover")
-        .arg("--language")
-        .arg("rust")
-        .arg("--output")
-        .arg("json")
-        .output()
-        .unwrap();
-
-    let stdout = String::from_utf8(output.stdout).unwrap();
-
-    // If authentication fails, the command will exit with error
-    // In that case, we just verify the test runs without panic
-    if !stdout.is_empty() {
-        let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
-        if let Ok(json) = parsed {
-            assert!(
-                json.is_array(),
-                "repo discover JSON output should be an array"
             );
         }
     }

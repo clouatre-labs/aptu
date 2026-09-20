@@ -9,7 +9,7 @@ assignees: ""
 ## Summary
 <!-- 1-2 sentences describing what to build. Be specific: what capability is missing, what user need does it address? -->
 
-Example: "Add a `--filter` flag to `aptu issue list` that allows filtering by label, assignee, or state."
+Example: "Add a `--filter` flag to `aptu issue triage --since` that allows filtering by label, assignee, or state."
 
 ## Context
 <!-- Why does this matter? What depends on it? Link to parent issues, roadmap, or design docs. Help agents understand the broader system impact. -->

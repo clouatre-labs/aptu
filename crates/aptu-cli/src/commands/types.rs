@@ -5,11 +5,8 @@
 //! These types allow command handlers to return data instead of printing
 //! directly, improving testability and separation of concerns.
 
-use aptu_core::DiscoveredRepo;
 use aptu_core::ai::types::TriageResponse;
 use aptu_core::github::auth::TokenSource;
-use aptu_core::github::graphql::IssueNode;
-use aptu_core::repos::CuratedRepo;
 use serde::Serialize;
 
 /// Result from the auth status command.
@@ -26,28 +23,6 @@ pub struct AuthStatusResult {
     pub ai_provider: Option<String>,
     /// AI provider auth method: "api-key" or "oauth".
     pub ai_auth_method: Option<String>,
-}
-
-/// Result from the repos command.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ReposResult {
-    /// List of curated repositories.
-    pub repos: Vec<CuratedRepo>,
-}
-
-/// Result from the issues command.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct IssuesResult {
-    /// Issues grouped by repository name.
-    pub issues_by_repo: Vec<(String, Vec<IssueNode>)>,
-    /// Total issue count across all repositories.
-    pub total_count: usize,
-    /// Repository filter that was applied (if any).
-    pub repo_filter: Option<String>,
-    /// Whether no repos matched the filter.
-    pub no_repos_matched: bool,
 }
 
 /// Result from the triage command.
@@ -249,32 +224,12 @@ impl PrLabelResult {
     }
 }
 
-/// Result from the discover command.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct DiscoverResult {
-    /// List of discovered repositories.
-    pub repos: Vec<DiscoveredRepo>,
-}
-
 /// Result from auth login or logout actions.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct AuthActionResult {
     /// Action performed (e.g., "login", "logout").
     pub action: String,
-    /// Human-readable message describing the outcome.
-    pub message: String,
-}
-
-/// Result from repo add or remove actions.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct RepoMutateResult {
-    /// Action performed (e.g., "add", "remove").
-    pub action: String,
-    /// Repository affected (e.g., "owner/name").
-    pub repo: String,
     /// Human-readable message describing the outcome.
     pub message: String,
 }

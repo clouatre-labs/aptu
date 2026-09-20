@@ -106,5 +106,4 @@ mod create;
 mod issues;
 mod models;
 pub mod pr;
-mod repos;
 mod triage;
