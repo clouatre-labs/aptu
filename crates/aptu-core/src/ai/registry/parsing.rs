@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 use super::consts::{
-    PROVIDER_CEREBRAS, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_OPENROUTER, PROVIDER_ZAI,
-    PROVIDER_ZENMUX,
+    PROVIDER_ANTHROPIC, PROVIDER_CEREBRAS, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_OPENROUTER,
+    PROVIDER_ZAI, PROVIDER_ZENMUX,
 };
 use crate::auth::TokenProvider;
 use crate::cache::FileCache;
@@ -277,17 +277,24 @@ impl CachedModelRegistry<'_> {
             .unwrap_or_default()
     }
 
+    /// Returns the models list endpoint for a provider, if supported.
+    fn models_endpoint(provider: &str) -> Option<&'static str> {
+        match provider {
+            PROVIDER_OPENROUTER => Some("https://openrouter.ai/api/v1/models"),
+            PROVIDER_GEMINI => Some("https://generativelanguage.googleapis.com/v1beta/models"),
+            PROVIDER_GROQ => Some("https://api.groq.com/openai/v1/models"),
+            PROVIDER_CEREBRAS => Some("https://api.cerebras.ai/v1/models"),
+            PROVIDER_ZENMUX => Some("https://zenmux.ai/api/v1/models"),
+            PROVIDER_ZAI => Some("https://api.z.ai/api/paas/v4/models"),
+            PROVIDER_ANTHROPIC => Some("https://api.anthropic.com/v1/models"),
+            _ => None,
+        }
+    }
+
     /// Fetch models from provider API.
     async fn fetch_from_api(&self, provider: &str) -> Result<Vec<CachedModel>, RegistryError> {
-        let url = match provider {
-            PROVIDER_OPENROUTER => "https://openrouter.ai/api/v1/models",
-            PROVIDER_GEMINI => "https://generativelanguage.googleapis.com/v1beta/models",
-            PROVIDER_GROQ => "https://api.groq.com/openai/v1/models",
-            PROVIDER_CEREBRAS => "https://api.cerebras.ai/v1/models",
-            PROVIDER_ZENMUX => "https://zenmux.ai/api/v1/models",
-            PROVIDER_ZAI => "https://api.z.ai/api/paas/v4/models",
-            _ => return Err(RegistryError::ProviderNotFound(provider.to_string())),
-        };
+        let url = Self::models_endpoint(provider)
+            .ok_or_else(|| RegistryError::ProviderNotFound(provider.to_string()))?;
 
         // Get API key from token provider
         let api_key = self.token_provider.ai_api_key(provider).ok_or_else(|| {
@@ -310,6 +317,13 @@ impl CachedModelRegistry<'_> {
                     format!("Bearer {}", api_key.expose_secret()),
                 )
             }
+            PROVIDER_ANTHROPIC => {
+                // Anthropic uses its own API key header plus a version header
+                self.client
+                    .get(url)
+                    .header("x-api-key", api_key.expose_secret())
+                    .header("anthropic-version", "2023-06-01")
+            }
             _ => self.client.get(url),
         };
 
@@ -327,9 +341,8 @@ impl CachedModelRegistry<'_> {
         let models = match provider {
             PROVIDER_OPENROUTER => Self::parse_openrouter_models(&data, provider),
             PROVIDER_GEMINI => Self::parse_gemini_models(&data, provider),
-            PROVIDER_GROQ | PROVIDER_CEREBRAS | PROVIDER_ZENMUX | PROVIDER_ZAI => {
-                Self::parse_generic_models(&data, provider)
-            }
+            PROVIDER_GROQ | PROVIDER_CEREBRAS | PROVIDER_ZENMUX | PROVIDER_ZAI
+            | PROVIDER_ANTHROPIC => Self::parse_generic_models(&data, provider),
             _ => vec![],
         };
 
@@ -392,6 +405,50 @@ impl ModelRegistry for CachedModelRegistry<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::registry::all_providers;
+
+    #[test]
+    fn test_models_endpoint_anthropic() {
+        let url = CachedModelRegistry::models_endpoint(PROVIDER_ANTHROPIC);
+        assert_eq!(url, Some("https://api.anthropic.com/v1/models"));
+    }
+
+    #[test]
+    fn test_provider_endpoint_mapping_consistency() {
+        for provider in all_providers() {
+            let url = CachedModelRegistry::models_endpoint(provider.name);
+            assert!(
+                url.is_some(),
+                "Provider {} is registered but has no models endpoint",
+                provider.name
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_anthropic_models() {
+        let data = serde_json::json!({
+            "data": [
+                {
+                    "id": "claude-sonnet-4-5",
+                    "type": "model",
+                    "display_name": "Claude Sonnet 4.5"
+                },
+                {
+                    "id": "claude-opus-4-1",
+                    "type": "model",
+                    "display_name": "Claude Opus 4.1"
+                }
+            ],
+            "has_more": false
+        });
+
+        let models = CachedModelRegistry::parse_generic_models(&data, PROVIDER_ANTHROPIC);
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].id, "claude-sonnet-4-5");
+        assert_eq!(models[1].id, "claude-opus-4-1");
+        assert_eq!(models[0].provider, "anthropic");
+    }
 
     #[test]
     fn test_parse_openrouter_models_with_pricing() {
