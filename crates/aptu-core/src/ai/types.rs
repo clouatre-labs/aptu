@@ -75,7 +75,7 @@ pub(crate) struct ChatMessage {
 }
 
 /// Request body for `OpenRouter` chat completions API.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct ChatCompletionRequest {
     /// Model identifier (e.g., "mistralai/mistral-small-2603").
     pub model: String,
@@ -96,7 +96,7 @@ pub(crate) struct ChatCompletionRequest {
 }
 
 /// Response format specification for structured output.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct ResponseFormat {
     /// Type of response format ("`json_object`" or "`json_schema`" for structured output).
     #[serde(rename = "type")]
