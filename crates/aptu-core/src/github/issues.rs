@@ -217,8 +217,9 @@ pub async fn list_issue_comments(
         // Cap at 300 to mirror the review-comment listing limit.
         if comments.len() >= 300 {
             tracing::warn!(
-                "Issue #{} has reached 300-comment cap; stopping pagination",
-                number
+                pr = number,
+                cap = 300,
+                "Issue has reached 300-comment cap; stopping pagination"
             );
             comments.truncate(300);
             break;
