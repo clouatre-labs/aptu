@@ -69,10 +69,12 @@ Prompt size reduction from the system prompt compression initiative (PRs [#1103]
 |-----------|----------------|---------------|-----------|
 | triage | 4,757 | 3,337 | −29.9% |
 | pr_review | 4,704 | 2,938 | −37.5% |
-| create | 3,571 | 2,534 | −29.0% |
+| create (removed) | 3,571 | 2,534 | −29.0% |
 | release | 3,945 | 2,785 | −29.4% |
 | pr_label | 2,467 | 1,707 | −30.8% |
 | **Total** | **19,444** | **13,301** | **−31.6%** |
+
+Note: the create operation was removed in the 2026-09-20 simplification audit; its row is retained as a historical baseline.
 
 Measured with `bench/measure.sh` (character counts across persona, tooling, and guidelines sections per operation).
 
