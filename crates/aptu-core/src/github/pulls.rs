@@ -20,29 +20,6 @@ use crate::error::{AptuError, ResourceType};
 use crate::retry::retry_backoff;
 use crate::triage::render_pr_review_comment_body;
 
-/// Result from creating a pull request.
-#[derive(Debug, serde::Serialize)]
-pub struct PrCreateResult {
-    /// PR number.
-    pub pr_number: u64,
-    /// PR URL.
-    pub url: String,
-    /// Head branch.
-    pub branch: String,
-    /// Base branch.
-    pub base: String,
-    /// PR title.
-    pub title: String,
-    /// Whether the PR is a draft.
-    pub draft: bool,
-    /// Number of files changed.
-    pub files_changed: u32,
-    /// Number of additions.
-    pub additions: u64,
-    /// Number of deletions.
-    pub deletions: u64,
-}
-
 /// Parses a PR reference into (owner, repo, number).
 ///
 /// Supports multiple formats:
@@ -1168,75 +1145,6 @@ pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String
     labels.into_iter().collect()
 }
 
-/// Creates a pull request on GitHub.
-///
-/// # Arguments
-///
-/// * `client` - Authenticated Octocrab client
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-/// * `title` - PR title
-/// * `head_branch` - Head branch (the branch with changes)
-/// * `base_branch` - Base branch (the branch to merge into)
-/// * `body` - Optional PR body text
-///
-/// # Returns
-///
-/// `PrCreateResult` with PR metadata.
-///
-/// # Errors
-///
-/// Returns an error if the API call fails or the user lacks write access.
-#[cfg(not(target_arch = "wasm32"))]
-#[instrument(skip(client), fields(owner = %owner, repo = %repo, head = %head_branch, base = %base_branch))]
-#[allow(clippy::too_many_arguments)]
-pub async fn create_pull_request(
-    client: &Octocrab,
-    owner: &str,
-    repo: &str,
-    title: &str,
-    head_branch: &str,
-    base_branch: &str,
-    body: Option<&str>,
-    draft: bool,
-) -> anyhow::Result<PrCreateResult> {
-    debug!("Creating pull request");
-
-    let pr = client
-        .pulls(owner, repo)
-        .create(title, head_branch, base_branch)
-        .body(body.unwrap_or_default())
-        .draft(draft)
-        .send()
-        .await
-        .with_context(|| {
-            format!("Failed to create PR in {owner}/{repo} ({head_branch} -> {base_branch})")
-        })?;
-
-    let result = PrCreateResult {
-        pr_number: pr.number,
-        url: pr
-            .html_url
-            .as_ref()
-            .map(std::string::ToString::to_string)
-            .unwrap_or_default(),
-        branch: pr.head.ref_field.clone(),
-        base: pr.base.ref_field.clone(),
-        title: pr.title.clone().unwrap_or_default(),
-        draft: pr.draft.unwrap_or(false),
-        files_changed: u32::try_from(pr.changed_files.unwrap_or(0)).unwrap_or(u32::MAX),
-        additions: pr.additions.unwrap_or(0),
-        deletions: pr.deletions.unwrap_or(0),
-    };
-
-    debug!(
-        pr_number = result.pr_number,
-        "Pull request created successfully"
-    );
-
-    Ok(result)
-}
-
 /// Determines whether a file should be skipped during fetch based on status and patch.
 /// Emits a debug log with the skip reason. Returns true if the file should be skipped
 /// (removed status or no patch), false otherwise.
@@ -1268,33 +1176,6 @@ mod tests {
         } else {
             Some(decoded_str.chars().take(max_chars).collect::<String>())
         }
-    }
-
-    #[test]
-    fn test_pr_create_result_fields() {
-        // Arrange / Act: construct directly (no network call needed)
-        let result = PrCreateResult {
-            pr_number: 42,
-            url: "https://github.com/owner/repo/pull/42".to_string(),
-            branch: "feat/my-feature".to_string(),
-            base: "main".to_string(),
-            title: "feat: add feature".to_string(),
-            draft: false,
-            files_changed: 3,
-            additions: 100,
-            deletions: 10,
-        };
-
-        // Assert
-        assert_eq!(result.pr_number, 42);
-        assert_eq!(result.url, "https://github.com/owner/repo/pull/42");
-        assert_eq!(result.branch, "feat/my-feature");
-        assert_eq!(result.base, "main");
-        assert_eq!(result.title, "feat: add feature");
-        assert!(!result.draft);
-        assert_eq!(result.files_changed, 3);
-        assert_eq!(result.additions, 100);
-        assert_eq!(result.deletions, 10);
     }
 
     // ---------------------------------------------------------------------------
