@@ -66,7 +66,7 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Z.A
 3. Build AST context: function signatures and imports for each changed file using `aptu-coder-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
 4. Build call-graph context: cross-file caller chains for changed functions; modified symbols are derived from PR diff hunks (declaration lines matching `fn`/`async fn`, `struct`, `enum`, `trait`, `impl` via a `SYMBOL_RE` static regex), not from the full graph; callers residing only in files the PR does not touch are intentionally excluded
 5. Dependency enrichment: if the PR bumps dependencies, fetch upstream GitHub Release notes for up to `max_dep_packages` packages and include summaries in context (controlled by `ReviewConfig`)
-6. Enforce prompt budget (`max_prompt_chars`): drop sections in order (`call_graph` -> `ast_context` -> `symbol_expansions` -> `dep_enrichments` -> file `full_content` -> file patches) until budget is met
+6. Enforce prompt budget (`max_prompt_chars`): drop sections in order (`call_graph` -> `ast_context` -> `dep_enrichments` -> file `full_content` -> file patches) until budget is met
 7. Post inline review comments via GitHub REST API
 
 The `ReviewContext` struct centralises all enrichment decisions: AST context, call graph, instructions, dependency release notes, and budget enforcement are all managed there before the prompt is assembled. Repo-path is inferred from CWD when not explicitly supplied via `--repo-path`.

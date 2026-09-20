@@ -271,7 +271,6 @@ max_instructions_chars = 1500      # Max chars of instructions file content incl
 min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
 max_dep_packages = 3               # Max dependency bump packages for which upstream release notes are fetched (default: 3)
 max_dep_release_chars = 2000       # Max chars of upstream release notes included per dependency package (default: 2 000)
-max_symbol_expansion_chars = 5000  # Max chars of expanded caller/callee symbol snippets; only applies when review depth is `deep` (default: 5 000)
 ```
 
 The call graph is enabled only when `budget_remaining > min_budget_for_call_graph`, where
@@ -281,7 +280,7 @@ Setting it above half of `max_prompt_chars` means call graph will only be built 
 The prefix section "When the assembled prompt exceeds..." describes how call graph is the first section dropped,
 so a value that rarely enables call graph is typically acceptable.
 
-When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, expanded symbol snippets (`symbol_expansions`, only present for `deep` reviews), dependency enrichments, full file content (largest first), diff patches (largest first). The system prompt and PR metadata are never dropped.
+When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, dependency enrichments, full file content (largest first), diff patches (largest first). The system prompt and PR metadata are never dropped.
 
 ## Cache Configuration
 

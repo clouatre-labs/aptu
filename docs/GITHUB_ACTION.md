@@ -149,7 +149,7 @@ Each line is a JSON object (`ReviewContextRecord`) with the following fields:
 | `call_graph_chars` | integer | Characters in call graph context. |
 | `dep_enrichments_count` | integer | Number of dependency enrichments applied. |
 | `dep_enrichments_chars` | integer | Total characters in dependency enrichments. |
-| `budget_drops` | string[] | Names of context items dropped due to budget (e.g. `call_graph`, `symbol_expansions`, `dep_enrichments`, `file_content:<path>`, `patch:<path>`). |
+| `budget_drops` | string[] | Names of context items dropped due to budget (e.g. `call_graph`, `dep_enrichments`, `file_content:<path>`, `patch:<path>`). |
 | `cwd_inferred` | boolean | Whether the repository path was inferred from CWD. |
 | `prompt_chars_final` | integer | Final assembled prompt character count. |
 | `finish_reasons` | string[] | Finish reasons from the AI response. |
@@ -455,7 +455,7 @@ These are stricter-than-API-default privacy settings and are the new effective b
 
 ### Removed inputs
 
-`command`, `subcommand`, `deep`, `min-budget-for-call-graph`, `max-chars-per-file`, `max-diff-chars`, `max-patch-chars-per-file`, `max-instructions-chars`, `max-dep-packages`, `max-dep-release-chars`, `max-diff-bytes`, `pr-queue`, `scan-exclude`, `openrouter-data-collection`, `openrouter-zdr`
+`command`, `subcommand`, `min-budget-for-call-graph`, `max-chars-per-file`, `max-diff-chars`, `max-patch-chars-per-file`, `max-instructions-chars`, `max-dep-packages`, `max-dep-release-chars`, `max-diff-bytes`, `pr-queue`, `scan-exclude`, `openrouter-data-collection`, `openrouter-zdr`
 
 Self-hosted consumers who previously tuned size budgets via these inputs should move those values into `config.toml`; the removed empty-string env shadowing that could override config defaults is gone.
 

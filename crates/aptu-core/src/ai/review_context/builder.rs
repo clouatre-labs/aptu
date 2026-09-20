@@ -22,7 +22,6 @@ use crate::config::ReviewConfig;
 ///
 /// * `pr` - Pull request details
 /// * `repo_path` - Optional explicit repository path (overrides CWD inference)
-/// * `deep` - Whether to enable deep analysis (call graph)
 /// * `review_config` - Review configuration with budget thresholds
 ///
 /// # Returns
@@ -31,7 +30,6 @@ use crate::config::ReviewConfig;
 pub async fn build_review_context(
     mut pr: PrDetails,
     repo_path: Option<String>,
-    deep: bool,
     review_config: &ReviewConfig,
 ) -> crate::Result<ReviewContext> {
     // Step 1: Resolve repo_path (explicit or inferred from CWD)
@@ -57,32 +55,21 @@ pub async fn build_review_context(
     pr.dep_enrichments = enrich_deps(&pr.files, review_config).await;
 
     // Step 4: Estimate total chars and decide call_graph budget
-    // (call_graph and symbol_expansions not yet built, pass empty)
-    let estimated_size = estimate_pr_size(&pr, &ast_context, "", &[]);
+    // (call_graph not yet built, pass empty)
+    let estimated_size = estimate_pr_size(&pr, &ast_context, "");
     let max_prompt_chars = review_config.max_prompt_chars;
     let budget_remaining = max_prompt_chars.saturating_sub(estimated_size);
 
     // Step 5: Build call_graph if decided
-    let should_enable_cg = should_enable_call_graph(deep, budget_remaining, review_config);
+    let should_enable_cg = should_enable_call_graph(budget_remaining, review_config);
     let mut call_graph = if should_enable_cg {
-        build_ctx_call_graph(repo_path_ref.as_deref(), &pr.files, true).await
+        build_ctx_call_graph(repo_path_ref.as_deref(), &pr.files).await
     } else {
         String::new()
     };
 
-    // Step 5b: Build symbol_expansions gated on `deep` only -- unlike call_graph, this
-    // is not auto-enabled via the budget-remaining heuristic, since adoption of this
-    // feature is pending a preregistered benchmark.
-    let mut symbol_expansions = build_ctx_symbol_expansions(
-        repo_path_ref.as_deref(),
-        &pr.files,
-        deep,
-        review_config.max_symbol_expansion_chars,
-    )
-    .await;
-
-    // Re-estimate with actual call_graph and symbol_expansions for accurate routing
-    let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph, &symbol_expansions);
+    // Re-estimate with actual call_graph for accurate routing
+    let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph);
 
     // Step 6: Apply budget drop order
     let had_patches_pre_drop = pr
@@ -95,8 +82,6 @@ pub async fn build_review_context(
         &mut pr,
         &mut ast_context,
         &mut call_graph,
-        &mut symbol_expansions,
-        deep,
         max_prompt_chars,
         &mut budget_drops,
         repo_path_ref.as_deref(),
@@ -133,7 +118,6 @@ pub async fn build_review_context(
         pr,
         ast_context,
         call_graph,
-        symbol_expansions,
         inferred_repo_path,
         cwd_inferred,
         max_chars_per_file: review_config.max_chars_per_file,
@@ -212,11 +196,7 @@ pub(crate) async fn build_ctx_ast(
 pub(crate) async fn build_ctx_call_graph(
     repo_path: Option<&str>,
     files: &[crate::ai::types::PrFile],
-    deep: bool,
 ) -> String {
-    if !deep {
-        return String::new();
-    }
     let Some(path) = repo_path else {
         return String::new();
     };
@@ -228,36 +208,6 @@ pub(crate) async fn build_ctx_call_graph(
     {
         let _ = (path, files);
         String::new()
-    }
-}
-
-/// Builds symbol-expansion context for changed symbols with exactly one
-/// unambiguous out-of-diff caller.
-///
-/// Gated behind `deep` only -- unlike `build_ctx_call_graph`, this does not
-/// auto-enable via the budget-remaining heuristic, since adoption is pending
-/// a preregistered benchmark.
-#[allow(clippy::unused_async)]
-pub(crate) async fn build_ctx_symbol_expansions(
-    repo_path: Option<&str>,
-    files: &[crate::ai::types::PrFile],
-    deep: bool,
-    max_chars: usize,
-) -> Vec<crate::ai::types::SymbolExpansion> {
-    if !deep {
-        return Vec::new();
-    }
-    let Some(path) = repo_path else {
-        return Vec::new();
-    };
-    #[cfg(feature = "ast-context")]
-    {
-        return crate::ast_context::build_symbol_expansions_context(path, files, max_chars).await;
-    }
-    #[cfg(not(feature = "ast-context"))]
-    {
-        let _ = (path, files, max_chars);
-        Vec::new()
     }
 }
 
