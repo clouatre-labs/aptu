@@ -43,6 +43,11 @@ impl TryFrom<&IssueComment> for u64 {
 
 /// Reverts all comments and labels posted by the authenticated aptu user on an issue.
 ///
+/// This function intentionally has no local permission gate: comments are
+/// filtered to the authenticated user's own, while label removal targets all
+/// labels on the issue and relies on GitHub server-side authorization on the
+/// underlying delete and label-removal API calls.
+///
 /// Fetches the issue with comments, identifies comments authored by the authenticated user,
 /// and deletes them along with any labels (if not in dry-run mode).
 ///

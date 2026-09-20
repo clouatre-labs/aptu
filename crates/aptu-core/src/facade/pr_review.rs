@@ -664,6 +664,23 @@ type ViewerPermissionCache =
     std::collections::HashMap<(String, String), (std::time::Instant, Option<ViewerPermission>)>;
 
 /// Process-wide cache of viewer permission lookups keyed by `(owner, repo)`.
+/// The cache is process-local: entries live only for the lifetime of the
+/// process and are dropped on exit. Within the 60s TTL a cached entry may
+/// serve a stale permission result during very long-running bulk
+/// operations; this is an accepted tradeoff.
+///
+/// # Assumption: one authenticated viewer per process
+///
+/// The cache key is not scoped to the authenticated identity because
+/// `octocrab::Octocrab` does not expose its credential for fingerprinting.
+/// The cache therefore assumes a single authenticated viewer per process,
+/// which holds for all current consumers (the `aptu` CLI and the GitHub
+/// Action each resolve one `TokenProvider` per execution). Library embedders
+/// that rotate tokens across multiple viewers within one process must not
+/// rely on this cache; a second viewer would observe the first viewer's
+/// cached permission for the same `owner/repo` within the TTL window.
+/// If multi-token support is ever needed, extend the cache key with a
+/// credential fingerprint (e.g. a token hash) rather than removing the cache.
 #[cfg(not(target_arch = "wasm32"))]
 fn viewer_permission_cache() -> &'static std::sync::Mutex<ViewerPermissionCache> {
     use std::collections::HashMap;
@@ -675,7 +692,9 @@ fn viewer_permission_cache() -> &'static std::sync::Mutex<ViewerPermissionCache>
 /// Fetches the viewer permission for `owner/repo`, memoizing the result across
 /// calls within the cache TTL to avoid redundant GraphQL round-trips when
 /// several write operations (e.g. posting a review and applying labels) run
-/// against the same repository in a single execution.
+/// against the same repository in a single execution. Because the cache is
+/// process-local with a 60s TTL, results may be stale for permissions changed
+/// mid-run by an external actor.
 #[cfg(not(target_arch = "wasm32"))]
 async fn fetch_repo_viewer_permission_cached(
     client: &octocrab::Octocrab,
