@@ -16,14 +16,8 @@ inputs:
   anthropic-api-key:
     description: Anthropic API key (from https://console.anthropic.com/settings/keys)
     required: false
-  cerebras-api-key:
-    description: Cerebras API key (from https://console.cerebras.ai/keys)
-    required: false
   gemini-api-key:
     description: Google Gemini API key (from https://aistudio.google.com/apikey)
-    required: false
-  groq-api-key:
-    description: Groq API key (from https://console.groq.com/keys)
     required: false
   openrouter-api-key:
     description: OpenRouter API key (from https://openrouter.ai/keys)
@@ -31,14 +25,11 @@ inputs:
   zai-api-key:
     description: Z.AI API key (from https://z.ai)
     required: false
-  zenmux-api-key:
-    description: ZenMux API key (from https://zenmux.ai)
-    required: false
 
   # --- AI model selection ---
   provider:
     description: >
-      AI provider to use (anthropic, cerebras, gemini, groq, openrouter, zai, zenmux).
+      AI provider to use (anthropic, gemini, openrouter, zai).
       Defaults to openrouter when not set.
     required: false
     default: ''
@@ -440,12 +431,9 @@ runs:
         REPO: ${{ github.event_name == 'repository_dispatch' && inputs.repo || github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
@@ -487,12 +475,9 @@ runs:
         REPO: ${{ github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
@@ -532,12 +517,9 @@ runs:
         REPO: ${{ github.event_name == 'repository_dispatch' && inputs.repo || github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
@@ -572,12 +554,9 @@ runs:
         REPO: ${{ github.event_name == 'repository_dispatch' && inputs.repo || github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
@@ -648,12 +627,9 @@ runs:
         REPO: ${{ github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         DRY_RUN: ${{ inputs.dry-run }}
         SCAN_DIFF: ${{ inputs.scan-security-diff }}
         SCAN_PATH: ${{ inputs.scan-path }}
@@ -696,12 +672,9 @@ runs:
         REPO: ${{ github.repository }}
         GH_TOKEN: ${{ inputs.github-token || github.token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
         GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        GROQ_API_KEY: ${{ inputs.groq-api-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
         ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        ZENMUX_API_KEY: ${{ inputs.zenmux-api-key }}
         APTU_AI__PROVIDER: ${{ inputs.provider }}
         APTU_AI__MODEL: ${{ inputs.model }}
         APTU_AI__OPENROUTER_DATA_COLLECTION: ${{ inputs.openrouter-data-collection }}
