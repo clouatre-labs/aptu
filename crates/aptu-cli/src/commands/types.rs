@@ -9,7 +9,6 @@ use aptu_core::DiscoveredRepo;
 use aptu_core::ai::types::TriageResponse;
 use aptu_core::github::auth::TokenSource;
 use aptu_core::github::graphql::IssueNode;
-use aptu_core::history::{Contribution, HistoryData};
 use aptu_core::repos::CuratedRepo;
 use serde::Serialize;
 
@@ -125,16 +124,6 @@ impl BulkTriageResult {
                 .is_some_and(|result| result.dry_run)
         })
     }
-}
-
-/// Result from the history command.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct HistoryResult {
-    /// List of contributions.
-    pub contributions: Vec<Contribution>,
-    /// Full history data for stats calculation.
-    pub history_data: HistoryData,
 }
 
 /// Result from the create command.

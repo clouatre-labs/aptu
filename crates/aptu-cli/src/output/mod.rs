@@ -103,7 +103,6 @@ mod auth;
 mod bulk;
 pub mod common;
 mod create;
-mod history;
 mod issues;
 mod models;
 pub mod pr;
