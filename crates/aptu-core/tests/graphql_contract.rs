@@ -64,6 +64,30 @@ fn graphql_response_deserializes_unwrapped_data() {
     }
 }
 
+#[test]
+fn issue_comment_node_null_author_deserializes_to_ghost() {
+    let node: aptu_core::github::graphql::IssueCommentNode = serde_json::from_value(json!({
+        "id": 1,
+        "author": null,
+        "body": "deleted user"
+    }))
+    .expect("a comment with a deleted (null) author must deserialize");
+    let comment = aptu_core::ai::types::IssueComment::from(node);
+    assert_eq!(comment.author, "ghost");
+}
+
+#[test]
+fn issue_comment_node_present_author_keeps_login() {
+    let node: aptu_core::github::graphql::IssueCommentNode = serde_json::from_value(json!({
+        "id": 2,
+        "author": {"login": "octocat"},
+        "body": "hello"
+    }))
+    .unwrap();
+    let comment = aptu_core::ai::types::IssueComment::from(node);
+    assert_eq!(comment.author, "octocat");
+}
+
 #[tokio::test]
 async fn fetch_issue_not_found_falls_back_to_pr() {
     let body = r#"{"id":1,"number":42,"title":"Fix","state":"open","html_url":"https://github.com/owner/repo/pull/42","url":"https://api.github.com/repos/owner/repo/pulls/42","head":{"label":"owner:fix","ref":"fix","sha":"abc","repo":null,"user":null},"base":{"label":"owner:main","ref":"main","sha":"def","repo":null,"user":null}}"#;
