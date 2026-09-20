@@ -346,8 +346,8 @@ pub struct IssueDetails {
 /// A comment on an issue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IssueComment {
-    /// Comment ID.
-    pub id: u64,
+    /// Comment ID (GraphQL ID scalar, an opaque string).
+    pub id: String,
     /// Comment author username.
     pub author: String,
     /// Comment body.

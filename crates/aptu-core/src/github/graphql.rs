@@ -244,8 +244,8 @@ pub struct RepoMilestonesConnection {
 /// Issue comment from GraphQL response.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IssueCommentNode {
-    /// Comment ID.
-    pub id: u64,
+    /// Comment ID (GraphQL ID scalar, an opaque string).
+    pub id: String,
     /// Comment author login. GitHub returns `null` for deleted users, which
     /// deserializes to `None` and maps to the "ghost" placeholder.
     pub author: Option<Author>,
@@ -367,6 +367,7 @@ fn build_issue_with_repo_context_query(owner: &str, repo: &str, number: u64) -> 
                     comments(first: 5) {{
                         totalCount
                         nodes {{
+                            id
                             author {{
                                 login
                             }}
