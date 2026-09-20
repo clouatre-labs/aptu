@@ -77,3 +77,9 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 - octocrab JWT backend: `jwt-aws-lc-rs` (not `jwt-rust-crypto`; swapped in #1459 to eliminate RUSTSEC-2023-0071/rsa dependency)
 - Each AI provider requires a `<PROVIDER>_API_KEY` env var; GitHub auth uses OAuth device flow (keyring-backed)
 - Match issue/PR bodies to the matching file under `.github/ISSUE_TEMPLATE/` (`bug.md`, `feature.md`, `refactor.yml`, `documentation.md`) or `.github/PULL_REQUEST_TEMPLATE.md` — `gh` doesn't auto-apply them once a body is passed via flag/file, so reproduce the template's sections by hand
+
+## Release
+
+- Bump version via PR (`chore(release): bump version to X.Y.Z`, Cargo.toml + Cargo.lock), merge, then push a GPG-signed annotated tag `vX.Y.Z` on the merge commit — lightweight tags are rejected by the `verify-tag-signature` gate
+- Pushing the tag triggers `release.yml`: signature check, binaries + SLSA attestations, crates.io publish, Homebrew formula PR, floating `vX.Y` tag move
+- After the workflow, curate the release notes (`## What's Changed` with `### Features`/`### Fixes`/`### Chores` and `**Scope:**` prefixes from commit scopes); full steps in `CONTRIBUTING.md`
