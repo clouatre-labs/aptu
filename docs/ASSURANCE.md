@@ -64,7 +64,7 @@ Aptu does not execute remote code, evaluate arbitrary expressions, or write to t
 **Boundaries and assumptions:**
 
 - CLI process to GitHub API: TLS enforced by rustls; no plaintext fallback. Responses are parsed with serde; unexpected fields are ignored.
-- CLI process to AI provider (OpenRouter, Gemini/Google, Z.AI, Anthropic): TLS enforced; API keys transmitted only in Authorization headers, never in request bodies or URLs.
+- CLI process to AI provider (OpenRouter, Gemini/Google, Z.AI, Anthropic): TLS enforced; API keys transmitted only in authentication headers (`Authorization` for OpenRouter and Z.AI, `x-goog-api-key` for Gemini, `x-api-key` for Anthropic), never in request bodies or URLs.
 - CLI process to OS keyring: platform keyring API (keyring crate); tokens are never written to disk in plaintext.
 - Config files: user-owned files in `~/.config/aptu/`; no secrets are stored there (see keyring above).
 - GitHub Webhook to Cloudflare Worker: HMAC-SHA256 signature validation; invalid signatures rejected with `401`. The webhook secret is stored as a Wrangler secret and never logged.
