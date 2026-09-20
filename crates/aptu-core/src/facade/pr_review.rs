@@ -343,6 +343,11 @@ fn build_dedup_map(
 ) -> std::collections::HashMap<(String, u64, String), (u64, String)> {
     comments
         .iter()
+        .filter(|c| {
+            c.body
+                .trim_start()
+                .starts_with(crate::triage::REVIEW_COMMENT_MARKER)
+        })
         .filter_map(|c| {
             resolve_key(&c.path, c.line, c.original_line, c.side.clone())
                 .map(|key| (key, (c.id, c.body.clone())))
@@ -880,12 +885,45 @@ mod tests {
     }
 
     #[test]
+    fn test_dedup_requires_marker_at_body_start() {
+        // Edge case: a human comment merely quoting the marker mid-body must
+        // not populate the dedup map; only a marker-anchored body counts.
+        let quoted = PrReviewCommentDetails {
+            id: 1,
+            author: "human".to_string(),
+            body: "Why does this say <!-- APTU_REVIEW_COMMENT --> in the middle?".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: Some(10),
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
+            commit_id: "abc123".to_string(),
+            original_line: None,
+        };
+        assert!(
+            build_dedup_map(std::slice::from_ref(&quoted)).is_empty(),
+            "mid-body marker quote must not be classified as aptu-owned"
+        );
+
+        let anchored = PrReviewCommentDetails {
+            body: format!(
+                "{}\nReal bot feedback",
+                crate::triage::REVIEW_COMMENT_MARKER
+            ),
+            ..quoted
+        };
+        assert_eq!(
+            build_dedup_map(&[anchored]).len(),
+            1,
+            "body starting with the marker must populate the dedup map"
+        );
+    }
+
+    #[test]
     fn test_dedup_drops_duplicate_comment() {
         // Arrange: existing bot comment on (src/lib.rs, 10, RIGHT, abc123)
         let existing = vec![PrReviewCommentDetails {
             id: 1,
             author: "aptu[bot]".to_string(),
-            body: "Existing feedback".to_string(),
+            body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
@@ -917,7 +955,8 @@ mod tests {
         let (id, body) = dedup.get(&key).unwrap();
         assert_eq!(*id, 1, "must map to the existing comment id");
         assert_eq!(
-            body, "Existing feedback",
+            body,
+            concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback"),
             "must map to the existing comment body"
         );
     }
@@ -928,7 +967,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 1,
             author: "aptu[bot]".to_string(),
-            body: "Existing feedback".to_string(),
+            body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
             path: "src/old.rs".to_string(),
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
@@ -995,7 +1034,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 42,
             author: "aptu[bot]".to_string(),
-            body: "Existing feedback".to_string(),
+            body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
@@ -1073,7 +1112,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 9,
             author: "unknown-login".to_string(),
-            body: "Revised feedback".to_string(),
+            body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Revised feedback").to_string(),
             path: "src/lib.rs".to_string(),
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
@@ -1123,7 +1162,7 @@ mod tests {
         let existing = vec![PrReviewCommentDetails {
             id: 3,
             author: "aptu[bot]".to_string(),
-            body: "Old body".to_string(),
+            body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Old body").to_string(),
             path: "src/lib.rs".to_string(),
             line: None,
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
@@ -1188,6 +1227,14 @@ mod tests {
         assert!(
             is_aptu_review_comment(&marked),
             "rendered inline comments must carry the marker"
+        );
+        assert!(
+            is_aptu_review_comment(concat!("   \n\t", "<!-- APTU_REVIEW_COMMENT -->\nrest")),
+            "leading whitespace before the marker is tolerated"
+        );
+        assert!(
+            !is_aptu_review_comment("Human note quoting <!-- APTU_REVIEW_COMMENT --> mid-body"),
+            "marker quoted mid-body must not classify the comment as aptu-owned"
         );
         assert_ne!(
             crate::triage::REVIEW_COMMENT_MARKER,

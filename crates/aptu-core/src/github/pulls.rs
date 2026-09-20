@@ -262,10 +262,14 @@ async fn fetch_pr_files(
     Ok(pr_files)
 }
 
-/// Returns true when a review comment body carries the APTU inline-comment marker.
+/// Returns true when a review comment body starts with the APTU inline-comment
+/// marker (after leading whitespace). Matching is anchored to the start so a
+/// human comment that merely quotes or mentions the marker mid-body is not
+/// misclassified as aptu-owned.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn is_aptu_review_comment(body: &str) -> bool {
-    body.contains(crate::triage::REVIEW_COMMENT_MARKER)
+    body.trim_start()
+        .starts_with(crate::triage::REVIEW_COMMENT_MARKER)
 }
 
 /// Fetches existing APTU review comments with pagination (`per_page=100`, max 300
