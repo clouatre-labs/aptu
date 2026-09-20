@@ -14,6 +14,12 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
 use super::{ReferenceKind, parse_github_reference};
+
+/// Forwards to the canonical [`super::parse_owner_repo`] to keep the
+/// historical `github::issues::parse_owner_repo` path stable for
+/// downstream consumers.
+pub use super::parse_owner_repo;
+
 use crate::ai::types::{IssueComment, IssueDetails, RepoIssueContext};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::retry::retry_backoff;
