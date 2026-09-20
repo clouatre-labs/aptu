@@ -71,6 +71,7 @@ Explicit do-NOTs: do not remove `bulk.rs` (used by triage batch), do not touch t
 
 ## Future Work (non-blocking)
 
+- Remove orphaned `PrCreateResult`/`create_pull_request` from `github/pulls.rs` (~120 LOC left behind by F5/#1656) — [#1660](https://github.com/clouatre-labs/aptu/issues/1660).
 - Pre-registered telemetry gate for #1651 (AST-context non-zero rate threshold) using existing 7-day artifacts.
 - Revisit `auth` OAuth device flow (~800 LOC): never used by the action/app; keep for local users today, but a candidate if CLI-only usage keeps shrinking.
 - docs/audit/ housekeeping: historical audits reference removed features once F3–F6 land.
