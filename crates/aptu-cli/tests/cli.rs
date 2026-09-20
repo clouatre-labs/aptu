@@ -1,110 +1,102 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use assert_cmd::cargo::cargo_bin_cmd;
-use predicates::prelude::*;
+
+/// Run the aptu binary with the given arguments and return its output.
+fn run_cli(args: &[&str]) -> std::process::Output {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.args(args).output().unwrap()
+}
+
+/// Run the aptu binary with the given arguments and stdin, returning its output.
+fn run_cli_with_stdin(args: &[&str], stdin: &str) -> std::process::Output {
+    let mut cmd = cargo_bin_cmd!("aptu");
+    cmd.args(args).write_stdin(stdin).output().unwrap()
+}
 
 #[test]
 fn test_version() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("--version")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("aptu"));
+    let output = run_cli(&["--version"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("aptu"));
 }
 
 #[test]
 fn test_help_contains_all_commands() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("--help")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("auth"))
-        .stdout(predicate::str::contains("issue"))
-        .stdout(predicate::str::contains("completion"));
+    let output = run_cli(&["--help"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("auth"));
+    assert!(stdout.contains("issue"));
+    assert!(stdout.contains("completion"));
 }
 
 #[test]
 fn test_completion_generate_bash() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("completion")
-        .arg("generate")
-        .arg("bash")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("bash").or(predicate::str::contains("complete")));
+    let output = run_cli(&["completion", "generate", "bash"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("bash") || stdout.contains("complete"));
 }
 
 #[test]
 fn test_completion_generate_zsh() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("completion")
-        .arg("generate")
-        .arg("zsh")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("zsh").or(predicate::str::contains("compdef")));
+    let output = run_cli(&["completion", "generate", "zsh"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("zsh") || stdout.contains("compdef"));
 }
 
 #[test]
 fn test_completion_install_dry_run() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("completion")
-        .arg("install")
-        .arg("--shell")
-        .arg("zsh")
-        .arg("--dry-run")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("DRY RUN"))
-        .stdout(predicate::str::contains("Completion path"));
+    let output = run_cli(&["completion", "install", "--shell", "zsh", "--dry-run"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("DRY RUN"));
+    assert!(stdout.contains("Completion path"));
 }
 
 #[test]
 fn test_invalid_command() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("invalidcmd")
-        .assert()
-        .failure()
-        .code(predicate::eq(2));
+    let output = run_cli(&["invalidcmd"]);
+    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
 }
 
 #[test]
 fn test_triage_multiple_references() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
-        .arg("triage")
-        .arg("block/goose#1")
-        .arg("block/goose#2")
-        .arg("--dry-run")
-        .assert()
-        .success();
+    let output = run_cli(&[
+        "issue",
+        "triage",
+        "block/goose#1",
+        "block/goose#2",
+        "--dry-run",
+    ]);
+    assert!(output.status.success());
 }
 
 #[test]
 fn test_triage_single_reference() {
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
-        .arg("triage")
-        .arg("block/goose#1")
-        .arg("--dry-run")
-        .assert()
-        .success();
+    let output = run_cli(&["issue", "triage", "block/goose#1", "--dry-run"]);
+    assert!(output.status.success());
 }
 
 #[test]
 fn test_triage_since_flag_invalid_date() {
     // Test that invalid date format is rejected
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
-        .arg("triage")
-        .arg("--repo")
-        .arg("block/goose")
-        .arg("--since")
-        .arg("not-a-date")
-        .arg("--dry-run")
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains("Invalid date format"));
+    let output = run_cli(&[
+        "issue",
+        "triage",
+        "--repo",
+        "block/goose",
+        "--since",
+        "not-a-date",
+        "--dry-run",
+    ]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Invalid date format"));
 }
 
 #[test]
@@ -114,18 +106,10 @@ fn test_triage_since_requires_repo() {
     // is automatically inferred. The command may fail with auth error in CI
     // (no token), but it should NOT fail with "--since requires --repo".
     // This proves auto-inference is working.
-    let mut cmd = cargo_bin_cmd!("aptu");
-    let assert = cmd
-        .arg("issue")
-        .arg("triage")
-        .arg("--since")
-        .arg("2025-12-01")
-        .arg("--dry-run")
-        .assert();
+    let output = run_cli(&["issue", "triage", "--since", "2025-12-01", "--dry-run"]);
 
     // Either succeeds (local with auth) or fails with auth error (CI without auth)
     // but never with "--since requires --repo" (that would mean inference failed)
-    let output = assert.get_output();
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         !stderr.contains("--since requires --repo"),
@@ -136,26 +120,17 @@ fn test_triage_since_requires_repo() {
 #[test]
 fn test_triage_no_comment_flag_recognized() {
     // Test that --no-comment flag is recognized in help
-    let mut cmd = cargo_bin_cmd!("aptu");
-    cmd.arg("issue")
-        .arg("triage")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("--no-comment"));
+    let output = run_cli(&["issue", "triage", "--help"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--no-comment"));
 }
 
 // JSON Output Validation Tests
 
 #[test]
 fn test_auth_status_json_output() {
-    let output = cargo_bin_cmd!("aptu")
-        .arg("auth")
-        .arg("status")
-        .arg("--output")
-        .arg("json")
-        .output()
-        .unwrap();
+    let output = run_cli(&["auth", "status", "--output", "json"]);
 
     let stdout = String::from_utf8(output.stdout).unwrap();
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
@@ -179,15 +154,14 @@ fn test_auth_status_json_output() {
 fn test_issue_triage_dry_run_json_output() {
     // Note: This test requires valid GitHub authentication
     // It will be skipped if not authenticated, but validates JSON output when it runs
-    let output = cargo_bin_cmd!("aptu")
-        .arg("issue")
-        .arg("triage")
-        .arg("block/goose#1")
-        .arg("--dry-run")
-        .arg("--output")
-        .arg("json")
-        .output()
-        .unwrap();
+    let output = run_cli(&[
+        "issue",
+        "triage",
+        "block/goose#1",
+        "--dry-run",
+        "--output",
+        "json",
+    ]);
     let stdout = String::from_utf8(output.stdout).unwrap();
 
     // If authentication fails, the command will exit with error
@@ -234,14 +208,13 @@ fn scan_security_diff_file_json() {
     write!(tmp, "{diff_content}").unwrap();
 
     // Act
-    let output = cargo_bin_cmd!("aptu")
-        .arg("scan-security")
-        .arg("--diff")
-        .arg(tmp.path())
-        .arg("--output")
-        .arg("json")
-        .output()
-        .unwrap();
+    let output = run_cli(&[
+        "scan-security",
+        "--diff",
+        tmp.path().to_str().unwrap(),
+        "--output",
+        "json",
+    ]);
 
     // Assert: exit 0 (no --fail-on) and findings array is non-empty
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -268,15 +241,10 @@ fn scan_security_diff_stdin() {
     );
 
     // Act
-    let output = cargo_bin_cmd!("aptu")
-        .arg("scan-security")
-        .arg("--diff")
-        .arg("-")
-        .arg("--output")
-        .arg("json")
-        .write_stdin(diff_content)
-        .output()
-        .unwrap();
+    let output = run_cli_with_stdin(
+        &["scan-security", "--diff", "-", "--output", "json"],
+        diff_content,
+    );
 
     // Assert: exit 0 and non-empty findings
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -302,12 +270,7 @@ fn scan_security_diff_oversize_error() {
     tmp.flush().unwrap();
 
     // Act
-    let output = cargo_bin_cmd!("aptu")
-        .arg("scan-security")
-        .arg("--diff")
-        .arg(tmp.path())
-        .output()
-        .unwrap();
+    let output = run_cli(&["scan-security", "--diff", tmp.path().to_str().unwrap()]);
 
     // Assert: non-zero exit due to size limit
     assert!(
@@ -322,13 +285,7 @@ fn scan_security_conflicts_path_and_diff() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
 
     // Act: pass both a path and --diff; Clap should reject
-    let output = cargo_bin_cmd!("aptu")
-        .arg("scan-security")
-        .arg(".")
-        .arg("--diff")
-        .arg(tmp.path())
-        .output()
-        .unwrap();
+    let output = run_cli(&["scan-security", ".", "--diff", tmp.path().to_str().unwrap()]);
 
     // Assert: non-zero exit (Clap argument conflict error)
     assert!(
@@ -357,16 +314,15 @@ fn scan_security_sarif_output_writes_valid_sarif() {
     let sarif_output = tempfile::NamedTempFile::new().unwrap();
 
     // Act: run with --output github-annotations and --sarif-output
-    let output = cargo_bin_cmd!("aptu")
-        .arg("scan-security")
-        .arg("--diff")
-        .arg(tmp.path())
-        .arg("--output")
-        .arg("github-annotations")
-        .arg("--sarif-output")
-        .arg(sarif_output.path())
-        .output()
-        .unwrap();
+    let output = run_cli(&[
+        "scan-security",
+        "--diff",
+        tmp.path().to_str().unwrap(),
+        "--output",
+        "github-annotations",
+        "--sarif-output",
+        sarif_output.path().to_str().unwrap(),
+    ]);
 
     // Assert: exit 0
     assert!(output.status.success(), "expected exit 0");
@@ -402,18 +358,17 @@ fn scan_security_sarif_output_written_before_fail_on_exit() {
     let sarif_output = tempfile::NamedTempFile::new().unwrap();
 
     // Act: run with --sarif-output and --fail-on critical,high
-    let output = cargo_bin_cmd!("aptu")
-        .arg("scan-security")
-        .arg("--diff")
-        .arg(tmp.path())
-        .arg("--output")
-        .arg("github-annotations")
-        .arg("--sarif-output")
-        .arg(sarif_output.path())
-        .arg("--fail-on")
-        .arg("critical,high")
-        .output()
-        .unwrap();
+    let output = run_cli(&[
+        "scan-security",
+        "--diff",
+        tmp.path().to_str().unwrap(),
+        "--output",
+        "github-annotations",
+        "--sarif-output",
+        sarif_output.path().to_str().unwrap(),
+        "--fail-on",
+        "critical,high",
+    ]);
 
     // Assert: non-zero exit due to --fail-on
     assert!(
