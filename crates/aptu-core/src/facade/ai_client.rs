@@ -204,20 +204,22 @@ where
             if is_retryable_anyhow(&e) {
                 // RateLimited falls through to the fallback chain after in-loop
                 // retry exhaustion; other retryable errors return early.
-                if let Some(AptuError::RateLimited {
-                    provider: rate_limited_provider,
-                    retry_after,
-                }) = e.downcast_ref::<AptuError>()
-                {
+                if let Some(AptuError::RateLimited { .. }) = e.downcast_ref::<AptuError>() {
                     let chain_configured = ai_config
                         .fallback
                         .as_ref()
                         .is_some_and(|f| !f.chain.is_empty());
                     if !chain_configured {
-                        return Err(AptuError::RateLimited {
-                            provider: rate_limited_provider.clone(),
-                            retry_after: *retry_after,
-                        });
+                        // Return the original error via downcast so its anyhow
+                        // context and exact instance are preserved.
+                        return match e.downcast::<AptuError>() {
+                            Ok(err) => Err(err),
+                            Err(e) => Err(AptuError::AI {
+                                message: e.to_string(),
+                                status: None,
+                                provider: primary_provider.to_string(),
+                            }),
+                        };
                     }
                     info!(
                         primary_provider = primary_provider,
@@ -371,7 +373,8 @@ mod fallback_tests {
 
     /// Arrange: primary rate limited with no fallback chain configured.
     /// Act: run try_with_fallback.
-    /// Assert: the original RateLimited error is surfaced.
+    /// Assert: the original RateLimited error is surfaced via downcast,
+    /// preserving the original error instance (not a reconstruction).
     #[tokio::test]
     async fn test_rate_limited_without_chain_surfaces_error() {
         let calls = Arc::new(AtomicUsize::new(0));
