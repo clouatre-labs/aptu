@@ -69,39 +69,22 @@ pub fn parse_pr_reference(
     parse_github_reference(ReferenceKind::Pull, reference, repo_context)
 }
 
-/// Fetches PR details including file diffs from GitHub.
-///
-/// Uses Octocrab to fetch PR metadata and file changes.
-///
-/// # Arguments
-///
-/// * `client` - Authenticated Octocrab client
-/// * `owner` - Repository owner
-/// * `repo` - Repository name
-/// * `number` - PR number
-///
-/// # Returns
-///
-/// `PrDetails` struct with PR metadata and file diffs.
+/// Fetches PR metadata, with a type-mismatch check on 404 (issue vs pull request).
 ///
 /// # Errors
 ///
 /// Returns an error if the API call fails or PR is not found.
 #[cfg(not(target_arch = "wasm32"))]
-#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
-#[allow(clippy::too_many_lines)]
-pub async fn fetch_pr_details(
+async fn fetch_pr_core(
     client: &Octocrab,
     owner: &str,
     repo: &str,
     number: u64,
-    review_config: &crate::config::ReviewConfig,
-) -> Result<PrDetails> {
+) -> Result<octocrab::models::pulls::PullRequest> {
     debug!("Fetching PR details");
 
-    // Fetch PR metadata
-    let pr = match client.pulls(owner, repo).get(number).await {
-        Ok(pr) => pr,
+    match client.pulls(owner, repo).get(number).await {
+        Ok(pr) => Ok(pr),
         Err(e) => {
             // Check if this is a 404 error and if an issue exists instead
             if let octocrab::Error::GitHub { source, .. } = &e
@@ -118,11 +101,27 @@ pub async fn fetch_pr_details(
                 }
                 // Issue check failed, fall back to original error
             }
-            return Err(e)
-                .with_context(|| format!("Failed to fetch PR #{number} from {owner}/{repo}"));
+            Err(e).with_context(|| format!("Failed to fetch PR #{number} from {owner}/{repo}"))
         }
-    };
+    }
+}
 
+/// Fetches PR files (diffs) with pagination (`per_page=100`, max 300 files),
+/// truncation detection, Contents API fallbacks, and full-content enrichment.
+///
+/// # Errors
+///
+/// Returns an error if the file listing API call fails.
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+async fn fetch_pr_files(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    head_sha: &str,
+    review_config: &crate::config::ReviewConfig,
+) -> Result<Vec<PrFile>> {
     // Fetch PR files (diffs) with pagination (per_page=100, max 300 files)
     let mut pr_files: Vec<PrFile> = Vec::new();
     let mut page = client
@@ -163,8 +162,6 @@ pub async fn fetch_pr_details(
             }
         }
     }
-
-    let head_sha = pr.head.sha.as_str();
 
     // Detect truncated patches and attempt Contents API fallback
     for file in &mut pr_files {
@@ -239,7 +236,7 @@ pub async fn fetch_pr_details(
         owner,
         repo,
         &pr_files,
-        pr.head.sha.as_str(),
+        head_sha,
         review_config.max_full_content_files,
         review_config.max_chars_per_file,
     )
@@ -262,15 +259,22 @@ pub async fn fetch_pr_details(
         })
         .collect();
 
-    let labels: Vec<String> = pr
-        .labels
-        .iter()
-        .flat_map(|v| v.iter())
-        .map(|l| l.name.clone())
-        .collect();
+    Ok(pr_files)
+}
 
-    // Fetch existing review comments (with pagination, per_page=100, max 300 items)
-    // so the AI prompt can avoid restating feedback the bot already posted.
+/// Fetches existing bot review comments with pagination (`per_page=100`, max 300 items)
+/// so the AI prompt can avoid restating feedback the bot already posted.
+///
+/// # Errors
+///
+/// Returns an error if the review comments API call fails.
+#[cfg(not(target_arch = "wasm32"))]
+async fn fetch_pr_comments(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+) -> Result<Vec<crate::ai::types::PrReviewCommentDetails>> {
     let mut review_comments: Vec<crate::ai::types::PrReviewCommentDetails> = Vec::new();
     let bot_login = match client.current().user().await {
         Ok(user) => user.login,
@@ -329,6 +333,51 @@ pub async fn fetch_pr_details(
             }
         }
     }
+
+    Ok(review_comments)
+}
+
+/// Fetches PR details including file diffs from GitHub.
+///
+/// Uses Octocrab to fetch PR metadata and file changes.
+///
+/// # Arguments
+///
+/// * `client` - Authenticated Octocrab client
+/// * `owner` - Repository owner
+/// * `repo` - Repository name
+/// * `number` - PR number
+///
+/// # Returns
+///
+/// `PrDetails` struct with PR metadata and file diffs.
+///
+/// # Errors
+///
+/// Returns an error if the API call fails or PR is not found.
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
+#[allow(clippy::too_many_lines)]
+pub async fn fetch_pr_details(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    review_config: &crate::config::ReviewConfig,
+) -> Result<PrDetails> {
+    let pr = fetch_pr_core(client, owner, repo, number).await?;
+
+    let head_sha = pr.head.sha.as_str();
+    let pr_files = fetch_pr_files(client, owner, repo, number, head_sha, review_config).await?;
+
+    let labels: Vec<String> = pr
+        .labels
+        .iter()
+        .flat_map(|v| v.iter())
+        .map(|l| l.name.clone())
+        .collect();
+
+    let review_comments = fetch_pr_comments(client, owner, repo, number).await?;
     debug!(
         review_comments = review_comments.len(),
         "Existing review comments fetched"
