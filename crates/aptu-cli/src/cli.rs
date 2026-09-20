@@ -211,9 +211,6 @@ pub enum Commands {
     #[command(subcommand)]
     Pr(PrCommand),
 
-    /// Show your contribution history
-    History,
-
     /// List AI models from providers
     #[command(subcommand)]
     Models(ModelsCommand),

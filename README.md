@@ -97,7 +97,6 @@ aptu repo list             # List curated repositories
 aptu issue list --repo block/goose          # Browse issues
 aptu issue triage block/goose#123    # Triage with AI
 aptu issue triage block/goose#123 --dry-run  # Preview
-aptu history               # View your contributions
 ```
 
 ## Observability

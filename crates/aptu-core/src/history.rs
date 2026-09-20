@@ -40,17 +40,26 @@ pub(crate) fn compute_etu(input: u64, cache_read: u64, cache_write: u64, output:
 }
 
 /// AI usage statistics for a contribution.
-#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+///
+/// Deserialization uses `serde(default)` on every field (notably
+/// `effective_token_units`) so legacy history.json rows that predate newer
+/// fields still load in `add_contribution` -> `load()`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct AiStats {
     /// Provider name (e.g., "openrouter", "anthropic").
+    #[serde(default)]
     pub provider: String,
     /// Model used for analysis.
+    #[serde(default)]
     pub model: String,
     /// Number of input tokens.
+    #[serde(default)]
     pub input_tokens: u64,
     /// Number of output tokens.
+    #[serde(default)]
     pub output_tokens: u64,
     /// Duration of the API call in milliseconds.
+    #[serde(default)]
     pub duration_ms: u64,
     /// Cost in USD (from `OpenRouter` API, `None` if not reported).
     #[serde(default)]
@@ -91,60 +100,6 @@ impl AiStats {
             self.output_tokens,
         );
         self
-    }
-}
-
-impl<'de> Deserialize<'de> for AiStats {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct Helper {
-            #[serde(default)]
-            provider: String,
-            #[serde(default)]
-            model: String,
-            #[serde(default)]
-            input_tokens: u64,
-            #[serde(default)]
-            output_tokens: u64,
-            #[serde(default)]
-            duration_ms: u64,
-            #[serde(default)]
-            cost_usd: Option<f64>,
-            #[serde(default)]
-            fallback_provider: Option<String>,
-            #[serde(default)]
-            prompt_chars: usize,
-            #[serde(default)]
-            cache_read_tokens: u64,
-            #[serde(default)]
-            cache_write_tokens: u64,
-            /// Ignored on deserialise; recomputed in the From impl.
-            #[serde(default)]
-            #[allow(dead_code)]
-            effective_token_units: f64,
-            #[serde(default)]
-            trace_id: Option<String>,
-        }
-
-        let h = Helper::deserialize(deserializer)?;
-        Ok(AiStats {
-            provider: h.provider,
-            model: h.model,
-            input_tokens: h.input_tokens,
-            output_tokens: h.output_tokens,
-            duration_ms: h.duration_ms,
-            cost_usd: h.cost_usd,
-            fallback_provider: h.fallback_provider,
-            prompt_chars: h.prompt_chars,
-            cache_read_tokens: h.cache_read_tokens,
-            cache_write_tokens: h.cache_write_tokens,
-            effective_token_units: 0.0,
-            trace_id: h.trace_id,
-        }
-        .with_computed_etu())
     }
 }
 
@@ -189,66 +144,6 @@ pub struct Contribution {
 pub struct HistoryData {
     /// List of contributions.
     pub contributions: Vec<Contribution>,
-}
-
-impl HistoryData {
-    /// Calculate total tokens used across all contributions.
-    #[must_use]
-    pub fn total_tokens(&self) -> u64 {
-        self.contributions
-            .iter()
-            .filter_map(|c| c.ai_stats.as_ref())
-            .map(|stats| stats.input_tokens + stats.output_tokens)
-            .sum()
-    }
-
-    /// Calculate total cost in USD across all contributions.
-    #[must_use]
-    pub fn total_cost(&self) -> f64 {
-        self.contributions
-            .iter()
-            .filter_map(|c| c.ai_stats.as_ref())
-            .filter_map(|stats| stats.cost_usd)
-            .sum()
-    }
-
-    /// Calculate average tokens per triage.
-    #[must_use]
-    #[allow(clippy::cast_precision_loss)]
-    pub fn avg_tokens_per_triage(&self) -> f64 {
-        let contributions_with_stats: Vec<_> = self
-            .contributions
-            .iter()
-            .filter_map(|c| c.ai_stats.as_ref())
-            .collect();
-
-        if contributions_with_stats.is_empty() {
-            return 0.0;
-        }
-
-        let total: u64 = contributions_with_stats
-            .iter()
-            .map(|stats| stats.input_tokens + stats.output_tokens)
-            .sum();
-
-        total as f64 / contributions_with_stats.len() as f64
-    }
-
-    /// Calculate total cost grouped by model.
-    #[must_use]
-    pub fn cost_by_model(&self) -> std::collections::HashMap<String, f64> {
-        let mut costs = std::collections::HashMap::new();
-
-        for contribution in &self.contributions {
-            if let Some(stats) = &contribution.ai_stats
-                && let Some(cost) = stats.cost_usd
-            {
-                *costs.entry(stats.model.clone()).or_insert(0.0) += cost;
-            }
-        }
-
-        costs
-    }
 }
 
 /// Returns the path to the history file.
@@ -411,9 +306,10 @@ mod tests {
         assert_eq!(stats.prompt_chars, parsed.prompt_chars);
         assert_eq!(stats.cache_read_tokens, parsed.cache_read_tokens);
         assert_eq!(stats.cache_write_tokens, parsed.cache_write_tokens);
+        // ETU passes through deserialization via serde default (no recompute on load).
         assert_eq!(stats.trace_id, parsed.trace_id);
-        // ETU must be recomputed: 1000 input + 500*5 output = 3500.0
-        assert!((parsed.effective_token_units - 3500.0).abs() < f64::EPSILON);
+        assert_eq!(stats.effective_token_units, parsed.effective_token_units);
+        assert_eq!(parsed.effective_token_units, 0.0);
     }
 
     #[test]
@@ -461,201 +357,6 @@ mod tests {
     }
 
     #[test]
-    fn test_total_tokens() {
-        let mut data = HistoryData::default();
-
-        let mut c1 = test_contribution();
-        c1.ai_stats = Some(AiStats {
-            provider: "openrouter".to_string(),
-            model: "model1".to_string(),
-            input_tokens: 100,
-            output_tokens: 50,
-            duration_ms: 1000,
-            cost_usd: Some(0.01),
-            fallback_provider: None,
-            prompt_chars: 0,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            effective_token_units: 0.0,
-            trace_id: None,
-        });
-
-        let mut c2 = test_contribution();
-        c2.ai_stats = Some(AiStats {
-            provider: "openrouter".to_string(),
-            model: "model2".to_string(),
-            input_tokens: 200,
-            output_tokens: 100,
-            duration_ms: 2000,
-            cost_usd: Some(0.02),
-            fallback_provider: None,
-            prompt_chars: 0,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            effective_token_units: 0.0,
-            trace_id: None,
-        });
-
-        data.contributions.push(c1);
-        data.contributions.push(c2);
-        data.contributions.push(test_contribution()); // No stats
-
-        assert_eq!(data.total_tokens(), 450);
-    }
-
-    #[test]
-    fn test_total_cost() {
-        let mut data = HistoryData::default();
-
-        let mut c1 = test_contribution();
-        c1.ai_stats = Some(AiStats {
-            provider: "openrouter".to_string(),
-            model: "model1".to_string(),
-            input_tokens: 100,
-            output_tokens: 50,
-            duration_ms: 1000,
-            cost_usd: Some(0.01),
-            fallback_provider: None,
-            prompt_chars: 0,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            effective_token_units: 0.0,
-            trace_id: None,
-        });
-
-        let mut c2 = test_contribution();
-        c2.ai_stats = Some(AiStats {
-            provider: "openrouter".to_string(),
-            model: "model2".to_string(),
-            input_tokens: 200,
-            output_tokens: 100,
-            duration_ms: 2000,
-            cost_usd: Some(0.02),
-            fallback_provider: None,
-            prompt_chars: 0,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            effective_token_units: 0.0,
-            trace_id: None,
-        });
-
-        data.contributions.push(c1);
-        data.contributions.push(c2);
-
-        assert!((data.total_cost() - 0.03).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn test_avg_tokens_per_triage() {
-        let mut data = HistoryData::default();
-
-        let mut c1 = test_contribution();
-        c1.ai_stats = Some(AiStats {
-            provider: "openrouter".to_string(),
-            model: "model1".to_string(),
-            input_tokens: 100,
-            output_tokens: 50,
-            duration_ms: 1000,
-            cost_usd: Some(0.01),
-            fallback_provider: None,
-            prompt_chars: 0,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            effective_token_units: 0.0,
-            trace_id: None,
-        });
-
-        let mut c2 = test_contribution();
-        c2.ai_stats = Some(AiStats {
-            provider: "openrouter".to_string(),
-            model: "model2".to_string(),
-            input_tokens: 200,
-            output_tokens: 100,
-            duration_ms: 2000,
-            cost_usd: Some(0.02),
-            fallback_provider: None,
-            prompt_chars: 0,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            effective_token_units: 0.0,
-            trace_id: None,
-        });
-
-        data.contributions.push(c1);
-        data.contributions.push(c2);
-
-        assert!((data.avg_tokens_per_triage() - 225.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn test_avg_tokens_per_triage_empty() {
-        let data = HistoryData::default();
-        assert!((data.avg_tokens_per_triage() - 0.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn test_cost_by_model() {
-        let mut data = HistoryData::default();
-
-        let mut c1 = test_contribution();
-        c1.ai_stats = Some(AiStats {
-            provider: "openrouter".to_string(),
-            model: "model1".to_string(),
-            input_tokens: 100,
-            output_tokens: 50,
-            duration_ms: 1000,
-            cost_usd: Some(0.01),
-            fallback_provider: None,
-            prompt_chars: 0,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            effective_token_units: 0.0,
-            trace_id: None,
-        });
-
-        let mut c2 = test_contribution();
-        c2.ai_stats = Some(AiStats {
-            provider: "openrouter".to_string(),
-            model: "model1".to_string(),
-            input_tokens: 200,
-            output_tokens: 100,
-            duration_ms: 2000,
-            cost_usd: Some(0.02),
-            fallback_provider: None,
-            prompt_chars: 0,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            effective_token_units: 0.0,
-            trace_id: None,
-        });
-
-        let mut c3 = test_contribution();
-        c3.ai_stats = Some(AiStats {
-            provider: "openrouter".to_string(),
-            model: "model2".to_string(),
-            input_tokens: 150,
-            output_tokens: 75,
-            duration_ms: 1500,
-            cost_usd: Some(0.015),
-            fallback_provider: None,
-            prompt_chars: 0,
-            cache_read_tokens: 0,
-            cache_write_tokens: 0,
-            effective_token_units: 0.0,
-            trace_id: None,
-        });
-
-        data.contributions.push(c1);
-        data.contributions.push(c2);
-        data.contributions.push(c3);
-
-        let costs = data.cost_by_model();
-        assert_eq!(costs.len(), 2);
-        assert!((costs.get("model1").unwrap() - 0.03).abs() < f64::EPSILON);
-        assert!((costs.get("model2").unwrap() - 0.015).abs() < f64::EPSILON);
-    }
-
-    #[test]
     fn test_ai_stats_cache_tokens_roundtrip() {
         let stats = AiStats {
             provider: "anthropic".to_string(),
@@ -687,10 +388,11 @@ mod tests {
         assert_eq!(stats.prompt_chars, parsed.prompt_chars);
         assert_eq!(stats.cache_read_tokens, 100);
         assert_eq!(stats.cache_write_tokens, 50);
+        // ETU passes through deserialization via serde default (no recompute on load).
         assert_eq!(parsed.cache_read_tokens, 100);
         assert_eq!(parsed.cache_write_tokens, 50);
-        // ETU must be recomputed: 1000 input + 0.1*100 cache_read + 1.25*50 cache_write + 500*5 output = 3572.5
-        assert!((parsed.effective_token_units - 3572.5).abs() < f64::EPSILON);
+        assert_eq!(stats.effective_token_units, parsed.effective_token_units);
+        assert_eq!(parsed.effective_token_units, 0.0);
     }
 
     #[test]
@@ -735,21 +437,26 @@ mod tests {
     }
 
     #[test]
-    fn test_etu_recomputed_on_deserialize() {
-        // A JSON record with a stale/wrong effective_token_units value.
-        // After deserialization the field must be recomputed from token counts.
+    fn test_ai_stats_legacy_row_without_etu() {
+        // Legacy history.json rows lack effective_token_units (and possibly other
+        // newer fields); serde defaults must let them load in add_contribution -> load().
         let json = r#"{
-            "provider": "anthropic",
-            "model": "claude-sonnet-4-6",
+            "provider": "openrouter",
+            "model": "mistralai/mistral-small-2603",
             "input_tokens": 1000,
-            "output_tokens": 200,
-            "cache_read_tokens": 500,
-            "cache_write_tokens": 100,
-            "effective_token_units": 99999.0
+            "output_tokens": 500
         }"#;
-        let stats: AiStats = serde_json::from_str(json).unwrap();
-        // Must equal compute_etu(1000, 500, 100, 200) = 2175.0, not 99999.0
-        assert!((stats.effective_token_units - 2175.0).abs() < f64::EPSILON);
+        let stats: AiStats = serde_json::from_str(json).expect("deserialize legacy row");
+
+        assert_eq!(stats.input_tokens, 1000);
+        assert_eq!(stats.output_tokens, 500);
+        assert_eq!(stats.duration_ms, 0);
+        assert_eq!(stats.cost_usd, None);
+        assert_eq!(stats.prompt_chars, 0);
+        assert_eq!(stats.cache_read_tokens, 0);
+        assert_eq!(stats.cache_write_tokens, 0);
+        assert_eq!(stats.trace_id, None);
+        assert!((stats.effective_token_units - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
