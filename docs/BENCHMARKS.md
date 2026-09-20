@@ -3,7 +3,7 @@
 
 # Benchmarks
 
-> **Note:** Results below reflect measurements taken at the time of each referenced PR. Model availability, pricing, and latency may have changed since. Use `aptu models list` for current model information.
+> **Note:** Results below reflect measurements taken at the time of each referenced PR. Model availability, pricing, and latency may have changed since. See your provider's model catalog for current model information.
 
 ## Comparative Benchmark
 

@@ -2,7 +2,7 @@
 
 Config file: `~/.config/aptu/config.toml`
 
-> **Note:** Model names in examples are illustrative and may not reflect current defaults or available models. See your provider's published model list to discover currently available models from your configured providers.
+> **Note:** Model names in examples are illustrative and may not reflect current defaults or available models. See your provider's model catalog (Anthropic Console, Google AI Studio, or openrouter.ai/models) for current model IDs.
 
 ```toml
 [ai]
@@ -16,7 +16,7 @@ confirm_before_post = true
 
 ## Task-Specific Model Configuration
 
-Configure different AI models for different operations (triage, review, create) to optimize for speed, cost, or reasoning depth:
+Configure different AI models for different operations (triage, review) to optimize for speed, cost, or reasoning depth:
 
 ```toml
 [ai]
@@ -30,10 +30,6 @@ model = "mistralai/mistral-small-2603"  # fast and cheap for triage
 [ai.tasks.review]
 provider = "openrouter"
 model = "anthropic/claude-haiku-4.5"  # balanced for review
-
-[ai.tasks.create]
-model = "anthropic/claude-sonnet-4.6"  # more capable for code creation
-```
 
 All task-specific overrides are optional. If not specified, the default `provider` and `model` are used.
 
@@ -52,12 +48,6 @@ All task-specific overrides are optional. If not specified, the default `provide
   - `small_model`: Optional model for small prompts (used with `large_model` for routing)
   - `large_model`: Optional model for large prompts (used with `small_model` for routing)
   - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 60000 for review)
-
-- **`[ai.tasks.create]`**: Configuration for code creation operations
-  - `provider`: Optional provider override
-  - `model`: Optional model override
-  - `small_model`: Optional model for small prompts (used with `large_model` for routing)
-  - `large_model`: Optional model for large prompts (used with `small_model` for routing)
   - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 8192 for create)
 
 ### Model-Tier Routing
@@ -172,7 +162,7 @@ Flags can be used independently (`--model` alone uses configured provider). CLI 
 
 ## AI Provider Setup
 
-Model IDs and pricing change frequently. See your provider's published model list to discover available models from any configured provider.
+Model IDs and pricing change frequently. See your provider's model catalog for available models.
 
 Aptu supports multiple AI providers. Choose the one that works best for you:
 
@@ -214,7 +204,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    model = "gemini-3.1-flash-lite"
    ```
 
-See Google's published Gemini model list to discover current model IDs.
+See the Google AI Studio model catalog for current model IDs.
 
 **Free Tier:** Available with Google AI Studio account; see Google AI Studio for current limits
 
@@ -364,25 +354,6 @@ When using the GitHub Action, these can be set as inputs:
     openrouter-zdr: true
 ```
 
-## DCO Sign-off (`dco_signoff`)
-
-When creating a branch and commit via `aptu pr create --diff`, Aptu can append a
-`Signed-off-by` trailer to the commit message to satisfy
-[Developer Certificate of Origin](https://developercertificate.org/) requirements.
-
-### Global default (config.toml)
-
-Set `dco_signoff = true` in the `[repos]` section of `~/.config/aptu/config.toml` to
-enable sign-off for every repository:
-
-```toml
-[repos]
-dco_signoff = true
-```
-
-The `--dco-signoff`
-CLI flag on `aptu pr create` overrides the global default.
-
 ## Prompt Customization
 
 Aptu ships with built-in system prompts compiled into the binary. You can override them at runtime without rebuilding.
@@ -398,7 +369,7 @@ model = "mistralai/mistral-small-2603"
 custom_guidance = "Always respond in French. Prefer concise labels."
 ```
 
-Use this for project-wide conventions you want the AI to follow consistently across triage, review, and create operations.
+Use this for project-wide conventions you want the AI to follow consistently across triage and review operations.
 
 ### Replace a system prompt for a specific operation
 
@@ -411,7 +382,6 @@ Supported operation names:
 | `~/.config/aptu/prompts/triage.md` | Issue triage system prompt |
 | `~/.config/aptu/prompts/review.md` | PR review system prompt |
 | `~/.config/aptu/prompts/pr_label.md` | PR label suggestion system prompt |
-| `~/.config/aptu/prompts/create.md` | Issue creation system prompt |
 
 **Example:** customize the triage prompt for a monorepo:
 
