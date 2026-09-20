@@ -17,7 +17,7 @@ use crate::github::auth::create_client_from_provider;
 use crate::github::graphql::ViewerPermission;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::graphql::fetch_repo_viewer_permission;
-pub use crate::github::pulls::ReviewPostOutcome;
+pub use crate::github::pulls::{ReviewPostOutcome, SummaryPostOutcome};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::github::pulls::{
     fetch_pr_details, post_pr_review as gh_post_pr_review, update_pr_review_comment,
@@ -398,6 +398,44 @@ fn dedup_outcome(
     }
 }
 
+/// Decision returned by [`summary_dedup_outcome`] for how to handle the Aptu
+/// review summary comment (the issue comment carrying the
+/// `<!-- APTU_REVIEW:<sha> -->` marker).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SummaryDedupOutcome {
+    /// No existing summary comment; create one after posting the review.
+    Post,
+    /// Existing summary comment already covers this head SHA; skip entirely.
+    Skip,
+    /// Existing summary comment covers a different (or unknown) head SHA;
+    /// patch it in place with the given comment ID.
+    Update { comment_id: u64 },
+}
+
+/// Pure helper shared by [`post_pr_review`] and its tests: given the existing
+/// Aptu summary comment (if any) and the current head SHA, decide whether to
+/// post, skip, or update the summary.
+///
+/// Ownership of the existing comment is decided by the caller using the same
+/// marker + Bot-type-author detection as the inline-comment dedup map (see
+/// [`build_dedup_map`]); never via `octocrab current().user()`, which fails on
+/// GitHub App installation tokens (see #1639). A legacy SHA-less marker is
+/// treated as stale so the summary is refreshed. The same-SHA skip is
+/// best-effort under concurrent runs (TOCTOU accepted; the worst case is a
+/// duplicate summary, mitigated by patch-oldest on collision).
+fn summary_dedup_outcome(
+    existing: Option<(u64, Option<String>)>,
+    head_sha: &str,
+) -> SummaryDedupOutcome {
+    match existing {
+        None => SummaryDedupOutcome::Post,
+        Some((comment_id, sha)) => match sha {
+            Some(sha) if sha == head_sha => SummaryDedupOutcome::Skip,
+            _ => SummaryDedupOutcome::Update { comment_id },
+        },
+    }
+}
+
 /// Posts a PR review to GitHub.
 ///
 /// This function abstracts the credential resolution and API client creation,
@@ -408,15 +446,23 @@ fn dedup_outcome(
 /// * `provider` - Token provider for GitHub credentials
 /// * `reference` - PR reference (URL, owner/repo#number, or number)
 /// * `repo_context` - Optional repository context for bare numbers
-/// * `body` - Review comment text
+/// * `summary_body` - Summary comment text (the single summary surface; posted
+///   as an issue comment carrying the `<!-- APTU_REVIEW:<sha> -->` marker)
+/// * `review_body` - PR review body text; must not contain the rendered summary
 /// * `event` - Review event type (Comment, Approve, or `RequestChanges`)
 /// * `comments` - Inline review comments; entries with `line = None` are silently skipped
 /// * `commit_id` - Head commit SHA; omitted from the API payload when empty
+/// * `existing_comments` - Existing inline review comments for dedup
+/// * `dedup_summary` - When true, deduplicate the review summary against a
+///   prior issue comment carrying the `<!-- APTU_REVIEW:<sha> -->` marker
 ///
 /// # Returns
 ///
 /// `ReviewPostOutcome` with the review ID and any per-comment fallback failures
 /// (see [`crate::github::pulls::post_pr_review`] for the 422 fallback behavior).
+/// The `summary` field reports Posted/Updated/Skipped for the summary comment.
+/// The same-SHA skip is best-effort under concurrent runs (TOCTOU accepted;
+/// worst case is a duplicate summary, mitigated by patch-oldest on collision).
 ///
 /// # Errors
 ///
@@ -427,18 +473,22 @@ fn dedup_outcome(
 /// - API call fails
 #[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(provider, comments, existing_comments), fields(reference = %reference, event = %event))]
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub async fn post_pr_review(
     provider: &dyn TokenProvider,
     reference: &str,
     repo_context: Option<&str>,
-    body: &str,
+    summary_body: &str,
+    review_body: &str,
     event: ReviewEvent,
     comments: &[PrReviewComment],
     commit_id: &str,
     existing_comments: &[crate::ai::types::PrReviewCommentDetails],
+    dedup_summary: bool,
 ) -> crate::Result<WriteOutcome<ReviewPostOutcome>> {
+    use crate::github::issues::{create_issue_comment, list_issue_comments, update_issue_comment};
     use crate::github::pulls::parse_pr_reference;
+    use crate::triage::parse_aptu_summary_marker;
 
     // Parse PR reference
     let (owner, repo, number) =
@@ -515,13 +565,69 @@ pub async fn post_pr_review(
         }
     }
 
+    // Summary dedup: locate a prior Aptu summary issue comment (marker +
+    // Bot-type author, never current().user(); see #1639). Same SHA -> skip
+    // entirely; changed/legacy SHA -> patch in place; none -> create one.
+    // Best-effort under concurrent runs (TOCTOU accepted; patch-oldest on
+    // collision).
+    let mut summary_outcome = SummaryPostOutcome::Posted;
+    let mut pending_summary_update: Option<u64> = None;
+    if dedup_summary {
+        let existing = list_issue_comments(&client, &owner, &repo, number)
+            .await
+            .map_err(crate::error::aptu_error_from_anyhow)?
+            .into_iter()
+            .find(|c| c.is_bot && parse_aptu_summary_marker(&c.body).is_some())
+            .map(|c| {
+                let marker = parse_aptu_summary_marker(&c.body);
+                (c.id, marker.and_then(|m| m.sha))
+            });
+        match summary_dedup_outcome(existing, commit_id) {
+            SummaryDedupOutcome::Skip => {
+                debug!("Head SHA unchanged; skipping review and summary comment");
+                return Ok(WriteOutcome::Applied(ReviewPostOutcome {
+                    review_id: 0,
+                    failed_comments: Vec::new(),
+                    summary: SummaryPostOutcome::Skipped,
+                }));
+            }
+            SummaryDedupOutcome::Update { comment_id } => {
+                debug!(comment_id = comment_id, "Updating existing summary comment");
+                summary_outcome = SummaryPostOutcome::Updated;
+                pending_summary_update = Some(comment_id);
+            }
+            SummaryDedupOutcome::Post => {}
+        }
+    }
+
     // Post the review
-    gh_post_pr_review(
-        &client, &owner, &repo, number, body, event, &filtered, commit_id,
+    let mut outcome = gh_post_pr_review(
+        &client,
+        &owner,
+        &repo,
+        number,
+        review_body,
+        event,
+        &filtered,
+        commit_id,
     )
     .await
-    .map(WriteOutcome::Applied)
-    .map_err(crate::error::aptu_error_from_anyhow)
+    .map_err(crate::error::aptu_error_from_anyhow)?;
+
+    // Create or update the summary comment (always, even with dedup disabled:
+    // --no-dedup-summary bypasses the lookup but still posts the summary).
+    if let Some(comment_id) = pending_summary_update {
+        update_issue_comment(&client, &owner, &repo, comment_id, summary_body)
+            .await
+            .map_err(crate::error::aptu_error_from_anyhow)?;
+    } else {
+        create_issue_comment(&client, &owner, &repo, number, summary_body)
+            .await
+            .map_err(crate::error::aptu_error_from_anyhow)?;
+    }
+    outcome.summary = summary_outcome;
+
+    Ok(WriteOutcome::Applied(outcome))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -530,11 +636,13 @@ pub async fn post_pr_review(
     _provider: &dyn crate::auth::TokenProvider,
     _reference: &str,
     _repo_context: Option<&str>,
-    _body: &str,
+    _summary_body: &str,
+    _review_body: &str,
     _event: crate::ai::types::ReviewEvent,
     _comments: &[crate::ai::types::PrReviewComment],
     _commit_id: &str,
     _existing_comments: &[crate::ai::types::PrReviewCommentDetails],
+    _dedup_summary: bool,
 ) -> crate::Result<WriteOutcome<ReviewPostOutcome>> {
     crate::facade::wasm_unsupported!("post_pr_review");
 }
@@ -789,7 +897,10 @@ mod tests {
     /// comments and passed as the authenticated login to `build_dedup_map`.
     const TEST_BOT_LOGIN: &str = "aptu[bot]";
 
-    use super::{DEFAULT_COMMENT_SIDE, DedupOutcome, analyze_pr, dedup_outcome, pr_write_allowed};
+    use super::{
+        DEFAULT_COMMENT_SIDE, DedupOutcome, SummaryDedupOutcome, analyze_pr, dedup_outcome,
+        pr_write_allowed, summary_dedup_outcome,
+    };
     use super::{build_dedup_map, resolve_key};
     use crate::ai::types::{
         CommentSeverity, PrDetails, PrFile, PrReviewComment, PrReviewCommentDetails,
@@ -821,6 +932,37 @@ mod tests {
         assert!(pr_write_allowed(Some(ViewerPermission::Maintain)));
         assert!(pr_write_allowed(Some(ViewerPermission::Admin)));
         assert!(pr_write_allowed(None));
+    }
+
+    #[test]
+    fn summary_dedup_skips_when_head_sha_unchanged() {
+        let existing = Some((42, Some("abc123".to_string())));
+        assert_eq!(
+            summary_dedup_outcome(existing, "abc123"),
+            SummaryDedupOutcome::Skip
+        );
+    }
+
+    #[test]
+    fn summary_dedup_updates_when_head_sha_changed_or_legacy() {
+        // Changed SHA -> patch in place.
+        assert_eq!(
+            summary_dedup_outcome(Some((42, Some("old".to_string()))), "new"),
+            SummaryDedupOutcome::Update { comment_id: 42 }
+        );
+        // Legacy SHA-less marker -> treated as stale -> update.
+        assert_eq!(
+            summary_dedup_outcome(Some((7, None)), "abc123"),
+            SummaryDedupOutcome::Update { comment_id: 7 }
+        );
+    }
+
+    #[test]
+    fn summary_dedup_posts_when_no_marker_comment() {
+        assert_eq!(
+            summary_dedup_outcome(None, "abc123"),
+            SummaryDedupOutcome::Post
+        );
     }
 
     #[tokio::test]

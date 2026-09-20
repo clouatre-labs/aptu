@@ -291,6 +291,45 @@ pub fn check_already_triaged(issue: &IssueDetails) -> TriageStatus {
 /// installation tokens cannot use `current().user()`).
 pub const REVIEW_COMMENT_MARKER: &str = "<!-- APTU_REVIEW_COMMENT -->";
 
+/// Marker prefix embedded in the PR review summary comment so it can be found
+/// and deduplicated on later runs. The full marker carries the head commit SHA:
+/// `<!-- APTU_REVIEW:<sha> -->`.
+pub const REVIEW_SUMMARY_MARKER_PREFIX: &str = "<!-- APTU_REVIEW:";
+
+/// A parsed Aptu review summary marker.
+///
+/// `sha` is `None` for the legacy SHA-less marker (`<!-- APTU_REVIEW -->`),
+/// which is always treated as stale so the summary is refreshed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AptuSummaryMarker {
+    /// Head commit SHA recorded when the summary was posted, if any.
+    pub sha: Option<String>,
+}
+
+/// Parses the `<!-- APTU_REVIEW:<sha> -->` summary marker from a comment body.
+///
+/// Returns `None` when the body does not carry an Aptu review summary marker.
+/// The legacy SHA-less form (`<!-- APTU_REVIEW -->`) parses to `sha: None` and
+/// is treated as stale by callers so the summary is updated in place.
+#[must_use]
+pub fn parse_aptu_summary_marker(body: &str) -> Option<AptuSummaryMarker> {
+    let trimmed = body.trim_start();
+    // Legacy SHA-less marker has no colon separator; treat it as stale.
+    if trimmed.starts_with("<!-- APTU_REVIEW -->") {
+        return Some(AptuSummaryMarker { sha: None });
+    }
+    let rest = trimmed.strip_prefix(REVIEW_SUMMARY_MARKER_PREFIX)?;
+    let end = rest.find("-->")?;
+    let sha = rest[..end].trim();
+    if sha.is_empty() {
+        Some(AptuSummaryMarker { sha: None })
+    } else {
+        Some(AptuSummaryMarker {
+            sha: Some(sha.to_string()),
+        })
+    }
+}
+
 /// Formats an inline PR review comment body.
 ///
 /// When the comment includes `suggested_code`, appends a GitHub suggestion block
@@ -310,25 +349,26 @@ pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
     body
 }
 
-/// Renders a concise PR review body for posting to GitHub.
+/// Renders the PR review summary comment body for posting to GitHub.
 ///
-/// Produces a short verdict + summary line, optionally followed by notable-change
-/// bullets when the PR touches more than five files. All inline detail lives in the
-/// anchored review comments; the body stays intentionally brief.
-///
-/// An `<!-- APTU_REVIEW -->` HTML comment is embedded so duplicate reviews can be
-/// detected programmatically.
+/// This is the single summary surface: the rendered summary lives ONLY here, as
+/// an issue comment whose body starts with the
+/// `<!-- APTU_REVIEW:<head_sha> -->` HTML comment so it can be deduplicated on
+/// re-runs: an unchanged head SHA means the summary is skipped, a changed SHA
+/// means it is patched in place. The PR review body itself is rendered
+/// separately by [`render_pr_review_review_body`] and never contains the
+/// summary.
 #[must_use]
-pub fn render_pr_review_markdown(review: &PrReviewResponse, files_count: usize) -> String {
-    let verdict_badge = match review.verdict.as_str() {
-        "approve" => "✅ Approve",
-        "request_changes" | "request-changes" => "❌ Request Changes",
-        _ => "💬 Comment",
-    };
+pub fn render_pr_review_markdown(
+    review: &PrReviewResponse,
+    files_count: usize,
+    head_sha: &str,
+) -> String {
+    let verdict_badge = verdict_badge(&review.verdict);
 
     let mut body = format!(
-        "<!-- APTU_REVIEW -->\n## Aptu Review\n\n**{}** — {}\n",
-        verdict_badge, review.summary
+        "{}{} -->\n## Aptu Review\n\n**{}** — {}\n",
+        REVIEW_SUMMARY_MARKER_PREFIX, head_sha, verdict_badge, review.summary
     );
 
     // Notable changes bullets: only for larger PRs to give reviewers orientation.
@@ -342,6 +382,36 @@ pub fn render_pr_review_markdown(review: &PrReviewResponse, files_count: usize) 
     body.push_str("\n---\n\n<sub>Posted by [aptu](https://github.com/clouatre-labs/aptu)</sub>\n");
 
     body
+}
+
+/// Renders the PR review body for posting to GitHub.
+///
+/// The review body carries only non-summary content (the verdict badge and
+/// notable-change bullets); the rendered summary lives solely in the
+/// deduplicated marker issue comment produced by [`render_pr_review_markdown`].
+#[must_use]
+pub fn render_pr_review_review_body(review: &PrReviewResponse, files_count: usize) -> String {
+    let verdict_badge = verdict_badge(&review.verdict);
+    let mut body = format!("## Aptu Review\n\n{verdict_badge}\n");
+
+    if files_count > 5 && !review.concerns.is_empty() {
+        body.push('\n');
+        for c in &review.concerns {
+            let _ = writeln!(body, "- {c}");
+        }
+    }
+
+    body.push_str("\n---\n\n<sub>Posted by [aptu](https://github.com/clouatre-labs/aptu)</sub>\n");
+
+    body
+}
+
+fn verdict_badge(verdict: &str) -> &'static str {
+    match verdict {
+        "approve" => "✅ Approve",
+        "request_changes" | "request-changes" => "❌ Request Changes",
+        _ => "💬 Comment",
+    }
 }
 
 #[cfg(test)]
@@ -583,8 +653,8 @@ mod tests {
     #[test]
     fn test_render_pr_review_markdown_basic() {
         let review = make_pr_review();
-        let body = render_pr_review_markdown(&review, 0);
-        assert!(body.contains("<!-- APTU_REVIEW -->"));
+        let body = render_pr_review_markdown(&review, 0, "abc123");
+        assert!(body.contains("<!-- APTU_REVIEW:abc123 -->"));
         assert!(body.contains("✅ Approve"));
         assert!(body.contains("Good PR overall."));
         assert!(body.contains("aptu"));
@@ -601,8 +671,8 @@ mod tests {
             suggestions: vec![],
             disclaimer: None,
         };
-        let body = render_pr_review_markdown(&review, 3);
-        assert!(body.contains("<!-- APTU_REVIEW -->"));
+        let body = render_pr_review_markdown(&review, 3, "abc123");
+        assert!(body.contains("<!-- APTU_REVIEW:abc123 -->"));
         assert!(!body.contains("### Strengths"));
         assert!(!body.contains("### Concerns"));
         assert!(!body.contains("### Inline Comments"));
@@ -613,13 +683,51 @@ mod tests {
     fn test_render_pr_review_markdown_verdict_badges() {
         let mut r = make_pr_review();
         r.verdict = "approve".to_string();
-        assert!(render_pr_review_markdown(&r, 0).contains("✅ Approve"));
+        assert!(render_pr_review_markdown(&r, 0, "s").contains("✅ Approve"));
         r.verdict = "request_changes".to_string();
-        assert!(render_pr_review_markdown(&r, 0).contains("❌ Request Changes"));
+        assert!(render_pr_review_markdown(&r, 0, "s").contains("❌ Request Changes"));
         r.verdict = "request-changes".to_string();
-        assert!(render_pr_review_markdown(&r, 0).contains("❌ Request Changes"));
+        assert!(render_pr_review_markdown(&r, 0, "s").contains("❌ Request Changes"));
         r.verdict = "comment".to_string();
-        assert!(render_pr_review_markdown(&r, 0).contains("💬 Comment"));
+        assert!(render_pr_review_markdown(&r, 0, "s").contains("💬 Comment"));
+    }
+
+    #[test]
+    fn test_render_pr_review_review_body_excludes_summary_and_marker() {
+        let review = make_pr_review();
+        let body = render_pr_review_review_body(&review, 0);
+        assert!(!body.contains(REVIEW_SUMMARY_MARKER_PREFIX));
+        assert!(!body.contains(&review.summary));
+        assert!(body.contains("## Aptu Review"));
+        // Summary comment remains the single surface carrying the summary text.
+        let comment = render_pr_review_markdown(&review, 0, "abc123");
+        assert!(comment.contains(&review.summary));
+    }
+
+    #[test]
+    fn test_parse_aptu_summary_marker_with_sha() {
+        let marker =
+            parse_aptu_summary_marker("<!-- APTU_REVIEW:0123abcd -->\n## Aptu Review\n\nbody");
+        assert_eq!(
+            marker,
+            Some(AptuSummaryMarker {
+                sha: Some("0123abcd".to_string())
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_aptu_summary_marker_legacy_sha_less() {
+        // Legacy marker (no SHA) parses to sha: None and is treated as stale.
+        let marker = parse_aptu_summary_marker("<!-- APTU_REVIEW -->\n## Aptu Review");
+        assert_eq!(marker, Some(AptuSummaryMarker { sha: None }));
+        // No marker at all.
+        assert_eq!(parse_aptu_summary_marker("just a comment"), None);
+        // Marker mentioned mid-body is not anchored; prefix match requires start.
+        assert_eq!(
+            parse_aptu_summary_marker("see <!-- APTU_REVIEW:deadbeef -->"),
+            None
+        );
     }
 
     #[test]
@@ -663,7 +771,7 @@ mod tests {
             "Removes CodeQL without replacement".to_string(),
             "cargo-nextest not pinned".to_string(),
         ];
-        let body = render_pr_review_markdown(&review, 6);
+        let body = render_pr_review_markdown(&review, 6, "s");
         assert!(body.contains("- Removes CodeQL without replacement"));
         assert!(body.contains("- cargo-nextest not pinned"));
     }
@@ -672,7 +780,7 @@ mod tests {
     fn test_render_pr_review_markdown_notable_changes_hidden() {
         let mut review = make_pr_review();
         review.concerns = vec!["Some concern".to_string()];
-        let body = render_pr_review_markdown(&review, 3);
+        let body = render_pr_review_markdown(&review, 3, "s");
         assert!(!body.contains("- Some concern"));
     }
 

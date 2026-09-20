@@ -77,8 +77,9 @@ pub use history::{AiStats, Contribution, ContributionStatus, HistoryData};
 // ============================================================================
 
 pub use triage::{
-    APTU_SIGNATURE, TriageStatus, check_already_triaged, render_pr_review_comment_body,
-    render_pr_review_markdown, render_triage_markdown,
+    APTU_SIGNATURE, AptuSummaryMarker, REVIEW_SUMMARY_MARKER_PREFIX, TriageStatus,
+    check_already_triaged, parse_aptu_summary_marker, render_pr_review_comment_body,
+    render_pr_review_markdown, render_pr_review_review_body, render_triage_markdown,
 };
 
 // ============================================================================
@@ -108,7 +109,7 @@ pub use facade::{
 #[cfg(not(target_arch = "wasm32"))]
 pub use github::issues::ApplyResult;
 #[cfg(not(target_arch = "wasm32"))]
-pub use github::pulls::ReviewPostOutcome;
+pub use github::pulls::{ReviewPostOutcome, SummaryPostOutcome};
 
 // ============================================================================
 // Security Scanning

@@ -339,6 +339,10 @@ pub enum PrCommand {
         #[arg(long)]
         no_comment: bool,
 
+        /// Disable review summary dedup (always post a new summary comment)
+        #[arg(long)]
+        no_dedup_summary: bool,
+
         /// Bypass confirmation prompts
         #[arg(short, long)]
         force: bool,

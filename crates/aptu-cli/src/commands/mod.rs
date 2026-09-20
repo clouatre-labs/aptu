@@ -34,6 +34,7 @@ struct ReviewOptions {
     dry_run: bool,
     yes: bool,
     no_comment: bool,
+    no_dedup_summary: bool,
 }
 
 /// Should we post a comment based on configuration and user interaction?
@@ -410,6 +411,7 @@ async fn review_single_pr(
                 opts.dry_run,
                 opts.yes,
                 ctx.is_verbose(),
+                opts.no_dedup_summary,
             )
             .await?;
         }
@@ -677,6 +679,7 @@ async fn run_pr_command(
             repo_path,
             deep,
             instructions_file,
+            no_dedup_summary,
         } => {
             let repo_path_str = repo_path.map(|p| p.to_string_lossy().into_owned());
             let repo_context = repo
@@ -733,6 +736,7 @@ async fn run_pr_command(
                                 dry_run,
                                 yes: !ctx.is_interactive() || force,
                                 no_comment,
+                                no_dedup_summary,
                             },
                             &ctx,
                             &config,
