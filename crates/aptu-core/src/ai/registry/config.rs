@@ -2,10 +2,7 @@
 
 //! Static provider configuration registry.
 
-use super::consts::{
-    PROVIDER_ANTHROPIC, PROVIDER_CEREBRAS, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_OPENROUTER,
-    PROVIDER_ZAI, PROVIDER_ZENMUX,
-};
+use super::consts::{PROVIDER_ANTHROPIC, PROVIDER_GEMINI, PROVIDER_OPENROUTER, PROVIDER_ZAI};
 
 /// Configuration for an AI provider.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -49,33 +46,6 @@ pub static PROVIDERS: &[ProviderConfig] = &[
         api_url: "https://openrouter.ai/api/v1/chat/completions",
         api_key_env: "OPENROUTER_API_KEY",
         model: "mistralai/mistral-small-2603",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-    ProviderConfig {
-        name: PROVIDER_GROQ,
-        display_name: "Groq",
-        api_url: "https://api.groq.com/openai/v1/chat/completions",
-        api_key_env: "GROQ_API_KEY",
-        model: "openai/gpt-oss-20b",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-    ProviderConfig {
-        name: PROVIDER_CEREBRAS,
-        display_name: "Cerebras",
-        api_url: "https://api.cerebras.ai/v1/chat/completions",
-        api_key_env: "CEREBRAS_API_KEY",
-        model: "gemma-4-31b",
-        max_tokens: 4096,
-        temperature: 0.3,
-    },
-    ProviderConfig {
-        name: PROVIDER_ZENMUX,
-        display_name: "Zenmux",
-        api_url: "https://zenmux.ai/api/v1/chat/completions",
-        api_key_env: "ZENMUX_API_KEY",
-        model: "openai/gpt-5.4-mini",
         max_tokens: 4096,
         temperature: 0.3,
     },
@@ -135,7 +105,7 @@ pub fn get_provider(name: &str) -> Option<&'static ProviderConfig> {
 /// use aptu_core::ai::registry::all_providers;
 ///
 /// let providers = all_providers();
-/// assert_eq!(providers.len(), 7);
+/// assert_eq!(providers.len(), 4);
 /// ```
 #[must_use]
 pub fn all_providers() -> &'static [ProviderConfig] {
@@ -165,25 +135,13 @@ mod tests {
     }
 
     #[test]
-    fn test_get_provider_groq() {
-        let provider = get_provider("groq");
-        assert!(provider.is_some());
-        let provider = provider.unwrap();
-        assert_eq!(provider.display_name, "Groq");
-        assert_eq!(provider.api_key_env, "GROQ_API_KEY");
-    }
-
-    #[test]
-    fn test_get_provider_cerebras() {
-        let provider = get_provider("cerebras");
-        assert!(provider.is_some());
-        let provider = provider.unwrap();
-        assert_eq!(provider.display_name, "Cerebras");
-        assert_eq!(provider.api_key_env, "CEREBRAS_API_KEY");
-    }
-
-    #[test]
     fn test_get_provider_not_found() {
+        for removed in ["groq", "cerebras", "zenmux"] {
+            assert!(
+                get_provider(removed).is_none(),
+                "{removed} should be removed"
+            );
+        }
         let provider = get_provider("nonexistent");
         assert!(provider.is_none());
     }
@@ -200,7 +158,7 @@ mod tests {
     #[test]
     fn test_all_providers_count() {
         let providers = all_providers();
-        assert_eq!(providers.len(), 7, "Should have exactly 7 providers");
+        assert_eq!(providers.len(), 4, "Should have exactly 4 providers");
     }
 
     #[test]
@@ -215,15 +173,6 @@ mod tests {
             );
             names.push(provider.name);
         }
-    }
-
-    #[test]
-    fn test_get_provider_zenmux() {
-        let provider = get_provider("zenmux");
-        assert!(provider.is_some());
-        let provider = provider.unwrap();
-        assert_eq!(provider.display_name, "Zenmux");
-        assert_eq!(provider.api_key_env, "ZENMUX_API_KEY");
     }
 
     #[test]

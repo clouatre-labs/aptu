@@ -48,7 +48,7 @@ const MODELS_LIST_HELP: &str = "EXAMPLES
     aptu models list --provider gemini --sort context
 
   Filter to models with at least 100k context:
-    aptu models list --provider groq --min-context 100000";
+    aptu models list --provider gemini --min-context 100000";
 
 /// Output format for CLI results.
 #[derive(Clone, Copy, Default, ValueEnum)]

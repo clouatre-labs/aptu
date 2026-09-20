@@ -6,7 +6,7 @@ Config file: `~/.config/aptu/config.toml`
 
 ```toml
 [ai]
-provider = "gemini"  # or "cerebras", "groq", "openrouter", "zai", "zenmux"
+provider = "gemini"  # or "anthropic", "openrouter", "zai"
 model = "gemini-3.1-flash-lite"
 allow_paid_models = true  # default: allows paid OpenRouter models
 
@@ -126,7 +126,7 @@ model = "gemini-3.1-flash-lite"
 
 # Fallback chain: try these providers in order if primary fails
 [ai.fallback]
-chain = ["cerebras", "groq"]
+chain = ["anthropic"]
 ```
 
 Each fallback entry can optionally override the model for that specific provider:
@@ -138,8 +138,8 @@ model = "gemini-3.1-flash-lite"
 
 [ai.fallback]
 chain = [
-  { provider = "cerebras", model = "qwen-3-32b" },
-  { provider = "groq", model = "llama-3.3-70b-versatile" }
+  { provider = "gemini", model = "gemini-3.1-flash-lite" },
+  { provider = "anthropic", model = "claude-haiku-4.5" }
 ]
 ```
 
@@ -197,25 +197,6 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 
 **Prompt Caching:** Anthropic models support prompt caching via cache control tokens on system messages. Aptu automatically enables caching for all Anthropic requests; no additional configuration is required.
 
-### Cerebras
-
-1. Get an API key from [Cerebras Console](https://console.cerebras.ai/keys)
-2. Set the environment variable:
-
-   ```bash
-   export CEREBRAS_API_KEY="your-api-key-here"
-   ```
-
-3. Configure in `~/.config/aptu/config.toml`:
-
-   ```toml
-   [ai]
-   provider = "cerebras"
-   model = "qwen-3-32b"
-   ```
-
-**Free Tier:** Available with Cerebras API account
-
 ### Google AI Studio (Gemini)
 
 1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
@@ -236,25 +217,6 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
 Use `aptu models list --provider gemini` to discover current model IDs.
 
 **Free Tier:** Available with Google AI Studio account; see Google AI Studio for current limits
-
-### Groq
-
-1. Get an API key from [Groq Console](https://console.groq.com/keys)
-2. Set the environment variable:
-
-   ```bash
-   export GROQ_API_KEY="your-api-key-here"
-   ```
-
-3. Configure in `~/.config/aptu/config.toml`:
-
-   ```toml
-   [ai]
-   provider = "groq"
-   model = "llama-3.3-70b-versatile"
-   ```
-
-**Free Tier:** Generous rate limits, fast inference with Groq's LPU technology
 
 ### OpenRouter
 
@@ -293,25 +255,6 @@ Use `aptu models list --provider gemini` to discover current model IDs.
    ```
 
 **Budget Tier:** See Z.AI documentation for current pricing and limits
-
-### ZenMux
-
-1. Get an API key from [ZenMux](https://zenmux.ai)
-2. Set the environment variable:
-
-   ```bash
-   export ZENMUX_API_KEY="your-api-key-here"
-   ```
-
-3. Configure in `~/.config/aptu/config.toml`:
-
-   ```toml
-   [ai]
-   provider = "zenmux"
-   model = "x-ai/grok-code-fast-1"
-   ```
-
-**Free Tier:** Available with ZenMux account; see ZenMux documentation for current models and limits
 
 ## PR Review Limits
 
@@ -408,7 +351,7 @@ These map to the OpenRouter `provider` object in the request body:
 - `data_collection: "deny"` instructs OpenRouter not to retain or use prompts/outputs for training.
 - `zdr: true` enforces zero data retention at the routing layer.
 
-These settings only affect the OpenRouter provider. Direct provider calls (Gemini, Anthropic, Groq, etc.) are not modified. For direct providers, data retention and training policies depend on the provider's account tier and terms of service.
+These settings only affect the OpenRouter provider. Direct provider calls (Gemini, Anthropic, etc.) are not modified. For direct providers, data retention and training policies depend on the provider's account tier and terms of service.
 
 ### GitHub Action inputs
 
