@@ -262,8 +262,19 @@ async fn fetch_pr_files(
     Ok(pr_files)
 }
 
-/// Fetches existing bot review comments with pagination (`per_page=100`, max 300 items)
-/// so the AI prompt can avoid restating feedback the bot already posted.
+/// Returns true when a review comment body carries the APTU inline-comment marker.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn is_aptu_review_comment(body: &str) -> bool {
+    body.contains(crate::triage::REVIEW_COMMENT_MARKER)
+}
+
+/// Fetches existing APTU review comments with pagination (`per_page=100`, max 300
+/// items) so the AI prompt can avoid restating feedback the bot already posted.
+///
+/// Comments are identified by the `<!-- APTU_REVIEW_COMMENT -->` body marker rather
+/// than by bot identity: GitHub App installation tokens cannot reliably resolve the
+/// authenticated user via `current().user()`, which previously produced an empty
+/// dedup map (see #1639).
 ///
 /// # Errors
 ///
@@ -276,60 +287,51 @@ async fn fetch_pr_comments(
     number: u64,
 ) -> Result<Vec<crate::ai::types::PrReviewCommentDetails>> {
     let mut review_comments: Vec<crate::ai::types::PrReviewCommentDetails> = Vec::new();
-    let bot_login = match client.current().user().await {
-        Ok(user) => user.login,
-        Err(e) => {
-            tracing::warn!("Failed to resolve bot login; skipping review comment fetch: {e}");
-            String::new()
-        }
-    };
-    if !bot_login.is_empty() {
-        let mut page = client
-            .pulls(owner, repo)
-            .list_comments(Some(number))
-            .per_page(100)
-            .send()
-            .await
-            .with_context(|| format!("Failed to fetch review comments for PR #{number}"))?;
+    let mut page = client
+        .pulls(owner, repo)
+        .list_comments(Some(number))
+        .per_page(100)
+        .send()
+        .await
+        .with_context(|| format!("Failed to fetch review comments for PR #{number}"))?;
 
-        loop {
-            review_comments.extend(page.items.into_iter().filter_map(|c| {
-                let author = c.user.as_ref().map(|u| u.login.clone()).unwrap_or_default();
-                if author != bot_login {
-                    return None;
-                }
-                Some(crate::ai::types::PrReviewCommentDetails {
-                    id: c.id.0,
-                    author,
-                    body: c.body.clone(),
-                    path: c.path,
-                    line: c.line,
-                    side: c.side,
-                    commit_id: c.commit_id,
-                })
-            }));
-
-            // Cap at 300 to mirror the list_files limit; PRs with more existing comments
-            // are uncommon and the prompt budget would discard most entries anyway.
-            if review_comments.len() >= 300 {
-                tracing::warn!(
-                    "PR #{} has reached 300-comment cap; stopping pagination",
-                    number
-                );
-                review_comments.truncate(300);
-                break;
+    loop {
+        review_comments.extend(page.items.into_iter().filter_map(|c| {
+            if !is_aptu_review_comment(&c.body) {
+                return None;
             }
+            Some(crate::ai::types::PrReviewCommentDetails {
+                id: c.id.0,
+                author: c.user.as_ref().map(|u| u.login.clone()).unwrap_or_default(),
+                body: c.body.clone(),
+                path: c.path,
+                line: c.line,
+                side: c.side,
+                commit_id: c.commit_id,
+                original_line: c.original_line,
+            })
+        }));
 
-            match client
-                .get_page::<octocrab::models::pulls::Comment>(&page.next)
-                .await
-            {
-                Ok(Some(next_page)) => page = next_page,
-                Ok(None) => break,
-                Err(e) => {
-                    tracing::warn!("Error fetching next page of review comments: {}", e);
-                    break;
-                }
+        // Cap at 300 to mirror the list_files limit; PRs with more existing comments
+        // are uncommon and the prompt budget would discard most entries anyway.
+        if review_comments.len() >= 300 {
+            tracing::warn!(
+                "PR #{} has reached 300-comment cap; stopping pagination",
+                number
+            );
+            review_comments.truncate(300);
+            break;
+        }
+
+        match client
+            .get_page::<octocrab::models::pulls::Comment>(&page.next)
+            .await
+        {
+            Ok(Some(next_page)) => page = next_page,
+            Ok(None) => break,
+            Err(e) => {
+                tracing::warn!("Error fetching next page of review comments: {}", e);
+                break;
             }
         }
     }
@@ -1331,7 +1333,13 @@ mod tests {
         assert_eq!(inline[0]["path"], "src/main.rs");
         assert_eq!(inline[0]["line"], 42);
         assert_eq!(inline[0]["side"], "RIGHT");
-        assert_eq!(inline[0]["body"], "Consider using a match here.");
+        assert_eq!(
+            inline[0]["body"],
+            format!(
+                "{}\nConsider using a match here.",
+                crate::triage::REVIEW_COMMENT_MARKER
+            )
+        );
     }
 
     #[test]
@@ -2103,6 +2111,7 @@ mod tests {
             line: Some(15),
             side: Some(crate::facade::pr_review::DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
+            original_line: None,
         };
         let human = PrReviewCommentDetails {
             id: 99,
@@ -2112,6 +2121,7 @@ mod tests {
             line: Some(30),
             side: Some("LEFT".to_string()),
             commit_id: "def456".to_string(),
+            original_line: None,
         };
 
         let kept: Vec<_> = vec![bot, human]

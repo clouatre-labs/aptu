@@ -1091,6 +1091,7 @@ mod tests {
             line: Some(10),
             side: Some(crate::facade::pr_review::DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
+            original_line: None,
         }];
         let mut ctx = make_test_pr(comments, 7);
 

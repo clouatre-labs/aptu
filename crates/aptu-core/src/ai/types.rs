@@ -471,6 +471,9 @@ pub struct PrReviewCommentDetails {
     /// Commit SHA the comment was made on.
     #[serde(default)]
     pub commit_id: String,
+    /// Original line number the comment was made on (before subsequent pushes).
+    #[serde(default)]
+    pub original_line: Option<u64>,
 }
 
 /// Severity level for PR review comments.

@@ -317,6 +317,39 @@ enum DedupOutcome {
     },
 }
 
+/// Pure helper shared by [`post_pr_review`] and its tests: resolves the dedup map
+/// key for an existing review comment. Falls back to `original_line` when `line`
+/// is `None` (comment is outdated after a re-push) so the key still matches an
+/// outgoing comment targeting the original line. Returns `None` when no usable
+/// line exists; such entries are excluded from the map (general PR comments are
+/// never inline duplicates).
+fn resolve_key(
+    path: &str,
+    line: Option<u64>,
+    original_line: Option<u64>,
+    side: Option<String>,
+) -> Option<(String, u64, String)> {
+    let line = line.or(original_line)?;
+    let side = side.unwrap_or_else(|| DEFAULT_COMMENT_SIDE.to_string());
+    Some((path.to_string(), line, side))
+}
+
+/// Pure helper shared by [`post_pr_review`] and its tests: builds the dedup map
+/// from existing review comments keyed on `(path, line, side)`. The map value is
+/// `(comment id, body)` so a duplicate can be updated in place when the rendered
+/// body differs from what was previously posted.
+fn build_dedup_map(
+    comments: &[crate::ai::types::PrReviewCommentDetails],
+) -> std::collections::HashMap<(String, u64, String), (u64, String)> {
+    comments
+        .iter()
+        .filter_map(|c| {
+            resolve_key(&c.path, c.line, c.original_line, c.side.clone())
+                .map(|key| (key, (c.id, c.body.clone())))
+        })
+        .collect()
+}
+
 /// Pure helper shared by [`post_pr_review`] and its tests: given the dedup map
 /// and an outgoing comment, determines whether to post, skip, or update.
 ///
@@ -407,21 +440,13 @@ pub async fn post_pr_review(
         return Ok(WriteOutcome::Skipped);
     }
 
-    // Build dedup map from existing bot-authored review comments keyed on (path, line, side).
-    // Comments with line=None (general PR comments) are not inline duplicates, so they are excluded
-    // from the dedup map (they will never match an inline comment which always has a line).
-    // The map value is (comment id, body) so a duplicate can be updated in place when the
-    // rendered body differs from what was previously posted.
-    let mut dedup: std::collections::HashMap<(String, u64, String), (u64, String)> =
-        std::collections::HashMap::new();
-    for c in existing_comments {
-        let Some(line) = c.line else { continue };
-        let side = c
-            .side
-            .clone()
-            .unwrap_or_else(|| DEFAULT_COMMENT_SIDE.to_string());
-        dedup.insert((c.path.clone(), line, side), (c.id, c.body.clone()));
-    }
+    // Build dedup map from existing review comments keyed on (path, line, side).
+    // Comments with no usable line (line=None and original_line=None; general PR
+    // comments) are excluded from the dedup map (they will never match an inline
+    // comment which always has a line). Existing APTU comments are identified by
+    // body marker in fetch_pr_comments, not by author, so dedup works under
+    // GitHub App installation tokens where bot identity cannot be resolved (#1639).
+    let dedup = build_dedup_map(existing_comments);
 
     // Filter out outgoing comments that match an existing bot-authored comment.
     // General PR comments (line=None) are never checked against the dedup map.
@@ -729,12 +754,14 @@ fn pr_write_allowed(perm: Option<ViewerPermission>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{DEFAULT_COMMENT_SIDE, DedupOutcome, analyze_pr, dedup_outcome, pr_write_allowed};
+    use super::{build_dedup_map, resolve_key};
     use crate::ai::types::{
         CommentSeverity, PrDetails, PrFile, PrReviewComment, PrReviewCommentDetails,
     };
     use crate::auth::TokenProvider;
     use crate::config::AiConfig;
     use crate::error::AptuError;
+    use crate::github::pulls::is_aptu_review_comment;
     use secrecy::SecretString;
 
     struct MockProvider;
@@ -852,25 +879,6 @@ mod tests {
         );
     }
 
-    // Mirrors the dedup map construction in post_pr_review: only comments with a
-    // line produce a key; line=None general PR comments are never inline duplicates.
-    // The value is (comment id, body) so duplicate handling can compare bodies.
-    fn make_dedup_set(
-        comments: &[PrReviewCommentDetails],
-    ) -> std::collections::HashMap<(String, u64, String), (u64, String)> {
-        comments
-            .iter()
-            .filter_map(|c| {
-                let line = c.line?;
-                let side = c
-                    .side
-                    .clone()
-                    .unwrap_or_else(|| DEFAULT_COMMENT_SIDE.to_string());
-                Some(((c.path.clone(), line, side), (c.id, c.body.clone())))
-            })
-            .collect()
-    }
-
     #[test]
     fn test_dedup_drops_duplicate_comment() {
         // Arrange: existing bot comment on (src/lib.rs, 10, RIGHT, abc123)
@@ -882,8 +890,9 @@ mod tests {
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
+            original_line: None,
         }];
-        let dedup = make_dedup_set(&existing);
+        let dedup = build_dedup_map(&existing);
 
         let incoming = PrReviewComment {
             file: "src/lib.rs".to_string(),
@@ -924,8 +933,9 @@ mod tests {
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
+            original_line: None,
         }];
-        let dedup = make_dedup_set(&existing);
+        let dedup = build_dedup_map(&existing);
         assert!(
             !dedup.contains_key(&(
                 "src/new.rs".to_string(),
@@ -936,7 +946,7 @@ mod tests {
         );
 
         // Sub-case 2: empty existing comments produce an empty dedup set
-        let dedup = make_dedup_set(&[]);
+        let dedup = build_dedup_map(&[]);
         assert!(
             dedup.is_empty(),
             "dedup set must be empty when no existing comments"
@@ -955,8 +965,9 @@ mod tests {
             line: None,
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
+            original_line: None,
         }];
-        let dedup = make_dedup_set(&existing);
+        let dedup = build_dedup_map(&existing);
 
         let incoming = PrReviewComment {
             file: "src/lib.rs".to_string(),
@@ -989,8 +1000,9 @@ mod tests {
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
+            original_line: None,
         }];
-        let dedup = make_dedup_set(&existing);
+        let dedup = build_dedup_map(&existing);
 
         let incoming = PrReviewComment {
             file: "src/lib.rs".to_string(),
@@ -1021,17 +1033,19 @@ mod tests {
 
     #[test]
     fn test_dedup_skips_identical_body() {
-        // Arrange: existing comment with body "Same feedback" on (src/lib.rs, 10, RIGHT, abc123)
+        // Arrange: existing comment with body "Same feedback" (with marker) on
+        // (src/lib.rs, 10, RIGHT, abc123)
         let existing = vec![PrReviewCommentDetails {
             id: 7,
             author: "aptu[bot]".to_string(),
-            body: "Same feedback".to_string(),
+            body: format!("{}\nSame feedback", crate::triage::REVIEW_COMMENT_MARKER),
             path: "src/lib.rs".to_string(),
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
             commit_id: "abc123".to_string(),
+            original_line: None,
         }];
-        let dedup = make_dedup_set(&existing);
+        let dedup = build_dedup_map(&existing);
 
         let incoming = PrReviewComment {
             file: "src/lib.rs".to_string(),
@@ -1048,6 +1062,137 @@ mod tests {
         assert!(
             matches!(outcome, DedupOutcome::Skip),
             "Expected Skip outcome, got {outcome:?}"
+        );
+    }
+
+    #[test]
+    fn test_dedup_unknown_author_with_marker_still_dedups() {
+        // Regression for #1639: under GitHub App installation tokens the bot login
+        // cannot be resolved; an existing comment authored by an unknown login but
+        // carrying the marker must still populate the map and yield Skip/Update.
+        let existing = vec![PrReviewCommentDetails {
+            id: 9,
+            author: "unknown-login".to_string(),
+            body: "Revised feedback".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: Some(10),
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
+            commit_id: "abc123".to_string(),
+            original_line: None,
+        }];
+        let dedup = build_dedup_map(&existing);
+        assert!(
+            !dedup.is_empty(),
+            "unknown author with line must populate map"
+        );
+
+        let incoming = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "Revised feedback".to_string(),
+            severity: CommentSeverity::Suggestion,
+            suggested_code: None,
+        };
+        let outcome = dedup_outcome(&dedup, &incoming);
+        assert!(
+            matches!(outcome, DedupOutcome::Skip) || matches!(outcome, DedupOutcome::Update { .. }),
+            "Expected Skip or Update, got {outcome:?}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_key_falls_back_to_original_line() {
+        // Edge case: line=None (outdated) + original_line=Some(n) maps to
+        // (path, n, side) and matches an outgoing comment targeting line n.
+        let key = resolve_key(
+            "src/lib.rs",
+            None,
+            Some(10),
+            Some(DEFAULT_COMMENT_SIDE.to_string()),
+        );
+        assert_eq!(
+            key,
+            Some((
+                "src/lib.rs".to_string(),
+                10,
+                DEFAULT_COMMENT_SIDE.to_string()
+            ))
+        );
+
+        // The resolved key must let dedup_outcome match the outgoing comment.
+        let existing = vec![PrReviewCommentDetails {
+            id: 3,
+            author: "aptu[bot]".to_string(),
+            body: "Old body".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: None,
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
+            commit_id: "abc123".to_string(),
+            original_line: Some(10),
+        }];
+        let dedup = build_dedup_map(&existing);
+        let incoming = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "New body".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        };
+        match dedup_outcome(&dedup, &incoming) {
+            DedupOutcome::Update { comment_id, .. } => assert_eq!(comment_id, 3),
+            other => panic!("Expected Update via original_line fallback, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_key_none_without_any_line() {
+        // Edge case: line=None + original_line=None is excluded from the map.
+        let key = resolve_key(
+            "src/lib.rs",
+            None,
+            None,
+            Some(DEFAULT_COMMENT_SIDE.to_string()),
+        );
+        assert!(key.is_none(), "no usable line must yield no key");
+
+        let existing = vec![PrReviewCommentDetails {
+            id: 1,
+            author: "aptu[bot]".to_string(),
+            body: "General PR comment".to_string(),
+            path: "src/lib.rs".to_string(),
+            line: None,
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
+            commit_id: "abc123".to_string(),
+            original_line: None,
+        }];
+        let dedup = build_dedup_map(&existing);
+        assert!(
+            dedup.is_empty(),
+            "fully-None line entries must stay out of the map"
+        );
+    }
+
+    #[test]
+    fn test_marker_filter_excludes_non_marker_bodies() {
+        // Edge case: bodies without the marker are excluded regardless of author;
+        // legacy pre-marker comments are invisible to dedup for one cycle.
+        assert!(!is_aptu_review_comment("plain human comment"));
+        assert!(!is_aptu_review_comment(""));
+        let marked = crate::triage::render_pr_review_comment_body(&PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(1),
+            comment: "text".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        });
+        assert!(
+            is_aptu_review_comment(&marked),
+            "rendered inline comments must carry the marker"
+        );
+        assert_ne!(
+            crate::triage::REVIEW_COMMENT_MARKER,
+            "<!-- APTU_REVIEW -->",
+            "inline marker must stay distinct from the summary marker"
         );
     }
 }
