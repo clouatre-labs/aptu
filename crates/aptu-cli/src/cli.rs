@@ -351,10 +351,6 @@ pub enum PrCommand {
         #[arg(long, value_name = "PATH")]
         repo_path: Option<std::path::PathBuf>,
 
-        /// Enable cross-file call graph context. Auto-enabled if remaining prompt budget exceeds 20k chars.
-        #[arg(long, default_value_t = false)]
-        deep: bool,
-
         /// Path to repository instructions file (overrides default AGENTS.md and .github/instructions/pr-review.md).
         #[arg(long, value_name = "PATH")]
         instructions_file: Option<std::path::PathBuf>,

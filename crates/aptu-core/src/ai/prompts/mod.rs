@@ -387,26 +387,6 @@ fn write_dep_enrichments_section(prompt: &mut String, ctx: &ReviewContext) {
     prompt.push_str("</dependency_release_notes>\n");
 }
 
-/// Writes the `<symbol_expansions>` section into `prompt`, if any expansions exist.
-fn write_symbol_expansions_section(prompt: &mut String, ctx: &ReviewContext) {
-    if ctx.symbol_expansions.is_empty() {
-        return;
-    }
-    prompt.push_str("\n<symbol_expansions>\n");
-    for expansion in &ctx.symbol_expansions {
-        let _ = writeln!(
-            prompt,
-            "### {} (referenced in {}:{}-{})\n{}\n",
-            sanitize_prompt_field(&expansion.symbol),
-            sanitize_prompt_field(&expansion.reference_path),
-            expansion.reference_lines.0,
-            expansion.reference_lines.1,
-            sanitize_prompt_field(&expansion.snippet)
-        );
-    }
-    prompt.push_str("</symbol_expansions>\n");
-}
-
 /// Writes the `<existing_review_comments>` section into `prompt`, if any comments exist.
 fn write_existing_review_comments_section(prompt: &mut String, ctx: &ReviewContext) {
     if ctx.pr.review_comments.is_empty() {
@@ -473,7 +453,6 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
         prompt.push_str(&ctx.call_graph);
     }
 
-    write_symbol_expansions_section(&mut prompt, ctx);
     write_existing_review_comments_section(&mut prompt, ctx);
 
     prompt

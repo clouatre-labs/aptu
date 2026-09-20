@@ -70,7 +70,6 @@ pub async fn analyze(
     pr_details: &PrDetails,
     ai_config: &aptu_core::AiConfig,
     repo_path: Option<String>,
-    deep: bool,
 ) -> Result<(
     PrReviewResponse,
     aptu_core::history::AiStats,
@@ -81,7 +80,7 @@ pub async fn analyze(
 
     // Call facade for analysis
     let (review, ai_stats, context_record) =
-        aptu_core::analyze_pr(&provider, pr_details, ai_config, repo_path, deep).await?;
+        aptu_core::analyze_pr(&provider, pr_details, ai_config, repo_path).await?;
 
     debug!("PR analyzed successfully");
     Ok((review, ai_stats, context_record))
@@ -467,7 +466,6 @@ pub async fn run_review(
     no_comment: bool,
     force: bool,
     repo_path: Option<std::path::PathBuf>,
-    deep: bool,
     instructions_file: Option<std::path::PathBuf>,
     ctx: crate::cli::OutputContext,
     config: &aptu_core::AppConfig,
@@ -536,7 +534,6 @@ pub async fn run_review(
                     &ctx,
                     &config,
                     repo_path_for_review,
-                    deep,
                 )
                 .await
             }

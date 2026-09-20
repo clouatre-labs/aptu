@@ -147,7 +147,6 @@ pub async fn analyze_pr(
     pr_details: &PrDetails,
     ai_config: &AiConfig,
     repo_path: Option<String>,
-    deep: bool,
 ) -> crate::Result<(
     crate::ai::types::PrReviewResponse,
     crate::history::AiStats,
@@ -189,7 +188,6 @@ pub async fn analyze_pr(
     let ctx = crate::ai::review_context::build_review_context(
         pr_details.clone(),
         repo_path,
-        deep,
         &review_config,
     )
     .await?;
@@ -282,7 +280,6 @@ pub async fn analyze_pr(
     _pr_details: &crate::ai::types::PrDetails,
     _ai_config: &crate::config::AiConfig,
     _repo_path: Option<String>,
-    _deep: bool,
 ) -> crate::Result<(
     crate::ai::types::PrReviewResponse,
     crate::history::AiStats,

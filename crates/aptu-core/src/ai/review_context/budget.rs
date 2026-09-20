@@ -16,47 +16,41 @@ use crate::config::ReviewConfig;
 /// non-content characters when estimating total prompt size.
 pub(crate) const PROMPT_OVERHEAD_CHARS: usize = 1_000;
 
-/// Determines whether to enable call graph context based on budget and flags.
-pub(crate) fn should_enable_call_graph(
-    deep: bool,
-    budget_remaining: usize,
-    config: &ReviewConfig,
-) -> bool {
-    deep || budget_remaining > config.min_budget_for_call_graph
+/// Determines whether to enable call graph context based on the remaining
+/// prompt budget. Call-graph context is auto-enabled whenever the estimated
+/// prompt leaves more than `min_budget_for_call_graph` characters available.
+pub(crate) fn should_enable_call_graph(budget_remaining: usize, config: &ReviewConfig) -> bool {
+    budget_remaining > config.min_budget_for_call_graph
 }
 
-/// Applies budget drop order: `call_graph` -> `ast_context` -> `symbol_expansions` ->
+/// Applies budget drop order: `call_graph` -> `ast_context` ->
 /// `dep_enrichments` -> `full_content` -> patches.
 /// Enforces the prompt budget by dropping enrichment sections in priority order.
 ///
 /// When the assembled prompt exceeds `max_prompt_chars`, sections are cleared in
 /// the following order (lowest-priority dropped first):
 ///
-/// 1. `call_graph` -- dropped first unless `deep` is explicitly set
+/// 1. `call_graph` -- dropped first
 /// 2. `ast_context` -- dropped second
-/// 3. `symbol_expansions` -- dropped third
-/// 4. `dep_enrichments` -- dropped fourth
-/// 5. file `full_content` -- dropped largest-first
-/// 6. file patches -- dropped largest-first as last resort, so the diff itself
+/// 3. `dep_enrichments` -- dropped third
+/// 4. file `full_content` -- dropped largest-first
+/// 5. file patches -- dropped largest-first as last resort, so the diff itself
 ///    (the highest-value context for a review) is preserved as long as possible
 ///
 /// Each drop is logged at `WARN` level with the section name and character count.
 /// The function never returns an error; sections that cannot fit are silently cleared.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn apply_budget_drops(
     pr: &mut PrDetails,
     ast_context: &mut String,
     call_graph: &mut String,
-    symbol_expansions: &mut Vec<crate::ai::types::SymbolExpansion>,
-    deep: bool,
     max_prompt_chars: usize,
     budget_drops: &mut Vec<String>,
     repo_path: Option<&str>,
 ) {
-    let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph, symbol_expansions);
+    let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph);
 
-    // Drop call_graph if over budget (unless explicitly enabled)
-    if estimated_size > max_prompt_chars && !deep {
+    // Drop call_graph if over budget
+    if estimated_size > max_prompt_chars {
         tracing::warn!(
             section = "call_graph",
             chars = call_graph.len(),
@@ -82,24 +76,6 @@ pub(crate) fn apply_budget_drops(
         estimated_size -= dropped_chars;
         if dropped_chars > 0 {
             budget_drops.push("ast_context".to_string());
-        }
-    }
-
-    // Drop symbol_expansions if still over budget
-    if estimated_size > max_prompt_chars {
-        let dropped_chars: usize = symbol_expansions
-            .iter()
-            .map(|e| e.snippet.len() + e.reference_path.len())
-            .sum();
-        if dropped_chars > 0 {
-            tracing::warn!(
-                section = "symbol_expansions",
-                chars = dropped_chars,
-                "Dropping section: prompt budget exceeded"
-            );
-            symbol_expansions.clear();
-            estimated_size -= dropped_chars;
-            budget_drops.push("symbol_expansions".to_string());
         }
     }
 
@@ -303,14 +279,9 @@ pub(crate) fn drop_full_content_by_size(
 /// Estimates the total character size of a PR review prompt.
 ///
 /// Sums title, body, file metadata, patches, `full_content`, `dep_enrichments`,
-/// `ast_context`, `call_graph`, `symbol_expansions`, and overhead.
+/// `ast_context`, `call_graph`, and overhead.
 #[must_use]
-pub(crate) fn estimate_pr_size(
-    pr: &PrDetails,
-    ast_context: &str,
-    call_graph: &str,
-    symbol_expansions: &[crate::ai::types::SymbolExpansion],
-) -> usize {
+pub(crate) fn estimate_pr_size(pr: &PrDetails, ast_context: &str, call_graph: &str) -> usize {
     let mut size = 0;
 
     // PR metadata
@@ -337,11 +308,6 @@ pub(crate) fn estimate_pr_size(
 
     // Call graph
     size += call_graph.len();
-
-    // Symbol expansions
-    for expansion in symbol_expansions {
-        size += expansion.snippet.len() + expansion.reference_path.len();
-    }
 
     // Overhead
     size += PROMPT_OVERHEAD_CHARS;

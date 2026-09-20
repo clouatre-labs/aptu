@@ -175,7 +175,7 @@ mod tests {
         };
 
         let provider = MockProvider;
-        let result = analyze_pr(&provider, &pr, &ai_config, None, false).await;
+        let result = analyze_pr(&provider, &pr, &ai_config, None).await;
 
         // Verify that the function returns a SecurityScan error
         match result {

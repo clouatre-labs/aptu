@@ -21,9 +21,6 @@ pub struct ReviewContext {
     pub ast_context: String,
     /// Call graph context for changed files (empty if not available or feature disabled).
     pub call_graph: String,
-    /// Symbol expansions for changed symbols with an unambiguous out-of-diff caller
-    /// (empty unless `deep` is explicitly requested; see `build_ctx_symbol_expansions`).
-    pub symbol_expansions: Vec<crate::ai::types::SymbolExpansion>,
     /// Inferred repository path from CWD (if available).
     pub inferred_repo_path: Option<PathBuf>,
     /// Whether the repository path was inferred from CWD.
@@ -146,7 +143,6 @@ impl Default for ReviewContext {
             },
             ast_context: String::new(),
             call_graph: String::new(),
-            symbol_expansions: Vec::new(),
             inferred_repo_path: None,
             cwd_inferred: false,
             max_chars_per_file: crate::config::ReviewConfig::default().max_chars_per_file,
@@ -182,13 +178,11 @@ pub(crate) use budget::{
     PROMPT_OVERHEAD_CHARS, apply_budget_drops, build_file_outline, estimate_pr_size,
 };
 #[allow(unused_imports)]
-pub(crate) use builder::{
-    build_ctx_ast, build_ctx_call_graph, build_ctx_symbol_expansions, enrich_deps,
-};
+pub(crate) use builder::{build_ctx_ast, build_ctx_call_graph, enrich_deps};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::types::{DepReleaseNote, PrFile, SymbolExpansion};
+    use crate::ai::types::{DepReleaseNote, PrFile};
     use crate::config::ReviewConfig;
 
     fn make_pr_with_content(patch_chars: usize, full_content_chars: usize) -> PrDetails {
@@ -245,7 +239,7 @@ mod tests {
         // Budget tight enough that call_graph must be dropped first.
         // Total with all: patch(500) + full_content(500) + ast(300) + call_graph(300)
         //                + metadata(~30) + PROMPT_OVERHEAD_CHARS(1000) = ~2630
-        // Set budget to force call_graph drop (not deep).
+        // Set budget to force call_graph drop.
         let max_prompt_chars = 600;
 
         let mut drops = Vec::new();
@@ -254,14 +248,12 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut Vec::new(),
-            false,
             max_prompt_chars,
             &mut drops,
             None,
         );
 
-        // call_graph dropped first (deep=false, over budget)
+        // call_graph dropped first (over budget)
         assert!(
             call_graph.is_empty(),
             "call_graph should be dropped first when over budget"
@@ -289,8 +281,6 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut Vec::new(),
-            false,
             max_prompt_chars,
             &mut drops,
             None,
@@ -325,8 +315,6 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut Vec::new(),
-            false,
             max_prompt_chars,
             &mut drops,
             None,
@@ -361,8 +349,6 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut Vec::new(),
-            false,
             max_prompt_chars,
             &mut drops,
             None,
@@ -394,8 +380,6 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut Vec::new(),
-            false,
             max_prompt_chars,
             &mut drops,
             None,
@@ -636,8 +620,6 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut Vec::new(),
-            false,
             max_prompt_chars,
             &mut drops,
             None,
@@ -685,8 +667,6 @@ mod tests {
             &mut pr,
             &mut ast_context,
             &mut call_graph,
-            &mut Vec::new(),
-            false,
             max_prompt_chars,
             &mut drops,
             None,
@@ -809,34 +789,21 @@ mod tests {
             ..ReviewConfig::default()
         };
         assert!(
-            !should_enable_call_graph(false, 20_000, &config),
+            !should_enable_call_graph(20_000, &config),
             "should_enable_call_graph must be false when budget_remaining equals min_budget_for_call_graph"
         );
     }
 
     #[test]
     fn test_should_enable_call_graph_budget_below_threshold() {
-        // budget_remaining < min_budget_for_call_graph, deep=false -> false
+        // budget_remaining < min_budget_for_call_graph -> false
         let config = ReviewConfig {
             min_budget_for_call_graph: 20_000,
             ..ReviewConfig::default()
         };
         assert!(
-            !should_enable_call_graph(false, 10_000, &config),
-            "should_enable_call_graph must be false when budget_remaining < min_budget_for_call_graph and deep=false"
-        );
-    }
-
-    #[test]
-    fn test_should_enable_call_graph_deep_overrides_budget() {
-        // deep=true bypasses the budget gate entirely
-        let config = ReviewConfig {
-            min_budget_for_call_graph: 20_000,
-            ..ReviewConfig::default()
-        };
-        assert!(
-            should_enable_call_graph(true, 0, &config),
-            "should_enable_call_graph must be true when deep=true regardless of budget_remaining"
+            !should_enable_call_graph(10_000, &config),
+            "should_enable_call_graph must be false when budget_remaining < min_budget_for_call_graph"
         );
     }
 
@@ -896,8 +863,8 @@ mod tests {
         let pr = make_pr_with_content(0, 0);
         let ast_context = "";
         let call_graph = "fn foo() -> bar\nfn baz() -> qux";
-        let size = estimate_pr_size(&pr, ast_context, call_graph, &[]);
-        let without_call_graph = estimate_pr_size(&pr, ast_context, "", &[]);
+        let size = estimate_pr_size(&pr, ast_context, call_graph);
+        let without_call_graph = estimate_pr_size(&pr, ast_context, "");
         // Delta between with and without call_graph should be exactly call_graph.len()
         assert_eq!(size - without_call_graph, call_graph.len());
         // Total should include PROMPT_OVERHEAD_CHARS
@@ -911,7 +878,7 @@ mod tests {
         let pr = make_pr_with_content(50, 100);
         let ast_context = "fn foo() {}";
         let call_graph = "caller -> callee\nother -> thing";
-        let size = estimate_pr_size(&pr, ast_context, call_graph, &[]);
+        let size = estimate_pr_size(&pr, ast_context, call_graph);
         assert!(
             size >= call_graph.len() + PROMPT_OVERHEAD_CHARS,
             "estimated size {} should be >= call_graph.len() {} + overhead {}",
@@ -928,8 +895,9 @@ mod tests {
     #[tokio::test]
     async fn test_build_review_context_preserves_ast_and_call_graph() {
         // Arrange: a fixture PR touching a real Rust source file in this crate, with
-        // deep=true to force call_graph building regardless of prompt budget (mirrors
-        // the fixture setup pattern used by ast_context.rs's own build_ast_context tests).
+        // min_budget_for_call_graph=0 to force call_graph building regardless of prompt
+        // budget (mirrors the fixture setup pattern used by ast_context.rs's own
+        // build_ast_context tests).
         let repo_path = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
         let mut pr = make_pr_with_content(0, 0);
         pr.files = vec![PrFile {
@@ -941,10 +909,13 @@ mod tests {
             additions: 1,
             deletions: 0,
         }];
-        let review_config = ReviewConfig::default();
+        let review_config = ReviewConfig {
+            min_budget_for_call_graph: 0,
+            ..ReviewConfig::default()
+        };
 
         // Act
-        let ctx = build_review_context(pr, Some(repo_path), true, &review_config)
+        let ctx = build_review_context(pr, Some(repo_path), &review_config)
             .await
             .expect("build_review_context should succeed for a valid repo_path");
 
@@ -983,7 +954,6 @@ mod tests {
         let result = build_review_context(
             pr,
             Some("/nonexistent-aptu-test-repo-path".to_string()),
-            false,
             &review_config,
         )
         .await;
@@ -1016,7 +986,6 @@ mod tests {
         let result = build_review_context(
             pr,
             Some("/nonexistent-aptu-test-repo-path".to_string()),
-            false,
             &review_config,
         )
         .await;
@@ -1043,7 +1012,6 @@ mod tests {
         let result = build_review_context(
             pr,
             Some("/nonexistent-aptu-test-repo-path".to_string()),
-            false,
             &review_config,
         )
         .await;
@@ -1053,197 +1021,5 @@ mod tests {
             result.is_ok(),
             "a non-empty PR with no pre-drop patches (binary-only) should not trigger the zero-patch guard: {result:?}"
         );
-    }
-
-    /// Creates a temp directory containing multiple fixture files, for symbol-expansion
-    /// tests that need `analyze_focused` to walk a small multi-file call graph.
-    #[cfg(feature = "ast-context")]
-    fn make_symbol_expansion_fixture(files: &[(&str, &str)]) -> tempfile::TempDir {
-        let dir = tempfile::tempdir().expect("failed to create temp dir");
-        for (name, content) in files {
-            std::fs::write(dir.path().join(name), content).expect("failed to write fixture file");
-        }
-        dir
-    }
-
-    /// Verifies that a changed symbol with exactly one out-of-diff caller produces a
-    /// `SymbolExpansion` with correct provenance (file path and line range).
-    #[cfg(feature = "ast-context")]
-    #[tokio::test]
-    async fn test_build_ctx_symbol_expansions_single_out_of_diff_caller() {
-        let dir = make_symbol_expansion_fixture(&[
-            ("changed.rs", "pub fn target_fn() {}\n"),
-            ("caller_a.rs", "fn call_it() {\n    target_fn();\n}\n"),
-        ]);
-        let repo_path = dir.path().to_string_lossy().into_owned();
-        let files = vec![PrFile {
-            filename: "changed.rs".to_string(),
-            status: "modified".to_string(),
-            additions: 1,
-            deletions: 0,
-            patch: None,
-            patch_truncated: false,
-            full_content: None,
-        }];
-
-        let expansions = build_ctx_symbol_expansions(Some(&repo_path), &files, true, 5_000).await;
-
-        assert_eq!(
-            expansions.len(),
-            1,
-            "expected exactly one expansion for an unambiguous out-of-diff caller"
-        );
-        assert_eq!(expansions[0].symbol, "target_fn");
-        assert_eq!(expansions[0].reference_path, "caller_a.rs");
-        assert_eq!(expansions[0].reference_lines, (2, 3));
-        assert!(expansions[0].snippet.contains("target_fn();"));
-    }
-
-    /// Verifies that a changed symbol with more than one out-of-diff caller is
-    /// skipped entirely (ambiguous), not expanded.
-    #[cfg(feature = "ast-context")]
-    #[tokio::test]
-    async fn test_build_ctx_symbol_expansions_ambiguous_callers_skipped() {
-        let dir = make_symbol_expansion_fixture(&[
-            ("changed.rs", "pub fn target_fn() {}\n"),
-            ("caller_a.rs", "fn call_it() {\n    target_fn();\n}\n"),
-            ("caller_b.rs", "fn call_it_too() {\n    target_fn();\n}\n"),
-        ]);
-        let repo_path = dir.path().to_string_lossy().into_owned();
-        let files = vec![PrFile {
-            filename: "changed.rs".to_string(),
-            status: "modified".to_string(),
-            additions: 1,
-            deletions: 0,
-            patch: None,
-            patch_truncated: false,
-            full_content: None,
-        }];
-
-        let expansions = build_ctx_symbol_expansions(Some(&repo_path), &files, true, 5_000).await;
-
-        assert!(
-            expansions.is_empty(),
-            "ambiguous (multiple out-of-diff) callers must be skipped, got {expansions:?}"
-        );
-    }
-
-    /// Creates a temp directory containing multiple fixture files nested under a
-    /// subdirectory tree, for symbol-expansion tests that need `analyze_focused` to
-    /// walk beyond a flat top-level layout (mimicking `crates/<crate>/src/...`).
-    #[cfg(feature = "ast-context")]
-    fn make_nested_symbol_expansion_fixture(
-        sub_dir: &str,
-        files: &[(&str, &str)],
-    ) -> tempfile::TempDir {
-        let dir = tempfile::tempdir().expect("failed to create temp dir");
-        let nested = dir.path().join(sub_dir);
-        std::fs::create_dir_all(&nested).expect("failed to create nested fixture dir");
-        for (name, content) in files {
-            std::fs::write(nested.join(name), content).expect("failed to write fixture file");
-        }
-        dir
-    }
-
-    /// Regression test for the directory-walk depth bug fixed in 8366dc5: `analyze_focused`'s
-    /// `max_depth` parameter is a directory-walk depth limit (`ignore::WalkBuilder::max_depth`),
-    /// not a call-graph traversal depth. Passing `Some(2)`/`Some(3)` silently truncated the walk
-    /// before reaching files nested under a realistic `crates/<crate>/src/` layout, so both the
-    /// symbol-expansion pass and the pre-existing call-graph pass found zero callers on any
-    /// normally-nested Rust repo. All other symbol-expansion fixtures above use flat files, so
-    /// this test is the only one that would catch a future regression (e.g. someone re-adding a
-    /// depth cap to the `analyze_focused` call in `build_symbol_expansions_context_sync`).
-    #[cfg(feature = "ast-context")]
-    #[tokio::test]
-    async fn test_build_ctx_symbol_expansions_finds_caller_in_nested_directory() {
-        let dir = make_nested_symbol_expansion_fixture(
-            "crates/foo/src",
-            &[
-                ("changed.rs", "pub fn target_fn() {}\n"),
-                ("caller_a.rs", "fn call_it() {\n    target_fn();\n}\n"),
-            ],
-        );
-        let repo_path = dir.path().to_string_lossy().into_owned();
-        let files = vec![PrFile {
-            filename: "crates/foo/src/changed.rs".to_string(),
-            status: "modified".to_string(),
-            additions: 1,
-            deletions: 0,
-            patch: None,
-            patch_truncated: false,
-            full_content: None,
-        }];
-
-        let expansions = build_ctx_symbol_expansions(Some(&repo_path), &files, true, 5_000).await;
-
-        assert_eq!(
-            expansions.len(),
-            1,
-            "expected exactly one expansion for an out-of-diff caller nested under crates/foo/src, got {expansions:?}"
-        );
-        assert_eq!(expansions[0].symbol, "target_fn");
-        assert_eq!(expansions[0].reference_path, "crates/foo/src/caller_a.rs");
-        assert_eq!(expansions[0].reference_lines, (2, 3));
-        assert!(expansions[0].snippet.contains("target_fn();"));
-    }
-
-    /// Verifies that `apply_budget_drops` clears `symbol_expansions` and records the
-    /// drop when the prompt is still over budget after `ast_context` is cleared,
-    /// consistent with the documented drop-order position.
-    #[test]
-    fn test_apply_budget_drops_symbol_expansions_dropped_over_budget() {
-        let mut pr = make_pr_with_content(50, 0);
-        let mut ast_context = String::new();
-        let mut call_graph = String::new();
-        let mut symbol_expansions = vec![SymbolExpansion {
-            symbol: "foo".to_string(),
-            reference_path: "src/caller.rs".to_string(),
-            reference_lines: (10, 20),
-            snippet: "x".repeat(400),
-        }];
-
-        // Base without symbol_expansions: patch(50) + metadata(~18) + overhead(1000) = ~1080.
-        // With symbol_expansions: + snippet(400) + path(13) = ~1493.
-        // Budget sits between the two, forcing the symbol_expansions drop alone.
-        let max_prompt_chars = 1200;
-
-        let mut drops = Vec::new();
-        apply_budget_drops(
-            &mut pr,
-            &mut ast_context,
-            &mut call_graph,
-            &mut symbol_expansions,
-            false,
-            max_prompt_chars,
-            &mut drops,
-            None,
-        );
-
-        assert!(
-            symbol_expansions.is_empty(),
-            "symbol_expansions should be dropped when still over budget"
-        );
-        assert!(
-            drops.contains(&"symbol_expansions".to_string()),
-            "budget_drops should record the symbol_expansions eviction: {drops:?}"
-        );
-    }
-
-    /// Verifies that `estimate_pr_size` includes `symbol_expansions`' `snippet` and
-    /// `reference_path` char lengths in the total, so the budget cap actually applies.
-    #[test]
-    fn test_estimate_pr_size_includes_symbol_expansions() {
-        let pr = make_pr_with_content(0, 0);
-        let symbol_expansions = vec![SymbolExpansion {
-            symbol: "foo".to_string(),
-            reference_path: "src/caller.rs".to_string(),
-            reference_lines: (1, 5),
-            snippet: "fn foo() {}".to_string(),
-        }];
-        let size = estimate_pr_size(&pr, "", "", &symbol_expansions);
-        let without_expansions = estimate_pr_size(&pr, "", "", &[]);
-        let expected_delta =
-            symbol_expansions[0].snippet.len() + symbol_expansions[0].reference_path.len();
-        assert_eq!(size - without_expansions, expected_delta);
     }
 }

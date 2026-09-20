@@ -373,24 +373,6 @@ pub struct DepReleaseNote {
     pub fetch_note: String,
 }
 
-/// A caller/reference snippet for a changed symbol with exactly one
-/// unambiguous out-of-diff reference, attached as additional review context.
-///
-/// Built only when `deep` is explicitly requested (see `build_review_context`);
-/// resolution failures and ambiguous matches are skipped silently rather than
-/// surfaced as errors.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SymbolExpansion {
-    /// Name of the changed symbol being expanded.
-    pub symbol: String,
-    /// File path (relative to the repository root) of the out-of-diff caller.
-    pub reference_path: String,
-    /// 1-indexed (start, end) line range of the snippet in `reference_path`.
-    pub reference_lines: (u32, u32),
-    /// Source snippet read from the caller file, capped by `max_symbol_expansion_chars`.
-    pub snippet: String,
-}
-
 /// Details about a pull request for AI review.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrDetails {
