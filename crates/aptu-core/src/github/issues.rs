@@ -14,6 +14,12 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
 use super::{ReferenceKind, parse_github_reference};
+
+/// Forwards to the canonical [`super::parse_owner_repo`] to keep the
+/// historical `github::issues::parse_owner_repo` path stable for
+/// downstream consumers.
+pub use super::parse_owner_repo;
+
 use crate::ai::types::{IssueComment, IssueDetails, RepoIssueContext};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::retry::retry_backoff;
@@ -53,25 +59,6 @@ pub struct GitTreeResponse {
     pub tree: Vec<GitTreeEntry>,
     /// Whether the tree is truncated (too many entries).
     pub truncated: bool,
-}
-
-/// Parses an owner/repo string to extract owner and repo.
-///
-/// Validates format: exactly one `/`, non-empty parts.
-///
-/// # Errors
-///
-/// Returns an error if the format is invalid.
-pub fn parse_owner_repo(s: &str) -> Result<(String, String)> {
-    let parts: Vec<&str> = s.split('/').collect();
-    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
-        anyhow::bail!(
-            "Invalid owner/repo format.\n\
-             Expected: owner/repo\n\
-             Got: {s}"
-        );
-    }
-    Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
 /// Parses a GitHub issue reference in multiple formats.
