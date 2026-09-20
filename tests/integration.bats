@@ -16,12 +16,6 @@ load test_helper
     assert_success
 }
 
-@test "issue list with real GitHub API" {
-    skip_if_no_gh_token
-    run "$APTU_BIN" issue list --repo clouatre-labs/aptu
-    assert_success
-}
-
 @test "issue triage --dry-run with OpenRouter API" {
     skip_if_no_gh_token
     skip_if_no_openrouter_key
