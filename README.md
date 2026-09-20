@@ -145,7 +145,7 @@ See [docs/CONFIGURATION.md](https://github.com/clouatre-labs/aptu/blob/main/docs
 
 ## Models
 
-The interactive `aptu models list` command has been removed. To choose a model, see your provider's model catalog (Anthropic Console, Google AI Studio, or openrouter.ai/models) and set `provider` and `model` in the `[ai]` section of `~/.config/aptu/config.toml`:
+The interactive `aptu models list` command has been removed. To choose a model, see your provider's model catalog (Anthropic Console, Google AI Studio, openrouter.ai/models, or the Z.AI model docs at docs.z.ai) and set `provider` and `model` in the `[ai]` section of `~/.config/aptu/config.toml`:
 
 ```toml
 [ai]

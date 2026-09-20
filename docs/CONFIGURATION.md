@@ -30,6 +30,7 @@ model = "mistralai/mistral-small-2603"  # fast and cheap for triage
 [ai.tasks.review]
 provider = "openrouter"
 model = "anthropic/claude-haiku-4.5"  # balanced for review
+```
 
 All task-specific overrides are optional. If not specified, the default `provider` and `model` are used.
 
@@ -48,7 +49,6 @@ All task-specific overrides are optional. If not specified, the default `provide
   - `small_model`: Optional model for small prompts (used with `large_model` for routing)
   - `large_model`: Optional model for large prompts (used with `small_model` for routing)
   - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 60000 for review)
-  - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 8192 for create)
 
 ### Model-Tier Routing
 
