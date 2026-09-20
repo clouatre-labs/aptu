@@ -52,7 +52,7 @@ Abstracts credential retrieval across platforms. Implementations:
 
 ### AiProvider Trait
 
-Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Groq, Cerebras, Zenmux, Z.AI). Each provider:
+Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Z.AI, Anthropic). Each provider:
 
 - Implements unified `chat_completion()` interface
 - Manages provider-specific API endpoints and authentication

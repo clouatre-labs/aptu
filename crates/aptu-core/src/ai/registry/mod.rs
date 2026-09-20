@@ -19,7 +19,7 @@
 //!
 //! // Get all providers
 //! let providers = all_providers();
-//! assert_eq!(providers.len(), 7);
+//! assert_eq!(providers.len(), 4);
 //! ```
 
 pub mod config;
@@ -27,10 +27,7 @@ pub mod consts;
 pub mod parsing;
 
 // Re-export provider constants
-pub use consts::{
-    PROVIDER_ANTHROPIC, PROVIDER_CEREBRAS, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_OPENROUTER,
-    PROVIDER_ZAI, PROVIDER_ZENMUX,
-};
+pub use consts::{PROVIDER_ANTHROPIC, PROVIDER_GEMINI, PROVIDER_OPENROUTER, PROVIDER_ZAI};
 
 // Re-export configuration items
 pub use config::{PROVIDERS, ProviderConfig, all_providers, get_provider};
