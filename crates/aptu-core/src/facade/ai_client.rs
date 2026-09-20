@@ -154,7 +154,8 @@ where
     }
 }
 
-/// Execute fallback chain when primary provider fails with non-retryable error.
+/// Execute the fallback chain when the primary provider fails with a
+/// non-retryable error or after rate-limit retries are exhausted.
 async fn execute_fallback_chain<T, F, Fut>(
     provider: &dyn TokenProvider,
     primary_provider: &str,
@@ -201,17 +202,43 @@ where
         Ok(response) => return Ok(response),
         Err(e) => {
             if is_retryable_anyhow(&e) {
-                return Err(AptuError::AI {
-                    message: e.to_string(),
-                    status: None,
-                    provider: primary_provider.to_string(),
-                });
+                // RateLimited falls through to the fallback chain after in-loop
+                // retry exhaustion; other retryable errors return early.
+                if let Some(AptuError::RateLimited { .. }) = e.downcast_ref::<AptuError>() {
+                    let chain_configured = ai_config
+                        .fallback
+                        .as_ref()
+                        .is_some_and(|f| !f.chain.is_empty());
+                    if !chain_configured {
+                        // Return the original error via downcast so its anyhow
+                        // context and exact instance are preserved.
+                        return match e.downcast::<AptuError>() {
+                            Ok(err) => Err(err),
+                            Err(e) => Err(AptuError::AI {
+                                message: e.to_string(),
+                                status: None,
+                                provider: primary_provider.to_string(),
+                            }),
+                        };
+                    }
+                    info!(
+                        primary_provider = primary_provider,
+                        "Primary provider rate limited after retry exhaustion, trying fallback chain"
+                    );
+                } else {
+                    return Err(AptuError::AI {
+                        message: e.to_string(),
+                        status: None,
+                        provider: primary_provider.to_string(),
+                    });
+                }
+            } else {
+                warn!(
+                    primary_provider = primary_provider,
+                    error = %e,
+                    "Primary provider failed with non-retryable error, trying fallback chain"
+                );
             }
-            warn!(
-                primary_provider = primary_provider,
-                error = %e,
-                "Primary provider failed with non-retryable error, trying fallback chain"
-            );
         }
     }
 
@@ -268,5 +295,159 @@ mod tests {
 
         assert_eq!(fallback_config.chain.len(), 1);
         assert_eq!(fallback_config.chain[0].provider, "openrouter");
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod fallback_tests {
+    use super::*;
+    use crate::auth::TokenProvider;
+    use crate::config::{FallbackConfig, FallbackEntry};
+    use secrecy::SecretString;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    struct MockTokenProvider;
+
+    impl TokenProvider for MockTokenProvider {
+        fn github_token(&self) -> Option<SecretString> {
+            None
+        }
+
+        fn ai_api_key(&self, provider: &str) -> Option<SecretString> {
+            Some(SecretString::from(format!("key-{provider}")))
+        }
+    }
+
+    fn test_config(fallback: Option<FallbackConfig>) -> AiConfig {
+        AiConfig {
+            validation_enabled: false,
+            fallback,
+            ..AiConfig::default()
+        }
+    }
+
+    /// Arrange: primary call rate limited, fallback call succeeds.
+    /// Act: run try_with_fallback.
+    /// Assert: the fallback entry executes and the operation succeeds.
+    #[tokio::test]
+    async fn test_rate_limited_primary_uses_fallback_entry() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_for_op = calls.clone();
+        let operation = |client: AiClient| {
+            let counter = calls_for_op.clone();
+            async move {
+                let n = counter.fetch_add(1, Ordering::SeqCst);
+                if n == 0 {
+                    Err(anyhow::anyhow!(AptuError::RateLimited {
+                        provider: "openrouter".to_string(),
+                        retry_after: 1,
+                    })) as anyhow::Result<u32>
+                } else {
+                    let _ = client;
+                    Ok(n as u32)
+                }
+            }
+        };
+
+        let config = test_config(Some(FallbackConfig {
+            chain: vec![FallbackEntry {
+                provider: "groq".to_string(),
+                model: None,
+            }],
+        }));
+
+        let result = try_with_fallback(
+            &MockTokenProvider,
+            "openrouter",
+            "test-model",
+            &config,
+            operation,
+        )
+        .await;
+
+        assert!(result.is_ok(), "expected fallback entry to succeed");
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "fallback should be called");
+    }
+
+    /// Arrange: primary rate limited with no fallback chain configured.
+    /// Act: run try_with_fallback.
+    /// Assert: the original RateLimited error is surfaced via downcast,
+    /// preserving the original error instance (not a reconstruction).
+    #[tokio::test]
+    async fn test_rate_limited_without_chain_surfaces_error() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_for_op = calls.clone();
+        let operation = |_client: AiClient| {
+            let counter = calls_for_op.clone();
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Err(anyhow::anyhow!(AptuError::RateLimited {
+                    provider: "openrouter".to_string(),
+                    retry_after: 7,
+                })) as anyhow::Result<u32>
+            }
+        };
+
+        let config = test_config(None);
+
+        let result = try_with_fallback(
+            &MockTokenProvider,
+            "openrouter",
+            "test-model",
+            &config,
+            operation,
+        )
+        .await;
+
+        match result {
+            Err(AptuError::RateLimited {
+                provider,
+                retry_after,
+            }) => {
+                assert_eq!(provider, "openrouter");
+                assert_eq!(retry_after, 7);
+            }
+            other => panic!("expected RateLimited error, got {other:?}"),
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "no fallback attempted");
+    }
+
+    /// Arrange: primary returns TruncatedResponse with a fallback chain configured.
+    /// Act: run try_with_fallback.
+    /// Assert: returns early without consulting the fallback chain.
+    #[tokio::test]
+    async fn test_truncated_response_returns_early() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_for_op = calls.clone();
+        let operation = |_client: AiClient| {
+            let counter = calls_for_op.clone();
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Err(anyhow::anyhow!(AptuError::TruncatedResponse {
+                    provider: "openrouter".to_string(),
+                })) as anyhow::Result<u32>
+            }
+        };
+
+        let config = test_config(Some(FallbackConfig {
+            chain: vec![FallbackEntry {
+                provider: "groq".to_string(),
+                model: None,
+            }],
+        }));
+
+        let result = try_with_fallback(
+            &MockTokenProvider,
+            "openrouter",
+            "test-model",
+            &config,
+            operation,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "fallback must not run");
     }
 }

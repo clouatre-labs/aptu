@@ -117,7 +117,7 @@ either direction.
 
 ## AI Provider Fallback Chain
 
-Configure a fallback chain to automatically try alternative providers when the primary provider fails with a non-retryable error:
+Configure a fallback chain to automatically try alternative providers when the primary provider fails with a non-retryable error or when the primary provider remains rate limited after in-loop retries are exhausted:
 
 ```toml
 [ai]
@@ -143,7 +143,7 @@ chain = [
 ]
 ```
 
-When the primary provider fails with a non-retryable error (after retry exhaustion), Aptu will automatically try each provider in the fallback chain. If a fallback entry specifies a model override, that model is used; otherwise, the primary model is used. Rate limit and circuit breaker errors are not retried via fallback.
+When the primary provider fails with a non-retryable error, Aptu automatically tries each provider in the fallback chain. It also walks the fallback chain when the primary provider returns a rate-limit error that persists after in-loop retries are exhausted. If a fallback entry specifies a model override, that model is used; otherwise, the primary model is used. Circuit breaker errors are not retried via fallback.
 
 **Use Cases:**
 
@@ -154,7 +154,8 @@ When the primary provider fails with a non-retryable error (after retry exhausti
 
 **Notes:**
 
-- Fallback only triggers for non-retryable errors
+- Fallback triggers for non-retryable errors, and for rate-limit errors after in-loop retries are exhausted
+- Circuit breaker errors do not trigger fallback
 - Each fallback provider must have a valid API key configured
 - Model overrides are optional; if not specified, the primary model is used
 - Fallback attempts are logged with `warn` level tracing
