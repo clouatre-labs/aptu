@@ -388,3 +388,90 @@ fn scan_security_sarif_output_written_before_fail_on_exit() {
         "expected at least one SARIF result"
     );
 }
+
+// --- output-format completeness matrix ---
+
+/// Offline-safe commands whose outcome rendering is exercised under every
+/// `OutputFormat` variant. Network-dependent commands (issue, pr, models) are
+/// excluded to keep the matrix deterministic.
+const FORMAT_MATRIX_ARGS: [&[&str]; 2] = [&["auth", "status"], &["scan-security", "--diff", "-"]];
+
+const ALL_FORMATS: [&str; 4] = ["text", "json", "sarif", "github-annotations"];
+
+#[test]
+fn output_format_completeness_matrix() {
+    // A minimal unified diff; scan-security scans it offline for known patterns.
+    let diff_content = concat!(
+        "diff --git a/config.py b/config.py\n",
+        "--- a/config.py\n",
+        "+++ b/config.py\n",
+        "@@ -1,2 +1,3 @@\n",
+        " # config\n",
+        "+api_key = \"abcdefghij1234567890xyz\"\n",
+        " pass\n"
+    );
+
+    for args in FORMAT_MATRIX_ARGS {
+        for format in ALL_FORMATS {
+            let mut full_args = args.to_vec();
+            full_args.extend(["--output", format]);
+
+            let output = if args.contains(&"-") {
+                run_cli_with_stdin(&full_args, diff_content)
+            } else {
+                run_cli(&full_args)
+            };
+
+            assert!(
+                output.status.success(),
+                "command {args:?} should succeed under --output {format}"
+            );
+
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            match format {
+                "text" | "json" => {
+                    assert!(
+                        !stdout.trim().is_empty(),
+                        "command {args:?} under {format} should produce output"
+                    );
+                    if format == "json" {
+                        serde_json::from_str::<serde_json::Value>(&stdout)
+                            .unwrap_or_else(|e| panic!("command {args:?} under json: {e}"));
+                    }
+                }
+                "sarif" => {
+                    let sarif: serde_json::Value = serde_json::from_str(&stdout)
+                        .unwrap_or_else(|e| panic!("command {args:?} under sarif: {e}"));
+                    assert_eq!(sarif["version"], "2.1.0");
+                    assert!(
+                        sarif["runs"].is_array(),
+                        "command {args:?} under sarif should emit valid SARIF with runs"
+                    );
+                }
+                "github-annotations" => {
+                    if args[0] == "auth" {
+                        // Documented no-op: non-scan commands emit nothing in
+                        // this format.
+                        assert!(
+                            stdout.trim().is_empty(),
+                            "auth status under github-annotations should emit nothing"
+                        );
+                    } else if args[0] == "scan-security" {
+                        // Documented contract: one GitHub workflow annotation
+                        // command line per finding, empty when there are none.
+                        for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+                            assert!(
+                                line.starts_with("::error file=")
+                                    && line.contains("line=")
+                                    && line.contains("title="),
+                                "scan-security under github-annotations should emit \
+                                 annotation commands, got: {line:?}"
+                            );
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+}
