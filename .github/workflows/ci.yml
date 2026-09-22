@@ -119,6 +119,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1"
       - name: Run duplicated-code scan (report-only)
         # jscpd exits 0 by default even when clones are found, so this stays non-gating
         run: bunx jscpd
