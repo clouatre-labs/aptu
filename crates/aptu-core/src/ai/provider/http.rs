@@ -546,6 +546,36 @@ mod tests {
         assert!(matches!(aptu_err, AptuError::CircuitOpen));
     }
 
+    /// Build a minimal HTTP/1.1 200 response with a JSON body for mock servers.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn mock_http_ok(body: &str) -> String {
+        format!(
+            "HTTP/1.1 200 OK\r\n\
+             Content-Type: application/json\r\n\
+             Content-Length: {}\r\n\
+             Connection: close\r\n\
+             \r\n\
+             {}",
+            body.len(),
+            body
+        )
+    }
+
+    /// Build an [`HttpMockProvider`] with the standard test key.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn mock_provider(
+        client: reqwest::Client,
+        addr: std::net::SocketAddr,
+        max_attempts: u32,
+    ) -> HttpMockProvider {
+        HttpMockProvider {
+            client,
+            key: secrecy::SecretString::from("test-key".to_string()),
+            url: format!("http://{addr}"),
+            max_attempts,
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     struct HttpMockProvider {
         client: reqwest::Client,
@@ -612,16 +642,7 @@ mod tests {
                 let mut buf = [0u8; 2048];
                 let _ = stream.read(&mut buf).await;
                 let body = r#"{"choices":[{"message":{"role":"assistant","content":"{\"_message\":\"ok\"}"}}]}"#;
-                let response = format!(
-                    "HTTP/1.1 200 OK\r\n\
-                     Content-Type: application/json\r\n\
-                     Content-Length: {}\r\n\
-                     Connection: close\r\n\
-                     \r\n\
-                     {}",
-                    body.len(),
-                    body
-                );
+                let response = mock_http_ok(&body);
                 let _ = stream.write_all(response.as_bytes()).await;
                 let _ = stream.shutdown().await;
             }
@@ -632,12 +653,7 @@ mod tests {
             .build()
             .expect("build client");
 
-        let provider = HttpMockProvider {
-            client,
-            key: secrecy::SecretString::from("test-key".to_string()),
-            url: format!("http://{addr}"),
-            max_attempts: 3,
-        };
+        let provider = mock_provider(client, addr, 3);
 
         let request = ChatCompletionRequest {
             model: "test-model".to_string(),
@@ -858,12 +874,7 @@ mod tests {
             .build()
             .expect("build client");
 
-        let provider = HttpMockProvider {
-            client,
-            key: secrecy::SecretString::from("test-key".to_string()),
-            url: format!("http://{addr}"),
-            max_attempts: 1,
-        };
+        let provider = mock_provider(client, addr, 1);
 
         let request = ChatCompletionRequest {
             model: "test-model".to_string(),
@@ -908,16 +919,7 @@ mod tests {
                 let mut buf = [0u8; 2048];
                 let _ = stream.read(&mut buf).await;
                 let body = "not json at all";
-                let response = format!(
-                    "HTTP/1.1 200 OK\r\n\
-                     Content-Type: application/json\r\n\
-                     Content-Length: {}\r\n\
-                     Connection: close\r\n\
-                     \r\n\
-                     {}",
-                    body.len(),
-                    body
-                );
+                let response = mock_http_ok(&body);
                 let _ = stream.write_all(response.as_bytes()).await;
                 let _ = stream.shutdown().await;
             }
@@ -928,12 +930,7 @@ mod tests {
             .build()
             .expect("build client");
 
-        let provider = HttpMockProvider {
-            client,
-            key: secrecy::SecretString::from("test-key".to_string()),
-            url: format!("http://{addr}"),
-            max_attempts: 1,
-        };
+        let provider = mock_provider(client, addr, 1);
 
         let request = ChatCompletionRequest {
             model: "test-model".to_string(),
