@@ -12,6 +12,7 @@ use tracing::{debug, instrument};
 
 use super::parse::{parse_ai_json, redact_api_error_body};
 use crate::ai::provider::AiProvider;
+use crate::ai::registry::consts::PROVIDER_ZAI;
 use crate::ai::types::{ChatCompletionRequest, ChatCompletionResponse};
 use crate::error::AptuError;
 use crate::history::AiStats;
@@ -38,6 +39,17 @@ fn map_http_error(
         429 => {
             let retry_after_val = retry_after.unwrap_or(0);
             debug!(retry_after = retry_after_val, "Parsed Retry-After header");
+            if provider_name == PROVIDER_ZAI
+                && (error_body.contains("\"1113\"") || error_body.contains("Insufficient balance"))
+            {
+                return Err(AptuError::AI {
+                    message: "Z.AI coding plan keys are not valid for the standard API endpoint; \
+                        use a pay-as-you-go key or a different fallback provider"
+                        .to_string(),
+                    status: Some(429),
+                    provider: provider_name.to_string(),
+                });
+            }
             Err(AptuError::RateLimited {
                 provider: provider_name.to_string(),
                 retry_after: retry_after_val,
@@ -426,6 +438,15 @@ mod tests {
             }
             _ => panic!("expected AptuError::RateLimited, got: {err:?}"),
         }
+    }
+
+    #[test]
+    fn test_map_http_error_zai_1113_insufficient_balance() {
+        let body = r#"{"error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}"#;
+        let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("coding plan keys are not valid"));
+        assert!(msg.contains("pay-as-you-go"));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
