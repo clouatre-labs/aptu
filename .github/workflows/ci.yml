@@ -120,8 +120,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Run duplicated-code scan (report-only)
-        run: |
-          bunx jscpd || echo "::notice::jscpd found clones - report only; baseline 11 clones (ratchet to gate in a follow-up)"
+        # jscpd exits 0 by default even when clones are found, so this stays non-gating
+        run: bunx jscpd
 
   check:
     name: Check Format & Lint
