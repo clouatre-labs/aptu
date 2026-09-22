@@ -1,6 +1,13 @@
 {
   "minTokens": 100,
-  "format": ["rust"],
+  "format": [
+    "rust"
+  ],
   "path": "crates",
-  "reporters": ["consoleFull"]
+  "reporters": [
+    "consoleFull"
+  ],
+  "ignore": [
+    ".worktrees/**"
+  ]
 }
