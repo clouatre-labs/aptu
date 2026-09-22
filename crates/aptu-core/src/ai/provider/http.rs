@@ -576,6 +576,30 @@ mod tests {
         }
     }
 
+    /// Build a client/provider/request tuple for mock-server tests.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn mock_setup(
+        addr: std::net::SocketAddr,
+        max_attempts: u32,
+        timeout_ms: Option<u64>,
+    ) -> (HttpMockProvider, ChatCompletionRequest) {
+        let mut builder = reqwest::Client::builder().pool_max_idle_per_host(0);
+        if let Some(ms) = timeout_ms {
+            builder = builder.timeout(Duration::from_millis(ms));
+        }
+        let client = builder.build().expect("build client");
+        let provider = mock_provider(client, addr, max_attempts);
+        let request = ChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            max_tokens: None,
+            temperature: None,
+            response_format: None,
+            session_id: None,
+        };
+        (provider, request)
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     struct HttpMockProvider {
         client: reqwest::Client,
@@ -868,22 +892,7 @@ mod tests {
             }
         });
 
-        let client = reqwest::Client::builder()
-            .pool_max_idle_per_host(0)
-            .timeout(Duration::from_millis(300))
-            .build()
-            .expect("build client");
-
-        let provider = mock_provider(client, addr, 1);
-
-        let request = ChatCompletionRequest {
-            model: "test-model".to_string(),
-            messages: vec![],
-            max_tokens: None,
-            temperature: None,
-            response_format: None,
-            session_id: None,
-        };
+        let (provider, request) = mock_setup(addr, 1, Some(300));
 
         let err = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
             &provider, &request,
@@ -925,21 +934,7 @@ mod tests {
             }
         });
 
-        let client = reqwest::Client::builder()
-            .pool_max_idle_per_host(0)
-            .build()
-            .expect("build client");
-
-        let provider = mock_provider(client, addr, 1);
-
-        let request = ChatCompletionRequest {
-            model: "test-model".to_string(),
-            messages: vec![],
-            max_tokens: None,
-            temperature: None,
-            response_format: None,
-            session_id: None,
-        };
+        let (provider, request) = mock_setup(addr, 1, None);
 
         let err = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
             &provider, &request,
