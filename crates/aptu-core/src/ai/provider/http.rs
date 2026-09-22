@@ -8,6 +8,7 @@
 //! - `send_and_parse`: retry loop around `try_request` with circuit breaker
 
 use anyhow::{Context, Result};
+use serde_json::Value;
 use tracing::{debug, instrument};
 
 use super::parse::{parse_ai_json, redact_api_error_body};
@@ -20,6 +21,25 @@ use crate::retry::{extract_retry_after, is_retryable_anyhow};
 
 /// Conservative provider-agnostic ceiling for escalated `max_tokens`.
 const MAX_ESCALATED_MAX_TOKENS: u32 = 16384;
+
+fn is_zai_insufficient_balance(error_body: &str) -> bool {
+    if error_body
+        .to_ascii_lowercase()
+        .contains("insufficient balance")
+    {
+        return true;
+    }
+    serde_json::from_str::<Value>(error_body)
+        .ok()
+        .and_then(|v| {
+            let code = v
+                .get("error")
+                .and_then(|e| e.get("code"))
+                .or_else(|| v.get("code"));
+            code.map(|c| c == "1113" || c.as_i64() == Some(1113))
+        })
+        .unwrap_or(false)
+}
 
 fn map_http_error(
     status: u16,
@@ -39,9 +59,7 @@ fn map_http_error(
         429 => {
             let retry_after_val = retry_after.unwrap_or(0);
             debug!(retry_after = retry_after_val, "Parsed Retry-After header");
-            if provider_name == PROVIDER_ZAI
-                && (error_body.contains("\"1113\"") || error_body.contains("Insufficient balance"))
-            {
+            if provider_name == PROVIDER_ZAI && is_zai_insufficient_balance(error_body) {
                 return Err(AptuError::AI {
                     message: "Z.AI coding plan keys are not valid for the standard API endpoint; \
                         use a pay-as-you-go key or a different fallback provider"
@@ -447,6 +465,30 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("coding plan keys are not valid"));
         assert!(msg.contains("pay-as-you-go"));
+    }
+
+    #[test]
+    fn test_map_http_error_zai_1113_numeric_code() {
+        let body =
+            r#"{"error":{"code":1113,"message":"Insufficient Balance or no resource package."}}"#;
+        let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("coding plan keys are not valid"));
+        assert!(msg.contains("pay-as-you-go"));
+    }
+
+    #[test]
+    fn test_map_http_error_zai_1113_top_level_numeric_code() {
+        let body = r#"{"code":1113,"message":"insufficient balance"}"#;
+        let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
+        assert!(err.to_string().contains("coding plan keys are not valid"));
+    }
+
+    #[test]
+    fn test_map_http_error_zai_other_rate_limit_still_retryable() {
+        let body = r#"{"error":{"code":"1001","message":"rate limited"}}"#;
+        let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("rate limit"));
     }
 
     #[cfg(not(target_arch = "wasm32"))]

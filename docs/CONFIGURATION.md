@@ -16,7 +16,7 @@ confirm_before_post = true
 
 ## Task-Specific Model Configuration
 
-Configure different AI models for different operations (triage, review) to optimize for speed, cost, or reasoning depth:
+Configure different AI models for different operations (triage, review, create) to optimize for speed, cost, or reasoning depth:
 
 ```toml
 [ai]
@@ -44,6 +44,11 @@ All task-specific overrides are optional. If not specified, the default `provide
   - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 8192 for triage)
   - `timeout_seconds`: Optional request timeout override in seconds for this task (default: falls back to `ai.timeout_seconds`)
 
+- **`[ai.tasks.create]`**: Configuration for issue/PR creation operations
+  - `provider`: Optional provider override
+  - `model`: Optional model override
+  - `timeout_seconds`: Optional request timeout override in seconds for this task (default: falls back to `ai.timeout_seconds`, 30s)
+
 - **`[ai.tasks.review]`**: Configuration for code review operations
   - `provider`: Optional provider override
   - `model`: Optional model override
@@ -57,7 +62,7 @@ All task-specific overrides are optional. If not specified, the default `provide
 The effective request timeout for each task is resolved in this order:
 
 1. Explicit per-task override (`timeout_seconds` in `[ai.tasks.<task>]`)
-2. Task default: review uses 120 seconds (large diffs take longer to analyze); triage and create use `ai.timeout_seconds` (default 30)
+2. Task default: review uses 120 seconds (large diffs take longer to analyze); triage and create fall back to `ai.timeout_seconds` (default 30)
 
 ```toml
 [ai.tasks.review]
