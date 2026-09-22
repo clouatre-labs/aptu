@@ -42,6 +42,7 @@ All task-specific overrides are optional. If not specified, the default `provide
   - `small_model`: Optional model for small prompts (used with `large_model` for routing)
   - `large_model`: Optional model for large prompts (used with `small_model` for routing)
   - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 8192 for triage)
+  - `timeout_seconds`: Optional request timeout override in seconds for this task (default: falls back to `ai.timeout_seconds`)
 
 - **`[ai.tasks.review]`**: Configuration for code review operations
   - `provider`: Optional provider override
@@ -49,6 +50,19 @@ All task-specific overrides are optional. If not specified, the default `provide
   - `small_model`: Optional model for small prompts (used with `large_model` for routing)
   - `large_model`: Optional model for large prompts (used with `small_model` for routing)
   - `routing_threshold_chars`: Optional threshold in characters for routing between `small_model` and `large_model` (default: 60000 for review)
+  - `timeout_seconds`: Optional request timeout override in seconds for this task (default: 120, giving review operations extra headroom)
+
+### Task Timeout Resolution
+
+The effective request timeout for each task is resolved in this order:
+
+1. Explicit per-task override (`timeout_seconds` in `[ai.tasks.<task>]`)
+2. Task default: review uses 120 seconds (large diffs take longer to analyze); triage and create use `ai.timeout_seconds` (default 30)
+
+```toml
+[ai.tasks.review]
+timeout_seconds = 180  # extend review timeout beyond the 120s default
+```
 
 ### Model-Tier Routing
 
@@ -245,6 +259,8 @@ See the Google AI Studio model catalog for current model IDs.
    ```
 
 **Budget Tier:** See Z.AI documentation for current pricing and limits
+
+> **Note:** Coding-plan keys (e.g. from a GLM Coding Plan) only work on the coding endpoint; aptu uses the standard API endpoint, so coding-plan keys are rejected with an "insufficient balance" error (code 1113). Use a pay-as-you-go key or a different fallback provider.
 
 ## PR Review Limits
 

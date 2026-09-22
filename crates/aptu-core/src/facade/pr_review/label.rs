@@ -109,10 +109,17 @@ pub async fn label_pr(
 
         // Get API key from provider using the resolved provider name
         if let Some(api_key) = provider.ai_api_key(&provider_name) {
+            // Apply the per-task effective timeout for the Create task
+            let mut task_config = ai_config.clone();
+            task_config.timeout_seconds = ai_config.effective_timeout_for_task(TaskType::Create);
+
             // Create AI client with resolved provider and model
-            if let Ok(ai_client) =
-                crate::ai::AiClient::with_api_key(&provider_name, api_key, &model_name, ai_config)
-            {
+            if let Ok(ai_client) = crate::ai::AiClient::with_api_key(
+                &provider_name,
+                api_key,
+                &model_name,
+                &task_config,
+            ) {
                 match ai_client
                     .suggest_pr_labels(&pr_details.title, &pr_details.body, &file_paths)
                     .await

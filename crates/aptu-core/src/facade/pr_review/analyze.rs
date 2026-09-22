@@ -235,6 +235,7 @@ pub async fn analyze_pr(
         &provider_name,
         &model_name,
         ai_config,
+        TaskType::Review,
         |client| {
             let review_ctx = ctx.clone();
             let review_cfg = review_config.clone();
