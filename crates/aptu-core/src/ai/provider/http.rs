@@ -585,7 +585,7 @@ mod tests {
     ) -> (HttpMockProvider, ChatCompletionRequest) {
         let mut builder = reqwest::Client::builder().pool_max_idle_per_host(0);
         if let Some(ms) = timeout_ms {
-            builder = builder.timeout(Duration::from_millis(ms));
+            builder = builder.timeout(std::time::Duration::from_millis(ms));
         }
         let client = builder.build().expect("build client");
         let provider = mock_provider(client, addr, max_attempts);
