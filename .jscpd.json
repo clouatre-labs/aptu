@@ -1,0 +1,6 @@
+{
+  "min-tokens": 100,
+  "formats": ["rust"],
+  "path": "crates",
+  "reporters": ["consoleFull"]
+}
