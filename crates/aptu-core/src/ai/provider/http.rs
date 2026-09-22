@@ -465,6 +465,7 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("coding plan keys are not valid"));
         assert!(msg.contains("pay-as-you-go"));
+        assert!(!is_retryable_anyhow(&err.into()));
     }
 
     #[test]
@@ -482,6 +483,7 @@ mod tests {
         let body = r#"{"code":1113,"message":"insufficient balance"}"#;
         let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
         assert!(err.to_string().contains("coding plan keys are not valid"));
+        assert!(!is_retryable_anyhow(&err.into()));
     }
 
     #[test]

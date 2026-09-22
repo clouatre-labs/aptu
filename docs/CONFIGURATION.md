@@ -64,6 +64,8 @@ The effective request timeout for each task is resolved in this order:
 1. Explicit per-task override (`timeout_seconds` in `[ai.tasks.<task>]`)
 2. Task default: review uses 120 seconds (large diffs take longer to analyze); triage and create fall back to `ai.timeout_seconds` (default 30)
 
+A `timeout_seconds` value of `0` is treated as unset and falls through to the next resolution step.
+
 ```toml
 [ai.tasks.review]
 timeout_seconds = 180  # extend review timeout beyond the 120s default

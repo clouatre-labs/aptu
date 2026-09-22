@@ -246,9 +246,14 @@ impl AiConfig {
     /// Resolve the effective request timeout in seconds for a specific task.
     ///
     /// Resolution order:
-    /// 1. Explicit per-task override (`[ai.tasks.<task>].timeout_seconds`)
+    /// 1. Explicit per-task override (`[ai.tasks.<task>].timeout_seconds`,
+    ///    treated as unset when zero)
     /// 2. Per-task default headroom: review = 120 seconds
     /// 3. Global `ai.timeout_seconds` (default 30) for triage and create
+    ///
+    /// A timeout of `0` is treated as unset at every step, so a misconfigured
+    /// zero value falls through to the next resolution step instead of
+    /// producing an immediately-timing-out client.
     #[must_use]
     pub fn effective_timeout_for_task(&self, task: TaskType) -> u64 {
         let task_override = match task {
@@ -257,7 +262,10 @@ impl AiConfig {
             TaskType::Create => self.tasks.as_ref().and_then(|t| t.create.as_ref()),
         };
 
-        if let Some(timeout) = task_override.and_then(|o| o.timeout_seconds) {
+        if let Some(timeout) = task_override
+            .and_then(|o| o.timeout_seconds)
+            .filter(|t| *t > 0)
+        {
             return timeout;
         }
 
@@ -265,7 +273,13 @@ impl AiConfig {
             // Review operations get extra headroom by default since large
             // diffs take significantly longer to analyze.
             TaskType::Review => 120,
-            TaskType::Triage | TaskType::Create => self.timeout_seconds,
+            TaskType::Triage | TaskType::Create => {
+                if self.timeout_seconds > 0 {
+                    self.timeout_seconds
+                } else {
+                    30
+                }
+            }
         }
     }
 }
@@ -306,6 +320,24 @@ mod tests {
         assert_eq!(config.effective_timeout_for_task(TaskType::Triage), 45);
         assert_eq!(config.effective_timeout_for_task(TaskType::Create), 45);
         // Review keeps its 120s headroom even with an explicit global timeout.
+        assert_eq!(config.effective_timeout_for_task(TaskType::Review), 120);
+    }
+
+    #[test]
+    fn test_effective_timeout_zero_is_treated_as_unset() {
+        let config = AiConfig {
+            timeout_seconds: 0,
+            tasks: Some(TasksConfig {
+                triage: Some(TaskOverride {
+                    timeout_seconds: Some(0),
+                    ..TaskOverride::default()
+                }),
+                ..TasksConfig::default()
+            }),
+            ..AiConfig::default()
+        };
+        // Zero override and zero global both fall through to task defaults.
+        assert_eq!(config.effective_timeout_for_task(TaskType::Triage), 30);
         assert_eq!(config.effective_timeout_for_task(TaskType::Review), 120);
     }
 }
