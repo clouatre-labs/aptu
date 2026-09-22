@@ -121,10 +121,14 @@ pub(super) async fn send_request_inner(
     }
 
     // Parse response
-    let completion: ChatCompletionResponse = response
-        .json()
-        .await
-        .context(format!("Failed to parse {} API response", provider.name()))?;
+    let completion: ChatCompletionResponse = response.json().await.map_err(|err| {
+        if err.is_timeout() {
+            anyhow::Error::new(err).context(format!("AI request to {} timed out", provider.name()))
+        } else {
+            anyhow::Error::new(err)
+                .context(format!("Failed to parse {} API response", provider.name()))
+        }
+    })?;
 
     Ok(completion)
 }
@@ -749,5 +753,143 @@ mod tests {
         }
         // No second attempt was made after the cap was hit.
         assert_eq!(*seen.lock().expect("lock"), vec![10000]);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_send_and_parse_timeout_yields_timeout_context_and_stays_retryable() {
+        use std::time::Duration;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+
+        tokio::spawn(async move {
+            // Respond with a Content-Length larger than the written body, then
+            // stall, forcing a client timeout during the body read (json()).
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf).await;
+                let body = "hi";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     Content-Type: application/json\r\n\
+                     Content-Length: 500\r\n\
+                     Connection: close\r\n\
+                     \r\n\
+                     {body}"
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .timeout(Duration::from_millis(300))
+            .build()
+            .expect("build client");
+
+        let provider = HttpMockProvider {
+            client,
+            key: secrecy::SecretString::from("test-key".to_string()),
+            url: format!("http://{addr}"),
+            max_attempts: 1,
+        };
+
+        let request = ChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            max_tokens: None,
+            temperature: None,
+            response_format: None,
+            session_id: None,
+        };
+
+        let err = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
+            &provider, &request,
+        )
+        .await
+        .unwrap_err();
+
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("AI request to test timed out"),
+            "unexpected message: {msg}"
+        );
+        assert!(!msg.contains("Failed to parse"));
+        // Timeout classification must survive the context layer.
+        assert!(
+            is_retryable_anyhow(&err),
+            "timeout error should remain retryable"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_send_and_parse_malformed_json_yields_parse_context() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf).await;
+                let body = "not json at all";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     Content-Type: application/json\r\n\
+                     Content-Length: {}\r\n\
+                     Connection: close\r\n\
+                     \r\n\
+                     {}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .build()
+            .expect("build client");
+
+        let provider = HttpMockProvider {
+            client,
+            key: secrecy::SecretString::from("test-key".to_string()),
+            url: format!("http://{addr}"),
+            max_attempts: 1,
+        };
+
+        let request = ChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            max_tokens: None,
+            temperature: None,
+            response_format: None,
+            session_id: None,
+        };
+
+        let err = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
+            &provider, &request,
+        )
+        .await
+        .unwrap_err();
+
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("Failed to parse test API response"),
+            "unexpected message: {msg}"
+        );
+        assert!(!msg.contains("timed out"));
     }
 }
