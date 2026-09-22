@@ -8,6 +8,7 @@ use crate::ai::AiClient;
 use crate::ai::registry::get_provider;
 use crate::auth::TokenProvider;
 use crate::config::AiConfig;
+use crate::config::ai::TaskType;
 use crate::error::AptuError;
 use crate::retry::is_retryable_anyhow;
 
@@ -32,7 +33,14 @@ fn try_setup_primary_client(
     primary_provider: &str,
     model_name: &str,
     ai_config: &AiConfig,
+    task: TaskType,
 ) -> crate::Result<AiClient> {
+    // Apply the per-task effective timeout so the HTTP client gets the right
+    // deadline for this operation (review gets more headroom than triage).
+    let mut ai_config = ai_config.clone();
+    ai_config.timeout_seconds = ai_config.effective_timeout_for_task(task);
+    let ai_config = &ai_config;
+
     // For Anthropic, delegate to centralized credential resolution
     if primary_provider == "anthropic"
         && let Some(client) = crate::ai::resolve_anthropic_credential(ai_config)
@@ -73,7 +81,13 @@ fn setup_fallback_client(
     entry: &crate::config::FallbackEntry,
     model_name: &str,
     ai_config: &AiConfig,
+    task: TaskType,
 ) -> Option<AiClient> {
+    // Apply the per-task effective timeout to fallback clients as well.
+    let mut ai_config = ai_config.clone();
+    ai_config.timeout_seconds = ai_config.effective_timeout_for_task(task);
+    let ai_config = &ai_config;
+
     let Some(api_key) = provider.ai_api_key(&entry.provider) else {
         warn!(
             fallback_provider = entry.provider,
@@ -113,6 +127,7 @@ async fn try_fallback_entry<T, F, Fut>(
     entry: &crate::config::FallbackEntry,
     model_name: &str,
     ai_config: &AiConfig,
+    task: TaskType,
     operation: &F,
 ) -> crate::Result<Option<T>>
 where
@@ -124,7 +139,8 @@ where
         "Attempting fallback provider"
     );
 
-    let Some(ai_client) = setup_fallback_client(provider, entry, model_name, ai_config) else {
+    let Some(ai_client) = setup_fallback_client(provider, entry, model_name, ai_config, task)
+    else {
         return Ok(None);
     };
 
@@ -161,6 +177,7 @@ async fn execute_fallback_chain<T, F, Fut>(
     primary_provider: &str,
     model_name: &str,
     ai_config: &AiConfig,
+    task: TaskType,
     operation: F,
 ) -> crate::Result<T>
 where
@@ -170,7 +187,7 @@ where
     if let Some(fallback_config) = &ai_config.fallback {
         for entry in &fallback_config.chain {
             if let Some(response) =
-                try_fallback_entry(provider, entry, model_name, ai_config, &operation).await?
+                try_fallback_entry(provider, entry, model_name, ai_config, task, &operation).await?
             {
                 return Ok(response);
             }
@@ -190,13 +207,15 @@ pub(super) async fn try_with_fallback<T, F, Fut>(
     primary_provider: &str,
     model_name: &str,
     ai_config: &AiConfig,
+    task: TaskType,
     operation: F,
 ) -> crate::Result<T>
 where
     F: Fn(AiClient) -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
-    let ai_client = try_setup_primary_client(provider, primary_provider, model_name, ai_config)?;
+    let ai_client =
+        try_setup_primary_client(provider, primary_provider, model_name, ai_config, task)?;
 
     match operation(ai_client).await {
         Ok(response) => return Ok(response),
@@ -242,7 +261,15 @@ where
         }
     }
 
-    execute_fallback_chain(provider, primary_provider, model_name, ai_config, operation).await
+    execute_fallback_chain(
+        provider,
+        primary_provider,
+        model_name,
+        ai_config,
+        task,
+        operation,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -364,6 +391,7 @@ mod fallback_tests {
             "openrouter",
             "test-model",
             &config,
+            TaskType::Triage,
             operation,
         )
         .await;
@@ -398,6 +426,7 @@ mod fallback_tests {
             "openrouter",
             "test-model",
             &config,
+            TaskType::Triage,
             operation,
         )
         .await;
@@ -444,6 +473,7 @@ mod fallback_tests {
             "openrouter",
             "test-model",
             &config,
+            TaskType::Review,
             operation,
         )
         .await;

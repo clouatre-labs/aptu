@@ -8,10 +8,12 @@
 //! - `send_and_parse`: retry loop around `try_request` with circuit breaker
 
 use anyhow::{Context, Result};
+use serde_json::Value;
 use tracing::{debug, instrument};
 
 use super::parse::{parse_ai_json, redact_api_error_body};
 use crate::ai::provider::AiProvider;
+use crate::ai::registry::consts::PROVIDER_ZAI;
 use crate::ai::types::{ChatCompletionRequest, ChatCompletionResponse};
 use crate::error::AptuError;
 use crate::history::AiStats;
@@ -19,6 +21,25 @@ use crate::retry::{extract_retry_after, is_retryable_anyhow};
 
 /// Conservative provider-agnostic ceiling for escalated `max_tokens`.
 const MAX_ESCALATED_MAX_TOKENS: u32 = 16384;
+
+fn is_zai_insufficient_balance(error_body: &str) -> bool {
+    if error_body
+        .to_ascii_lowercase()
+        .contains("insufficient balance")
+    {
+        return true;
+    }
+    serde_json::from_str::<Value>(error_body)
+        .ok()
+        .and_then(|v| {
+            let code = v
+                .get("error")
+                .and_then(|e| e.get("code"))
+                .or_else(|| v.get("code"));
+            code.map(|c| c == "1113" || c.as_i64() == Some(1113))
+        })
+        .unwrap_or(false)
+}
 
 fn map_http_error(
     status: u16,
@@ -38,6 +59,15 @@ fn map_http_error(
         429 => {
             let retry_after_val = retry_after.unwrap_or(0);
             debug!(retry_after = retry_after_val, "Parsed Retry-After header");
+            if provider_name == PROVIDER_ZAI && is_zai_insufficient_balance(error_body) {
+                return Err(AptuError::AI {
+                    message: "Z.AI coding plan keys are not valid for the standard API endpoint; \
+                        use a pay-as-you-go key or a different fallback provider"
+                        .to_string(),
+                    status: Some(429),
+                    provider: provider_name.to_string(),
+                });
+            }
             Err(AptuError::RateLimited {
                 provider: provider_name.to_string(),
                 retry_after: retry_after_val,
@@ -121,10 +151,14 @@ pub(super) async fn send_request_inner(
     }
 
     // Parse response
-    let completion: ChatCompletionResponse = response
-        .json()
-        .await
-        .context(format!("Failed to parse {} API response", provider.name()))?;
+    let completion: ChatCompletionResponse = response.json().await.map_err(|err| {
+        if err.is_timeout() {
+            anyhow::Error::new(err).context(format!("AI request to {} timed out", provider.name()))
+        } else {
+            anyhow::Error::new(err)
+                .context(format!("Failed to parse {} API response", provider.name()))
+        }
+    })?;
 
     Ok(completion)
 }
@@ -424,6 +458,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_map_http_error_zai_1113_insufficient_balance() {
+        let body = r#"{"error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}"#;
+        let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("coding plan keys are not valid"));
+        assert!(msg.contains("pay-as-you-go"));
+        assert!(!is_retryable_anyhow(&err.into()));
+    }
+
+    #[test]
+    fn test_map_http_error_zai_1113_numeric_code() {
+        let body =
+            r#"{"error":{"code":1113,"message":"Insufficient Balance or no resource package."}}"#;
+        let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("coding plan keys are not valid"));
+        assert!(msg.contains("pay-as-you-go"));
+    }
+
+    #[test]
+    fn test_map_http_error_zai_1113_top_level_numeric_code() {
+        let body = r#"{"code":1113,"message":"insufficient balance"}"#;
+        let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
+        assert!(err.to_string().contains("coding plan keys are not valid"));
+        assert!(!is_retryable_anyhow(&err.into()));
+    }
+
+    #[test]
+    fn test_map_http_error_zai_other_rate_limit_still_retryable() {
+        let body = r#"{"error":{"code":"1001","message":"rate limited"}}"#;
+        let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("rate limit"));
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     struct CircuitOpenProvider {
         breaker: crate::ai::CircuitBreaker,
@@ -475,6 +544,60 @@ mod tests {
             .downcast_ref::<AptuError>()
             .unwrap_or_else(|| panic!("unexpected error: {err:#}"));
         assert!(matches!(aptu_err, AptuError::CircuitOpen));
+    }
+
+    /// Build a minimal HTTP/1.1 200 response with a JSON body for mock servers.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn mock_http_ok(body: &str) -> String {
+        format!(
+            "HTTP/1.1 200 OK\r\n\
+             Content-Type: application/json\r\n\
+             Content-Length: {}\r\n\
+             Connection: close\r\n\
+             \r\n\
+             {}",
+            body.len(),
+            body
+        )
+    }
+
+    /// Build an [`HttpMockProvider`] with the standard test key.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn mock_provider(
+        client: reqwest::Client,
+        addr: std::net::SocketAddr,
+        max_attempts: u32,
+    ) -> HttpMockProvider {
+        HttpMockProvider {
+            client,
+            key: secrecy::SecretString::from("test-key".to_string()),
+            url: format!("http://{addr}"),
+            max_attempts,
+        }
+    }
+
+    /// Build a client/provider/request tuple for mock-server tests.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn mock_setup(
+        addr: std::net::SocketAddr,
+        max_attempts: u32,
+        timeout_ms: Option<u64>,
+    ) -> (HttpMockProvider, ChatCompletionRequest) {
+        let mut builder = reqwest::Client::builder().pool_max_idle_per_host(0);
+        if let Some(ms) = timeout_ms {
+            builder = builder.timeout(std::time::Duration::from_millis(ms));
+        }
+        let client = builder.build().expect("build client");
+        let provider = mock_provider(client, addr, max_attempts);
+        let request = ChatCompletionRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            max_tokens: None,
+            temperature: None,
+            response_format: None,
+            session_id: None,
+        };
+        (provider, request)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -543,16 +666,7 @@ mod tests {
                 let mut buf = [0u8; 2048];
                 let _ = stream.read(&mut buf).await;
                 let body = r#"{"choices":[{"message":{"role":"assistant","content":"{\"_message\":\"ok\"}"}}]}"#;
-                let response = format!(
-                    "HTTP/1.1 200 OK\r\n\
-                     Content-Type: application/json\r\n\
-                     Content-Length: {}\r\n\
-                     Connection: close\r\n\
-                     \r\n\
-                     {}",
-                    body.len(),
-                    body
-                );
+                let response = mock_http_ok(&body);
                 let _ = stream.write_all(response.as_bytes()).await;
                 let _ = stream.shutdown().await;
             }
@@ -563,12 +677,7 @@ mod tests {
             .build()
             .expect("build client");
 
-        let provider = HttpMockProvider {
-            client,
-            key: secrecy::SecretString::from("test-key".to_string()),
-            url: format!("http://{addr}"),
-            max_attempts: 3,
-        };
+        let provider = mock_provider(client, addr, 3);
 
         let request = ChatCompletionRequest {
             model: "test-model".to_string(),
@@ -749,5 +858,95 @@ mod tests {
         }
         // No second attempt was made after the cap was hit.
         assert_eq!(*seen.lock().expect("lock"), vec![10000]);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_send_and_parse_timeout_yields_timeout_context_and_stays_retryable() {
+        use std::time::Duration;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+
+        tokio::spawn(async move {
+            // Respond with a Content-Length larger than the written body, then
+            // stall, forcing a client timeout during the body read (json()).
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf).await;
+                let body = "hi";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                     Content-Type: application/json\r\n\
+                     Content-Length: 500\r\n\
+                     Connection: close\r\n\
+                     \r\n\
+                     {body}"
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        let (provider, request) = mock_setup(addr, 1, Some(300));
+
+        let err = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
+            &provider, &request,
+        )
+        .await
+        .unwrap_err();
+
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("AI request to test timed out"),
+            "unexpected message: {msg}"
+        );
+        assert!(!msg.contains("Failed to parse"));
+        // Timeout classification must survive the context layer.
+        assert!(
+            is_retryable_anyhow(&err),
+            "timeout error should remain retryable"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_send_and_parse_malformed_json_yields_parse_context() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf).await;
+                let body = "not json at all";
+                let response = mock_http_ok(&body);
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        let (provider, request) = mock_setup(addr, 1, None);
+
+        let err = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
+            &provider, &request,
+        )
+        .await
+        .unwrap_err();
+
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("Failed to parse test API response"),
+            "unexpected message: {msg}"
+        );
+        assert!(!msg.contains("timed out"));
     }
 }

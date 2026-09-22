@@ -174,6 +174,7 @@ pub async fn analyze_issue(
         &provider_name,
         &model_name,
         ai_config,
+        TaskType::Triage,
         |client| {
             let issue = issue_mut.clone();
             async move { client.analyze_issue(&issue).await }
