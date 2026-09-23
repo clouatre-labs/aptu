@@ -18,6 +18,10 @@ This document describes the project direction across three time horizons. Items 
 - **Model-tier routing** (#1416): routes large PRs to a higher-capability model tier automatically based on estimated prompt size
 - **Prompt optimisation** (#1415): minified schemas, examples moved to user turn (~2.6k chars saved per call)
 - **File-based TTL cache eviction** (#1172): `[cache]` config now supports per-field TTL settings (`issue_ttl_minutes`, `repo_ttl_hours`, `file_eviction_days`); stale cache entries are automatically pruned on startup.
+- **Per-task AI timeouts** (#1682): `timeout_seconds` is configurable per task via `[ai.tasks.<task>]`, extending the default request timeout for long-running reviews.
+- **Structured review verdict/severity badges** (#1683, #1685): PR review comments render verdict and severity badges for machine-scannable findings.
+- **Claude Max/Pro/Team OAuth**: authenticate via an existing Claude subscription (`credentials.json` from the `claude` CLI) as an alternative to a dedicated API key.
+- **Prompt caching**: automatic on Gemini and Anthropic; system prompt and repo context are cache-eligible, cutting cost on active repos with no model switch required.
 
 ## Near-Term (next 3-6 months)
 
@@ -27,8 +31,6 @@ These items address known gaps and complete features already partially implement
 - **SARIF v2.2 full compliance**: complete SARIF export for security scan results, including rule metadata and suppression entries
 - **Config validation**: `aptu config validate` reports missing keys and unknown fields on startup
 - **API key memory hygiene**: apply `zeroize` on drop to all secret-typed fields in `aptu-core`; prevents secrets from lingering in freed memory after deallocation (single-dependency hardening)
-- **Claude Max/Pro/Team OAuth**: authenticate via an existing Claude subscription (`credentials.json` from the `claude` CLI) as an alternative to a dedicated API key; eliminates the main onboarding friction point for Anthropic users
-- **Prompt caching**: 10-30% cost reduction on active repos, no model switch required. System prompt (5,000 chars) + AST/call-graph context do not change between runs on the same repo. Cache-read cost is 0.1x input cost on both Gemini and Anthropic.
 
 ## Medium-Term (6-18 months)
 
@@ -67,36 +69,8 @@ The following are explicitly out of scope for the foreseeable future:
 - Automatic merge or code modification; Aptu is advisory only
 - Daemon, persistent web dashboard, or TUI; Aptu is a CLI and library, not a server
 
-## Patterns Adopted from aptu-coder
-
-`~/git/clouatre-labs/aptu-coder` was audited for transferable patterns (May 2026). Selected adoptions:
-
-- **Channel-based JSONL observability** (`metrics.rs`): fire metric events into unbounded channel at return; background writer appends to JSONL. Zero blocking on hot path. Applied to the JSONL token-usage artifact (P1, #1225).
-- **Path-heuristic relevance filtering** (`test_detection.rs`): skip or deprioritize files by path pattern without parsing. Applied to the docs-only / dependency-bump relevance gate (P1, #1227) and future test-file deprioritization in review.
-- **Output-size enforcement** (`output_size` test, `SIZE_LIMIT` constant): enforce token budget at test time, not only at runtime. Worth adopting in `provider.rs` tests.
-- **Graceful degradation via `lock_or_recover`** (`cache.rs`): on poisoned mutex, clear and continue rather than panic. Applicable to aptu's disk cache layer.
-
-Patterns audited and not adopted:
-
-- Summary-first cursor-paginated output: aptu is a CLI/Action, not an MCP server; streaming pagination does not apply to single-run AI calls.
-- Per-language AST extractors: aptu already has its own AST context pipeline in `provider.rs`.
-
 ## Removed from Roadmap
 
 - **iOS App**: not aligned with GitHub Actions / App focus.
 - **Gamification / Leaderboards**: deferred; requires platform and user base first.
 - **MCP Server** (`aptu-mcp`): removed (see #1232).
-
-## Issue Index
-
-| # | Title | P |
-|---|---|---|
-| #1222 | Fix PR file pagination (>30 files silently dropped) | P0 |
-| #1223 | Detect and recover from GitHub-truncated patches | P0 |
-| #1224 | Add explicit model guidance on truncated content | P0 |
-| #1225 | JSONL token-usage artifact + GITHUB_STEP_SUMMARY | P1 |
-| #1226 | Add cache_read_tokens / cache_write_tokens to UsageInfo | P1 |
-| #1227 | Relevance gate for docs-only / dep-bump PRs | P1 |
-| #1228 | Read AGENTS.md and .github/instructions/pr-review.md | P1 |
-| #1230 | Prompt caching (Gemini / Anthropic) | P2 |
-| #94 | GitHub App | P94 |

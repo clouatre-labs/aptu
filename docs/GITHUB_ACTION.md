@@ -440,32 +440,3 @@ To scan only changed files, pass a diff file via `scan-security-diff` instead:
 
 The scan step outputs SARIF and is non-blocking. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md) for the workflow example and CI self-audit gate pattern.
 
-## Migration (v2 action contract)
-
-Commit 1fe3853 pruned dead and unused inputs and trimmed the outputs contract. No kept input changed semantics, and consumer invocations (including the aptu-github-app) are unaffected. If you set any input below, delete it from your workflow.
-
-### Privacy-sensitive removals
-
-The `openrouter-data-collection` and `openrouter-zdr` inputs (and their environment-variable mappings) were removed because no consumer set them. With these mappings gone, OpenRouter requests now always use the aptu-core config defaults:
-
-- `openrouter_data_collection`: `"deny"` (prompt data is not used for training)
-- `openrouter_zdr`: `true` (Zero Data Retention required)
-
-These are stricter-than-API-default privacy settings and are the new effective behavior for all OpenRouter calls. To override them, set the values in `config.toml` (see [Configuration Fields](#configuration-fields)); the action no longer accepts them as inputs.
-
-### Removed inputs
-
-`command`, `subcommand`, `min-budget-for-call-graph`, `max-chars-per-file`, `max-diff-chars`, `max-patch-chars-per-file`, `max-instructions-chars`, `max-dep-packages`, `max-dep-release-chars`, `max-diff-bytes`, `pr-queue`, `scan-exclude`, `openrouter-data-collection`, `openrouter-zdr`
-
-Self-hosted consumers who previously tuned size budgets via these inputs should move those values into `config.toml`; the removed empty-string env shadowing that could override config defaults is gone.
-
-### Fallback config seeding
-
-When `fallback-provider` or `fallback-model` is set, the action only writes `~/.config/aptu/config.toml` if the file does not already exist. User-managed configuration always wins; the action never overwrites an existing `config.toml`.
-
-### Removed outputs
-
-`cache-hit-ratio`, `cost-usd`, `duration-ms`, `effective-token-units`, `input-tokens`, `output-tokens`
-
-Token usage and cost metrics are still rendered to the job step summary; use `APTU_METRICS_FILE` if you need machine-readable metrics. The `pr-review-outcome` output is unchanged.
-

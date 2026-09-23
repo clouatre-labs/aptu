@@ -8,7 +8,7 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 
 | File | Trigger | Purpose | Rationale |
 |------|---------|---------|-----------|
-| `.github/workflows/ci.yml` | push/PR (src, tests, workflows) | Build, test, lint, security scan | Fast feedback on every change; path filters skip docs-only pushes |
+| `.github/workflows/ci.yml` | push/PR (src, tests, workflows) | Build, test, lint, security scan, and enforce the jscpd duplicate-code ratchet (new clones are gated against the checked-in baseline) | Fast feedback on every change; path filters skip docs-only pushes |
 | `.github/workflows/release.yml` | push `v*.*.*` tag, workflow_dispatch | Build release binaries, attest provenance, publish to GitHub Releases, Homebrew, and crates.io | Single pipeline owns the full release lifecycle |
 | `.github/workflows/build-and-attest.yml` | workflow_call (from release.yml) | Build release binaries and attest provenance | SLSA Level 3 provenance attestation; reusable workflow isolation satisfies SLSA v1.0 Build Level 3 |
 | `.github/workflows/reuse.yml` | push/PR | REUSE SPDX compliance check | Apache-2.0 license attribution is machine-verifiable |
