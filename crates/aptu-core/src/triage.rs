@@ -9,6 +9,7 @@ use crate::ai::types::{
     CommentSeverity, IssueDetails, PrFile, PrReviewComment, PrReviewResponse, TriageResponse,
 };
 use crate::utils::is_priority_label;
+use sha2::{Digest, Sha256};
 use std::fmt::Write;
 use tracing::debug;
 
@@ -293,6 +294,68 @@ pub fn check_already_triaged(issue: &IssueDetails) -> TriageStatus {
 /// installation tokens cannot use `current().user()`).
 pub const REVIEW_COMMENT_MARKER: &str = "<!-- APTU_REVIEW_COMMENT -->";
 
+/// Closing suffix of every HTML comment marker embedded in rendered bodies.
+/// Shared by hash extraction and stripping so marker parsing stays consistent.
+const HTML_COMMENT_END: &str = "-->";
+
+/// Prefix of the HTML comment that carries the SHA-256 content hash of the
+/// review comment (`<!-- APTU_COMMENT_HASH:<hex> -->`). Embedded immediately
+/// after [`REVIEW_COMMENT_MARKER`] so dedup can compare semantic content
+/// instead of rendered bytes; the hash covers only the comment text, severity,
+/// and suggested code, never the rendering format.
+pub const APTU_COMMENT_HASH_PREFIX: &str = "<!-- APTU_COMMENT_HASH:";
+
+/// Computes the SHA-256 content hash (lowercase hex) over the semantic content
+/// of a review comment: text, severity, and suggested code. Fields are encoded
+/// with an 8-byte big-endian length prefix each so adversarial content (e.g.
+/// embedded NUL bytes) cannot shift field boundaries or collide two distinct
+/// semantic values. `suggested_code` additionally carries a presence
+/// discriminant byte (0 for `None`, 1 for `Some`) so `None` and `Some("")` —
+/// semantically different values — hash differently. Rendered format is
+/// intentionally excluded so renderer-only changes do not trigger updates.
+#[must_use]
+pub fn comment_content_hash(comment: &PrReviewComment) -> String {
+    fn hash_field(hasher: &mut Sha256, field: &str) {
+        let bytes = field.as_bytes();
+        hasher.update(u64::try_from(bytes.len()).unwrap_or(u64::MAX).to_be_bytes());
+        hasher.update(bytes);
+    }
+    let mut hasher = Sha256::new();
+    hash_field(&mut hasher, &comment.comment);
+    hash_field(&mut hasher, &format!("{:?}", comment.severity));
+    match &comment.suggested_code {
+        None => hasher.update([0_u8]),
+        Some(code) => {
+            hasher.update([1_u8]);
+            hash_field(&mut hasher, code);
+        }
+    }
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        let _ = write!(hex, "{byte:02x}");
+    }
+    hex
+}
+
+/// Extracts the stored content hash from a previously rendered comment body.
+/// The marker is searched directly after [`REVIEW_COMMENT_MARKER`] at the body
+/// start so HTML-comment-like text inside suggestion blocks cannot be
+/// misparsed. Returns `None` for legacy bodies posted before the hash marker
+/// existed.
+#[must_use]
+pub fn extract_comment_hash(body: &str) -> Option<String> {
+    let rest = body.trim_start().strip_prefix(REVIEW_COMMENT_MARKER)?;
+    let rest = rest.trim_start().strip_prefix(APTU_COMMENT_HASH_PREFIX)?;
+    let end = rest.find(HTML_COMMENT_END)?;
+    let hash = rest[..end].trim();
+    if hash.is_empty() {
+        None
+    } else {
+        Some(hash.to_string())
+    }
+}
+
 /// Marker prefix embedded in the PR review summary comment so it can be found
 /// and deduplicated on later runs. The full marker carries the head commit SHA:
 /// `<!-- APTU_REVIEW:<sha> -->`.
@@ -332,6 +395,23 @@ pub fn parse_aptu_summary_marker(body: &str) -> Option<AptuSummaryMarker> {
     }
 }
 
+/// Removes the content-hash marker line from a rendered body, producing the
+/// legacy-style rendering used to compare against bodies posted before the
+/// hash marker existed. Bodies without the hash marker are returned unchanged.
+#[must_use]
+pub fn strip_comment_hash(body: &str) -> String {
+    let Some(start) = body.find(APTU_COMMENT_HASH_PREFIX) else {
+        return body.to_string();
+    };
+    let Some(rel_end) = body[start..].find(HTML_COMMENT_END) else {
+        return body.to_string();
+    };
+    let mut out = String::with_capacity(body.len());
+    out.push_str(&body[..start]);
+    out.push_str(body[start + rel_end + 3..].trim_start_matches('\n'));
+    out
+}
+
 /// Formats an inline PR review comment body.
 ///
 /// Prepends a severity badge derived from the comment severity. When the
@@ -341,6 +421,9 @@ pub fn parse_aptu_summary_marker(body: &str) -> Option<AptuSummaryMarker> {
 pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
     let mut body = String::from(REVIEW_COMMENT_MARKER);
     body.push('\n');
+    body.push_str(APTU_COMMENT_HASH_PREFIX);
+    body.push_str(&comment_content_hash(comment));
+    body.push_str(" -->\n");
     body.push_str(severity_badge(&comment.severity));
     body.push(' ');
     body.push_str(&comment.comment);
@@ -1019,5 +1102,54 @@ mod tests {
             markdown.contains("Decompose into sub-issues"),
             "markdown must contain recommendation"
         );
+    }
+
+    fn hash_comment(comment_text: &str, severity: CommentSeverity, code: Option<&str>) -> String {
+        comment_content_hash(&PrReviewComment {
+            file: "f.rs".to_string(),
+            line: Some(1),
+            comment: comment_text.to_string(),
+            severity,
+            suggested_code: code.map(str::to_string),
+        })
+    }
+
+    #[test]
+    fn test_comment_content_hash_nul_bytes_do_not_collapse() {
+        // A comment text containing NUL bytes must not be confusable with a
+        // different split of (comment, severity, suggested_code).
+        let with_nul = hash_comment("bad\0Warning\0code", CommentSeverity::Issue, None);
+        let split = hash_comment("bad", CommentSeverity::Warning, Some("code"));
+        assert_ne!(with_nul, split);
+        // Empty suggested_code vs. a comment ending in a NUL remain distinct.
+        let trailing_nul = hash_comment("bad\0", CommentSeverity::Issue, None);
+        let with_empty_code = hash_comment("bad", CommentSeverity::Issue, Some(""));
+        assert_ne!(trailing_nul, with_empty_code);
+    }
+
+    #[test]
+    fn test_comment_content_hash_adversarial_boundary_shift() {
+        // Comment plus a code-looking tail must differ from comment with that
+        // tail moved into suggested_code (old 0x00 delimiter would collide).
+        let merged = hash_comment("msg\0let x = 1;", CommentSeverity::Suggestion, None);
+        let shifted = hash_comment("msg", CommentSeverity::Suggestion, Some("let x = 1;"));
+        assert_ne!(merged, shifted);
+    }
+
+    #[test]
+    fn test_comment_content_hash_none_vs_empty_suggested_code() {
+        // Presence discriminant: None and Some("") are semantically different
+        // and must not collapse to the same hash.
+        let none = hash_comment("msg", CommentSeverity::Issue, None);
+        let empty = hash_comment("msg", CommentSeverity::Issue, Some(""));
+        assert_ne!(none, empty);
+    }
+
+    #[test]
+    fn test_comment_content_hash_is_deterministic() {
+        let a = hash_comment("msg", CommentSeverity::Issue, Some("let x = 1;"));
+        let b = hash_comment("msg", CommentSeverity::Issue, Some("let x = 1;"));
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64);
     }
 }
