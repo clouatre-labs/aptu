@@ -115,7 +115,8 @@ pub async fn post(
     // non-summary content so a fresh or updated post never shows two summaries.
     let summary_body =
         render_pr_review_markdown(&analyze_result.review, &analyze_result.pr_details.head_sha);
-    let review_body = render_pr_review_review_body(&analyze_result.review);
+    let review_body =
+        render_pr_review_review_body(&analyze_result.review, &analyze_result.pr_details.files);
 
     if dry_run {
         debug!("Dry-run mode: skipping post");
