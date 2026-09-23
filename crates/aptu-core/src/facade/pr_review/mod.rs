@@ -365,13 +365,105 @@ mod tests {
     }
 
     #[test]
+    fn test_comment_content_hash_is_format_insensitive() {
+        // Same semantic content must produce an identical hex hash regardless
+        // of rendering format, and the rendered body must carry that hash.
+        let comment = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "Same feedback".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        };
+        let rendered = crate::triage::render_pr_review_comment_body(&comment);
+        assert_eq!(
+            crate::triage::extract_comment_hash(&rendered).as_deref(),
+            Some(crate::triage::comment_content_hash(&comment)).as_deref(),
+            "rendered body must carry the content hash of the comment"
+        );
+        assert_eq!(
+            crate::triage::comment_content_hash(&comment),
+            crate::triage::comment_content_hash(&comment),
+            "identical content must hash identically"
+        );
+    }
+
+    #[test]
+    fn test_dedup_legacy_body_without_hash_falls_back_to_equality() {
+        // Edge case: a legacy body posted before the hash marker has no stored
+        // hash; dedup must fall back to full body equality.
+        let rendered = crate::triage::render_pr_review_comment_body(&PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "Legacy feedback".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        });
+        let legacy_body = rendered
+            .strip_prefix(crate::triage::REVIEW_COMMENT_MARKER)
+            .and_then(|rest| {
+                let hash_end = rest.find("-->")?;
+                Some(format!(
+                    "{}{}",
+                    crate::triage::REVIEW_COMMENT_MARKER,
+                    &rest[hash_end + 3..]
+                ))
+            })
+            .expect("rendered body must contain hash marker");
+        assert!(crate::triage::extract_comment_hash(&legacy_body).is_none());
+
+        let existing = vec![PrReviewCommentDetails {
+            id: 11,
+            author: "aptu[bot]".to_string(),
+            is_bot: true,
+            body: legacy_body,
+            path: "src/lib.rs".to_string(),
+            line: Some(10),
+            side: Some(DEFAULT_COMMENT_SIDE.to_string()),
+            commit_id: "abc123".to_string(),
+            original_line: None,
+        }];
+        let dedup = build_dedup_map(&existing, Some(TEST_BOT_LOGIN));
+        let incoming = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "Legacy feedback".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        };
+        assert!(
+            matches!(dedup_outcome(&dedup, &incoming), DedupOutcome::Skip),
+            "legacy body equal to the rendering must Skip via body equality"
+        );
+
+        let changed = PrReviewComment {
+            comment: "Changed feedback".to_string(),
+            ..incoming
+        };
+        match dedup_outcome(&dedup, &changed) {
+            DedupOutcome::Update { comment_id, .. } => {
+                assert_eq!(comment_id, 11);
+            }
+            other => panic!("Expected Update outcome, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn test_dedup_updates_differing_body() {
-        // Arrange: existing comment with body "Existing feedback" on (src/lib.rs, 10, RIGHT, abc123)
+        // Arrange: existing comment carries the hash of different content but
+        // the same rendered format on (src/lib.rs, 10, RIGHT, abc123)
+        let old_comment = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "Existing feedback".to_string(),
+            severity: CommentSeverity::Suggestion,
+            suggested_code: None,
+        };
         let existing = vec![PrReviewCommentDetails {
             id: 42,
             author: "aptu[bot]".to_string(),
             is_bot: true,
-            body: concat!("<!-- APTU_REVIEW_COMMENT -->\n", "Existing feedback").to_string(),
+            body: crate::triage::render_pr_review_comment_body(&old_comment),
             path: "src/lib.rs".to_string(),
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
@@ -391,7 +483,7 @@ mod tests {
         // Act: call dedup_outcome to determine the handling
         let outcome = dedup_outcome(&dedup, &incoming);
 
-        // Assert: key present with differing body -> Update with existing comment id
+        // Assert: differing content hash -> Update with existing comment id
         match outcome {
             DedupOutcome::Update {
                 comment_id,
@@ -409,15 +501,24 @@ mod tests {
 
     #[test]
     fn test_dedup_skips_identical_body() {
-        // Arrange: existing comment with body "Same feedback" (with marker) on
-        // (src/lib.rs, 10, RIGHT, abc123)
+        // Arrange: existing comment whose stored hash matches the incoming
+        // content even though the rendering format differs -- a renderer-only
+        // change must not trigger an update.
+        let comment = PrReviewComment {
+            file: "src/lib.rs".to_string(),
+            line: Some(10),
+            comment: "Same feedback".to_string(),
+            severity: CommentSeverity::Info,
+            suggested_code: None,
+        };
         let existing = vec![PrReviewCommentDetails {
             id: 7,
             author: "aptu[bot]".to_string(),
             is_bot: true,
             body: format!(
-                "{}\n🔵 Info: Same feedback",
-                crate::triage::REVIEW_COMMENT_MARKER
+                "{}\n<!-- APTU_COMMENT_HASH:{} -->\nOLD FORMAT: Same feedback",
+                crate::triage::REVIEW_COMMENT_MARKER,
+                crate::triage::comment_content_hash(&comment)
             ),
             path: "src/lib.rs".to_string(),
             line: Some(10),
@@ -427,19 +528,13 @@ mod tests {
         }];
         let dedup = build_dedup_map(&existing, Some(TEST_BOT_LOGIN));
 
-        let incoming = PrReviewComment {
-            file: "src/lib.rs".to_string(),
-            line: Some(10),
-            comment: "Same feedback".to_string(),
-            severity: CommentSeverity::Info,
-            suggested_code: None,
-        };
+        let incoming = comment;
 
         // Act: call dedup_outcome to determine the handling
         let outcome = dedup_outcome(&dedup, &incoming);
 
-        // Existing comment body must match the freshly rendered body (with
-        // severity badge) for the Skip outcome.
+        // Stored hash matches the incoming content hash -> Skip despite the
+        // format difference between stored and freshly rendered bodies.
         assert!(
             matches!(outcome, DedupOutcome::Skip),
             "Expected Skip outcome, got {outcome:?}"

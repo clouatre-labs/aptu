@@ -9,6 +9,7 @@ use crate::ai::types::{
     CommentSeverity, IssueDetails, PrFile, PrReviewComment, PrReviewResponse, TriageResponse,
 };
 use crate::utils::is_priority_label;
+use sha2::{Digest, Sha256};
 use std::fmt::Write;
 use tracing::debug;
 
@@ -293,6 +294,50 @@ pub fn check_already_triaged(issue: &IssueDetails) -> TriageStatus {
 /// installation tokens cannot use `current().user()`).
 pub const REVIEW_COMMENT_MARKER: &str = "<!-- APTU_REVIEW_COMMENT -->";
 
+/// Prefix of the HTML comment that carries the SHA-256 content hash of the
+/// review comment (`<!-- APTU_COMMENT_HASH:<hex> -->`). Embedded immediately
+/// after [`REVIEW_COMMENT_MARKER`] so dedup can compare semantic content
+/// instead of rendered bytes; the hash covers only the comment text, severity,
+/// and suggested code, never the rendering format.
+pub const APTU_COMMENT_HASH_PREFIX: &str = "<!-- APTU_COMMENT_HASH:";
+
+/// Computes the SHA-256 content hash (lowercase hex) over the semantic content
+/// of a review comment: text, severity, and suggested code. Rendered format is
+/// intentionally excluded so renderer-only changes do not trigger updates.
+#[must_use]
+pub fn comment_content_hash(comment: &PrReviewComment) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(comment.comment.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(format!("{:?}", comment.severity).as_bytes());
+    hasher.update([0u8]);
+    hasher.update(comment.suggested_code.as_deref().unwrap_or("").as_bytes());
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        let _ = write!(hex, "{byte:02x}");
+    }
+    hex
+}
+
+/// Extracts the stored content hash from a previously rendered comment body.
+/// The marker is searched directly after [`REVIEW_COMMENT_MARKER`] at the body
+/// start so HTML-comment-like text inside suggestion blocks cannot be
+/// misparsed. Returns `None` for legacy bodies posted before the hash marker
+/// existed.
+#[must_use]
+pub fn extract_comment_hash(body: &str) -> Option<String> {
+    let rest = body.trim_start().strip_prefix(REVIEW_COMMENT_MARKER)?;
+    let rest = rest.trim_start().strip_prefix(APTU_COMMENT_HASH_PREFIX)?;
+    let end = rest.find("-->")?;
+    let hash = rest[..end].trim();
+    if hash.is_empty() {
+        None
+    } else {
+        Some(hash.to_string())
+    }
+}
+
 /// Marker prefix embedded in the PR review summary comment so it can be found
 /// and deduplicated on later runs. The full marker carries the head commit SHA:
 /// `<!-- APTU_REVIEW:<sha> -->`.
@@ -332,6 +377,23 @@ pub fn parse_aptu_summary_marker(body: &str) -> Option<AptuSummaryMarker> {
     }
 }
 
+/// Removes the content-hash marker line from a rendered body, producing the
+/// legacy-style rendering used to compare against bodies posted before the
+/// hash marker existed. Bodies without the hash marker are returned unchanged.
+#[must_use]
+pub fn strip_comment_hash(body: &str) -> String {
+    let Some(start) = body.find(APTU_COMMENT_HASH_PREFIX) else {
+        return body.to_string();
+    };
+    let Some(rel_end) = body[start..].find("-->") else {
+        return body.to_string();
+    };
+    let mut out = String::with_capacity(body.len());
+    out.push_str(&body[..start]);
+    out.push_str(body[start + rel_end + 3..].trim_start_matches('\n'));
+    out
+}
+
 /// Formats an inline PR review comment body.
 ///
 /// Prepends a severity badge derived from the comment severity. When the
@@ -341,6 +403,9 @@ pub fn parse_aptu_summary_marker(body: &str) -> Option<AptuSummaryMarker> {
 pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
     let mut body = String::from(REVIEW_COMMENT_MARKER);
     body.push('\n');
+    body.push_str(APTU_COMMENT_HASH_PREFIX);
+    body.push_str(&comment_content_hash(comment));
+    body.push_str(" -->\n");
     body.push_str(severity_badge(&comment.severity));
     body.push(' ');
     body.push_str(&comment.comment);

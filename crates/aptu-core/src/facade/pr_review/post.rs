@@ -77,6 +77,15 @@ pub(crate) fn build_dedup_map(
 /// inline duplicates). The map key is `(path, line, side)` -- `commit_id` is
 /// intentionally excluded so the dedup survives re-pushes (existing comments retain
 /// their original SHA; only the key shape must be stable across pushes).
+///
+/// Comparison is keyed on the stored content hash (see
+/// [`crate::triage::comment_content_hash`]) embedded in the rendered body:
+/// identical semantic content yields `Skip` even when the rendering format
+/// changed, and changed content yields `Update`. Legacy bodies posted before
+/// the hash marker existed have no stored hash; for those the dedup falls back
+/// to full rendered-body equality for one transition -- the update rewrites the
+/// body with the hash marker, so the fallback self-heals after at most one
+/// update.
 pub(crate) fn dedup_outcome(
     dedup: &std::collections::HashMap<(String, u64, String), (u64, String)>,
     comment: &PrReviewComment,
@@ -89,7 +98,19 @@ pub(crate) fn dedup_outcome(
         return DedupOutcome::Post;
     };
     let rendered = crate::triage::render_pr_review_comment_body(comment);
-    if rendered == *existing_body {
+    let incoming_hash = crate::triage::comment_content_hash(comment);
+    let matches = match crate::triage::extract_comment_hash(existing_body) {
+        Some(stored_hash) => stored_hash == incoming_hash,
+        None => {
+            // Legacy body: compare against the legacy-style rendering (hash
+            // line stripped) so an unchanged legacy comment is skipped without
+            // a migration update; an update rewrites the body with the hash
+            // marker, so the fallback self-heals after at most one update.
+            rendered == *existing_body
+                || crate::triage::strip_comment_hash(&rendered) == *existing_body
+        }
+    };
+    if matches {
         DedupOutcome::Skip
     } else {
         DedupOutcome::Update {
