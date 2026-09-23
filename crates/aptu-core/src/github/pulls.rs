@@ -1239,7 +1239,7 @@ mod tests {
         assert_eq!(
             inline[0]["body"],
             format!(
-                "{}\n💡 Consider using a match here.",
+                "{}\n💡 Suggestion: Consider using a match here.",
                 crate::triage::REVIEW_COMMENT_MARKER
             )
         );

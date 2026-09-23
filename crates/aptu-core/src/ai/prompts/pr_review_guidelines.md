@@ -10,7 +10,7 @@ Focus: Correctness, Security, Performance, Maintainability, Testing. For prose-o
 
 ## Summary Quality
 
-Keep the summary concise (2-4 sentences): what changed, why it matters, and the one thing a reviewer should verify. Be concrete (e.g. "the retry helper centralizes backoff logic" rather than "good design").
+Keep the summary concise (2-4 sentences): what changed, why it matters, and the one thing a reviewer should verify. Be concrete (e.g. "the retry helper centralizes backoff logic" rather than "good design"). When the diff makes it clear, name the PR's impact area (performance, security, feature, refactoring, docs) and flag breaking changes explicitly.
 
 ## Dependency Release Notes
 

@@ -415,7 +415,10 @@ mod tests {
             id: 7,
             author: "aptu[bot]".to_string(),
             is_bot: true,
-            body: format!("{}\n🔵 Same feedback", crate::triage::REVIEW_COMMENT_MARKER),
+            body: format!(
+                "{}\n🔵 Info: Same feedback",
+                crate::triage::REVIEW_COMMENT_MARKER
+            ),
             path: "src/lib.rs".to_string(),
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),

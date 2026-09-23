@@ -354,12 +354,15 @@ pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
     body
 }
 
+/// Emoji badge plus a text label for each severity. The text label keeps the
+/// severity readable in screen readers, plain-text email, and non-rendered
+/// views where emoji color alone carries no meaning.
 fn severity_badge(severity: &CommentSeverity) -> &'static str {
     match severity {
-        CommentSeverity::Issue => "🔴",
-        CommentSeverity::Warning => "🟠",
-        CommentSeverity::Suggestion => "💡",
-        CommentSeverity::Info => "🔵",
+        CommentSeverity::Issue => "🔴 Issue:",
+        CommentSeverity::Warning => "🟠 Warning:",
+        CommentSeverity::Suggestion => "💡 Suggestion:",
+        CommentSeverity::Info => "🔵 Info:",
     }
 }
 
@@ -403,9 +406,6 @@ pub fn render_pr_review_markdown(review: &PrReviewResponse, head_sha: &str) -> S
     body
 }
 
-/// Renders the structured concerns/strengths/suggestions sections shared by
-/// the summary comment and the review body. Concerns are always rendered;
-/// strengths and suggestions are secondary and collapsed.
 /// Renders the PR review body for posting to GitHub.
 ///
 /// The review body carries only non-summary content (the verdict badge and
@@ -424,6 +424,11 @@ pub fn render_pr_review_review_body(review: &PrReviewResponse) -> String {
     body
 }
 
+/// Renders the structured concerns/strengths/suggestions sections shared by
+/// the summary comment and the review body, in a fixed order (Concerns,
+/// Strengths, Suggestions) so both surfaces stay predictable. Concerns are
+/// always rendered as a heading; strengths and suggestions are secondary and
+/// collapsed inside `<details>` blocks. Empty sections are omitted entirely.
 fn render_structured_sections(body: &mut String, review: &PrReviewResponse) {
     if !review.concerns.is_empty() {
         body.push_str("\n### Concerns\n\n");
@@ -815,7 +820,7 @@ mod tests {
             suggested_code: Some("    let x = foo()?;\n".to_string()),
         };
         let body = render_pr_review_comment_body(&comment);
-        assert!(body.contains("🟠 Use ? instead of unwrap."));
+        assert!(body.contains("🟠 Warning: Use ? instead of unwrap."));
         assert!(body.contains("```suggestion"));
         assert!(body.contains("let x = foo()?;"));
     }
@@ -830,7 +835,7 @@ mod tests {
             suggested_code: None,
         };
         let body = render_pr_review_comment_body(&comment);
-        assert!(body.contains("🔵 Consider refactoring this module."));
+        assert!(body.contains("🔵 Info: Consider refactoring this module."));
         assert!(!body.contains("```suggestion"));
     }
 
