@@ -115,7 +115,6 @@ mod tests {
                 suggestions: Vec::new(),
                 disclaimer: None,
             },
-            0,
             "newsha",
         );
         assert!(fresh_body.contains("<!-- APTU_REVIEW:newsha -->"));
@@ -416,7 +415,10 @@ mod tests {
             id: 7,
             author: "aptu[bot]".to_string(),
             is_bot: true,
-            body: format!("{}\nSame feedback", crate::triage::REVIEW_COMMENT_MARKER),
+            body: format!(
+                "{}\n🔵 Info: Same feedback",
+                crate::triage::REVIEW_COMMENT_MARKER
+            ),
             path: "src/lib.rs".to_string(),
             line: Some(10),
             side: Some(DEFAULT_COMMENT_SIDE.to_string()),
@@ -436,7 +438,8 @@ mod tests {
         // Act: call dedup_outcome to determine the handling
         let outcome = dedup_outcome(&dedup, &incoming);
 
-        // Assert: key present with identical body -> Skip
+        // Existing comment body must match the freshly rendered body (with
+        // severity badge) for the Skip outcome.
         assert!(
             matches!(outcome, DedupOutcome::Skip),
             "Expected Skip outcome, got {outcome:?}"

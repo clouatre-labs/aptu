@@ -8,6 +8,10 @@
 
 Focus: Correctness, Security, Performance, Maintainability, Testing. For prose-only PRs (all changed files are .md, .txt, .rst, or similar), assess only what is observable in the provided content: factual accuracy, front-matter fields present in the diff, and links. Do not infer rendering behavior, schema requirements, or formatting conventions from general knowledge. Skip platform version flagging.
 
+## Summary Quality
+
+Keep the summary concise (2-4 sentences): what changed, why it matters, and the one thing a reviewer should verify. Be concrete (e.g. "the retry helper centralizes backoff logic" rather than "good design"). When the diff makes it clear, name the PR's impact area (performance, security, feature, refactoring, docs) and flag breaking changes explicitly.
+
 ## Dependency Release Notes
 
 When a PR updates dependency versions (in Cargo.toml, package.json, or pyproject.toml), release notes from the upstream GitHub repository are included in a `<dependency_release_notes>` block. Use this information to comment on breaking changes, security fixes, and migration notes. If release notes are unavailable (404, timeout, or non-GitHub upstream), a note field explains the reason. Always acknowledge dependency updates in your review, especially if they introduce breaking changes or security patches.
