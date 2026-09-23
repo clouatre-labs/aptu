@@ -129,7 +129,7 @@ Auto-triage new issues with AI using any supported provider.
 
 ```yaml
 - name: AI issue triage and PR review
-  uses: clouatre-labs/aptu@83226816caaec41ee93af5e1ca7c974b76de35ba  # v0.10.10
+  uses: clouatre-labs/aptu@ce21cb7277564d95108cdca60c2f4340dcd063e9  # v0.11.0
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
