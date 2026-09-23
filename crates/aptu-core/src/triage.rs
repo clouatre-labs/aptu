@@ -5,7 +5,9 @@
 //! This module provides utilities to check whether an issue has already been triaged,
 //! either through labels or Aptu-generated comments.
 
-use crate::ai::types::{IssueDetails, PrReviewComment, PrReviewResponse, TriageResponse};
+use crate::ai::types::{
+    CommentSeverity, IssueDetails, PrReviewComment, PrReviewResponse, TriageResponse,
+};
 use crate::utils::is_priority_label;
 use std::fmt::Write;
 use tracing::debug;
@@ -332,12 +334,15 @@ pub fn parse_aptu_summary_marker(body: &str) -> Option<AptuSummaryMarker> {
 
 /// Formats an inline PR review comment body.
 ///
-/// When the comment includes `suggested_code`, appends a GitHub suggestion block
+/// Prepends a severity badge derived from the comment severity. When the
+/// comment includes `suggested_code`, appends a GitHub suggestion block
 /// that renders as a one-click "Apply suggestion" button in the PR diff view.
 #[must_use]
 pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
     let mut body = String::from(REVIEW_COMMENT_MARKER);
     body.push('\n');
+    body.push_str(severity_badge(&comment.severity));
+    body.push(' ');
     body.push_str(&comment.comment);
     if let Some(code) = &comment.suggested_code
         && !code.is_empty()
@@ -347,6 +352,30 @@ pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
         body.push_str("\n```");
     }
     body
+}
+
+fn severity_badge(severity: &CommentSeverity) -> &'static str {
+    match severity {
+        CommentSeverity::Issue => "🔴",
+        CommentSeverity::Warning => "🟠",
+        CommentSeverity::Suggestion => "💡",
+        CommentSeverity::Info => "🔵",
+    }
+}
+
+/// Renders one collapsible `<details>` section with a bullet list.
+///
+/// Returns nothing when `items` is empty so empty sections are omitted
+/// entirely from the rendered body.
+fn render_collapsible_section(body: &mut String, title: &str, items: &[String]) {
+    if items.is_empty() {
+        return;
+    }
+    body.push_str(&format!("\n<details>\n<summary>{title}</summary>\n\n"));
+    for item in items {
+        let _ = writeln!(body, "- {item}");
+    }
+    body.push_str("\n</details>\n");
 }
 
 /// Renders the PR review summary comment body for posting to GitHub.
@@ -359,11 +388,7 @@ pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
 /// separately by [`render_pr_review_review_body`] and never contains the
 /// summary.
 #[must_use]
-pub fn render_pr_review_markdown(
-    review: &PrReviewResponse,
-    files_count: usize,
-    head_sha: &str,
-) -> String {
+pub fn render_pr_review_markdown(review: &PrReviewResponse, head_sha: &str) -> String {
     let verdict_badge = verdict_badge(&review.verdict);
 
     let mut body = format!(
@@ -371,46 +396,50 @@ pub fn render_pr_review_markdown(
         REVIEW_SUMMARY_MARKER_PREFIX, head_sha, verdict_badge, review.summary
     );
 
-    // Notable changes bullets: only for larger PRs to give reviewers orientation.
-    if files_count > 5 && !review.concerns.is_empty() {
-        body.push('\n');
-        for c in &review.concerns {
-            let _ = writeln!(body, "- {c}");
-        }
-    }
+    render_structured_sections(&mut body, review);
 
     body.push_str("\n---\n\n<sub>Posted by [aptu](https://github.com/clouatre-labs/aptu)</sub>\n");
 
     body
 }
 
+/// Renders the structured concerns/strengths/suggestions sections shared by
+/// the summary comment and the review body. Concerns are always rendered;
+/// strengths and suggestions are secondary and collapsed.
 /// Renders the PR review body for posting to GitHub.
 ///
 /// The review body carries only non-summary content (the verdict badge and
-/// notable-change bullets); the rendered summary lives solely in the
-/// deduplicated marker issue comment produced by [`render_pr_review_markdown`].
+/// structured concerns/strengths/suggestions sections); the rendered summary
+/// lives solely in the deduplicated marker issue comment produced by
+/// [`render_pr_review_markdown`].
 #[must_use]
-pub fn render_pr_review_review_body(review: &PrReviewResponse, files_count: usize) -> String {
+pub fn render_pr_review_review_body(review: &PrReviewResponse) -> String {
     let verdict_badge = verdict_badge(&review.verdict);
     let mut body = format!("## Aptu Review\n\n{verdict_badge}\n");
 
-    if files_count > 5 && !review.concerns.is_empty() {
-        body.push('\n');
-        for c in &review.concerns {
-            let _ = writeln!(body, "- {c}");
-        }
-    }
+    render_structured_sections(&mut body, review);
 
     body.push_str("\n---\n\n<sub>Posted by [aptu](https://github.com/clouatre-labs/aptu)</sub>\n");
 
     body
+}
+
+fn render_structured_sections(body: &mut String, review: &PrReviewResponse) {
+    if !review.concerns.is_empty() {
+        body.push_str("\n### Concerns\n\n");
+        for c in &review.concerns {
+            let _ = writeln!(body, "- {c}");
+        }
+    }
+    render_collapsible_section(body, "Strengths", &review.strengths);
+    render_collapsible_section(body, "Suggestions", &review.suggestions);
 }
 
 fn verdict_badge(verdict: &str) -> &'static str {
     match verdict {
-        "approve" => "✅ Approve",
+        "approve" => "✅ Approved",
         "request_changes" | "request-changes" => "❌ Request Changes",
-        _ => "💬 Comment",
+        _ => "💬 Comments",
     }
 }
 
@@ -653,11 +682,27 @@ mod tests {
     #[test]
     fn test_render_pr_review_markdown_basic() {
         let review = make_pr_review();
-        let body = render_pr_review_markdown(&review, 0, "abc123");
-        assert!(body.contains("<!-- APTU_REVIEW:abc123 -->"));
-        assert!(body.contains("✅ Approve"));
+        let body = render_pr_review_markdown(&review, "abc123");
+        // Marker is the literal first line.
+        assert!(body.starts_with("<!-- APTU_REVIEW:abc123 -->\n"));
+        assert!(body.contains("✅ Approved"));
         assert!(body.contains("Good PR overall."));
         assert!(body.contains("aptu"));
+        // Structured sections render regardless of files_count.
+        assert!(body.contains("### Concerns"));
+        assert!(body.contains("<details>"));
+        assert!(body.contains("<summary>Strengths</summary>"));
+        assert!(body.contains("- Clean code"));
+        assert!(body.contains("<summary>Suggestions</summary>"));
+        assert!(body.contains("- Add a CHANGELOG entry."));
+        assert!(body.contains("- Missing docs"));
+    }
+
+    #[test]
+    fn test_render_pr_review_markdown_marker_first_line() {
+        let review = make_pr_review();
+        let body = render_pr_review_markdown(&review, "deadbeef");
+        assert_eq!(body.lines().next(), Some("<!-- APTU_REVIEW:deadbeef -->"));
     }
 
     #[test]
@@ -671,36 +716,38 @@ mod tests {
             suggestions: vec![],
             disclaimer: None,
         };
-        let body = render_pr_review_markdown(&review, 3, "abc123");
+        let body = render_pr_review_markdown(&review, "abc123");
         assert!(body.contains("<!-- APTU_REVIEW:abc123 -->"));
-        assert!(!body.contains("### Strengths"));
-        assert!(!body.contains("### Concerns"));
-        assert!(!body.contains("### Inline Comments"));
-        assert!(!body.contains("### Suggestions"));
+        assert!(!body.contains("Strengths"));
+        assert!(!body.contains("Concerns"));
+        assert!(!body.contains("Suggestions"));
+        assert!(!body.contains("<details>"));
     }
 
     #[test]
     fn test_render_pr_review_markdown_verdict_badges() {
         let mut r = make_pr_review();
         r.verdict = "approve".to_string();
-        assert!(render_pr_review_markdown(&r, 0, "s").contains("✅ Approve"));
+        assert!(render_pr_review_markdown(&r, "s").contains("✅ Approved"));
         r.verdict = "request_changes".to_string();
-        assert!(render_pr_review_markdown(&r, 0, "s").contains("❌ Request Changes"));
+        assert!(render_pr_review_markdown(&r, "s").contains("❌ Request Changes"));
         r.verdict = "request-changes".to_string();
-        assert!(render_pr_review_markdown(&r, 0, "s").contains("❌ Request Changes"));
+        assert!(render_pr_review_markdown(&r, "s").contains("❌ Request Changes"));
         r.verdict = "comment".to_string();
-        assert!(render_pr_review_markdown(&r, 0, "s").contains("💬 Comment"));
+        assert!(render_pr_review_markdown(&r, "s").contains("💬 Comments"));
     }
 
     #[test]
     fn test_render_pr_review_review_body_excludes_summary_and_marker() {
         let review = make_pr_review();
-        let body = render_pr_review_review_body(&review, 0);
+        let body = render_pr_review_review_body(&review);
         assert!(!body.contains(REVIEW_SUMMARY_MARKER_PREFIX));
         assert!(!body.contains(&review.summary));
         assert!(body.contains("## Aptu Review"));
+        assert!(body.contains("### Concerns"));
+        assert!(body.contains("<summary>Strengths</summary>"));
         // Summary comment remains the single surface carrying the summary text.
-        let comment = render_pr_review_markdown(&review, 0, "abc123");
+        let comment = render_pr_review_markdown(&review, "abc123");
         assert!(comment.contains(&review.summary));
     }
 
@@ -731,7 +778,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_pr_review_comment_body_plain_text() {
+    fn test_render_pr_review_comment_body_severity_badges() {
         let base = PrReviewComment {
             file: "f.rs".to_string(),
             line: Some(1),
@@ -739,49 +786,23 @@ mod tests {
             severity: CommentSeverity::Issue,
             suggested_code: None,
         };
-        // No admonition badges -- plain prose only
-        let body = render_pr_review_comment_body(&base);
-        assert!(!body.contains("[!CAUTION]"));
-        assert!(!body.contains("[!WARNING]"));
-        assert!(!body.contains("[!TIP]"));
-        assert!(!body.contains("[!NOTE]"));
-        assert!(body.contains("test msg"));
-        // Severity variants all produce plain text
-        let w = PrReviewComment {
-            severity: CommentSeverity::Warning,
-            ..base.clone()
-        };
-        assert!(!render_pr_review_comment_body(&w).contains("[!"));
-        let s = PrReviewComment {
-            severity: CommentSeverity::Suggestion,
-            ..base.clone()
-        };
-        assert!(!render_pr_review_comment_body(&s).contains("[!"));
-        let i = PrReviewComment {
-            severity: CommentSeverity::Info,
-            ..base.clone()
-        };
-        assert!(!render_pr_review_comment_body(&i).contains("[!"));
-    }
-
-    #[test]
-    fn test_render_pr_review_markdown_notable_changes_shown() {
-        let mut review = make_pr_review();
-        review.concerns = vec![
-            "Removes CodeQL without replacement".to_string(),
-            "cargo-nextest not pinned".to_string(),
+        let cases = [
+            (CommentSeverity::Issue, "🔴"),
+            (CommentSeverity::Warning, "🟠"),
+            (CommentSeverity::Suggestion, "💡"),
+            (CommentSeverity::Info, "🔵"),
         ];
-        let body = render_pr_review_markdown(&review, 6, "s");
-        assert!(body.contains("- Removes CodeQL without replacement"));
-        assert!(body.contains("- cargo-nextest not pinned"));
-    }
-
-    #[test]
-    fn test_render_pr_review_markdown_notable_changes_hidden() {
-        let mut review = make_pr_review();
-        review.concerns = vec!["Some concern".to_string()];
-        let body = render_pr_review_markdown(&review, 3, "s");
-        assert!(!body.contains("- Some concern"));
+        for (severity, badge) in cases {
+            let c = PrReviewComment {
+                severity,
+                ..base.clone()
+            };
+            let body = render_pr_review_comment_body(&c);
+            assert!(body.contains(badge), "missing badge {badge}");
+            assert!(body.contains("test msg"));
+            assert!(body.starts_with(REVIEW_COMMENT_MARKER));
+            assert!(!body.contains("[!"));
+        }
     }
 
     #[test]
@@ -794,8 +815,7 @@ mod tests {
             suggested_code: Some("    let x = foo()?;\n".to_string()),
         };
         let body = render_pr_review_comment_body(&comment);
-        assert!(!body.contains("[!"));
-        assert!(body.contains("Use ? instead of unwrap."));
+        assert!(body.contains("🟠 Use ? instead of unwrap."));
         assert!(body.contains("```suggestion"));
         assert!(body.contains("let x = foo()?;"));
     }
@@ -810,7 +830,7 @@ mod tests {
             suggested_code: None,
         };
         let body = render_pr_review_comment_body(&comment);
-        assert!(!body.contains("[!"));
+        assert!(body.contains("🔵 Consider refactoring this module."));
         assert!(!body.contains("```suggestion"));
     }
 
