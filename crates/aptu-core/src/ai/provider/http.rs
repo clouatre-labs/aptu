@@ -666,7 +666,7 @@ mod tests {
                 let mut buf = [0u8; 2048];
                 let _ = stream.read(&mut buf).await;
                 let body = r#"{"choices":[{"message":{"role":"assistant","content":"{\"_message\":\"ok\"}"}}]}"#;
-                let response = mock_http_ok(&body);
+                let response = mock_http_ok(body);
                 let _ = stream.write_all(response.as_bytes()).await;
                 let _ = stream.shutdown().await;
             }
@@ -928,7 +928,7 @@ mod tests {
                 let mut buf = [0u8; 2048];
                 let _ = stream.read(&mut buf).await;
                 let body = "not json at all";
-                let response = mock_http_ok(&body);
+                let response = mock_http_ok(body);
                 let _ = stream.write_all(response.as_bytes()).await;
                 let _ = stream.shutdown().await;
             }

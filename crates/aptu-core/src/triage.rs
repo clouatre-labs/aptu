@@ -6,7 +6,7 @@
 //! either through labels or Aptu-generated comments.
 
 use crate::ai::types::{
-    CommentSeverity, IssueDetails, PrReviewComment, PrReviewResponse, TriageResponse,
+    CommentSeverity, IssueDetails, PrFile, PrReviewComment, PrReviewResponse, TriageResponse,
 };
 use crate::utils::is_priority_label;
 use std::fmt::Write;
@@ -406,18 +406,80 @@ pub fn render_pr_review_markdown(review: &PrReviewResponse, head_sha: &str) -> S
     body
 }
 
+/// Maximum number of rows shown in the per-file walkthrough table before the
+/// remaining files are collapsed into an "and N more" tail line.
+const FILE_WALKTHROUGH_MAX_ROWS: usize = 20;
+
+/// Renders the per-file walkthrough table (File | Diff) for the PR review body.
+///
+/// Rows are sorted by descending churn (additions + deletions) and carry stats
+/// only (`+N −N`); no patches or AI-generated content. Removed and renamed
+/// files render with whatever counts exist (including `+0 −0`). Returns `None`
+/// when `files` is empty so the whole section is omitted.
+/// Escapes a filename so it cannot corrupt the Markdown table structure or
+/// inject rendered content: pipe characters are escaped (`|` -> `\|`),
+/// carriage returns and line feeds are stripped, and backticks are escaped to
+/// prevent inline code spans.
+fn escape_table_cell(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        match c {
+            '\r' | '\n' => {}
+            '\\' => out.push_str("\\\\"),
+            '|' => out.push_str("\\|"),
+            '`' => out.push_str("\\`"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+fn render_file_walkthrough(files: &[PrFile]) -> Option<String> {
+    if files.is_empty() {
+        return None;
+    }
+
+    let mut sorted: Vec<&PrFile> = files.iter().collect();
+    sorted.sort_by_key(|f| std::cmp::Reverse(f.additions.saturating_add(f.deletions)));
+
+    let mut table = String::from("\n### Files Changed\n\n| File | Diff |\n|---|---|\n");
+    for f in sorted.iter().take(FILE_WALKTHROUGH_MAX_ROWS) {
+        let _ = writeln!(
+            table,
+            "| {} | +{} −{} |",
+            escape_table_cell(&f.filename),
+            f.additions,
+            f.deletions
+        );
+    }
+    if sorted.len() > FILE_WALKTHROUGH_MAX_ROWS {
+        let _ = writeln!(
+            table,
+            "| ... and {} more | |",
+            sorted.len() - FILE_WALKTHROUGH_MAX_ROWS
+        );
+    }
+
+    Some(table)
+}
+
 /// Renders the PR review body for posting to GitHub.
 ///
-/// The review body carries only non-summary content (the verdict badge and
-/// structured concerns/strengths/suggestions sections); the rendered summary
-/// lives solely in the deduplicated marker issue comment produced by
+/// The review body carries only non-summary content (the verdict badge,
+/// structured concerns/strengths/suggestions sections, and a per-file
+/// walkthrough table with diff stats only); the rendered summary lives solely
+/// in the deduplicated marker issue comment produced by
 /// [`render_pr_review_markdown`].
 #[must_use]
-pub fn render_pr_review_review_body(review: &PrReviewResponse) -> String {
+pub fn render_pr_review_review_body(review: &PrReviewResponse, files: &[PrFile]) -> String {
     let verdict_badge = verdict_badge(&review.verdict);
     let mut body = format!("## Aptu Review\n\n{verdict_badge}\n");
 
     render_structured_sections(&mut body, review);
+
+    if let Some(table) = render_file_walkthrough(files) {
+        body.push_str(&table);
+    }
 
     body.push_str("\n---\n\n<sub>Posted by [aptu](https://github.com/clouatre-labs/aptu)</sub>\n");
 
@@ -742,18 +804,93 @@ mod tests {
         assert!(render_pr_review_markdown(&r, "s").contains("💬 Comments"));
     }
 
+    fn make_walkthrough_file(filename: &str, additions: u64, deletions: u64) -> PrFile {
+        PrFile {
+            filename: filename.to_string(),
+            status: "modified".to_string(),
+            additions,
+            deletions,
+            patch: None,
+            patch_truncated: false,
+            full_content: None,
+        }
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_sorted_by_churn() {
+        let files = vec![
+            make_walkthrough_file("src/small.rs", 1, 0),
+            make_walkthrough_file("src/big.rs", 10, 5),
+        ];
+        let table = render_file_walkthrough(&files).expect("table for non-empty files");
+        assert!(table.contains("### Files Changed"));
+        assert!(table.contains("| File | Diff |"));
+        let big = table.find("src/big.rs").expect("big row");
+        let small = table.find("src/small.rs").expect("small row");
+        assert!(big < small, "rows sorted by descending churn");
+        assert!(table.contains("| src/big.rs | +10 −5 |"));
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_empty_returns_none() {
+        assert!(render_file_walkthrough(&[]).is_none());
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_caps_at_twenty_rows_with_tail() {
+        let files: Vec<PrFile> = (0..23)
+            .map(|i| make_walkthrough_file(&format!("f{i}.rs"), i, 0))
+            .collect();
+        let table = render_file_walkthrough(&files).expect("table");
+        assert_eq!(table.matches("| f").count(), 20);
+        assert!(table.contains("| ... and 3 more | |"));
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_removed_file_with_zero_churn() {
+        let files = vec![make_walkthrough_file("gone.rs", 0, 0)];
+        let table = render_file_walkthrough(&files).expect("table");
+        assert!(table.contains("| gone.rs | +0 −0 |"));
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_escapes_pipes_and_strips_newlines() {
+        let files = vec![make_walkthrough_file("we|rd.rs", 1, 0)];
+        let table = render_file_walkthrough(&files).expect("table");
+        assert!(table.contains("| we\\|rd.rs | +1 −0 |"));
+
+        let files = vec![make_walkthrough_file("bad\r\nname`x.rs", 1, 0)];
+        let table = render_file_walkthrough(&files).expect("table");
+        assert!(table.contains("| badname\\`x.rs | +1 −0 |"));
+        assert!(!table.contains('\r'));
+
+        let files = vec![make_walkthrough_file("a\\b|c.rs", 1, 0)];
+        let table = render_file_walkthrough(&files).expect("table");
+        assert!(table.contains("| a\\\\b\\|c.rs | +1 −0 |"));
+    }
+
     #[test]
     fn test_render_pr_review_review_body_excludes_summary_and_marker() {
         let review = make_pr_review();
-        let body = render_pr_review_review_body(&review);
+        let files = vec![make_walkthrough_file("src/main.rs", 3, 1)];
+        let body = render_pr_review_review_body(&review, &files);
         assert!(!body.contains(REVIEW_SUMMARY_MARKER_PREFIX));
         assert!(!body.contains(&review.summary));
         assert!(body.contains("## Aptu Review"));
         assert!(body.contains("### Concerns"));
         assert!(body.contains("<summary>Strengths</summary>"));
+        // Walkthrough table carries stats only; never the summary or marker.
+        assert!(body.contains("| src/main.rs | +3 −1 |"));
         // Summary comment remains the single surface carrying the summary text.
         let comment = render_pr_review_markdown(&review, "abc123");
         assert!(comment.contains(&review.summary));
+    }
+
+    #[test]
+    fn test_render_pr_review_review_body_empty_files_omits_table() {
+        let review = make_pr_review();
+        let body = render_pr_review_review_body(&review, &[]);
+        assert!(!body.contains("### Files Changed"));
     }
 
     #[test]
