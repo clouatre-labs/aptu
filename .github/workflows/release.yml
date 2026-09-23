@@ -134,7 +134,11 @@ jobs:
         uses: taiki-e/create-gh-release-action@eba8ea96c86cca8a37f1b56e94b4d13301fba651 # v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          draft: false
+          # Draft until all assets are uploaded: GitHub immutable releases lock a
+          # published release immediately, so publishing before asset upload fails
+          # with HTTP 422 "Cannot upload assets to an immutable release". The
+          # publish-release job flips the draft to published once builds succeed.
+          draft: true
           ref: refs/tags/${{ env.TAG }}
 
       - name: Dry run - skip release creation
@@ -228,7 +232,7 @@ jobs:
 
   update-homebrew:
     name: Update Homebrew Formula
-    needs: build-and-attest
+    needs: [build-and-attest, publish-release]
     permissions:
       contents: read
     if: ${{ github.event_name != 'workflow_dispatch' }}
@@ -337,6 +341,36 @@ jobs:
           
           # Auto-merge after Audit check passes (ruleset requires status checks)
           gh pr merge "$BRANCH_NAME" --auto --squash --delete-branch
+
+  publish-release:
+    name: Publish Release
+    needs: [create-release, build-and-attest]
+    if: always() && needs.create-release.result == 'success' && needs.build-and-attest.result == 'success'
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_INPUT: ${{ inputs.tag_name }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${TAG_INPUT}" ]]; then
+            TAG="${TAG_INPUT}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          # Draft releases are not returned by the get-release-by-tag endpoint
+          # (a draft has no tag ref); resolve via the release list instead.
+          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"${TAG}\") | .id" | head -n1)
+          if [[ -z "${RELEASE_ID}" ]]; then
+            echo "No draft release found for ${TAG} (dry run?) - skipping publish"
+            exit 0
+          fi
+          gh api -X PATCH "repos/${{ github.repository }}/releases/${RELEASE_ID}" -F draft=false --silent
+          echo "Published release ${TAG}"
 
   publish:
     name: Publish to crates.io
