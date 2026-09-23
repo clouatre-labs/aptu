@@ -188,6 +188,7 @@ pub async fn post(
             // Unreachable in practice: submitted reviews are immutable, so a
             // changed head SHA posts a NEW review (reported as Posted). The arm
             // stays for API compatibility with SummaryPostOutcome (#1695).
+            #[allow(deprecated)] // SummaryPostOutcome::Updated is deprecated; see #1695
             aptu_core::SummaryPostOutcome::Updated => {
                 info!(review_id = outcome.review_id, "Review posted successfully");
                 eprintln!("Review posted successfully (ID: {})", outcome.review_id);

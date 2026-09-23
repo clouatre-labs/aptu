@@ -659,6 +659,10 @@ pub enum SummaryPostOutcome {
     /// produced since #1695 (the PR review body is the single summary surface
     /// and submitted reviews are immutable; a changed SHA posts a NEW review
     /// reported as Posted). Kept for `--output json` contract compatibility.
+    #[deprecated(
+        since = "0.12.1",
+        note = "Submitted reviews are immutable; a changed head SHA now posts a new review reported as Posted. Variant kept for API compatibility."
+    )]
     Updated,
     /// Head SHA unchanged; the existing summary comment was left as-is.
     Skipped,
