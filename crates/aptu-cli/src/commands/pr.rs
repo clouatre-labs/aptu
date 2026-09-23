@@ -15,8 +15,7 @@ use super::types::BulkPrReviewResult;
 use aptu_core::ai::types::PrReviewComment;
 use aptu_core::history::AiStats;
 use aptu_core::{
-    PrDetails, PrReviewResponse, render_pr_review_comment_body, render_pr_review_markdown,
-    render_pr_review_review_body,
+    PrDetails, PrReviewResponse, render_pr_review_comment_body, render_pr_review_review_body,
 };
 use tracing::{debug, info, instrument, warn};
 
@@ -111,12 +110,13 @@ pub async fn post(
     // Create CLI token provider
     let provider = CliTokenProvider;
 
-    // Summary lives ONLY in the marker issue comment; the PR review body carries
-    // non-summary content so a fresh or updated post never shows two summaries.
-    let summary_body =
-        render_pr_review_markdown(&analyze_result.review, &analyze_result.pr_details.head_sha);
-    let review_body =
-        render_pr_review_review_body(&analyze_result.review, &analyze_result.pr_details.files);
+    // The PR review body is the single summary surface: it carries the marker,
+    // verdict, summary, Concerns, and Files Changed table (#1695).
+    let review_body = render_pr_review_review_body(
+        &analyze_result.review,
+        &analyze_result.pr_details.files,
+        &analyze_result.pr_details.head_sha,
+    );
 
     if dry_run {
         debug!("Dry-run mode: skipping post");
@@ -125,7 +125,6 @@ pub async fn post(
             event, analyze_result.pr_details.number
         );
         eprintln!("Review body:\n{review_body}");
-        eprintln!("Summary comment:\n{summary_body}");
         if verbose && !analyze_result.review.comments.is_empty() {
             eprintln!(
                 "\nInline comments ({}):",
@@ -163,7 +162,6 @@ pub async fn post(
             &provider,
             reference,
             repo_context,
-            &summary_body,
             &review_body,
             event,
             &analyze_result.review.comments,
@@ -183,16 +181,17 @@ pub async fn post(
         match outcome.summary {
             aptu_core::SummaryPostOutcome::Skipped => {
                 eprintln!(
-                    "Review summary already up to date for head SHA {}; nothing posted",
+                    "Review already up to date for head SHA {}; nothing posted",
                     analyze_result.pr_details.head_sha
                 );
             }
+            // Unreachable in practice: submitted reviews are immutable, so a
+            // changed head SHA posts a NEW review (reported as Posted). The arm
+            // stays for API compatibility with SummaryPostOutcome (#1695).
+            #[allow(deprecated)] // SummaryPostOutcome::Updated is deprecated; see #1695
             aptu_core::SummaryPostOutcome::Updated => {
-                info!(review_id = outcome.review_id, "Review updated successfully");
-                eprintln!(
-                    "Review updated in place (ID: {}); summary comment updated",
-                    outcome.review_id
-                );
+                info!(review_id = outcome.review_id, "Review posted successfully");
+                eprintln!("Review posted successfully (ID: {})", outcome.review_id);
             }
             aptu_core::SummaryPostOutcome::Posted => {
                 info!(review_id = outcome.review_id, "Review posted successfully");
