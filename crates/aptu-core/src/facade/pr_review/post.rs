@@ -99,16 +99,18 @@ pub(crate) fn dedup_outcome(
     };
     let rendered = crate::triage::render_pr_review_comment_body(comment);
     let incoming_hash = crate::triage::comment_content_hash(comment);
-    let matches = match crate::triage::extract_comment_hash(existing_body) {
-        Some(stored_hash) => stored_hash == incoming_hash,
-        None => {
-            // Legacy body: compare against the legacy-style rendering (hash
-            // line stripped) so an unchanged legacy comment is skipped without
-            // a migration update; an update rewrites the body with the hash
-            // marker, so the fallback self-heals after at most one update.
-            rendered == *existing_body
-                || crate::triage::strip_comment_hash(&rendered) == *existing_body
-        }
+    let matches = if let Some(stored_hash) = crate::triage::extract_comment_hash(existing_body) {
+        stored_hash == incoming_hash
+    } else {
+        // Legacy body: compare against the legacy-style rendering (hash
+        // line stripped) so an unchanged legacy comment is skipped without
+        // a migration update; an update rewrites the body with the hash
+        // marker, so the fallback self-heals after at most one update.
+        debug!(
+            comment_file = %comment.file,
+            "inline comment body lacks hash marker; using legacy body-equality fallback"
+        );
+        rendered == *existing_body || crate::triage::strip_comment_hash(&rendered) == *existing_body
     };
     if matches {
         DedupOutcome::Skip

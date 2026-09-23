@@ -294,6 +294,10 @@ pub fn check_already_triaged(issue: &IssueDetails) -> TriageStatus {
 /// installation tokens cannot use `current().user()`).
 pub const REVIEW_COMMENT_MARKER: &str = "<!-- APTU_REVIEW_COMMENT -->";
 
+/// Closing suffix of every HTML comment marker embedded in rendered bodies.
+/// Shared by hash extraction and stripping so marker parsing stays consistent.
+const HTML_COMMENT_END: &str = "-->";
+
 /// Prefix of the HTML comment that carries the SHA-256 content hash of the
 /// review comment (`<!-- APTU_COMMENT_HASH:<hex> -->`). Embedded immediately
 /// after [`REVIEW_COMMENT_MARKER`] so dedup can compare semantic content
@@ -343,7 +347,7 @@ pub fn comment_content_hash(comment: &PrReviewComment) -> String {
 pub fn extract_comment_hash(body: &str) -> Option<String> {
     let rest = body.trim_start().strip_prefix(REVIEW_COMMENT_MARKER)?;
     let rest = rest.trim_start().strip_prefix(APTU_COMMENT_HASH_PREFIX)?;
-    let end = rest.find("-->")?;
+    let end = rest.find(HTML_COMMENT_END)?;
     let hash = rest[..end].trim();
     if hash.is_empty() {
         None
@@ -399,7 +403,7 @@ pub fn strip_comment_hash(body: &str) -> String {
     let Some(start) = body.find(APTU_COMMENT_HASH_PREFIX) else {
         return body.to_string();
     };
-    let Some(rel_end) = body[start..].find("-->") else {
+    let Some(rel_end) = body[start..].find(HTML_COMMENT_END) else {
         return body.to_string();
     };
     let mut out = String::with_capacity(body.len());
