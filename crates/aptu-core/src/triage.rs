@@ -5,8 +5,11 @@
 //! This module provides utilities to check whether an issue has already been triaged,
 //! either through labels or Aptu-generated comments.
 
-use crate::ai::types::{IssueDetails, PrReviewComment, PrReviewResponse, TriageResponse};
+use crate::ai::types::{
+    CommentSeverity, IssueDetails, PrFile, PrReviewComment, PrReviewResponse, TriageResponse,
+};
 use crate::utils::is_priority_label;
+use sha2::{Digest, Sha256};
 use std::fmt::Write;
 use tracing::debug;
 
@@ -291,6 +294,68 @@ pub fn check_already_triaged(issue: &IssueDetails) -> TriageStatus {
 /// installation tokens cannot use `current().user()`).
 pub const REVIEW_COMMENT_MARKER: &str = "<!-- APTU_REVIEW_COMMENT -->";
 
+/// Closing suffix of every HTML comment marker embedded in rendered bodies.
+/// Shared by hash extraction and stripping so marker parsing stays consistent.
+const HTML_COMMENT_END: &str = "-->";
+
+/// Prefix of the HTML comment that carries the SHA-256 content hash of the
+/// review comment (`<!-- APTU_COMMENT_HASH:<hex> -->`). Embedded immediately
+/// after [`REVIEW_COMMENT_MARKER`] so dedup can compare semantic content
+/// instead of rendered bytes; the hash covers only the comment text, severity,
+/// and suggested code, never the rendering format.
+pub const APTU_COMMENT_HASH_PREFIX: &str = "<!-- APTU_COMMENT_HASH:";
+
+/// Computes the SHA-256 content hash (lowercase hex) over the semantic content
+/// of a review comment: text, severity, and suggested code. Fields are encoded
+/// with an 8-byte big-endian length prefix each so adversarial content (e.g.
+/// embedded NUL bytes) cannot shift field boundaries or collide two distinct
+/// semantic values. `suggested_code` additionally carries a presence
+/// discriminant byte (0 for `None`, 1 for `Some`) so `None` and `Some("")` —
+/// semantically different values — hash differently. Rendered format is
+/// intentionally excluded so renderer-only changes do not trigger updates.
+#[must_use]
+pub fn comment_content_hash(comment: &PrReviewComment) -> String {
+    fn hash_field(hasher: &mut Sha256, field: &str) {
+        let bytes = field.as_bytes();
+        hasher.update(u64::try_from(bytes.len()).unwrap_or(u64::MAX).to_be_bytes());
+        hasher.update(bytes);
+    }
+    let mut hasher = Sha256::new();
+    hash_field(&mut hasher, &comment.comment);
+    hash_field(&mut hasher, &format!("{:?}", comment.severity));
+    match &comment.suggested_code {
+        None => hasher.update([0_u8]),
+        Some(code) => {
+            hasher.update([1_u8]);
+            hash_field(&mut hasher, code);
+        }
+    }
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        let _ = write!(hex, "{byte:02x}");
+    }
+    hex
+}
+
+/// Extracts the stored content hash from a previously rendered comment body.
+/// The marker is searched directly after [`REVIEW_COMMENT_MARKER`] at the body
+/// start so HTML-comment-like text inside suggestion blocks cannot be
+/// misparsed. Returns `None` for legacy bodies posted before the hash marker
+/// existed.
+#[must_use]
+pub fn extract_comment_hash(body: &str) -> Option<String> {
+    let rest = body.trim_start().strip_prefix(REVIEW_COMMENT_MARKER)?;
+    let rest = rest.trim_start().strip_prefix(APTU_COMMENT_HASH_PREFIX)?;
+    let end = rest.find(HTML_COMMENT_END)?;
+    let hash = rest[..end].trim();
+    if hash.is_empty() {
+        None
+    } else {
+        Some(hash.to_string())
+    }
+}
+
 /// Marker prefix embedded in the PR review summary comment so it can be found
 /// and deduplicated on later runs. The full marker carries the head commit SHA:
 /// `<!-- APTU_REVIEW:<sha> -->`.
@@ -330,14 +395,37 @@ pub fn parse_aptu_summary_marker(body: &str) -> Option<AptuSummaryMarker> {
     }
 }
 
+/// Removes the content-hash marker line from a rendered body, producing the
+/// legacy-style rendering used to compare against bodies posted before the
+/// hash marker existed. Bodies without the hash marker are returned unchanged.
+#[must_use]
+pub fn strip_comment_hash(body: &str) -> String {
+    let Some(start) = body.find(APTU_COMMENT_HASH_PREFIX) else {
+        return body.to_string();
+    };
+    let Some(rel_end) = body[start..].find(HTML_COMMENT_END) else {
+        return body.to_string();
+    };
+    let mut out = String::with_capacity(body.len());
+    out.push_str(&body[..start]);
+    out.push_str(body[start + rel_end + 3..].trim_start_matches('\n'));
+    out
+}
+
 /// Formats an inline PR review comment body.
 ///
-/// When the comment includes `suggested_code`, appends a GitHub suggestion block
+/// Prepends a severity badge derived from the comment severity. When the
+/// comment includes `suggested_code`, appends a GitHub suggestion block
 /// that renders as a one-click "Apply suggestion" button in the PR diff view.
 #[must_use]
 pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
     let mut body = String::from(REVIEW_COMMENT_MARKER);
     body.push('\n');
+    body.push_str(APTU_COMMENT_HASH_PREFIX);
+    body.push_str(&comment_content_hash(comment));
+    body.push_str(" -->\n");
+    body.push_str(severity_badge(&comment.severity));
+    body.push(' ');
     body.push_str(&comment.comment);
     if let Some(code) = &comment.suggested_code
         && !code.is_empty()
@@ -347,6 +435,33 @@ pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
         body.push_str("\n```");
     }
     body
+}
+
+/// Emoji badge plus a text label for each severity. The text label keeps the
+/// severity readable in screen readers, plain-text email, and non-rendered
+/// views where emoji color alone carries no meaning.
+fn severity_badge(severity: &CommentSeverity) -> &'static str {
+    match severity {
+        CommentSeverity::Issue => "🔴 Issue:",
+        CommentSeverity::Warning => "🟠 Warning:",
+        CommentSeverity::Suggestion => "💡 Suggestion:",
+        CommentSeverity::Info => "🔵 Info:",
+    }
+}
+
+/// Renders one collapsible `<details>` section with a bullet list.
+///
+/// Returns nothing when `items` is empty so empty sections are omitted
+/// entirely from the rendered body.
+fn render_collapsible_section(body: &mut String, title: &str, items: &[String]) {
+    if items.is_empty() {
+        return;
+    }
+    body.push_str(&format!("\n<details>\n<summary>{title}</summary>\n\n"));
+    for item in items {
+        let _ = writeln!(body, "- {item}");
+    }
+    body.push_str("\n</details>\n");
 }
 
 /// Renders the PR review summary comment body for posting to GitHub.
@@ -359,11 +474,7 @@ pub fn render_pr_review_comment_body(comment: &PrReviewComment) -> String {
 /// separately by [`render_pr_review_review_body`] and never contains the
 /// summary.
 #[must_use]
-pub fn render_pr_review_markdown(
-    review: &PrReviewResponse,
-    files_count: usize,
-    head_sha: &str,
-) -> String {
+pub fn render_pr_review_markdown(review: &PrReviewResponse, head_sha: &str) -> String {
     let verdict_badge = verdict_badge(&review.verdict);
 
     let mut body = format!(
@@ -371,34 +482,86 @@ pub fn render_pr_review_markdown(
         REVIEW_SUMMARY_MARKER_PREFIX, head_sha, verdict_badge, review.summary
     );
 
-    // Notable changes bullets: only for larger PRs to give reviewers orientation.
-    if files_count > 5 && !review.concerns.is_empty() {
-        body.push('\n');
-        for c in &review.concerns {
-            let _ = writeln!(body, "- {c}");
-        }
-    }
+    render_structured_sections(&mut body, review);
 
     body.push_str("\n---\n\n<sub>Posted by [aptu](https://github.com/clouatre-labs/aptu)</sub>\n");
 
     body
+}
+
+/// Maximum number of rows shown in the per-file walkthrough table before the
+/// remaining files are collapsed into an "and N more" tail line.
+const FILE_WALKTHROUGH_MAX_ROWS: usize = 20;
+
+/// Renders the per-file walkthrough table (File | Diff) for the PR review body.
+///
+/// Rows are sorted by descending churn (additions + deletions) and carry stats
+/// only (`+N −N`); no patches or AI-generated content. Removed and renamed
+/// files render with whatever counts exist (including `+0 −0`). Returns `None`
+/// when `files` is empty so the whole section is omitted.
+/// Escapes a filename so it cannot corrupt the Markdown table structure or
+/// inject rendered content: pipe characters are escaped (`|` -> `\|`),
+/// carriage returns and line feeds are stripped, and backticks are escaped to
+/// prevent inline code spans.
+fn escape_table_cell(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        match c {
+            '\r' | '\n' => {}
+            '\\' => out.push_str("\\\\"),
+            '|' => out.push_str("\\|"),
+            '`' => out.push_str("\\`"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+fn render_file_walkthrough(files: &[PrFile]) -> Option<String> {
+    if files.is_empty() {
+        return None;
+    }
+
+    let mut sorted: Vec<&PrFile> = files.iter().collect();
+    sorted.sort_by_key(|f| std::cmp::Reverse(f.additions.saturating_add(f.deletions)));
+
+    let mut table = String::from("\n### Files Changed\n\n| File | Diff |\n|---|---|\n");
+    for f in sorted.iter().take(FILE_WALKTHROUGH_MAX_ROWS) {
+        let _ = writeln!(
+            table,
+            "| {} | +{} −{} |",
+            escape_table_cell(&f.filename),
+            f.additions,
+            f.deletions
+        );
+    }
+    if sorted.len() > FILE_WALKTHROUGH_MAX_ROWS {
+        let _ = writeln!(
+            table,
+            "| ... and {} more | |",
+            sorted.len() - FILE_WALKTHROUGH_MAX_ROWS
+        );
+    }
+
+    Some(table)
 }
 
 /// Renders the PR review body for posting to GitHub.
 ///
-/// The review body carries only non-summary content (the verdict badge and
-/// notable-change bullets); the rendered summary lives solely in the
-/// deduplicated marker issue comment produced by [`render_pr_review_markdown`].
+/// The review body carries only non-summary content (the verdict badge,
+/// structured concerns/strengths/suggestions sections, and a per-file
+/// walkthrough table with diff stats only); the rendered summary lives solely
+/// in the deduplicated marker issue comment produced by
+/// [`render_pr_review_markdown`].
 #[must_use]
-pub fn render_pr_review_review_body(review: &PrReviewResponse, files_count: usize) -> String {
+pub fn render_pr_review_review_body(review: &PrReviewResponse, files: &[PrFile]) -> String {
     let verdict_badge = verdict_badge(&review.verdict);
     let mut body = format!("## Aptu Review\n\n{verdict_badge}\n");
 
-    if files_count > 5 && !review.concerns.is_empty() {
-        body.push('\n');
-        for c in &review.concerns {
-            let _ = writeln!(body, "- {c}");
-        }
+    render_structured_sections(&mut body, review);
+
+    if let Some(table) = render_file_walkthrough(files) {
+        body.push_str(&table);
     }
 
     body.push_str("\n---\n\n<sub>Posted by [aptu](https://github.com/clouatre-labs/aptu)</sub>\n");
@@ -406,11 +569,27 @@ pub fn render_pr_review_review_body(review: &PrReviewResponse, files_count: usiz
     body
 }
 
+/// Renders the structured concerns/strengths/suggestions sections shared by
+/// the summary comment and the review body, in a fixed order (Concerns,
+/// Strengths, Suggestions) so both surfaces stay predictable. Concerns are
+/// always rendered as a heading; strengths and suggestions are secondary and
+/// collapsed inside `<details>` blocks. Empty sections are omitted entirely.
+fn render_structured_sections(body: &mut String, review: &PrReviewResponse) {
+    if !review.concerns.is_empty() {
+        body.push_str("\n### Concerns\n\n");
+        for c in &review.concerns {
+            let _ = writeln!(body, "- {c}");
+        }
+    }
+    render_collapsible_section(body, "Strengths", &review.strengths);
+    render_collapsible_section(body, "Suggestions", &review.suggestions);
+}
+
 fn verdict_badge(verdict: &str) -> &'static str {
     match verdict {
-        "approve" => "✅ Approve",
+        "approve" => "✅ Approved",
         "request_changes" | "request-changes" => "❌ Request Changes",
-        _ => "💬 Comment",
+        _ => "💬 Comments",
     }
 }
 
@@ -653,11 +832,27 @@ mod tests {
     #[test]
     fn test_render_pr_review_markdown_basic() {
         let review = make_pr_review();
-        let body = render_pr_review_markdown(&review, 0, "abc123");
-        assert!(body.contains("<!-- APTU_REVIEW:abc123 -->"));
-        assert!(body.contains("✅ Approve"));
+        let body = render_pr_review_markdown(&review, "abc123");
+        // Marker is the literal first line.
+        assert!(body.starts_with("<!-- APTU_REVIEW:abc123 -->\n"));
+        assert!(body.contains("✅ Approved"));
         assert!(body.contains("Good PR overall."));
         assert!(body.contains("aptu"));
+        // Structured sections render regardless of files_count.
+        assert!(body.contains("### Concerns"));
+        assert!(body.contains("<details>"));
+        assert!(body.contains("<summary>Strengths</summary>"));
+        assert!(body.contains("- Clean code"));
+        assert!(body.contains("<summary>Suggestions</summary>"));
+        assert!(body.contains("- Add a CHANGELOG entry."));
+        assert!(body.contains("- Missing docs"));
+    }
+
+    #[test]
+    fn test_render_pr_review_markdown_marker_first_line() {
+        let review = make_pr_review();
+        let body = render_pr_review_markdown(&review, "deadbeef");
+        assert_eq!(body.lines().next(), Some("<!-- APTU_REVIEW:deadbeef -->"));
     }
 
     #[test]
@@ -671,37 +866,114 @@ mod tests {
             suggestions: vec![],
             disclaimer: None,
         };
-        let body = render_pr_review_markdown(&review, 3, "abc123");
+        let body = render_pr_review_markdown(&review, "abc123");
         assert!(body.contains("<!-- APTU_REVIEW:abc123 -->"));
-        assert!(!body.contains("### Strengths"));
-        assert!(!body.contains("### Concerns"));
-        assert!(!body.contains("### Inline Comments"));
-        assert!(!body.contains("### Suggestions"));
+        assert!(!body.contains("Strengths"));
+        assert!(!body.contains("Concerns"));
+        assert!(!body.contains("Suggestions"));
+        assert!(!body.contains("<details>"));
     }
 
     #[test]
     fn test_render_pr_review_markdown_verdict_badges() {
         let mut r = make_pr_review();
         r.verdict = "approve".to_string();
-        assert!(render_pr_review_markdown(&r, 0, "s").contains("✅ Approve"));
+        assert!(render_pr_review_markdown(&r, "s").contains("✅ Approved"));
         r.verdict = "request_changes".to_string();
-        assert!(render_pr_review_markdown(&r, 0, "s").contains("❌ Request Changes"));
+        assert!(render_pr_review_markdown(&r, "s").contains("❌ Request Changes"));
         r.verdict = "request-changes".to_string();
-        assert!(render_pr_review_markdown(&r, 0, "s").contains("❌ Request Changes"));
+        assert!(render_pr_review_markdown(&r, "s").contains("❌ Request Changes"));
         r.verdict = "comment".to_string();
-        assert!(render_pr_review_markdown(&r, 0, "s").contains("💬 Comment"));
+        assert!(render_pr_review_markdown(&r, "s").contains("💬 Comments"));
+    }
+
+    fn make_walkthrough_file(filename: &str, additions: u64, deletions: u64) -> PrFile {
+        PrFile {
+            filename: filename.to_string(),
+            status: "modified".to_string(),
+            additions,
+            deletions,
+            patch: None,
+            patch_truncated: false,
+            full_content: None,
+        }
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_sorted_by_churn() {
+        let files = vec![
+            make_walkthrough_file("src/small.rs", 1, 0),
+            make_walkthrough_file("src/big.rs", 10, 5),
+        ];
+        let table = render_file_walkthrough(&files).expect("table for non-empty files");
+        assert!(table.contains("### Files Changed"));
+        assert!(table.contains("| File | Diff |"));
+        let big = table.find("src/big.rs").expect("big row");
+        let small = table.find("src/small.rs").expect("small row");
+        assert!(big < small, "rows sorted by descending churn");
+        assert!(table.contains("| src/big.rs | +10 −5 |"));
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_empty_returns_none() {
+        assert!(render_file_walkthrough(&[]).is_none());
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_caps_at_twenty_rows_with_tail() {
+        let files: Vec<PrFile> = (0..23)
+            .map(|i| make_walkthrough_file(&format!("f{i}.rs"), i, 0))
+            .collect();
+        let table = render_file_walkthrough(&files).expect("table");
+        assert_eq!(table.matches("| f").count(), 20);
+        assert!(table.contains("| ... and 3 more | |"));
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_removed_file_with_zero_churn() {
+        let files = vec![make_walkthrough_file("gone.rs", 0, 0)];
+        let table = render_file_walkthrough(&files).expect("table");
+        assert!(table.contains("| gone.rs | +0 −0 |"));
+    }
+
+    #[test]
+    fn test_render_file_walkthrough_escapes_pipes_and_strips_newlines() {
+        let files = vec![make_walkthrough_file("we|rd.rs", 1, 0)];
+        let table = render_file_walkthrough(&files).expect("table");
+        assert!(table.contains("| we\\|rd.rs | +1 −0 |"));
+
+        let files = vec![make_walkthrough_file("bad\r\nname`x.rs", 1, 0)];
+        let table = render_file_walkthrough(&files).expect("table");
+        assert!(table.contains("| badname\\`x.rs | +1 −0 |"));
+        assert!(!table.contains('\r'));
+
+        let files = vec![make_walkthrough_file("a\\b|c.rs", 1, 0)];
+        let table = render_file_walkthrough(&files).expect("table");
+        assert!(table.contains("| a\\\\b\\|c.rs | +1 −0 |"));
     }
 
     #[test]
     fn test_render_pr_review_review_body_excludes_summary_and_marker() {
         let review = make_pr_review();
-        let body = render_pr_review_review_body(&review, 0);
+        let files = vec![make_walkthrough_file("src/main.rs", 3, 1)];
+        let body = render_pr_review_review_body(&review, &files);
         assert!(!body.contains(REVIEW_SUMMARY_MARKER_PREFIX));
         assert!(!body.contains(&review.summary));
         assert!(body.contains("## Aptu Review"));
+        assert!(body.contains("### Concerns"));
+        assert!(body.contains("<summary>Strengths</summary>"));
+        // Walkthrough table carries stats only; never the summary or marker.
+        assert!(body.contains("| src/main.rs | +3 −1 |"));
         // Summary comment remains the single surface carrying the summary text.
-        let comment = render_pr_review_markdown(&review, 0, "abc123");
+        let comment = render_pr_review_markdown(&review, "abc123");
         assert!(comment.contains(&review.summary));
+    }
+
+    #[test]
+    fn test_render_pr_review_review_body_empty_files_omits_table() {
+        let review = make_pr_review();
+        let body = render_pr_review_review_body(&review, &[]);
+        assert!(!body.contains("### Files Changed"));
     }
 
     #[test]
@@ -731,7 +1003,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_pr_review_comment_body_plain_text() {
+    fn test_render_pr_review_comment_body_severity_badges() {
         let base = PrReviewComment {
             file: "f.rs".to_string(),
             line: Some(1),
@@ -739,49 +1011,23 @@ mod tests {
             severity: CommentSeverity::Issue,
             suggested_code: None,
         };
-        // No admonition badges -- plain prose only
-        let body = render_pr_review_comment_body(&base);
-        assert!(!body.contains("[!CAUTION]"));
-        assert!(!body.contains("[!WARNING]"));
-        assert!(!body.contains("[!TIP]"));
-        assert!(!body.contains("[!NOTE]"));
-        assert!(body.contains("test msg"));
-        // Severity variants all produce plain text
-        let w = PrReviewComment {
-            severity: CommentSeverity::Warning,
-            ..base.clone()
-        };
-        assert!(!render_pr_review_comment_body(&w).contains("[!"));
-        let s = PrReviewComment {
-            severity: CommentSeverity::Suggestion,
-            ..base.clone()
-        };
-        assert!(!render_pr_review_comment_body(&s).contains("[!"));
-        let i = PrReviewComment {
-            severity: CommentSeverity::Info,
-            ..base.clone()
-        };
-        assert!(!render_pr_review_comment_body(&i).contains("[!"));
-    }
-
-    #[test]
-    fn test_render_pr_review_markdown_notable_changes_shown() {
-        let mut review = make_pr_review();
-        review.concerns = vec![
-            "Removes CodeQL without replacement".to_string(),
-            "cargo-nextest not pinned".to_string(),
+        let cases = [
+            (CommentSeverity::Issue, "🔴"),
+            (CommentSeverity::Warning, "🟠"),
+            (CommentSeverity::Suggestion, "💡"),
+            (CommentSeverity::Info, "🔵"),
         ];
-        let body = render_pr_review_markdown(&review, 6, "s");
-        assert!(body.contains("- Removes CodeQL without replacement"));
-        assert!(body.contains("- cargo-nextest not pinned"));
-    }
-
-    #[test]
-    fn test_render_pr_review_markdown_notable_changes_hidden() {
-        let mut review = make_pr_review();
-        review.concerns = vec!["Some concern".to_string()];
-        let body = render_pr_review_markdown(&review, 3, "s");
-        assert!(!body.contains("- Some concern"));
+        for (severity, badge) in cases {
+            let c = PrReviewComment {
+                severity,
+                ..base.clone()
+            };
+            let body = render_pr_review_comment_body(&c);
+            assert!(body.contains(badge), "missing badge {badge}");
+            assert!(body.contains("test msg"));
+            assert!(body.starts_with(REVIEW_COMMENT_MARKER));
+            assert!(!body.contains("[!"));
+        }
     }
 
     #[test]
@@ -794,8 +1040,7 @@ mod tests {
             suggested_code: Some("    let x = foo()?;\n".to_string()),
         };
         let body = render_pr_review_comment_body(&comment);
-        assert!(!body.contains("[!"));
-        assert!(body.contains("Use ? instead of unwrap."));
+        assert!(body.contains("🟠 Warning: Use ? instead of unwrap."));
         assert!(body.contains("```suggestion"));
         assert!(body.contains("let x = foo()?;"));
     }
@@ -810,7 +1055,7 @@ mod tests {
             suggested_code: None,
         };
         let body = render_pr_review_comment_body(&comment);
-        assert!(!body.contains("[!"));
+        assert!(body.contains("🔵 Info: Consider refactoring this module."));
         assert!(!body.contains("```suggestion"));
     }
 
@@ -857,5 +1102,54 @@ mod tests {
             markdown.contains("Decompose into sub-issues"),
             "markdown must contain recommendation"
         );
+    }
+
+    fn hash_comment(comment_text: &str, severity: CommentSeverity, code: Option<&str>) -> String {
+        comment_content_hash(&PrReviewComment {
+            file: "f.rs".to_string(),
+            line: Some(1),
+            comment: comment_text.to_string(),
+            severity,
+            suggested_code: code.map(str::to_string),
+        })
+    }
+
+    #[test]
+    fn test_comment_content_hash_nul_bytes_do_not_collapse() {
+        // A comment text containing NUL bytes must not be confusable with a
+        // different split of (comment, severity, suggested_code).
+        let with_nul = hash_comment("bad\0Warning\0code", CommentSeverity::Issue, None);
+        let split = hash_comment("bad", CommentSeverity::Warning, Some("code"));
+        assert_ne!(with_nul, split);
+        // Empty suggested_code vs. a comment ending in a NUL remain distinct.
+        let trailing_nul = hash_comment("bad\0", CommentSeverity::Issue, None);
+        let with_empty_code = hash_comment("bad", CommentSeverity::Issue, Some(""));
+        assert_ne!(trailing_nul, with_empty_code);
+    }
+
+    #[test]
+    fn test_comment_content_hash_adversarial_boundary_shift() {
+        // Comment plus a code-looking tail must differ from comment with that
+        // tail moved into suggested_code (old 0x00 delimiter would collide).
+        let merged = hash_comment("msg\0let x = 1;", CommentSeverity::Suggestion, None);
+        let shifted = hash_comment("msg", CommentSeverity::Suggestion, Some("let x = 1;"));
+        assert_ne!(merged, shifted);
+    }
+
+    #[test]
+    fn test_comment_content_hash_none_vs_empty_suggested_code() {
+        // Presence discriminant: None and Some("") are semantically different
+        // and must not collapse to the same hash.
+        let none = hash_comment("msg", CommentSeverity::Issue, None);
+        let empty = hash_comment("msg", CommentSeverity::Issue, Some(""));
+        assert_ne!(none, empty);
+    }
+
+    #[test]
+    fn test_comment_content_hash_is_deterministic() {
+        let a = hash_comment("msg", CommentSeverity::Issue, Some("let x = 1;"));
+        let b = hash_comment("msg", CommentSeverity::Issue, Some("let x = 1;"));
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64);
     }
 }
