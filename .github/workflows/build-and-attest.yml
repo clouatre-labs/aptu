@@ -14,7 +14,7 @@ on:
       os:
         required: true
         type: string
-        description: Runner OS (e.g., ubuntu-24.04, macos-15)
+        description: Runner OS (e.g., ubuntu-26.04, macos-15)
       cross:
         required: true
         type: boolean

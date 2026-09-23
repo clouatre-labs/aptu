@@ -14,7 +14,7 @@ permissions: {}
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     timeout-minutes: 5
@@ -36,7 +36,7 @@ jobs:
   review:
     needs: changes
     if: needs.changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 10
     permissions:
       pull-requests: write

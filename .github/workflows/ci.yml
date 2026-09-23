@@ -27,7 +27,7 @@ env:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     timeout-minutes: 5
@@ -63,7 +63,7 @@ jobs:
 
   commitlint:
     name: Lint Commits
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
       pull-requests: read
@@ -92,7 +92,7 @@ jobs:
 
   deny:
     name: Audit Dependencies
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     needs: changes
@@ -110,7 +110,7 @@ jobs:
 
   jscpd:
     name: Detect Duplicated Code
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     needs: changes
@@ -130,7 +130,7 @@ jobs:
 
   check:
     name: Check Format & Lint
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     needs: changes
@@ -160,7 +160,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     needs: changes
@@ -192,7 +192,7 @@ jobs:
 
   graphql-contract:
     name: GraphQL Contract
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     needs: changes
@@ -222,7 +222,7 @@ jobs:
 
   build:
     name: Build CLI
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     needs: [changes]
@@ -255,7 +255,7 @@ jobs:
 
   wasm-check:
     name: WASM Check
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     needs: changes
     if: needs.changes.outputs.code == 'true'
     permissions:
@@ -279,7 +279,7 @@ jobs:
 
   integration:
     name: Integration Tests
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     needs: [changes, test, build]
@@ -316,7 +316,7 @@ jobs:
 
   scan-self:
     name: Scan Self
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
       security-events: write
@@ -346,7 +346,7 @@ jobs:
 
   lint-docs:
     name: Lint Docs
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     needs: changes
@@ -364,7 +364,7 @@ jobs:
 
   ci-result:
     name: CI Result
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions: {}
     if: always()
     needs: [commitlint, deny, check, test, graphql-contract, build, integration, scan-self, wasm-check, lint-docs]
