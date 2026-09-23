@@ -122,40 +122,40 @@ pub(crate) fn dedup_outcome(
     }
 }
 
-/// Decision returned by [`summary_dedup_outcome`] for how to handle the Aptu
-/// review summary comment (the issue comment carrying the
+/// Decision returned by [`summary_dedup_outcome`] for how to handle the
+/// Aptu review marker (the PR review body carrying the
 /// `<!-- APTU_REVIEW:<sha> -->` marker).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SummaryDedupOutcome {
-    /// No existing summary comment; create one after posting the review.
+    /// No existing marker review; post a new review after the decision.
     Post,
-    /// Existing summary comment already covers this head SHA; skip entirely.
+    /// An existing marker review already covers this head SHA; skip entirely.
     Skip,
-    /// Existing summary comment covers a different (or unknown) head SHA;
-    /// patch it in place with the given comment ID.
-    Update { comment_id: u64 },
+    /// An existing marker review covers a different (or unknown) head SHA;
+    /// submitted reviews are immutable, so post a NEW review.
+    Update,
 }
 
-/// Pure helper shared by [`post_pr_review`] and its tests: given the existing
-/// Aptu summary comment (if any) and the current head SHA, decide whether to
-/// post, skip, or update the summary.
+/// Pure helper shared by [`post_pr_review`] and its tests: given the latest
+/// existing Aptu marker review (if any) and the current head SHA, decide
+/// whether to post, skip, or post a replacement review.
 ///
-/// Ownership of the existing comment is decided by the caller using the same
+/// Ownership of the existing review is decided by the caller using the same
 /// marker + Bot-type-author detection as the inline-comment dedup map (see
 /// [`build_dedup_map`]); never via `octocrab current().user()`, which fails on
 /// GitHub App installation tokens (see #1639). A legacy SHA-less marker is
-/// treated as stale so the summary is refreshed. The same-SHA skip is
+/// treated as stale so a fresh review is posted. The same-SHA skip is
 /// best-effort under concurrent runs (TOCTOU accepted; the worst case is a
-/// duplicate summary, mitigated by patch-oldest on collision).
+/// duplicate review).
 pub(crate) fn summary_dedup_outcome(
     existing: Option<(u64, Option<String>)>,
     head_sha: &str,
 ) -> SummaryDedupOutcome {
     match existing {
         None => SummaryDedupOutcome::Post,
-        Some((comment_id, sha)) => match sha {
+        Some((_, sha)) => match sha {
             Some(sha) if sha == head_sha => SummaryDedupOutcome::Skip,
-            _ => SummaryDedupOutcome::Update { comment_id },
+            _ => SummaryDedupOutcome::Update,
         },
     }
 }
@@ -170,23 +170,24 @@ pub(crate) fn summary_dedup_outcome(
 /// * `provider` - Token provider for GitHub credentials
 /// * `reference` - PR reference (URL, owner/repo#number, or number)
 /// * `repo_context` - Optional repository context for bare numbers
-/// * `summary_body` - Summary comment text (the single summary surface; posted
-///   as an issue comment carrying the `<!-- APTU_REVIEW:<sha> -->` marker)
-/// * `review_body` - PR review body text; must not contain the rendered summary
+/// * `review_body` - PR review body text; the single summary surface, starting
+///   with the `<!-- APTU_REVIEW:<sha> -->` marker so re-runs can deduplicate
 /// * `event` - Review event type (Comment, Approve, or `RequestChanges`)
 /// * `comments` - Inline review comments; entries with `line = None` are silently skipped
 /// * `commit_id` - Head commit SHA; omitted from the API payload when empty
 /// * `existing_comments` - Existing inline review comments for dedup
-/// * `dedup_summary` - When true, deduplicate the review summary against a
-///   prior issue comment carrying the `<!-- APTU_REVIEW:<sha> -->` marker
+/// * `dedup_summary` - When true, deduplicate the review against a prior
+///   bot-authored PR review whose body carries the `<!-- APTU_REVIEW:<sha> -->` marker
 ///
 /// # Returns
 ///
 /// `ReviewPostOutcome` with the review ID and any per-comment fallback failures
 /// (see [`crate::github::pulls::post_pr_review`] for the 422 fallback behavior).
-/// The `summary` field reports Posted/Updated/Skipped for the summary comment.
+/// The `summary` field reports Posted/Skipped (Updated is kept for API
+/// compatibility but is no longer produced: submitted reviews are immutable, so
+/// a changed head SHA posts a NEW review reported as Posted).
 /// The same-SHA skip is best-effort under concurrent runs (TOCTOU accepted;
-/// worst case is a duplicate summary, mitigated by patch-oldest on collision).
+/// worst case is a duplicate review).
 ///
 /// # Errors
 ///
@@ -202,7 +203,6 @@ pub async fn post_pr_review(
     provider: &dyn TokenProvider,
     reference: &str,
     repo_context: Option<&str>,
-    summary_body: &str,
     review_body: &str,
     event: ReviewEvent,
     comments: &[PrReviewComment],
@@ -210,9 +210,7 @@ pub async fn post_pr_review(
     existing_comments: &[crate::ai::types::PrReviewCommentDetails],
     dedup_summary: bool,
 ) -> crate::Result<WriteOutcome<ReviewPostOutcome>> {
-    use crate::github::issues::{create_issue_comment, list_issue_comments, update_issue_comment};
-    use crate::github::pulls::parse_pr_reference;
-    use crate::triage::parse_aptu_summary_marker;
+    use crate::github::pulls::{find_marker_review, list_pr_reviews, parse_pr_reference};
 
     // Parse PR reference
     let (owner, repo, number) =
@@ -289,36 +287,29 @@ pub async fn post_pr_review(
         }
     }
 
-    // Summary dedup: locate a prior Aptu summary issue comment (marker +
-    // Bot-type author, never current().user(); see #1639). Same SHA -> skip
-    // entirely; changed/legacy SHA -> patch in place; none -> create one.
-    // Best-effort under concurrent runs (TOCTOU accepted; patch-oldest on
-    // collision).
-    let mut summary_outcome = SummaryPostOutcome::Posted;
-    let mut pending_summary_update: Option<u64> = None;
+    // Summary dedup: locate a prior Aptu marker review (marker + Bot-type
+    // author, never current().user(); see #1639). Same SHA -> skip entirely;
+    // changed/legacy SHA or none -> post a new review (submitted reviews are
+    // immutable; the PUT update endpoint only works on PENDING reviews and
+    // returns 422 otherwise). Best-effort under concurrent runs (TOCTOU
+    // accepted; worst case is a duplicate review).
+    let summary_outcome = SummaryPostOutcome::Posted;
     if dedup_summary {
-        let existing = list_issue_comments(&client, &owner, &repo, number)
+        let reviews = list_pr_reviews(&client, &owner, &repo, number)
             .await
-            .map_err(crate::error::aptu_error_from_anyhow)?
-            .into_iter()
-            .find(|c| c.is_bot && parse_aptu_summary_marker(&c.body).is_some())
-            .map(|c| {
-                let marker = parse_aptu_summary_marker(&c.body);
-                (c.id, marker.and_then(|m| m.sha))
-            });
+            .map_err(crate::error::aptu_error_from_anyhow)?;
+        let existing = find_marker_review(&reviews);
         match summary_dedup_outcome(existing, commit_id) {
             SummaryDedupOutcome::Skip => {
-                debug!("Head SHA unchanged; skipping review and summary comment");
+                debug!("Head SHA unchanged; skipping review entirely");
                 return Ok(WriteOutcome::Applied(ReviewPostOutcome {
                     review_id: 0,
                     failed_comments: Vec::new(),
                     summary: SummaryPostOutcome::Skipped,
                 }));
             }
-            SummaryDedupOutcome::Update { comment_id } => {
-                debug!(comment_id = comment_id, "Updating existing summary comment");
-                summary_outcome = SummaryPostOutcome::Updated;
-                pending_summary_update = Some(comment_id);
+            SummaryDedupOutcome::Update => {
+                debug!("Head SHA changed; posting a new review (submitted reviews are immutable)");
             }
             SummaryDedupOutcome::Post => {}
         }
@@ -338,17 +329,8 @@ pub async fn post_pr_review(
     .await
     .map_err(crate::error::aptu_error_from_anyhow)?;
 
-    // Create or update the summary comment (always, even with dedup disabled:
-    // --no-dedup-summary bypasses the lookup but still posts the summary).
-    if let Some(comment_id) = pending_summary_update {
-        update_issue_comment(&client, &owner, &repo, comment_id, summary_body)
-            .await
-            .map_err(crate::error::aptu_error_from_anyhow)?;
-    } else {
-        create_issue_comment(&client, &owner, &repo, number, summary_body)
-            .await
-            .map_err(crate::error::aptu_error_from_anyhow)?;
-    }
+    // No summary issue comment is created or updated in any path: the review
+    // body itself is the single summary surface (#1695).
     outcome.summary = summary_outcome;
 
     Ok(WriteOutcome::Applied(outcome))
@@ -360,7 +342,6 @@ pub async fn post_pr_review(
     _provider: &dyn crate::auth::TokenProvider,
     _reference: &str,
     _repo_context: Option<&str>,
-    _summary_body: &str,
     _review_body: &str,
     _event: crate::ai::types::ReviewEvent,
     _comments: &[crate::ai::types::PrReviewComment],

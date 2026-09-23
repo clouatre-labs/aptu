@@ -449,44 +449,17 @@ fn severity_badge(severity: &CommentSeverity) -> &'static str {
     }
 }
 
-/// Renders one collapsible `<details>` section with a bullet list.
-///
-/// Returns nothing when `items` is empty so empty sections are omitted
-/// entirely from the rendered body.
-fn render_collapsible_section(body: &mut String, title: &str, items: &[String]) {
-    if items.is_empty() {
-        return;
-    }
-    body.push_str(&format!("\n<details>\n<summary>{title}</summary>\n\n"));
-    for item in items {
-        let _ = writeln!(body, "- {item}");
-    }
-    body.push_str("\n</details>\n");
-}
-
-/// Renders the PR review summary comment body for posting to GitHub.
-///
-/// This is the single summary surface: the rendered summary lives ONLY here, as
-/// an issue comment whose body starts with the
-/// `<!-- APTU_REVIEW:<head_sha> -->` HTML comment so it can be deduplicated on
-/// re-runs: an unchanged head SHA means the summary is skipped, a changed SHA
-/// means it is patched in place. The PR review body itself is rendered
-/// separately by [`render_pr_review_review_body`] and never contains the
-/// summary.
+/// Deprecated: thin alias for [`render_pr_review_review_body`] with no
+/// changed-file walkthrough. The PR review body is the single summary surface;
+/// kept as a `#[deprecated]` alias because it is re-exported from the crate
+/// root (public API) and removing it would be a breaking change.
 #[must_use]
+#[deprecated(
+    since = "0.13.0",
+    note = "use render_pr_review_review_body; the PR review body is the single summary surface"
+)]
 pub fn render_pr_review_markdown(review: &PrReviewResponse, head_sha: &str) -> String {
-    let verdict_badge = verdict_badge(&review.verdict);
-
-    let mut body = format!(
-        "{}{} -->\n## Aptu Review\n\n**{}** — {}\n",
-        REVIEW_SUMMARY_MARKER_PREFIX, head_sha, verdict_badge, review.summary
-    );
-
-    render_structured_sections(&mut body, review);
-
-    body.push_str("\n---\n\n<sub>Posted by [aptu](https://github.com/clouatre-labs/aptu)</sub>\n");
-
-    body
+    render_pr_review_review_body(review, &[], head_sha)
 }
 
 /// Maximum number of rows shown in the per-file walkthrough table before the
@@ -546,17 +519,26 @@ fn render_file_walkthrough(files: &[PrFile]) -> Option<String> {
     Some(table)
 }
 
-/// Renders the PR review body for posting to GitHub.
+/// Renders the single PR review summary surface for posting to GitHub.
 ///
-/// The review body carries only non-summary content (the verdict badge,
-/// structured concerns/strengths/suggestions sections, and a per-file
-/// walkthrough table with diff stats only); the rendered summary lives solely
-/// in the deduplicated marker issue comment produced by
-/// [`render_pr_review_markdown`].
+/// The PR review body IS the summary surface: it starts with the
+/// `<!-- APTU_REVIEW:<head_sha> -->` marker (so re-runs can deduplicate by
+/// listing prior bot-authored reviews), then carries the verdict badge, the
+/// rendered summary, the Concerns section, and a per-file walkthrough table
+/// with diff stats only. Strengths and Suggestions are not rendered as
+/// separate sections; the prompt guidelines fold non-obvious strengths into
+/// the summary and omit padding.
 #[must_use]
-pub fn render_pr_review_review_body(review: &PrReviewResponse, files: &[PrFile]) -> String {
+pub fn render_pr_review_review_body(
+    review: &PrReviewResponse,
+    files: &[PrFile],
+    head_sha: &str,
+) -> String {
     let verdict_badge = verdict_badge(&review.verdict);
-    let mut body = format!("## Aptu Review\n\n{verdict_badge}\n");
+    let mut body = format!(
+        "{}{} -->\n## Aptu Review\n\n**{}** — {}\n",
+        REVIEW_SUMMARY_MARKER_PREFIX, head_sha, verdict_badge, review.summary
+    );
 
     render_structured_sections(&mut body, review);
 
@@ -569,11 +551,10 @@ pub fn render_pr_review_review_body(review: &PrReviewResponse, files: &[PrFile])
     body
 }
 
-/// Renders the structured concerns/strengths/suggestions sections shared by
-/// the summary comment and the review body, in a fixed order (Concerns,
-/// Strengths, Suggestions) so both surfaces stay predictable. Concerns are
-/// always rendered as a heading; strengths and suggestions are secondary and
-/// collapsed inside `<details>` blocks. Empty sections are omitted entirely.
+/// Renders the structured Concerns section of the review body. Concerns are
+/// always rendered as a heading; empty sections are omitted entirely.
+/// Standalone Strengths/Suggestions sections were removed in #1695: the
+/// summary prose and inline comments carry that signal instead.
 fn render_structured_sections(body: &mut String, review: &PrReviewResponse) {
     if !review.concerns.is_empty() {
         body.push_str("\n### Concerns\n\n");
@@ -581,8 +562,6 @@ fn render_structured_sections(body: &mut String, review: &PrReviewResponse) {
             let _ = writeln!(body, "- {c}");
         }
     }
-    render_collapsible_section(body, "Strengths", &review.strengths);
-    render_collapsible_section(body, "Suggestions", &review.suggestions);
 }
 
 fn verdict_badge(verdict: &str) -> &'static str {
@@ -830,33 +809,53 @@ mod tests {
     }
 
     #[test]
-    fn test_render_pr_review_markdown_basic() {
+    #[allow(deprecated)]
+    fn test_render_pr_review_markdown_deprecated_alias_matches_review_body() {
+        // The deprecated renderer is a thin alias for the single-surface
+        // review body with no walkthrough table.
         let review = make_pr_review();
-        let body = render_pr_review_markdown(&review, "abc123");
-        // Marker is the literal first line.
+        let alias = render_pr_review_markdown(&review, "abc123");
+        assert_eq!(alias, render_pr_review_review_body(&review, &[], "abc123"));
+    }
+
+    #[test]
+    fn test_render_pr_review_review_body_single_surface() {
+        let review = make_pr_review();
+        let files = vec![make_walkthrough_file("src/main.rs", 3, 1)];
+        let body = render_pr_review_review_body(&review, &files, "abc123");
+        // Marker is the literal first line and round-trips through the parser.
         assert!(body.starts_with("<!-- APTU_REVIEW:abc123 -->\n"));
+        assert_eq!(
+            parse_aptu_summary_marker(&body),
+            Some(AptuSummaryMarker {
+                sha: Some("abc123".to_string())
+            })
+        );
+        // Verdict, summary, Concerns, and Files Changed table are present.
         assert!(body.contains("✅ Approved"));
         assert!(body.contains("Good PR overall."));
-        assert!(body.contains("aptu"));
-        // Structured sections render regardless of files_count.
         assert!(body.contains("### Concerns"));
-        assert!(body.contains("<details>"));
-        assert!(body.contains("<summary>Strengths</summary>"));
-        assert!(body.contains("- Clean code"));
-        assert!(body.contains("<summary>Suggestions</summary>"));
-        assert!(body.contains("- Add a CHANGELOG entry."));
         assert!(body.contains("- Missing docs"));
+        assert!(body.contains("### Files Changed"));
+        assert!(body.contains("| src/main.rs | +3 −1 |"));
+        assert!(body.contains("aptu"));
     }
 
     #[test]
-    fn test_render_pr_review_markdown_marker_first_line() {
+    fn test_render_pr_review_review_body_omits_strengths_and_suggestions() {
         let review = make_pr_review();
-        let body = render_pr_review_markdown(&review, "deadbeef");
-        assert_eq!(body.lines().next(), Some("<!-- APTU_REVIEW:deadbeef -->"));
+        let body = render_pr_review_review_body(&review, &[], "abc123");
+        // Even when the response carries strengths/suggestions, no standalone
+        // sections are rendered.
+        assert!(!body.contains("Strengths"));
+        assert!(!body.contains("Suggestions"));
+        assert!(!body.contains("<details>"));
+        assert!(!body.contains("- Clean code"));
+        assert!(!body.contains("- Add a CHANGELOG entry."));
     }
 
     #[test]
-    fn test_render_pr_review_markdown_empty_arrays() {
+    fn test_render_pr_review_review_body_empty_arrays() {
         let review = PrReviewResponse {
             summary: "LGTM".to_string(),
             verdict: "approve".to_string(),
@@ -866,7 +865,7 @@ mod tests {
             suggestions: vec![],
             disclaimer: None,
         };
-        let body = render_pr_review_markdown(&review, "abc123");
+        let body = render_pr_review_review_body(&review, &[], "abc123");
         assert!(body.contains("<!-- APTU_REVIEW:abc123 -->"));
         assert!(!body.contains("Strengths"));
         assert!(!body.contains("Concerns"));
@@ -875,16 +874,16 @@ mod tests {
     }
 
     #[test]
-    fn test_render_pr_review_markdown_verdict_badges() {
+    fn test_render_pr_review_review_body_verdict_badges() {
         let mut r = make_pr_review();
         r.verdict = "approve".to_string();
-        assert!(render_pr_review_markdown(&r, "s").contains("✅ Approved"));
+        assert!(render_pr_review_review_body(&r, &[], "s").contains("✅ Approved"));
         r.verdict = "request_changes".to_string();
-        assert!(render_pr_review_markdown(&r, "s").contains("❌ Request Changes"));
+        assert!(render_pr_review_review_body(&r, &[], "s").contains("❌ Request Changes"));
         r.verdict = "request-changes".to_string();
-        assert!(render_pr_review_markdown(&r, "s").contains("❌ Request Changes"));
+        assert!(render_pr_review_review_body(&r, &[], "s").contains("❌ Request Changes"));
         r.verdict = "comment".to_string();
-        assert!(render_pr_review_markdown(&r, "s").contains("💬 Comments"));
+        assert!(render_pr_review_review_body(&r, &[], "s").contains("💬 Comments"));
     }
 
     fn make_walkthrough_file(filename: &str, additions: u64, deletions: u64) -> PrFile {
@@ -953,26 +952,21 @@ mod tests {
     }
 
     #[test]
-    fn test_render_pr_review_review_body_excludes_summary_and_marker() {
+    fn test_render_pr_review_review_body_round_trips_marker() {
+        // Marker is the literal first line and parses back to the head SHA.
         let review = make_pr_review();
-        let files = vec![make_walkthrough_file("src/main.rs", 3, 1)];
-        let body = render_pr_review_review_body(&review, &files);
-        assert!(!body.contains(REVIEW_SUMMARY_MARKER_PREFIX));
-        assert!(!body.contains(&review.summary));
-        assert!(body.contains("## Aptu Review"));
-        assert!(body.contains("### Concerns"));
-        assert!(body.contains("<summary>Strengths</summary>"));
-        // Walkthrough table carries stats only; never the summary or marker.
-        assert!(body.contains("| src/main.rs | +3 −1 |"));
-        // Summary comment remains the single surface carrying the summary text.
-        let comment = render_pr_review_markdown(&review, "abc123");
-        assert!(comment.contains(&review.summary));
+        let body = render_pr_review_review_body(&review, &[], "deadbeef");
+        assert_eq!(body.lines().next(), Some("<!-- APTU_REVIEW:deadbeef -->"));
+        assert_eq!(
+            parse_aptu_summary_marker(&body).and_then(|m| m.sha),
+            Some("deadbeef".to_string())
+        );
     }
 
     #[test]
     fn test_render_pr_review_review_body_empty_files_omits_table() {
         let review = make_pr_review();
-        let body = render_pr_review_review_body(&review, &[]);
+        let body = render_pr_review_review_body(&review, &[], "abc123");
         assert!(!body.contains("### Files Changed"));
     }
 

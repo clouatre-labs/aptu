@@ -76,6 +76,7 @@ pub use history::{AiStats, Contribution, ContributionStatus, HistoryData};
 // Triage Detection
 // ============================================================================
 
+#[allow(deprecated)]
 pub use triage::{
     APTU_SIGNATURE, AptuSummaryMarker, REVIEW_SUMMARY_MARKER_PREFIX, TriageStatus,
     check_already_triaged, parse_aptu_summary_marker, render_pr_review_comment_body,

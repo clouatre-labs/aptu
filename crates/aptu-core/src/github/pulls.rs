@@ -655,7 +655,10 @@ fn append_github_errors(message: &str, errors: Option<&[serde_json::Value]>) -> 
 pub enum SummaryPostOutcome {
     /// No existing summary comment; a new one was created.
     Posted,
-    /// An existing summary comment was patched in place (head SHA changed).
+    /// Head SHA changed and a prior summary was patched in place. No longer
+    /// produced since #1695 (the PR review body is the single summary surface
+    /// and submitted reviews are immutable; a changed SHA posts a NEW review
+    /// reported as Posted). Kept for `--output json` contract compatibility.
     Updated,
     /// Head SHA unchanged; the existing summary comment was left as-is.
     Skipped,
@@ -1116,6 +1119,109 @@ pub async fn update_pr_review_comment(
 ///
 /// # Returns
 /// Vector of label names to apply
+/// A single PR review entry retained for marker-based review dedup.
+#[derive(Debug, Clone)]
+pub struct PullReviewEntry {
+    /// Review ID.
+    pub id: u64,
+    /// Author login.
+    pub author: String,
+    /// Whether the review author is a bot (`user.type == "Bot"`).
+    pub author_is_bot: bool,
+    /// Review body (markdown).
+    pub body: String,
+}
+
+/// Finds the latest Aptu marker review among listed PR reviews.
+///
+/// Ownership requires BOTH the body marker (parsed via
+/// [`crate::triage::parse_aptu_summary_marker`]) AND a Bot-type author; never
+/// `octocrab current().user()`, which fails on GitHub App installation tokens
+/// (see #1639). The LATEST matching review wins so a PR with reviews from
+/// multiple head-SHA iterations deduplicates against the most recent one.
+/// Returns the review ID and its parsed marker SHA (the legacy SHA-less form
+/// parses to `None`, which callers treat as stale).
+#[must_use]
+pub fn find_marker_review(entries: &[PullReviewEntry]) -> Option<(u64, Option<String>)> {
+    entries.iter().rev().find_map(|r| {
+        if !r.author_is_bot {
+            return None;
+        }
+        crate::triage::parse_aptu_summary_marker(&r.body).map(|m| (r.id, m.sha))
+    })
+}
+
+/// Lists all reviews on a pull request with pagination (`per_page=100`, max
+/// 300 items), mirroring the issue-comment listing in `github/issues.rs`.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails.
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo, number = number))]
+pub async fn list_pr_reviews(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    number: u64,
+) -> Result<Vec<PullReviewEntry>> {
+    let mut reviews: Vec<PullReviewEntry> = Vec::new();
+    let mut page = client
+        .pulls(owner, repo)
+        .list_reviews(number)
+        .per_page(100)
+        .send()
+        .await
+        .with_context(|| format!("Failed to list reviews for PR #{number}"))?;
+
+    loop {
+        reviews.extend(page.items.into_iter().map(|r| PullReviewEntry {
+            id: r.id.0,
+            author: r.user.as_ref().map(|u| u.login.clone()).unwrap_or_default(),
+            author_is_bot: r.user.is_some_and(|u| u.r#type.as_str() == "Bot"),
+            body: r.body.unwrap_or_default(),
+        }));
+
+        // Cap at 300 to mirror the review-comment listing limit.
+        if reviews.len() >= 300 {
+            tracing::warn!(
+                pr = number,
+                cap = 300,
+                "PR has reached 300-review cap; stopping pagination"
+            );
+            reviews.truncate(300);
+            break;
+        }
+
+        match client
+            .get_page::<octocrab::models::pulls::Review>(&page.next)
+            .await
+        {
+            Ok(Some(next_page)) => page = next_page,
+            Ok(None) => break,
+            Err(e) => {
+                // A failed page fetch is an error, not an empty listing:
+                // treating it as empty would break same-SHA dedup and cause a
+                // duplicate review post.
+                return Err(anyhow::anyhow!(e).context(format!(
+                    "Failed to fetch next page of reviews for PR #{number}"
+                )));
+            }
+        }
+    }
+
+    Ok(reviews)
+}
+
+/// Parses conventional commit prefix from PR title and maps file paths to scope labels.
+/// Returns a vector of label names to apply to the PR.
+///
+/// # Arguments
+/// * `title` - PR title (may contain conventional commit prefix)
+/// * `file_paths` - List of file paths changed in the PR
+///
+/// # Returns
+/// Vector of label names to apply
 #[must_use]
 pub fn labels_from_pr_metadata(title: &str, file_paths: &[String]) -> Vec<String> {
     let mut labels = std::collections::HashSet::new();
@@ -1181,6 +1287,64 @@ fn should_skip_file(filename: &str, status: &str, patch: Option<&String>) -> boo
 mod tests {
     use super::*;
     use crate::ai::types::CommentSeverity;
+
+    fn review_entry(id: u64, author: &str, is_bot: bool, body: &str) -> PullReviewEntry {
+        PullReviewEntry {
+            id,
+            author: author.to_string(),
+            author_is_bot: is_bot,
+            body: body.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_find_marker_review_requires_bot_author_and_marker_body() {
+        use crate::triage::parse_aptu_summary_marker;
+        let entries = vec![
+            // Human-authored marker review: NOT owned (marker alone is not
+            // enough; a human cannot be trusted as the Aptu author).
+            review_entry(1, "someone", false, "<!-- APTU_REVIEW:abc -->\nbody"),
+            // Bot-authored but no marker.
+            review_entry(2, "aptu[bot]", true, "just a review"),
+            // Bot-authored with marker: the only match.
+            review_entry(3, "aptu[bot]", true, "<!-- APTU_REVIEW:def -->\nbody"),
+        ];
+        let found = find_marker_review(&entries);
+        assert_eq!(
+            found.map(|(id, sha)| (id, sha == Some("def".to_string()))),
+            Some((3, true))
+        );
+        // Sanity: the marker in the winning body parses.
+        assert!(parse_aptu_summary_marker(&entries[2].body).is_some());
+    }
+
+    #[test]
+    fn test_find_marker_review_prefers_latest_and_none_when_absent() {
+        // Latest bot marker review wins over an older one.
+        let entries = vec![
+            review_entry(1, "aptu[bot]", true, "<!-- APTU_REVIEW:old -->\nbody"),
+            review_entry(2, "aptu[bot]", true, "<!-- APTU_REVIEW:new -->\nbody"),
+        ];
+        assert_eq!(
+            find_marker_review(&entries),
+            Some((2, Some("new".to_string())))
+        );
+        // No marker reviews at all.
+        assert_eq!(
+            find_marker_review(&[review_entry(1, "aptu[bot]", true, "no marker")]),
+            None
+        );
+        // Legacy SHA-less marker parses to a stale None SHA.
+        assert_eq!(
+            find_marker_review(&[review_entry(
+                9,
+                "aptu[bot]",
+                true,
+                "<!-- APTU_REVIEW -->\nold"
+            )]),
+            Some((9, None))
+        );
+    }
 
     fn decode_content(encoded: &str, max_chars: usize) -> Option<String> {
         use base64::Engine;

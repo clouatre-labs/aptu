@@ -78,15 +78,15 @@ mod tests {
 
     #[test]
     fn summary_dedup_updates_when_head_sha_changed_or_legacy() {
-        // Changed SHA -> patch in place.
+        // Changed SHA -> post a new review (submitted reviews are immutable).
         assert_eq!(
             summary_dedup_outcome(Some((42, Some("old".to_string()))), "new"),
-            SummaryDedupOutcome::Update { comment_id: 42 }
+            SummaryDedupOutcome::Update
         );
-        // Legacy SHA-less marker -> treated as stale -> update.
+        // Legacy SHA-less marker -> treated as stale -> new review.
         assert_eq!(
             summary_dedup_outcome(Some((7, None)), "abc123"),
-            SummaryDedupOutcome::Update { comment_id: 7 }
+            SummaryDedupOutcome::Update
         );
     }
 
@@ -99,13 +99,11 @@ mod tests {
     }
 
     #[test]
-    fn summary_update_body_carries_current_head_sha_marker() {
-        // Invariant: on the Update path, the body passed to
-        // `update_issue_comment` is the freshly rendered summary with the
-        // CURRENT head SHA marker, never the stale body read from the
-        // existing comment.
-        let stale_body = "<!-- APTU_REVIEW:oldsha -->\n## Aptu Review\nstale";
-        let fresh_body = crate::triage::render_pr_review_markdown(
+    #[allow(deprecated)]
+    fn summary_body_carries_current_head_sha_marker() {
+        // Invariant: the single-surface review body carries the CURRENT head
+        // SHA marker, never a stale SHA read from an existing review.
+        let body = crate::triage::render_pr_review_markdown(
             &crate::ai::types::PrReviewResponse {
                 summary: "ok".to_string(),
                 verdict: "approve".to_string(),
@@ -117,9 +115,8 @@ mod tests {
             },
             "newsha",
         );
-        assert!(fresh_body.contains("<!-- APTU_REVIEW:newsha -->"));
-        assert!(!fresh_body.contains("oldsha"));
-        let _ = stale_body; // stale body is only parsed for the marker, never re-posted
+        assert!(body.contains("<!-- APTU_REVIEW:newsha -->"));
+        assert!(!body.contains("oldsha"));
     }
 
     #[tokio::test]
