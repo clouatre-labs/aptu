@@ -305,8 +305,10 @@ pub const APTU_COMMENT_HASH_PREFIX: &str = "<!-- APTU_COMMENT_HASH:";
 /// of a review comment: text, severity, and suggested code. Fields are encoded
 /// with an 8-byte big-endian length prefix each so adversarial content (e.g.
 /// embedded NUL bytes) cannot shift field boundaries or collide two distinct
-/// semantic values. Rendered format is intentionally excluded so renderer-only
-/// changes do not trigger updates.
+/// semantic values. `suggested_code` additionally carries a presence
+/// discriminant byte (0 for `None`, 1 for `Some`) so `None` and `Some("")` —
+/// semantically different values — hash differently. Rendered format is
+/// intentionally excluded so renderer-only changes do not trigger updates.
 #[must_use]
 pub fn comment_content_hash(comment: &PrReviewComment) -> String {
     fn hash_field(hasher: &mut Sha256, field: &str) {
@@ -317,7 +319,13 @@ pub fn comment_content_hash(comment: &PrReviewComment) -> String {
     let mut hasher = Sha256::new();
     hash_field(&mut hasher, &comment.comment);
     hash_field(&mut hasher, &format!("{:?}", comment.severity));
-    hash_field(&mut hasher, comment.suggested_code.as_deref().unwrap_or(""));
+    match &comment.suggested_code {
+        None => hasher.update([0_u8]),
+        Some(code) => {
+            hasher.update([1_u8]);
+            hash_field(&mut hasher, code);
+        }
+    }
     let digest = hasher.finalize();
     let mut hex = String::with_capacity(digest.len() * 2);
     for byte in digest {
@@ -1122,6 +1130,15 @@ mod tests {
         let merged = hash_comment("msg\0let x = 1;", CommentSeverity::Suggestion, None);
         let shifted = hash_comment("msg", CommentSeverity::Suggestion, Some("let x = 1;"));
         assert_ne!(merged, shifted);
+    }
+
+    #[test]
+    fn test_comment_content_hash_none_vs_empty_suggested_code() {
+        // Presence discriminant: None and Some("") are semantically different
+        // and must not collapse to the same hash.
+        let none = hash_comment("msg", CommentSeverity::Issue, None);
+        let empty = hash_comment("msg", CommentSeverity::Issue, Some(""));
+        assert_ne!(none, empty);
     }
 
     #[test]
