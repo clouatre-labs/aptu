@@ -94,13 +94,7 @@ fn truncate_at_char_boundary(s: &str, max_bytes: usize) -> &str {
     if s.len() <= max_bytes {
         return s;
     }
-    let idx = s
-        .char_indices()
-        .map(|(i, _)| i)
-        .take_while(|&i| i <= max_bytes)
-        .last()
-        .unwrap_or(0);
-    &s[..idx]
+    &s[..s.floor_char_boundary(max_bytes)]
 }
 
 /// Builds the user prompt for issue triage.
