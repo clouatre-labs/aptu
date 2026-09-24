@@ -207,6 +207,9 @@ outputs:
   pr-review-outcome:
     description: Real outcome of the aptu PR review step (success or failure), independent of continue-on-error
     value: ${{ steps.pr-review.outputs.outcome }}
+  lint-issue-outcome:
+    description: Real outcome of the aptu lint-issue step (success or failure), independent of continue-on-error
+    value: ${{ steps.lint-issue.outputs.outcome }}
 
 runs:
   using: composite
@@ -538,6 +541,7 @@ runs:
         token: ${{ inputs.github-token || github.token }}
 
     - name: Run aptu lint-issue
+      id: lint-issue
       if: inputs.lint-issue-file != ''
       continue-on-error: ${{ inputs.lint-fail-on != 'true' }}
       shell: bash
@@ -547,7 +551,13 @@ runs:
       run: |
         set -e
         echo "Running: aptu lint-issue --file $LINT_ISSUE_FILE --issue-type $LINT_ISSUE_TYPE --output github-annotations"
-        aptu lint-issue --file "$LINT_ISSUE_FILE" --issue-type "$LINT_ISSUE_TYPE" --output github-annotations
+        if aptu lint-issue --file "$LINT_ISSUE_FILE" --issue-type "$LINT_ISSUE_TYPE" --output github-annotations; then
+          echo "outcome=success" >> "$GITHUB_OUTPUT"
+        else
+          LINT_EXIT_CODE=$?
+          echo "outcome=failure" >> "$GITHUB_OUTPUT"
+          exit "$LINT_EXIT_CODE"
+        fi
 
     - name: Write token usage summary
       if: always()

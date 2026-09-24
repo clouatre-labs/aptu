@@ -33,7 +33,7 @@ jobs:
       - name: Run aptu lint-issue
         id: lint
         continue-on-error: ${{ inputs.fail-on != 'true' }}
-        uses: clouatre-labs/aptu@main
+        uses: clouatre-labs/aptu@v0
         with:
           lint-issue-file: ${{ inputs.issue-body-file }}
           lint-issue-type: ${{ inputs.issue-type }}
@@ -45,7 +45,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
-          OUTCOME: ${{ steps.lint.outcome }}
+          OUTCOME: ${{ steps.lint.outputs.lint-issue-outcome }}
         run: |
           if [[ "$OUTCOME" == "success" ]]; then
             DESCRIPTION="issue lint passed"
