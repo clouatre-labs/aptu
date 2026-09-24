@@ -89,6 +89,20 @@ const MAX_LABELS: usize = 20;
 const MAX_MILESTONES: usize = 10;
 const MAX_FILES: usize = 20;
 
+/// Truncates `s` to at most `max_bytes`, snapping to the nearest UTF-8 char boundary at or below the limit.
+fn truncate_at_char_boundary(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let idx = s
+        .char_indices()
+        .map(|(i, _)| i)
+        .take_while(|&i| i <= max_bytes)
+        .last()
+        .unwrap_or(0);
+    &s[..idx]
+}
+
 /// Builds the user prompt for issue triage.
 #[must_use]
 pub fn build_user_prompt(issue: &IssueDetails) -> String {
@@ -102,7 +116,7 @@ pub fn build_user_prompt(issue: &IssueDetails) -> String {
     let body = if sanitized_body.len() > MAX_BODY_LENGTH {
         format!(
             "{}...\n[APTU: body truncated by size budget -- do not speculate on missing content]",
-            &sanitized_body[..MAX_BODY_LENGTH],
+            truncate_at_char_boundary(&sanitized_body, MAX_BODY_LENGTH),
         )
     } else if sanitized_body.is_empty() {
         "[No description provided]".to_string()
@@ -122,7 +136,10 @@ pub fn build_user_prompt(issue: &IssueDetails) -> String {
         for comment in issue.comments.iter().take(MAX_COMMENTS) {
             let sanitized_comment_body = sanitize_prompt_field(&comment.body);
             let comment_body = if sanitized_comment_body.len() > 500 {
-                format!("{}...", &sanitized_comment_body[..500])
+                format!(
+                    "{}...",
+                    truncate_at_char_boundary(&sanitized_comment_body, 500)
+                )
             } else {
                 sanitized_comment_body
             };
@@ -433,7 +450,7 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     } else if sanitized_body.len() > MAX_BODY_LENGTH {
         format!(
             "{}...\n[APTU: description truncated by size budget -- do not speculate on missing content]",
-            &sanitized_body[..MAX_BODY_LENGTH],
+            truncate_at_char_boundary(&sanitized_body, MAX_BODY_LENGTH),
         )
     } else {
         sanitized_body
@@ -476,7 +493,7 @@ pub fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]
     } else if sanitized_body.len() > MAX_BODY_LENGTH {
         format!(
             "{}...\n[APTU: description truncated by size budget -- do not speculate on missing content]",
-            &sanitized_body[..MAX_BODY_LENGTH],
+            truncate_at_char_boundary(&sanitized_body, MAX_BODY_LENGTH),
         )
     } else {
         sanitized_body.clone()
@@ -1340,5 +1357,119 @@ mod tests {
             !prompt.contains("[APTU: patch dropped due to prompt budget"),
             "patch skipped by design (added file with full_content) must not be annotated as budget-dropped"
         );
+    }
+
+    #[test]
+    fn test_truncate_at_char_boundary_full_string_within_budget() {
+        let s = "hello";
+        assert_eq!(truncate_at_char_boundary(s, 10), "hello");
+        assert_eq!(truncate_at_char_boundary(s, 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_at_char_boundary_exact_boundary() {
+        let s = "abcé";
+        assert_eq!(truncate_at_char_boundary(s, 3), "abc");
+    }
+
+    #[test]
+    fn test_truncate_at_char_boundary_snaps_down_mid_char() {
+        let s = "abécd";
+        // byte 3 is the start of 'é' (2 bytes: 3..5), so budget 4 snaps to 3
+        assert_eq!(truncate_at_char_boundary(s, 4), "abé");
+    }
+
+    #[test]
+    fn test_build_user_prompt_multibyte_straddling_budget_no_panic() {
+        let body = "x".repeat(1999) + &"é".repeat(2000);
+        let issue = IssueDetails::builder()
+            .owner("test".to_string())
+            .repo("repo".to_string())
+            .number(1)
+            .title("Test".to_string())
+            .body(body)
+            .labels(vec![])
+            .comments(vec![])
+            .url("https://github.com/test/repo/issues/1".to_string())
+            .build();
+
+        let prompt = build_user_prompt(&issue);
+        assert!(prompt.contains(
+            "[APTU: body truncated by size budget -- do not speculate on missing content]"
+        ));
+        assert!(prompt.contains(&format!("Body:\n{}", "x".repeat(1999))));
+        assert!(!prompt.contains(&"x".repeat(2000)));
+    }
+
+    #[test]
+    fn test_build_pr_review_user_prompt_multibyte_straddling_budget_no_panic() {
+        use super::super::types::PrDetails;
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "Test PR".to_string(),
+            body: "x".repeat(1999) + &"é".repeat(2000),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1".to_string(),
+            files: vec![],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        let mut ctx = super::super::review_context::ReviewContext {
+            pr,
+            max_chars_per_file: 100,
+            ..Default::default()
+        };
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+        assert!(prompt.contains(
+            "[APTU: description truncated by size budget -- do not speculate on missing content]"
+        ));
+    }
+
+    #[test]
+    fn test_build_pr_label_user_prompt_multibyte_straddling_budget_no_panic() {
+        let title = "test";
+        let body = "x".repeat(1999) + &"é".repeat(2000);
+        let files: Vec<String> = vec![];
+
+        let prompt = build_pr_label_user_prompt(title, &body, &files);
+        assert!(prompt.contains(
+            "[APTU: description truncated by size budget -- do not speculate on missing content]"
+        ));
+        assert!(prompt.contains("x".repeat(1999).as_str()));
+        assert!(!prompt.contains("x".repeat(2000).as_str()));
+    }
+
+    #[test]
+    fn test_build_user_prompt_multibyte_comment_straddling_budget_no_panic() {
+        let comment_body = "x".repeat(499) + &"é".repeat(100);
+        let comment = super::super::types::IssueComment {
+            id: "1".to_string(),
+            author: "alice".to_string(),
+            body: comment_body,
+        };
+        let issue = IssueDetails::builder()
+            .owner("test".to_string())
+            .repo("repo".to_string())
+            .number(1)
+            .title("Test".to_string())
+            .body("body".to_string())
+            .labels(vec![])
+            .comments(vec![comment])
+            .url("https://github.com/test/repo/issues/1".to_string())
+            .build();
+
+        let prompt = build_user_prompt(&issue);
+        assert!(prompt.contains("Recent Comments:"));
+        assert!(prompt.contains("- @alice:"));
+        assert!(prompt.contains("x".repeat(499).as_str()));
+        assert!(!prompt.contains("x".repeat(500).as_str()));
     }
 }
