@@ -11,7 +11,10 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::issue_lint::parser::{extract_h2_headings, has_code_example, has_external_reference};
+use crate::issue_lint::parser::{
+    extract_h2_headings, has_code_example, has_external_reference, has_fenced_code,
+    strip_fenced_blocks, strip_html_comments,
+};
 use crate::issue_lint::types::{IssueLintResult, IssueLintSpec, IssueLintViolation};
 
 /// File name auto-discovered at the repository root.
@@ -137,9 +140,12 @@ fn lint_with_spec(body: &str, spec: &IssueLintSpec) -> IssueLintResult {
 
 /// Lints the body with the four generic deterministic checks.
 fn lint_generic(body: &str) -> IssueLintResult {
+    // All checks run on stripped text (HTML comments and fenced contents
+    // removed) except fence detection, which needs the raw body.
+    let stripped = strip_fenced_blocks(&strip_html_comments(body));
     let mut violations = Vec::new();
-    let stripped = body.trim();
-    if stripped.chars().count() < GENERIC_MIN_BODY_CHARS {
+    let trimmed = stripped.trim();
+    if trimmed.chars().count() < GENERIC_MIN_BODY_CHARS {
         violations.push(IssueLintViolation {
             rule: "generic/body-too-short".to_string(),
             message: format!(
@@ -148,7 +154,7 @@ fn lint_generic(body: &str) -> IssueLintResult {
             line: None,
         });
     }
-    let checkbox_count = acceptance_checkbox_count(body);
+    let checkbox_count = acceptance_checkbox_count(&stripped);
     if checkbox_count < GENERIC_MIN_CHECKBOXES {
         violations.push(IssueLintViolation {
             rule: "generic/acceptance-criteria".to_string(),
@@ -158,14 +164,14 @@ fn lint_generic(body: &str) -> IssueLintResult {
             line: None,
         });
     }
-    if !has_code_example(body) {
+    if !(has_fenced_code(body) || has_code_example(&stripped)) {
         violations.push(IssueLintViolation {
             rule: "generic/no-code-example".to_string(),
             message: "no code fence or file-path reference found".to_string(),
             line: None,
         });
     }
-    if !has_external_reference(body) {
+    if !has_external_reference(&stripped) {
         violations.push(IssueLintViolation {
             rule: "generic/no-external-link".to_string(),
             message: "no external URL or #N issue reference found".to_string(),
@@ -314,6 +320,53 @@ mod tests {
             lint_issue(&good, None).passed,
             "violations: {:?}",
             lint_issue(&good, None).violations
+        );
+    }
+
+    /// Generic mode: checkboxes hidden in HTML comments or fenced blocks do
+    /// not satisfy the acceptance-criteria check; a real fence still counts
+    /// as a code example.
+    #[test]
+    fn test_generic_mode_ignores_hidden_checkboxes() {
+        // Arrange: the only checkboxes live in an HTML comment inside the
+        // acceptance section, and a fenced block contains two more.
+        let body = [
+            "## Acceptance Criteria",
+            "- [ ] real",
+            "- [ ] also real",
+            "<!--",
+            "- [ ] hidden in comment",
+            "- [ ] also hidden",
+            "-->",
+            "```",
+            "- [ ] hidden in fence",
+            "- [ ] also fenced",
+            "```",
+            "Implemented like crates/aptu-core/src/lib.rs per https://example.com/spec (#1702).",
+        ]
+        .join("\n");
+
+        // Act
+        let comment_only = [
+            "## Acceptance Criteria",
+            "<!--",
+            "- [ ] hidden in comment",
+            "- [ ] also hidden",
+            "-->",
+            "Implemented like crates/aptu-core/src/lib.rs per https://example.com/spec (#1702).",
+        ]
+        .join("\n");
+        let result = lint_issue(&body, None);
+        let result_comment = lint_issue(&comment_only, None);
+
+        // Assert: the fenced body passes (one real checkbox plus fence for
+        // code example); the comment-only body fails acceptance-criteria.
+        assert!(result.passed, "violations: {:?}", result.violations);
+        assert!(
+            result_comment
+                .violations
+                .iter()
+                .any(|v| v.rule == "generic/acceptance-criteria")
         );
     }
 

@@ -55,7 +55,7 @@ jobs:
             STATE="failure"
           else
             DESCRIPTION="issue lint skipped"
-            STATE="neutral"
+            STATE="pending"
           fi
           gh api repos/${{ github.repository }}/statuses/"$SHA" \
             -f state="$STATE" \

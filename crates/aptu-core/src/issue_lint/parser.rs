@@ -90,6 +90,13 @@ pub fn extract_h2_headings(body: &str) -> Vec<(String, usize)> {
         .collect()
 }
 
+/// True when the body contains a fenced code block (backtick or tilde).
+/// Must run on the raw body: fences cannot be detected after stripping.
+#[must_use]
+pub fn has_fenced_code(body: &str) -> bool {
+    body.contains("```") || body.contains("~~~")
+}
+
 /// True when the body references an external URL (`http://`/`https://`)
 /// or another issue (`#N` with at least one digit).
 #[must_use]
@@ -105,17 +112,19 @@ pub fn has_external_reference(body: &str) -> bool {
             .any(|rest| rest.chars().next().is_some_and(|c| c.is_ascii_digit()))
 }
 
-/// True when the body contains a fenced code block or a file-path-like
-/// reference (a token containing `/` and a `.`, or a filename extension).
+/// True when the stripped body contains a file-path-like reference (a token
+/// containing `/` and a `.`), or when the raw body contains a code fence.
 #[must_use]
 pub fn has_code_example(body: &str) -> bool {
-    if body.contains("```") || body.contains("~~~") {
+    if has_fenced_code(body) {
         return true;
     }
-    body.split_whitespace().any(|token| {
-        let token = token.trim_matches(|c: char| "()`*\"".contains(c));
-        token.contains('/') && token.contains('.') && !token.contains("://")
-    })
+    strip_fenced_blocks(&strip_html_comments(body))
+        .split_whitespace()
+        .any(|token| {
+            let token = token.trim_matches(|c: char| "()`*\"".contains(c));
+            token.contains('/') && token.contains('.') && !token.contains("://")
+        })
 }
 
 #[cfg(test)]
