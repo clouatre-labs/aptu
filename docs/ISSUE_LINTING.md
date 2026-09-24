@@ -50,12 +50,12 @@ Output formats: `text`, `json`, and `github-annotations`. `sarif` is not support
 Resolution is automatic, in order:
 
 1. explicit `--config <specs.toml>`
-2. `issue-lint-specs.toml` at the repository root (auto-discovered from the working directory)
+2. `issue-lint-specs.toml` at the repository root (found by walking upward from the working directory until a `.git` entry is located; falls back to the working directory itself)
 3. generic mode
 
 A spec matches by its `type` field against `--issue-type`. An unknown `--issue-type` with an explicit config lacking that type is a hard error (exit 2). With no explicit config, a repo-root spec that lacks the type falls back to generic mode.
 
-Note that the working-directory dependency matters in CI: the repo-root file must be present in the step's working directory.
+Because discovery walks upward to the repository root, the command works from any subdirectory of a checkout, including worktrees. Outside a repository, only a spec file in the working directory itself is considered.
 
 ## Config schema
 

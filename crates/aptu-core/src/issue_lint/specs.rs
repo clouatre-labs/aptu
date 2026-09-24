@@ -6,7 +6,7 @@
 //! `issue-lint-specs.toml` (auto-discovered from the working directory),
 //! then built-in generic checks.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -71,11 +71,27 @@ pub fn parse_specs(content: &str) -> Result<Vec<IssueLintSpec>> {
 /// # Errors
 /// Returns an error when an explicit config is unreadable or malformed.
 pub fn resolve_specs(explicit_config: Option<&Path>) -> Result<SpecResolution> {
-    resolve_specs_in(Path::new("."), explicit_config)
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    resolve_specs_in(&cwd, explicit_config)
 }
 
-/// Like [`resolve_specs`] but auto-discovers `issue-lint-specs.toml` under
-/// `base` instead of the process working directory (testable).
+/// Walks upward from `start` looking for a `.git` entry (file or directory,
+/// covering worktrees and submodules); returns the first ancestor containing
+/// one, or `start` itself when no repository root is found.
+#[must_use]
+pub fn find_repo_root(start: &Path) -> PathBuf {
+    let mut current = Some(start);
+    while let Some(dir) = current {
+        if dir.join(".git").exists() {
+            return dir.to_path_buf();
+        }
+        current = dir.parent();
+    }
+    start.to_path_buf()
+}
+
+/// Like [`resolve_specs`] but auto-discovers `issue-lint-specs.toml` at the
+/// repository root found by walking upward from `base` (testable).
 ///
 /// # Errors
 /// Returns an error when a chosen config is unreadable or malformed.
@@ -83,7 +99,7 @@ pub fn resolve_specs_in(base: &Path, explicit_config: Option<&Path>) -> Result<S
     if let Some(path) = explicit_config {
         return Ok(SpecResolution::Explicit(load_specs(path)?));
     }
-    let repo_root = base.join(SPECS_FILE_NAME);
+    let repo_root = find_repo_root(base).join(SPECS_FILE_NAME);
     if repo_root.is_file() {
         return Ok(SpecResolution::RepoRoot(load_specs(&repo_root)?));
     }
@@ -438,6 +454,49 @@ required_headings = ["Summary"]
 
         std::fs::remove_dir_all(&dir).ok();
         std::fs::remove_dir_all(&empty_dir).ok();
+    }
+
+    /// Repo-root discovery walks up from a nested directory to the `.git`
+    /// ancestor and finds its spec file.
+    #[test]
+    fn test_find_repo_root_walks_up_to_git_dir() {
+        // Arrange: repo root with .git dir and a spec, plus a nested subdir.
+        let root = std::env::temp_dir().join("aptu-lint-root-test");
+        let nested = root.join("crates").join("nested");
+        std::fs::create_dir_all(&nested).expect("mkdir");
+        std::fs::create_dir_all(root.join(".git")).expect("mkdir .git");
+        std::fs::write(root.join(SPECS_FILE_NAME), "[[spec]]\ntype = \"bug\"\n")
+            .expect("write spec");
+
+        // Act
+        let discovered = find_repo_root(&nested);
+        let resolution = resolve_specs_in(&nested, None).expect("resolution");
+
+        // Assert
+        assert_eq!(discovered, root);
+        assert!(matches!(
+            resolution,
+            SpecResolution::RepoRoot(specs) if specs.len() == 1 && specs[0].issue_type == "bug"
+        ));
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// Without a `.git` ancestor, discovery falls back to the start dir.
+    #[test]
+    fn test_find_repo_root_falls_back_to_start() {
+        // Arrange
+        let plain = std::env::temp_dir().join("aptu-lint-no-git-test");
+        std::fs::create_dir_all(&plain).expect("mkdir");
+
+        // Act / Assert
+        assert_eq!(find_repo_root(&plain), plain);
+        assert_eq!(
+            resolve_specs_in(&plain, None).expect("resolution"),
+            SpecResolution::Generic
+        );
+
+        std::fs::remove_dir_all(&plain).ok();
     }
 
     /// Malformed explicit config is an error (CLI maps this to exit 2).

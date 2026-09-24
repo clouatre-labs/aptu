@@ -47,32 +47,74 @@ pub fn strip_html_comments(body: &str) -> String {
     }
 }
 
-/// Returns the body with fenced code block contents blanked out, preserving
-/// line count. Handles backtick and tilde fences with a linear scanner.
+/// A line is a fence marker when it starts (after at most whitespace) with
+/// three or more backticks or tildes; returns the marker char and count.
+fn fence_marker(line: &str) -> Option<(char, usize)> {
+    let c = line.chars().next()?;
+    if c != '`' && c != '~' {
+        return None;
+    }
+    let count = line.chars().take_while(|&x| x == c).count();
+    (count >= 3).then_some((c, count))
+}
+
+/// Returns 0-based inclusive `(start_line, end_line)` ranges of properly
+/// closed fenced code blocks, using a linear fence scanner. A fence opens on
+/// a line whose first non-whitespace characters are 3+ backticks or tildes
+/// (optionally followed by an info string) and only counts when a matching
+/// closing fence (same char, at least as many, no info string) appears later.
 #[must_use]
-pub fn strip_fenced_blocks(body: &str) -> String {
-    let mut out_lines: Vec<String> = Vec::new();
-    let mut fence_token: Option<String> = None;
-    for line in body.lines() {
-        let trimmed = line.trim_start();
-        if let Some(token) = &fence_token {
-            out_lines.push(String::new());
-            if trimmed.starts_with(token.as_str()) {
-                fence_token = None;
+pub fn fence_spans(body: &str) -> Vec<(usize, usize)> {
+    let mut spans = Vec::new();
+    let mut open: Option<(char, usize, usize)> = None;
+    for (idx, line) in body.lines().enumerate() {
+        let trimmed = line.trim();
+        match open {
+            Some((c, n, start)) => {
+                let is_close = fence_marker(trimmed).is_some_and(|(cc, nn)| cc == c && nn >= n)
+                    && trimmed.trim_matches(c).trim().is_empty();
+                if is_close {
+                    spans.push((start, idx));
+                    open = None;
+                }
             }
-        } else {
-            let fence = ['`', '~']
-                .into_iter()
-                .find(|c| trimmed.starts_with(&c.to_string().repeat(3)));
-            if let Some(c) = fence {
-                fence_token = Some(c.to_string());
-                out_lines.push(String::new());
-            } else {
-                out_lines.push(line.to_string());
+            None => {
+                if let Some((c, n)) = fence_marker(trimmed) {
+                    let info = trimmed.trim_start_matches(c).trim();
+                    // Backtick fences may not carry a backtick info string.
+                    if c == '~' || !info.contains('`') {
+                        open = Some((c, n, idx));
+                    }
+                }
             }
         }
     }
-    out_lines.join("\n")
+    spans
+}
+
+/// Returns the body with fenced code block contents blanked out, preserving
+/// line count. Handles backtick and tilde fences with a linear scanner;
+/// unmatched openers leave their content intact.
+#[must_use]
+pub fn strip_fenced_blocks(body: &str) -> String {
+    let spans = fence_spans(body);
+    let mut blanked = vec![false; body.lines().count()];
+    for (start, end) in spans {
+        for idx in blanked.iter_mut().take(end + 1).skip(start) {
+            *idx = true;
+        }
+    }
+    body.lines()
+        .enumerate()
+        .map(|(idx, line)| {
+            if blanked[idx] {
+                String::new()
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Extracts H2 headings (lines starting with `## `) with 1-based line
@@ -90,11 +132,12 @@ pub fn extract_h2_headings(body: &str) -> Vec<(String, usize)> {
         .collect()
 }
 
-/// True when the body contains a fenced code block (backtick or tilde).
-/// Must run on the raw body: fences cannot be detected after stripping.
+/// True when the body contains at least one properly closed fenced code
+/// block (backtick or tilde). Fences inside HTML comments and unmatched
+/// delimiters do not count.
 #[must_use]
 pub fn has_fenced_code(body: &str) -> bool {
-    body.contains("```") || body.contains("~~~")
+    !fence_spans(&strip_html_comments(body)).is_empty()
 }
 
 /// True when the body references an external URL (`http://`/`https://`)
@@ -190,5 +233,50 @@ mod tests {
         assert!(has_code_example("```\ncode\n```"));
         assert!(has_code_example("see `src/main.rs`"));
         assert!(!has_code_example("plain text only"));
+    }
+
+    /// Fence spans only cover properly closed blocks.
+    #[test]
+    fn test_fence_spans_closed_blocks() {
+        // Arrange
+        let body = "before\n```rust\ncode\n```\nafter\n~~~\ntilde\n~~~\n";
+
+        // Act
+        let spans = fence_spans(body);
+
+        // Assert
+        assert_eq!(spans, vec![(1, 3), (5, 7)]);
+        assert_eq!(strip_fenced_blocks(body), "before\n\n\n\nafter\n\n\n");
+    }
+
+    /// Inline backtick runs, unmatched openers, and fences inside HTML
+    /// comments do not count as fenced code; a closed fence does.
+    #[test]
+    fn test_has_fenced_code_strict() {
+        // Inline triple-backtick text and unmatched opener do not count.
+        assert!(!has_fenced_code("use \"```\" inline in a sentence"));
+        assert!(!has_fenced_code("use ~~~ inline too"));
+        assert!(!has_fenced_code("````\nnever closed either"));
+        assert!(!has_fenced_code("```\njust an opener, never closed"));
+        assert!(!has_fenced_code("~~~\nunmatched tilde"));
+
+        // Fences inside HTML comments do not count.
+        assert!(!has_fenced_code("<!--\n```\nhidden\n```\n-->"));
+
+        // A proper closed fence counts.
+        assert!(has_fenced_code("text\n```\ncode\n```\nmore"));
+        assert!(has_fenced_code("~~~\ncode\n~~~"));
+        assert!(has_fenced_code("```rs\nfn main() {}\n```"));
+    }
+
+    /// Closing fences must match the opening char, count, and carry no info.
+    #[test]
+    fn test_fence_spans_close_rules() {
+        // Tilde opener is not closed by a backtick line.
+        assert!(fence_spans("~~~\ncode\n```").is_empty());
+        // Closing fence with a longer marker still closes.
+        assert_eq!(fence_spans("```\ncode\n`````"), vec![(0, 2)]);
+        // Closing fence cannot have an info string.
+        assert!(fence_spans("```\ncode\n``` text").is_empty());
     }
 }
