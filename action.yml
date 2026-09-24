@@ -164,6 +164,26 @@ inputs:
     required: false
     default: 'true'
 
+  # --- Lint issue ---
+  lint-issue-file:
+    description: >
+      Path to the issue body markdown file to validate with aptu lint-issue.
+      Leave empty to skip the lint step.
+    required: false
+    default: ''
+  lint-issue-type:
+    description: >
+      Issue template type to validate against (for example feature, bug, docs).
+      Used only when a spec file defines a matching [[spec]] entry.
+    required: false
+    default: 'feature'
+  lint-fail-on:
+    description: >
+      Set to 'true' to fail the workflow when lint-issue reports violations.
+      Leave empty (or 'false') to keep the lint step advisory (annotations only).
+    required: false
+    default: 'false'
+
   # --- Telemetry rollup ---
   telemetry-rollup:
     description: >
@@ -187,6 +207,9 @@ outputs:
   pr-review-outcome:
     description: Real outcome of the aptu PR review step (success or failure), independent of continue-on-error
     value: ${{ steps.pr-review.outputs.outcome }}
+  lint-issue-outcome:
+    description: Real outcome of the aptu lint-issue step (success or failure), independent of continue-on-error
+    value: ${{ steps.lint-issue.outputs.outcome }}
 
 runs:
   using: composite
@@ -516,6 +539,25 @@ runs:
         sarif_file: findings.sarif
         category: aptu-scan-security
         token: ${{ inputs.github-token || github.token }}
+
+    - name: Run aptu lint-issue
+      id: lint-issue
+      if: inputs.lint-issue-file != ''
+      continue-on-error: ${{ inputs.lint-fail-on != 'true' }}
+      shell: bash
+      env:
+        LINT_ISSUE_FILE: ${{ inputs.lint-issue-file }}
+        LINT_ISSUE_TYPE: ${{ inputs.lint-issue-type }}
+      run: |
+        set -e
+        echo "Running: aptu lint-issue --file $LINT_ISSUE_FILE --issue-type $LINT_ISSUE_TYPE --output github-annotations"
+        if aptu lint-issue --file "$LINT_ISSUE_FILE" --issue-type "$LINT_ISSUE_TYPE" --output github-annotations; then
+          echo "outcome=success" >> "$GITHUB_OUTPUT"
+        else
+          LINT_EXIT_CODE=$?
+          echo "outcome=failure" >> "$GITHUB_OUTPUT"
+          exit "$LINT_EXIT_CODE"
+        fi
 
     - name: Write token usage summary
       if: always()

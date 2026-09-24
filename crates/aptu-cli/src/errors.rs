@@ -296,3 +296,32 @@ impl std::fmt::Display for ScanFindingsExit {
 }
 
 impl std::error::Error for ScanFindingsExit {}
+
+/// Sentinel error returned by `lint-issue` when violations are found.
+/// `main` handles this by exiting with code 1 without printing an error
+/// message; the lint output has already been emitted by the command.
+#[derive(Debug)]
+pub struct LintViolationsExit;
+
+impl std::fmt::Display for LintViolationsExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "issue body failed lint-issue checks")
+    }
+}
+
+impl std::error::Error for LintViolationsExit {}
+
+/// Sentinel error returned by `lint-issue` for a broken or unmatched
+/// explicit config. `main` handles this by exiting with code 2 without
+/// printing an additional error message; the command prints the clear
+/// error to stderr before returning this sentinel.
+#[derive(Debug)]
+pub struct LintConfigErrorExit;
+
+impl std::fmt::Display for LintConfigErrorExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "lint-issue explicit config is broken or unmatched")
+    }
+}
+
+impl std::error::Error for LintConfigErrorExit {}

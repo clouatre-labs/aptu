@@ -138,6 +138,7 @@ pub mod error;
 pub mod facade;
 pub mod github;
 pub mod history;
+pub mod issue_lint;
 pub mod metrics;
 pub mod retry;
 pub mod sanitize;

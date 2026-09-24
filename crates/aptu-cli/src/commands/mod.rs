@@ -6,10 +6,12 @@ pub mod auth;
 pub mod common;
 pub mod completion;
 pub mod issue;
+pub mod issue_lint;
 pub mod pr;
 pub mod scan_security;
 pub mod triage;
 pub mod types;
+pub mod workflow;
 
 use std::time::Instant;
 
@@ -647,6 +649,14 @@ pub async fn run(
                 config,
             )
             .await
+        }
+        Commands::LintIssue {
+            file,
+            issue_type,
+            config: lint_config,
+        } => {
+            issue_lint::run_lint_issue_command(file, issue_type, lint_config, ctx.format, config)
+                .await
         }
     }
 }

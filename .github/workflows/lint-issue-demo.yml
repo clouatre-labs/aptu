@@ -1,0 +1,65 @@
+# Demo workflow for the aptu lint-issue operation: validates an issue body
+# file deterministically (no AI), emits GitHub annotations, and posts the
+# aptu/lint-issue commit status. Advisory by default; set fail-on to block.
+name: Lint Issue Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue-body-file:
+        description: Path to the issue body markdown file
+        required: true
+        default: issue-body.md
+      issue-type:
+        description: Issue template type (feature, bug, docs)
+        required: false
+        default: feature
+      fail-on:
+        description: Set to 'true' to fail on lint violations
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  lint-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Run aptu lint-issue
+        id: lint
+        continue-on-error: ${{ inputs.fail-on != 'true' }}
+        uses: clouatre-labs/aptu@5bdf04b9350e574f28adb62c723b2cae77eca23e # v0.12
+        with:
+          lint-issue-file: ${{ inputs.issue-body-file }}
+          lint-issue-type: ${{ inputs.issue-type }}
+          lint-fail-on: ${{ inputs.fail-on }}
+
+      - name: Post aptu/lint-issue commit status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          OUTCOME: ${{ steps.lint.outputs.lint-issue-outcome }}
+        run: |
+          if [[ "$OUTCOME" == "success" ]]; then
+            DESCRIPTION="issue lint passed"
+            STATE="success"
+          elif [[ "$OUTCOME" == "failure" ]]; then
+            DESCRIPTION="issue lint found violations"
+            STATE="failure"
+          else
+            DESCRIPTION="issue lint skipped"
+            STATE="pending"
+          fi
+          gh api repos/${{ github.repository }}/statuses/"$SHA" \
+            -f state="$STATE" \
+            -f context="aptu/lint-issue" \
+            -f description="$DESCRIPTION"

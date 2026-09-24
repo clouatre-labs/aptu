@@ -475,3 +475,153 @@ fn output_format_completeness_matrix() {
         }
     }
 }
+
+// --- lint-issue integration tests ---
+
+/// Writes a unique temp file and returns its path as a string.
+fn write_temp_lint_file(name: &str, content: &str) -> String {
+    let path = std::env::temp_dir().join(name);
+    std::fs::write(&path, content).unwrap();
+    path.to_string_lossy().into_owned()
+}
+
+fn cleanup_temp_lint_file(path: &str) {
+    std::fs::remove_file(path).ok();
+}
+
+const CONFORMING_BODY: &str = "\
+## Summary
+Add a deterministic lint operation for issue bodies with enough detail to act on.
+## Context
+Follows the scan-security pattern described in docs/SECURITY_SCANNING.md (#1702).
+## Implementation Notes
+Mirror the security module; see crates/aptu-core/src/lib.rs.
+## Acceptance Criteria
+- [ ] passes on conforming bodies
+- [ ] fails with named headings
+## Not In Scope
+App-managed mode.
+";
+
+const SPEC_TOML: &str = "\
+[[spec]]
+type = \"feature\"
+required_headings = [\"Summary\", \"Context\", \"Acceptance Criteria\"]
+";
+
+#[test]
+fn test_lint_issue_conforming_body_exits_zero() {
+    let body = write_temp_lint_file("aptu-cli-lint-conforming.md", CONFORMING_BODY);
+    let config = write_temp_lint_file("aptu-cli-lint-conforming.toml", SPEC_TOML);
+    let output = run_cli(&[
+        "lint-issue",
+        "--file",
+        &body,
+        "--issue-type",
+        "feature",
+        "--config",
+        &config,
+    ]);
+    cleanup_temp_lint_file(&body);
+    cleanup_temp_lint_file(&config);
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("passed lint"));
+}
+
+#[test]
+fn test_lint_issue_violations_exit_one_with_empty_stderr() {
+    let body = write_temp_lint_file("aptu-cli-lint-violations.md", "too short\n");
+    let config = write_temp_lint_file("aptu-cli-lint-violations.toml", SPEC_TOML);
+    let output = run_cli(&[
+        "lint-issue",
+        "--file",
+        &body,
+        "--issue-type",
+        "feature",
+        "--config",
+        &config,
+    ]);
+    cleanup_temp_lint_file(&body);
+    cleanup_temp_lint_file(&config);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty(), "stderr should be silent");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("missing required heading: Summary"));
+}
+
+#[test]
+fn test_lint_issue_malformed_config_exits_two() {
+    let body = write_temp_lint_file("aptu-cli-lint-broken.md", CONFORMING_BODY);
+    let config = write_temp_lint_file("aptu-cli-lint-broken.toml", "not [[ valid toml");
+    let output = run_cli(&[
+        "lint-issue",
+        "--file",
+        &body,
+        "--issue-type",
+        "feature",
+        "--config",
+        &config,
+    ]);
+    cleanup_temp_lint_file(&body);
+    cleanup_temp_lint_file(&config);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Error"));
+}
+
+#[test]
+fn test_lint_issue_unknown_type_with_explicit_config_exits_two() {
+    let body = write_temp_lint_file("aptu-cli-lint-unmatched.md", CONFORMING_BODY);
+    let config = write_temp_lint_file("aptu-cli-lint-unmatched.toml", SPEC_TOML);
+    let output = run_cli(&[
+        "lint-issue",
+        "--file",
+        &body,
+        "--issue-type",
+        "mystery",
+        "--config",
+        &config,
+    ]);
+    cleanup_temp_lint_file(&body);
+    cleanup_temp_lint_file(&config);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("no [[spec]]"));
+}
+
+#[test]
+fn test_lint_issue_generic_mode_and_annotations() {
+    // Generic mode (no config) on a conforming body passes.
+    let body = write_temp_lint_file("aptu-cli-lint-generic.md", CONFORMING_BODY);
+    let output = run_cli(&["lint-issue", "--file", &body, "--issue-type", "feature"]);
+    assert_eq!(output.status.code(), Some(0));
+
+    // Generic mode violations with annotations format: annotation lines.
+    let sparse = write_temp_lint_file("aptu-cli-lint-sparse.md", "one line\n");
+    let output = run_cli(&[
+        "lint-issue",
+        "--file",
+        &sparse,
+        "--issue-type",
+        "feature",
+        "--output",
+        "github-annotations",
+    ]);
+    cleanup_temp_lint_file(&body);
+    cleanup_temp_lint_file(&sparse);
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("::error line="));
+}
+
+#[test]
+fn test_lint_issue_generic_mode_without_issue_type_exits_zero() {
+    // Generic mode works without --issue-type on a conforming body.
+    let body = write_temp_lint_file("aptu-cli-lint-generic-notype.md", CONFORMING_BODY);
+    let output = run_cli(&["lint-issue", "--file", &body]);
+    cleanup_temp_lint_file(&body);
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("passed lint"));
+}

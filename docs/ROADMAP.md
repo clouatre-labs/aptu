@@ -31,6 +31,7 @@ These items address known gaps and complete features already partially implement
 - **SARIF v2.2 full compliance**: complete SARIF export for security scan results, including rule metadata and suppression entries
 - **Config validation**: `aptu config validate` reports missing keys and unknown fields on startup
 - **API key memory hygiene**: apply `zeroize` on drop to all secret-typed fields in `aptu-core`; prevents secrets from lingering in freed memory after deallocation (single-dependency hardening)
+- **Deterministic issue linting** (#1702): `aptu lint-issue` validates issue bodies against template headings and readiness checks with no AI call, plus GitHub Action inputs and a `aptu/lint-issue` commit-status demo workflow
 
 ## Medium-Term (6-18 months)
 

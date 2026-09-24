@@ -10,6 +10,7 @@ use aptu_core::{AppConfig, Finding, PatternEngine, SarifReport, SecurityScanner}
 use walkdir::WalkDir;
 
 use crate::cli::OutputFormat;
+use crate::commands::workflow::{escape_workflow_data, escape_workflow_property};
 
 /// Maximum allowed size for a diff input (5 MiB).
 const DIFF_SIZE_LIMIT: usize = 5_242_880;
@@ -154,7 +155,10 @@ fn emit_output(
             for f in findings {
                 println!(
                     "::error file={},line={},title={}::{}",
-                    f.file_path, f.line_number, f.pattern_id, f.description
+                    escape_workflow_property(&f.file_path),
+                    f.line_number,
+                    escape_workflow_property(&f.pattern_id),
+                    escape_workflow_data(&f.description)
                 );
             }
         }
