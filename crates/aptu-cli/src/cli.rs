@@ -212,9 +212,10 @@ pub enum Commands {
         /// Path to the issue body markdown file
         #[arg(long, value_name = "FILE")]
         file: std::path::PathBuf,
-        /// Issue template type to validate against (for example feature, bug)
+        /// Issue template type to validate against (for example feature, bug).
+        /// Required when an explicit --config is supplied; optional otherwise.
         #[arg(long, value_name = "TYPE")]
-        issue_type: String,
+        issue_type: Option<String>,
         /// Path to a TOML specs file overriding repo-root and generic specs
         #[arg(long, value_name = "FILE")]
         config: Option<std::path::PathBuf>,

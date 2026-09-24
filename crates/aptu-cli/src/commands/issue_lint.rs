@@ -26,7 +26,7 @@ const BODY_SIZE_LIMIT: usize = 5_242_880;
 #[allow(clippy::unused_async)]
 pub async fn run_lint_issue_command(
     file: PathBuf,
-    issue_type: String,
+    issue_type: Option<String>,
     config: Option<PathBuf>,
     output_format: OutputFormat,
     _app_config: &AppConfig,
@@ -48,7 +48,13 @@ pub async fn run_lint_issue_command(
             return Err(anyhow::Error::new(LintConfigErrorExit));
         }
         Ok(aptu_core::issue_lint::SpecResolution::Explicit(specs)) => {
-            if let Some(spec) = find_spec(&specs, &issue_type) {
+            // Spec matching requires a type; an explicit config without
+            // --issue-type is a configuration error (exit 2).
+            let Some(issue_type) = issue_type.as_deref() else {
+                eprintln!("Error: --issue-type is required when an explicit config is supplied");
+                return Err(anyhow::Error::new(LintConfigErrorExit));
+            };
+            if let Some(spec) = find_spec(&specs, issue_type) {
                 Some(spec.clone())
             } else {
                 eprintln!(
@@ -64,7 +70,12 @@ pub async fn run_lint_issue_command(
             }
         }
         Ok(aptu_core::issue_lint::SpecResolution::RepoRoot(specs)) => {
-            find_spec(&specs, &issue_type).cloned()
+            let matched = issue_type
+                .as_deref()
+                .and_then(|issue_type| find_spec(&specs, issue_type))
+                .cloned();
+            // A repo-root spec that lacks the type falls back to generic.
+            matched
         }
         Ok(aptu_core::issue_lint::SpecResolution::Generic) => None,
     };
@@ -187,7 +198,7 @@ App-managed mode.
         let rt = tokio::runtime::Runtime::new().expect("runtime");
         let result = rt.block_on(run_lint_issue_command(
             file.clone(),
-            "feature".to_string(),
+            Some("feature".to_string()),
             Some(config.clone()),
             OutputFormat::Text,
             &AppConfig::default(),
@@ -214,7 +225,7 @@ App-managed mode.
         let rt = tokio::runtime::Runtime::new().expect("runtime");
         let result = rt.block_on(run_lint_issue_command(
             file.clone(),
-            "nonexistent".to_string(),
+            Some("nonexistent".to_string()),
             Some(config.clone()),
             OutputFormat::Text,
             &AppConfig::default(),
@@ -238,7 +249,7 @@ App-managed mode.
         let rt = tokio::runtime::Runtime::new().expect("runtime");
         let result = rt.block_on(run_lint_issue_command(
             file.clone(),
-            "feature".to_string(),
+            Some("feature".to_string()),
             Some(config.clone()),
             OutputFormat::Text,
             &AppConfig::default(),
@@ -265,7 +276,7 @@ App-managed mode.
         let rt = tokio::runtime::Runtime::new().expect("runtime");
         let result = rt.block_on(run_lint_issue_command(
             file.clone(),
-            "feature".to_string(),
+            Some("feature".to_string()),
             Some(config.clone()),
             OutputFormat::Text,
             &AppConfig::default(),
@@ -287,7 +298,7 @@ App-managed mode.
         let rt = tokio::runtime::Runtime::new().expect("runtime");
         let result = rt.block_on(run_lint_issue_command(
             file.clone(),
-            "feature".to_string(),
+            Some("feature".to_string()),
             None,
             OutputFormat::Sarif,
             &AppConfig::default(),

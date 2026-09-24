@@ -614,3 +614,14 @@ fn test_lint_issue_generic_mode_and_annotations() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("::error line="));
 }
+
+#[test]
+fn test_lint_issue_generic_mode_without_issue_type_exits_zero() {
+    // Generic mode works without --issue-type on a conforming body.
+    let body = write_temp_lint_file("aptu-cli-lint-generic-notype.md", CONFORMING_BODY);
+    let output = run_cli(&["lint-issue", "--file", &body]);
+    cleanup_temp_lint_file(&body);
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("passed lint"));
+}

@@ -29,11 +29,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Run aptu lint-issue
         id: lint
         continue-on-error: ${{ inputs.fail-on != 'true' }}
-        uses: clouatre-labs/aptu@v0
+        uses: clouatre-labs/aptu@5bdf04b9350e574f28adb62c723b2cae77eca23e # v0.12
         with:
           lint-issue-file: ${{ inputs.issue-body-file }}
           lint-issue-type: ${{ inputs.issue-type }}

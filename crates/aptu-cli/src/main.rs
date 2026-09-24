@@ -21,7 +21,7 @@ use aptu_core::utils;
 use clap::Parser;
 use tracing::{debug, info};
 
-use crate::cli::{Cli, OutputContext};
+use crate::cli::{Cli, Commands, OutputContext};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -37,8 +37,17 @@ async fn main() -> Result<()> {
     #[cfg(feature = "keyring")]
     aptu_core::github::keyring_init().context("Failed to initialize keyring")?;
 
-    // Load config early to validate it works (Option A from plan)
-    let mut config = config::load_config().context("Failed to load configuration")?;
+    // Load config early to validate it works (Option A from plan).
+    // lint-issue is deterministic and needs no AI/provider config, so a
+    // malformed global config must not block it (mirrors scan-security).
+    let mut config = match config::load_config() {
+        Ok(config) => config,
+        Err(err) if matches!(cli.command, Commands::LintIssue { .. }) => {
+            debug!("Ignoring config load failure for lint-issue: {err}");
+            aptu_core::AppConfig::default()
+        }
+        Err(err) => return Err(err).context("Failed to load configuration"),
+    };
     debug!("Configuration loaded successfully");
 
     // Attempt to infer repository from git remote

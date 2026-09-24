@@ -80,14 +80,11 @@ pub fn resolve_specs(explicit_config: Option<&Path>) -> Result<SpecResolution> {
 /// one, or `start` itself when no repository root is found.
 #[must_use]
 pub fn find_repo_root(start: &Path) -> PathBuf {
-    let mut current = Some(start);
-    while let Some(dir) = current {
-        if dir.join(".git").exists() {
-            return dir.to_path_buf();
-        }
-        current = dir.parent();
-    }
-    start.to_path_buf()
+    start
+        .ancestors()
+        .find(|p| p.join(".git").exists())
+        .unwrap_or(start)
+        .to_path_buf()
 }
 
 /// Like [`resolve_specs`] but auto-discovers `issue-lint-specs.toml` at the

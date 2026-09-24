@@ -18,10 +18,8 @@ pub fn strip_html_comments(body: &str) -> String {
         while !rest.is_empty() {
             if in_comment {
                 if let Some(idx) = rest.find("-->") {
-                    // Keep line count: emit blanks for the removed span.
-                    for _ in 0..rest[..idx].matches('\n').count() {
-                        kept.push('\n');
-                    }
+                    // Line count is preserved: the remainder of the line
+                    // after `-->` is kept on the next loop iteration.
                     rest = &rest[idx + 3..];
                     in_comment = false;
                 } else {

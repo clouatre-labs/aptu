@@ -29,6 +29,9 @@ Generic mode needs zero configuration and covers any repository. It applies rega
 ## CLI usage
 
 ```bash
+# Lint an issue body in generic mode (no config, no --issue-type needed)
+aptu lint-issue --file issue-body.md
+
 # Lint an issue body against a repo config
 aptu lint-issue --file issue-body.md --issue-type feature
 
@@ -43,7 +46,7 @@ Exit codes:
 
 - `0` pass (including generic-mode pass)
 - `1` violations found (output is emitted before the exit so failing steps stay diagnosable)
-- `2` an explicitly supplied config is broken/malformed or has no `[[spec]]` matching `--issue-type`; a clear error is printed to stderr
+- `2` an explicitly supplied config is broken/malformed, was given without `--issue-type` (spec matching needs a type), or has no `[[spec]]` matching `--issue-type`; a clear error is printed to stderr
 
 Output formats: `text`, `json`, and `github-annotations`. `sarif` is not supported for `lint-issue` (SARIF applies to `scan-security` only) and is rejected with a clear error.
 
@@ -55,7 +58,7 @@ Resolution is automatic, in order:
 2. `issue-lint-specs.toml` at the repository root (found by walking upward from the working directory until a `.git` entry is located; falls back to the working directory itself)
 3. generic mode
 
-A spec matches by its `type` field against `--issue-type`. An unknown `--issue-type` with an explicit config lacking that type is a hard error (exit 2). With no explicit config, a repo-root spec that lacks the type falls back to generic mode.
+`--issue-type` is optional. Generic mode never needs it; a repo-root spec uses it when matching and falls back to generic mode if no spec matches. When an explicit `--config` is supplied, `--issue-type` is required: a spec matches by its `type` field, and an explicit config without `--issue-type` (or with a type the config lacks) is a hard error (exit 2).
 
 Because discovery walks upward to the repository root, the command works from any subdirectory of a checkout, including worktrees. Outside a repository, only a spec file in the working directory itself is considered.
 
