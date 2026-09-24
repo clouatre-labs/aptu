@@ -9,6 +9,7 @@ use aptu_core::AppConfig;
 use aptu_core::issue_lint::{IssueLintSpec, find_spec, lint_issue, resolve_specs};
 
 use crate::cli::OutputFormat;
+use crate::commands::workflow::{escape_workflow_data, escape_workflow_property};
 use crate::errors::LintConfigErrorExit;
 use crate::errors::LintViolationsExit;
 
@@ -30,6 +31,13 @@ pub async fn run_lint_issue_command(
     output_format: OutputFormat,
     _app_config: &AppConfig,
 ) -> Result<()> {
+    // SARIF is a security-scanning format and is not supported for lint-issue.
+    if matches!(output_format, OutputFormat::Sarif) {
+        return Err(anyhow::anyhow!(
+            "output format 'sarif' is not supported for lint-issue (use text, json, or github-annotations)"
+        ));
+    }
+
     let body = read_body(&file)?;
 
     // Resolve specs; broken configs print a clear error, then exit 2.
@@ -106,16 +114,18 @@ fn emit_output(
                 println!(
                     "::error line={},title={}::{}",
                     v.line.unwrap_or(1),
-                    v.rule,
-                    v.message
+                    escape_workflow_property(&v.rule),
+                    escape_workflow_data(&v.message)
                 );
             }
         }
-        OutputFormat::Json | OutputFormat::Sarif => {
+        OutputFormat::Json => {
             let json = serde_json::to_string_pretty(result)
                 .map_err(|e| anyhow::anyhow!("Failed to serialize lint result to JSON: {e}"))?;
             println!("{json}");
         }
+        // Unreachable: SARIF is rejected before the lint run.
+        OutputFormat::Sarif => unreachable!("sarif output is rejected before linting"),
         OutputFormat::Text => {
             if result.passed {
                 println!("Issue body passed lint.");
@@ -265,5 +275,27 @@ App-managed mode.
         assert!(result.is_ok(), "unexpected error: {result:?}");
         cleanup(&file);
         cleanup(&config);
+    }
+
+    /// Sarif output is rejected with a clear error for lint-issue.
+    #[test]
+    fn test_sarif_output_is_rejected() {
+        // Arrange
+        let file = write_temp("aptu-lint-sarif-body.md", CONFORMING_BODY);
+
+        // Act
+        let rt = tokio::runtime::Runtime::new().expect("runtime");
+        let result = rt.block_on(run_lint_issue_command(
+            file.clone(),
+            "feature".to_string(),
+            None,
+            OutputFormat::Sarif,
+            &AppConfig::default(),
+        ));
+
+        // Assert
+        let err = result.expect_err("expected sarif rejection");
+        assert!(err.to_string().contains("sarif"));
+        cleanup(&file);
     }
 }

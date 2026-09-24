@@ -43,6 +43,8 @@ Exit codes:
 - `1` violations found (output is emitted before the exit so failing steps stay diagnosable)
 - `2` an explicitly supplied config is broken/malformed or has no `[[spec]]` matching `--issue-type`; a clear error is printed to stderr
 
+Output formats: `text`, `json`, and `github-annotations`. `sarif` is not supported for `lint-issue` (SARIF applies to `scan-security` only) and is rejected with a clear error.
+
 ## Spec resolution
 
 Resolution is automatic, in order:

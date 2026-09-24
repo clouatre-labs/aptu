@@ -11,6 +11,7 @@ pub mod pr;
 pub mod scan_security;
 pub mod triage;
 pub mod types;
+pub mod workflow;
 
 use std::time::Instant;
 
