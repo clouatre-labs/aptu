@@ -206,6 +206,19 @@ pub enum Commands {
         #[arg(long, value_name = "PATH")]
         sarif_output: Option<std::path::PathBuf>,
     },
+
+    /// Lint an issue body file against template headings
+    LintIssue {
+        /// Path to the issue body markdown file
+        #[arg(long, value_name = "FILE")]
+        file: std::path::PathBuf,
+        /// Issue template type to validate against (for example feature, bug)
+        #[arg(long, value_name = "TYPE")]
+        issue_type: String,
+        /// Path to a TOML specs file overriding repo-root and generic specs
+        #[arg(long, value_name = "FILE")]
+        config: Option<std::path::PathBuf>,
+    },
 }
 
 /// Authentication subcommands
