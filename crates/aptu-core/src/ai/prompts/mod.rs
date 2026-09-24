@@ -1397,6 +1397,8 @@ mod tests {
         assert!(prompt.contains(
             "[APTU: body truncated by size budget -- do not speculate on missing content]"
         ));
+        assert!(prompt.contains(&format!("Body:\n{}", "x".repeat(1999))));
+        assert!(!prompt.contains(&"x".repeat(2000)));
     }
 
     #[test]
@@ -1441,6 +1443,8 @@ mod tests {
         assert!(prompt.contains(
             "[APTU: description truncated by size budget -- do not speculate on missing content]"
         ));
+        assert!(prompt.contains("x".repeat(1999).as_str()));
+        assert!(!prompt.contains("x".repeat(2000).as_str()));
     }
 
     #[test]
@@ -1465,5 +1469,7 @@ mod tests {
         let prompt = build_user_prompt(&issue);
         assert!(prompt.contains("Recent Comments:"));
         assert!(prompt.contains("- @alice:"));
+        assert!(prompt.contains("x".repeat(499).as_str()));
+        assert!(!prompt.contains("x".repeat(500).as_str()));
     }
 }
