@@ -141,7 +141,9 @@ fn lint_with_spec(body: &str, spec: &IssueLintSpec) -> IssueLintResult {
             line: None,
         });
     }
-    if spec.require_external_link && !has_external_reference(body) {
+    if spec.require_external_link
+        && !has_external_reference(&strip_fenced_blocks(&strip_html_comments(body)))
+    {
         violations.push(IssueLintViolation {
             rule: "spec/no-external-link".to_string(),
             message: "no external URL or #N issue reference found".to_string(),
@@ -500,6 +502,67 @@ required_headings = ["Summary"]
     }
 
     /// Malformed explicit config is an error (CLI maps this to exit 2).
+    /// External links inside HTML comments or fenced blocks do not satisfy
+    /// require_external_link; a visible link does.
+    #[test]
+    fn test_lint_issue_external_link_ignores_hidden_text() {
+        // Arrange
+        let body = [
+            "## Summary",
+            "Something.",
+            "## Context",
+            "Some context.",
+            "## Acceptance Criteria",
+            "- [ ] done",
+            "<!-- hidden https://example.com and #123 -->",
+            "```text",
+            "https://in-fence.example.com",
+            "```",
+            "",
+        ]
+        .join("\n");
+
+        // Act
+        let result = lint_issue(&body, Some(&feature_spec()));
+
+        // Assert
+        assert!(
+            result
+                .violations
+                .iter()
+                .any(|v| v.rule == "spec/no-external-link"),
+            "hidden link should not satisfy require_external_link: {:?}",
+            result.violations
+        );
+
+        // Arrange
+        let body = [
+            "## Summary",
+            "Something.",
+            "## Context",
+            "Some context.",
+            "## Acceptance Criteria",
+            "- [ ] done",
+            "<!-- hidden https://hidden.example.com -->",
+            "Visible reference: https://example.com and #456.",
+            "",
+        ]
+        .join("\n");
+
+        // Act
+        let result = lint_issue(&body, Some(&feature_spec()));
+
+        // Assert
+        assert!(
+            !result
+                .violations
+                .iter()
+                .any(|v| v.rule == "spec/no-external-link"),
+            "visible link should satisfy require_external_link: {:?}",
+            result.violations
+        );
+    }
+
     #[test]
     fn test_resolve_specs_broken_explicit_config_errors() {
         // Arrange

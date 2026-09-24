@@ -15,6 +15,8 @@ With a spec (explicit `--config` or a repo-root `issue-lint-specs.toml`), the bo
 - at least one fenced code block or file-path reference, when `require_code_examples = true`
 - at least one external URL or `#N` issue reference, when `require_external_link = true`
 
+All spec checks operate on visible text only: HTML comments and fenced-block contents are stripped before matching, consistent with generic mode.
+
 Without any spec, generic mode applies four deterministic checks derived from issue-readiness research (arXiv 2512.21426, Table I):
 
 1. body length above a one-liner floor (100 characters)
