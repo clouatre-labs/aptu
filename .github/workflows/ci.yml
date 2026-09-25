@@ -126,7 +126,7 @@ jobs:
         with:
           bun-version: "1"
       - name: Detect Duplicated Code
-        run: bunx jscpd crates --baseline-from-ref origin/main --fail-on-new-clones
+        run: bunx jscpd crates --baseline-from-ref origin/main --fail-on-new-clones --fail-on-empty
 
   check:
     name: Check Format & Lint
