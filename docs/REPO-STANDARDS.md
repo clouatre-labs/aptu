@@ -8,13 +8,16 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 
 | File | Trigger | Purpose | Rationale |
 |------|---------|---------|-----------|
-| `.github/workflows/ci.yml` | push/PR (src, tests, workflows) | Build, test, lint, security scan, and enforce the jscpd duplicate-code ratchet (new clones are gated against the checked-in baseline) | Fast feedback on every change; path filters skip docs-only pushes |
-| `.github/workflows/release.yml` | push `v*.*.*` tag, workflow_dispatch | Build release binaries, attest provenance, publish to GitHub Releases, Homebrew, and crates.io | Single pipeline owns the full release lifecycle |
+| `.github/workflows/ci.yml` | push main (crates, Cargo, workflows, tests, docs) / PR (all paths) | Build, test, lint, security scan, and enforce the jscpd duplicate-code ratchet (new clones are gated against the checked-in baseline) | Fast feedback on every change; the `lint-docs` job gates docs changes on both push and PR |
+| `.github/workflows/release.yml` | push `v*.*.*` tag, workflow_dispatch | Build release binaries, attest provenance, publish to GitHub Releases, Homebrew, and GitHub Marketplace (via the `update-marketplace-tag` job) | Single pipeline owns the full release lifecycle |
 | `.github/workflows/build-and-attest.yml` | workflow_call (from release.yml) | Build release binaries and attest provenance | SLSA Level 3 provenance attestation; reusable workflow isolation satisfies SLSA v1.0 Build Level 3 |
 | `.github/workflows/reuse.yml` | push/PR | REUSE SPDX compliance check | Apache-2.0 license attribution is machine-verifiable |
 | `.github/workflows/scorecard.yml` | schedule weekly, push main | OpenSSF Scorecard security posture analysis | Tracks supply-chain security best practices over time |
 | `.github/workflows/issue-triage.yml` | issue opened | Auto-triage and label new issues | Reduces maintainer triage overhead |
 | `.github/workflows/pr-review.yml` | pull_request (opened, synchronize), workflow_dispatch | AI PR review and labeling; path-filtered to code changes | Advisory review on every code-touching PR |
+| `.github/workflows/security.yml` | push/PR main | TruffleHog secret scan and zizmor workflow audit in a single `security-result` job | Consolidated security gate; zizmor step runs even if the secret scan fails |
+| `.github/workflows/scheduled-security-audit.yml` | weekly cron (Monday 02:00 UTC), workflow_dispatch | Full-repo zizmor audit | Covers the whole repository independent of any diff; never runs on push |
+| `.github/workflows/lint-issue-demo.yml` | demo/lint helper for issue workflows | Exercises and validates the issue-triage linting path without opening real issues | Keeps issue automation verifiable without noise |
 
 ---
 
@@ -24,7 +27,7 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 
 `ci.yml` has no dedicated branch-currency ("check-base") job. The main branch ruleset's `strict_required_status_checks_policy: true` already enforces that a PR branch is up to date with `main` before merge, at zero Actions cost, so a job that re-checks the same thing with `git merge-base` would be redundant.
 
-`security.yml`'s two controls (TruffleHog secret scan, zizmor SHA-pin audit) run as sequential steps inside a single `security-result` job rather than as separate jobs feeding an aggregator; the zizmor step is marked `if: always()` so it still runs and reports even if the trufflehog step fails, and is additionally gated on a `dorny/paths-filter` check so it only runs when `.github/workflows/**` changed (the weekly `scheduled-security-audit.yml` covers full-repo zizmor audits on every other push). `security-result` is not currently in the branch ruleset's `required_status_checks` list (only `CI Result` is required) — that predates this change and is unaffected by it.
+`security.yml`'s two controls (TruffleHog secret scan, zizmor SHA-pin audit) run as sequential steps inside a single `security-result` job rather than as separate jobs feeding an aggregator; the zizmor step is marked `if: always()` so it still runs and reports even if the trufflehog step fails, and is additionally gated on a `dorny/paths-filter` check so it only runs when `.github/workflows/**` changed (full-repo zizmor audits run weekly via `scheduled-security-audit.yml`, independent of any diff and never on push). `security-result` is not currently in the branch ruleset's `required_status_checks` list (only `CI Result` is required) — that predates this change and is unaffected by it.
 
 ---
 
@@ -33,9 +36,9 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 | Profile | `opt-level` | `lto` | `codegen-units` | `panic` | `strip` | Purpose |
 |---------|------------|-------|-----------------|---------|---------|---------|
 | `release` | `z` (size) | `true` (full) | `1` | `abort` | `true` | Production binary; smallest size, deterministic |
-| `ci` | inherits | `false` | `16` | inherits | inherits | CI builds; faster link time without sacrificing correctness |
+| `ci` | inherits | `false` | `256` | `unwind` (explicit) | `false` (explicit) | CI builds; test-safe (`panic = "unwind"`) with faster link time |
 
-`panic = "abort"` in release is intentional: no unwinding overhead. Do not pass `--profile ci` to `cargo test`; `panic=abort` aborts the test harness.
+`panic = "abort"` in release is intentional: no unwinding overhead. `--profile ci` is safe for `cargo test`: the profile explicitly sets `panic = "unwind"` and `strip = false`, so it does not abort the test harness.
 
 ---
 
@@ -43,11 +46,11 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 
 | Tool | Command | Purpose |
 |------|---------|---------|
-| `cargo clippy` | `cargo clippy --profile ci -- -D warnings` | Lint; all warnings are errors in CI |
+| `cargo clippy` | `cargo clippy --locked --profile ci --features aptu-core/ast-context -- -D warnings -W clippy::cognitive_complexity` | Lint; all warnings are errors in CI |
 | `cargo fmt` | `cargo fmt --check` | Format enforcement |
-| `cargo deny` | `cargo deny check advisories licenses` | Dependency audit (CVEs and license policy) |
-| `zizmor` | `zizmor .github/workflows/` | SHA pinning and security pattern enforcement for Actions |
-| `gitleaks` | `gitleaks detect` | Secret detection in source history |
+| `cargo deny` | `cargo deny check` | Dependency audit (CVEs and license policy) |
+| `trufflehog` | `trufflesecurity/trufflehog-action` with `--only-verified` in `security.yml` | Secret detection in source; replaces gitleaks |
+| `zizmor` | `zizmorcore/zizmor-action` (v0.6.4) in `security.yml` | SHA pinning and security pattern enforcement for Actions |
 | `reuse` | `reuse lint` | SPDX header compliance |
 
 ### Lint suppressions
@@ -68,24 +71,24 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 |---------|---------------|-----------|
 | SLSA Level 3 provenance | `attest-build-provenance` + cosign in reusable `build-and-attest.yml` (`workflow_call`) | Verifiable artifact origin; reusable workflow isolation satisfies SLSA v1.0 Build Level 3; mitigates supply-chain substitution |
 | OIDC keyless signing | `id-token: write` per-job in `release.yml` | No long-lived credentials; tokens scoped to the run |
-| GPG tag signing | `git tag -s`; verified by `git verify-tag` with imported public key in `release.yml` | Guards against tag tampering before any build or publish runs |
+| GPG tag signing | `git tag -s`; verified in `release.yml` via GitHub API tag verification (`verification.verified`) | Guards against tag tampering before any build or publish runs |
 | SHA-pinned Actions | All `uses:` lines pinned to commit SHA | Prevents tag mutation attacks (e.g., `actions/checkout@v4` is mutable) |
 | TruffleHog secret scan | Step in `security-result` job (`security.yml`) | Catches accidental credential commits |
 | zizmor | Step in `security-result` job (`security.yml`), gated `if: always()` so it still runs if the secret scan step fails, and skipped when `.github/workflows/**` didn't change | Enforces SHA pinning and flags unsafe workflow patterns |
 | REUSE compliance | SPDX headers on every source file; checked in `reuse.yml` | Apache-2.0 license attribution is machine-verifiable |
 | Least-privilege permissions | Top-level `permissions: contents: read` in every workflow; elevated scopes declared per-job | Limits blast radius if a step is compromised |
 | OpenSSF Scorecard | `scorecard.yml` on schedule and push to main | Tracks supply-chain security best practices over time |
-| cargo-deny | `cargo deny check advisories licenses` | Audit Rust dependency tree for CVEs and license policy |
+| cargo-deny | `cargo deny check` | Audit Rust dependency tree for CVEs and license policy |
 
 ---
 
 ## Dependency Management
 
-- **Renovate** manages all dependency updates automatically (config: `.github/renovate.json`).
-- GitHub Actions digests are updated via `matchManagers: ["github-actions"]` with automerge enabled for digest/pin/patch/minor updates.
-- Rust crates are updated via `matchManagers: ["cargo"]`.
+- **Renovate** manages all dependency updates automatically (config: `renovate.json` at the repo root).
+- GitHub Actions digests are updated via `matchManagers: ["github-actions"]` with automerge enabled for major/minor/patch/digest/pin updates.
+- Rust crates fall under the generic non-major group (patch/minor/digest/pin/lockFileMaintenance automerge); major crate updates are manual.
 - `minimumReleaseAge: 3 days` prevents merging dependencies the same day they are published (typosquatting window).
-- `cargo deny check advisories licenses` runs in CI to audit the resolved dependency tree against known CVEs and the project license policy.
+- `cargo deny check` runs in CI to audit the resolved dependency tree against known CVEs and the project license policy.
 
 ---
 
@@ -102,8 +105,8 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 
 ## Applying to a New Repository
 
-1. Copy `.github/workflows/` and `.github/renovate.json`.
+1. Copy `.github/workflows/` and `renovate.json` (repo root).
 2. Create required GitHub secrets: `GPG_SIGNING_KEY` (ASCII-armored public key of the release signer).
-3. Set branch ruleset: squash merge only, `delete_branch_on_merge: true`, required status check: `ci-result`.
+3. Set branch ruleset: squash merge only, `delete_branch_on_merge: true`, required status check: `CI Result` (job id `ci-result`).
 4. Enable OIDC for the release environment in GitHub Settings > Environments.
 5. Add SPDX headers to all source files (`reuse addheader`).
