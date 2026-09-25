@@ -3,7 +3,9 @@
   "format": [
     "rust"
   ],
-  "path": "crates",
+  "path": [
+    "crates"
+  ],
   "reporters": [
     "consoleFull"
   ],
