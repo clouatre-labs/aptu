@@ -87,7 +87,7 @@ pub use triage::{
 // Bulk Processing
 // ============================================================================
 
-pub use bulk::{BulkOutcome, BulkResult, process_bulk};
+pub use bulk::{BulkItem, BulkOutcome, BulkResult, process_bulk};
 
 // ============================================================================
 // Utilities

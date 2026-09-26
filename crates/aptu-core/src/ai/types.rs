@@ -341,6 +341,15 @@ pub struct IssueDetails {
     /// Issue last update timestamp.
     #[serde(default)]
     pub updated_at: Option<String>,
+    /// Whether the issue author is a bot (deterministic `__typename == "Bot"` check).
+    /// A null/missing author maps to `false`.
+    #[serde(default)]
+    #[builder(default)]
+    pub author_is_bot: bool,
+    /// Whether the issue is locked.
+    #[serde(default)]
+    #[builder(default)]
+    pub locked: bool,
 }
 
 /// A comment on an issue.

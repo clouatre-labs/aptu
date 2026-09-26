@@ -286,6 +286,10 @@ impl From<IssueCommentNode> for IssueComment {
 pub struct Author {
     /// Author login.
     pub login: String,
+    /// GraphQL `__typename` of the author (e.g. "User", "Bot"); used for
+    /// deterministic bot detection. `None` when absent from the response.
+    #[serde(rename = "__typename", default)]
+    pub type_name: Option<String>,
 }
 
 /// Comments connection from GraphQL.
@@ -315,6 +319,9 @@ pub struct IssueNodeDetailed {
     pub comments: CommentsConnection,
     /// Issue author.
     pub author: Option<Author>,
+    /// Whether the issue is locked.
+    #[serde(default)]
+    pub locked: bool,
     /// Issue creation timestamp (ISO 8601).
     #[serde(rename = "createdAt")]
     pub created_at: String,
@@ -421,8 +428,10 @@ fn build_issue_with_repo_context_query(owner: &str, repo: &str, number: u64) -> 
                     body
                     url
                     author {{
+                        __typename
                         login
                     }}
+                    locked
                     createdAt
                     updatedAt
                     labels(first: 10) {{
@@ -630,6 +639,57 @@ mod tests {
     }
 
     #[test]
+    fn issue_node_detailed_null_author_deserializes_as_not_bot() {
+        // Null author (deleted user) must deserialize without panic and map to
+        // author_is_bot = false via the ghost fallback precedent.
+        let response = serde_json::json!({
+            "issue": {
+                "number": 1,
+                "title": "t",
+                "body": "b",
+                "url": "https://example.com",
+                "labels": { "nodes": [] },
+                "comments": { "totalCount": 0, "nodes": [] },
+                "author": null,
+                "locked": false,
+                "createdAt": "2024-01-01T00:00:00Z",
+                "updatedAt": "2024-01-01T00:00:00Z"
+            },
+            "repository": {
+                "nameWithOwner": "o/r",
+                "viewerPermission": null,
+                "labels": { "nodes": [] },
+                "milestones": { "nodes": [] },
+                "primaryLanguage": null
+            }
+        });
+
+        // Act
+        let parsed: IssueWithRepoContextResponse =
+            serde_json::from_value(response).expect("null author must not panic");
+
+        // Assert
+        assert!(parsed.issue.author.is_none());
+        assert!(!parsed.issue.locked);
+        let author_is_bot = parsed
+            .issue
+            .author
+            .as_ref()
+            .and_then(|a| a.type_name.as_deref())
+            .is_some_and(|t| t == "Bot");
+        assert!(!author_is_bot);
+    }
+
+    #[test]
+    fn issue_node_detailed_bot_typename_detected() {
+        let author = Author {
+            login: "dependabot[bot]".to_string(),
+            type_name: Some("Bot".to_string()),
+        };
+        assert_eq!(author.type_name.as_deref(), Some("Bot"));
+    }
+
+    #[test]
     fn parse_viewer_permission_handles_null_and_unknown() {
         let null_response = serde_json::json!({ "repository": { "viewerPermission": null } });
         assert_eq!(parse_viewer_permission(&null_response), None);
@@ -645,6 +705,19 @@ mod tests {
         let query_str = query["query"].as_str().unwrap();
         assert!(query_str.contains("repository(owner: \"block\", name: \"goose\")"));
         assert!(query_str.contains("viewerPermission"));
+    }
+
+    #[test]
+    fn build_issue_with_repo_context_query_includes_gate_fields() {
+        // Arrange & Act
+        let query = build_issue_with_repo_context_query("block", "goose", 1);
+        let query_str = query["query"].as_str().unwrap();
+
+        // Assert: author block must carry __typename for the bot gate, and the
+        // issue must fetch `locked`; losing either field would silently
+        // disable the deterministic skip gates (defaults to false).
+        assert!(query_str.contains("author {\n                        __typename\n                        login\n                    }"));
+        assert!(query_str.contains("locked"));
     }
 
     #[test]
