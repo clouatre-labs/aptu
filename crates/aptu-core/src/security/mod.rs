@@ -13,7 +13,6 @@ pub mod patterns;
 pub mod sarif;
 pub mod scanner;
 pub mod types;
-pub mod validator;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cache::FindingCache;
@@ -23,7 +22,4 @@ pub use ignore::SecurityConfig;
 pub use patterns::PatternEngine;
 pub use sarif::SarifReport;
 pub use scanner::SecurityScanner;
-pub use types::{
-    Confidence, Finding, PatternDefinition, Severity, ValidatedFinding, ValidationResult,
-};
-pub use validator::SecurityValidator;
+pub use types::{Confidence, Finding, PatternDefinition, Severity, ValidatedFinding};
