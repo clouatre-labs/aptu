@@ -282,9 +282,12 @@ fn write_pr_file_section(
         }
 
         // Check if adding this patch would exceed total diff size limit
-        if total_diff_size + patch_size > ctx.max_diff_chars {
+        if total_diff_size.saturating_add(patch_size) > ctx.max_diff_chars {
             // Record the skipped file so it is never silently omitted.
-            recorded_names.push(filename.clone());
+            // Avoid duplicating a name already recorded for per-file truncation.
+            if !recorded_names.contains(&filename) {
+                recorded_names.push(filename.clone());
+            }
             return (FileSectionOutcome::Skipped, recorded_names);
         }
 
@@ -1653,6 +1656,42 @@ mod tests {
             ctx.truncated_patch_files,
             vec!["src/truncated.rs".to_string()],
             "truncated patch filename must be recorded"
+        );
+    }
+
+    /// A file that is first per-file truncated and then skipped by the
+    /// remaining total-budget check is recorded exactly once.
+    #[test]
+    fn test_truncated_then_skipped_file_recorded_once() {
+        use super::super::types::PrFile;
+
+        // Arrange: 150-char patch against a 100 per-file cap with a 50-char
+        // total diff budget. The waiver is denied (150 > 50), the patch is
+        // truncated to 100, and 100 still exceeds the 50-char budget, so the
+        // file is both truncated and skipped. Its name must appear once.
+        let files = vec![PrFile {
+            filename: "src/dup.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 1,
+            patch: Some("d".repeat(150)),
+            patch_truncated: false,
+            full_content: None,
+        }];
+        let mut ctx = make_waiver_ctx(files, 100, 50);
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert
+        assert!(
+            prompt.contains("files omitted due to size limits"),
+            "file exceeding remaining budget must be reported as omitted"
+        );
+        assert_eq!(
+            ctx.truncated_patch_files,
+            vec!["src/dup.rs".to_string()],
+            "filename must be recorded at most once"
         );
     }
 }
