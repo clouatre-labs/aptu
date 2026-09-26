@@ -500,7 +500,7 @@ required_headings = ["Summary"]
 
     /// Malformed explicit config is an error (CLI maps this to exit 2).
     /// External links inside HTML comments or fenced blocks do not satisfy
-    /// require_external_link; a visible link does.
+    /// `require_external_link`; a visible link does.
     #[test]
     fn test_lint_issue_external_link_ignores_hidden_text() {
         // Arrange
