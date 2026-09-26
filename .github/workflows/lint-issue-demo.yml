@@ -35,7 +35,7 @@ jobs:
       - name: Run aptu lint-issue
         id: lint
         continue-on-error: ${{ inputs.fail-on != 'true' }}
-        uses: clouatre-labs/aptu@5bdf04b9350e574f28adb62c723b2cae77eca23e # v0.12
+        uses: clouatre-labs/aptu@27b46e08c4bae922d04065b3777cceb8195778ee # v0.12.5
         with:
           lint-issue-file: ${{ inputs.issue-body-file }}
           lint-issue-type: ${{ inputs.issue-type }}
