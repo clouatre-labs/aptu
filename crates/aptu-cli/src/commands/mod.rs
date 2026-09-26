@@ -28,7 +28,7 @@ use crate::cli::{
 use crate::commands::common::maybe_spinner;
 use crate::commands::types::{OutcomeInfo, PrReviewResult};
 use crate::output;
-use aptu_core::{AppConfig, State, check_already_triaged};
+use aptu_core::{AppConfig, BulkItem, State, check_already_triaged};
 
 /// Options for PR review behavior.
 #[allow(clippy::struct_excessive_bools)]
@@ -139,7 +139,7 @@ pub(crate) async fn triage_single_issue(
     force: bool,
     ctx: &OutputContext,
     config: &AppConfig,
-) -> Result<Option<types::TriageResult>> {
+) -> Result<BulkItem<types::TriageResult>> {
     let triage_cfg = TriageConfig {
         reference,
         repo_context,
@@ -154,7 +154,7 @@ pub(crate) async fn triage_single_issue(
 }
 
 #[allow(clippy::too_many_lines)]
-async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types::TriageResult>> {
+async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<BulkItem<types::TriageResult>> {
     // Phase 1a: Fetch issue
     let spinner = maybe_spinner(cfg.ctx, "Fetching issue...");
     let fetch_start = Instant::now();
@@ -174,9 +174,20 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
             if matches!(cfg.ctx.format, OutputFormat::Text) {
                 println!("{}", style("Already triaged (skipping)").yellow());
             }
-            return Ok(None);
+            return Ok(BulkItem::Skipped("already triaged".to_string()));
         }
     }
+
+    // Phase 1b.5: Deterministic skip gates (no AI call, no network beyond fetch)
+    if let Some(outcome) = apply_deterministic_gates(&issue_details, cfg.ctx) {
+        return Ok(outcome);
+    }
+
+    // Phase 1b.6: Advisory lint (generic mode, AI-free, network-free).
+    // Findings are logged but never cause a skip: generic mode's 100-char
+    // minimum body would deterministically skip legitimate short issues at
+    // scale, so lint stays advisory in the triage path.
+    log_advisory_lint(&issue_details, cfg.ctx);
 
     // Phase 1c: Analyze with AI
     let spinner = maybe_spinner(cfg.ctx, "Analyzing with AI...");
@@ -223,7 +234,7 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
 
     // Handle dry-run - already rendered, just exit
     if cfg.dry_run {
-        return Ok(Some(result));
+        return Ok(BulkItem::Done(result));
     }
 
     // Determine if we should post a comment (independent of --apply)
@@ -266,7 +277,54 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<Option<types
     // Show success messages
     show_triage_success(cfg.ctx, comment_url.as_deref(), &result, cfg.no_apply);
 
-    Ok(Some(result))
+    Ok(BulkItem::Done(result))
+}
+
+/// Deterministic pre-triage skip trigger for an issue, if any.
+fn deterministic_skip_trigger(issue: &aptu_core::ai::types::IssueDetails) -> Option<&'static str> {
+    if issue.author_is_bot {
+        Some("bot-authored (author is a bot)")
+    } else if issue.locked {
+        Some("locked")
+    } else {
+        None
+    }
+}
+
+/// Applies the deterministic skip gates; returns `Some(Skipped)` when a gate fires.
+fn apply_deterministic_gates(
+    issue: &aptu_core::ai::types::IssueDetails,
+    ctx: &OutputContext,
+) -> Option<BulkItem<types::TriageResult>> {
+    let trigger = deterministic_skip_trigger(issue)?;
+    if matches!(ctx.format, OutputFormat::Text) {
+        println!("{}", style(format!("Skipped: {trigger}")).yellow());
+    }
+    debug!(issue = issue.number, trigger, "Deterministic skip gate");
+    Some(BulkItem::Skipped(trigger.to_string()))
+}
+
+/// Logs generic-mode lint findings as advisory (never a skip).
+fn log_advisory_lint(issue: &aptu_core::ai::types::IssueDetails, ctx: &OutputContext) {
+    let lint_result = aptu_core::issue_lint::specs::lint_issue(&issue.body, None);
+    for violation in &lint_result.violations {
+        debug!(
+            issue = issue.number,
+            rule = violation.rule,
+            message = violation.message,
+            "Advisory lint finding"
+        );
+        if matches!(ctx.format, OutputFormat::Text) {
+            println!(
+                "{}",
+                style(format!(
+                    "Lint (advisory): {}: {}",
+                    violation.rule, violation.message
+                ))
+                .yellow()
+            );
+        }
+    }
 }
 
 /// Post a triage comment, returning the comment URL if posted.
@@ -673,6 +731,95 @@ pub async fn run(
 mod tests {
     use crate::cli::{OutputContext, OutputFormat};
     use crate::commands::types::AuthActionResult;
+    use aptu_core::ai::types::IssueDetails;
+
+    // Deterministic gate: bot-authored issue maps to the bot trigger
+    #[test]
+    fn test_skip_trigger_bot_authored() {
+        // Arrange
+        let issue = IssueDetails::builder()
+            .owner("o".to_string())
+            .repo("r".to_string())
+            .number(1)
+            .title("t".to_string())
+            .body("b".to_string())
+            .url("u".to_string())
+            .author_is_bot(true)
+            .build();
+
+        // Act
+        let trigger = super::deterministic_skip_trigger(&issue);
+
+        // Assert
+        assert_eq!(trigger, Some("bot-authored (author is a bot)"));
+    }
+
+    // Deterministic gate: locked issue maps to the locked trigger
+    #[test]
+    fn test_skip_trigger_locked() {
+        // Arrange
+        let issue = IssueDetails::builder()
+            .owner("o".to_string())
+            .repo("r".to_string())
+            .number(1)
+            .title("t".to_string())
+            .body("b".to_string())
+            .url("u".to_string())
+            .locked(true)
+            .build();
+
+        // Act
+        let trigger = super::deterministic_skip_trigger(&issue);
+
+        // Assert
+        assert_eq!(trigger, Some("locked"));
+    }
+
+    // Deterministic gate precedence: an issue that is both bot-authored and
+    // locked yields the bot-authored trigger
+    #[test]
+    fn test_skip_trigger_bot_authored_wins_over_locked() {
+        // Arrange
+        let issue = IssueDetails::builder()
+            .owner("o".to_string())
+            .repo("r".to_string())
+            .number(1)
+            .title("t".to_string())
+            .body("b".to_string())
+            .url("u".to_string())
+            .author_is_bot(true)
+            .locked(true)
+            .build();
+
+        // Act
+        let trigger = super::deterministic_skip_trigger(&issue);
+
+        // Assert
+        assert_eq!(trigger, Some("bot-authored (author is a bot)"));
+    }
+
+    // Advisory lint: a short body yields a generic lint finding but the issue
+    // still proceeds to triage (no deterministic skip)
+    #[test]
+    fn test_advisory_lint_does_not_skip() {
+        // Arrange
+        let issue = IssueDetails::builder()
+            .owner("o".to_string())
+            .repo("r".to_string())
+            .number(1)
+            .title("t".to_string())
+            .body("short".to_string())
+            .url("u".to_string())
+            .build();
+
+        // Act
+        let lint = aptu_core::issue_lint::specs::lint_issue(&issue.body, None);
+        let trigger = super::deterministic_skip_trigger(&issue);
+
+        // Assert
+        assert!(!lint.violations.is_empty());
+        assert_eq!(trigger, None);
+    }
 
     // UX-006/007: AuthActionResult renders correct text
     #[test]

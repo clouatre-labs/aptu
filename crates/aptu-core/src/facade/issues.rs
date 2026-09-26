@@ -303,6 +303,14 @@ pub async fn fetch_issue_for_triage(
     issue_details.author = issue_node.author.as_ref().map(|a| a.login.clone());
     issue_details.created_at = Some(issue_node.created_at.clone());
     issue_details.updated_at = Some(issue_node.updated_at.clone());
+    // Deterministic gate inputs: null/missing author maps to not-bot (ghost
+    // fallback precedent); locked comes straight from the GraphQL response.
+    issue_details.author_is_bot = issue_node
+        .author
+        .as_ref()
+        .and_then(|a| a.type_name.as_deref())
+        .is_some_and(|t| t == "Bot");
+    issue_details.locked = issue_node.locked;
     issue_details.viewer_permission = repo_data.viewer_permission.map(|p| p.to_string());
 
     // Extract keywords and language for parallel calls
@@ -549,6 +557,8 @@ mod tests {
             author: None,
             created_at: None,
             updated_at: None,
+            author_is_bot: false,
+            locked: false,
         }
     }
 
@@ -593,6 +603,8 @@ mod tests {
             author: Some("test-author".to_string()),
             created_at: Some("2024-01-01T00:00:00Z".to_string()),
             updated_at: Some("2024-01-01T00:00:00Z".to_string()),
+            author_is_bot: false,
+            locked: false,
         };
 
         let ai_config = AiConfig {

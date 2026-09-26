@@ -516,7 +516,7 @@ pub async fn run_review(
             let config = config_clone.clone();
             let repo_path_for_review = repo_path_str_owned.clone();
             async move {
-                super::review_single_pr(
+                let outcome = super::review_single_pr(
                     &pr_ref,
                     repo_context.as_deref(),
                     review_type,
@@ -530,7 +530,11 @@ pub async fn run_review(
                     &config,
                     repo_path_for_review,
                 )
-                .await
+                .await?;
+                Ok(match outcome {
+                    Some(result) => aptu_core::BulkItem::Done(result),
+                    None => aptu_core::BulkItem::Skipped("Skipped".to_string()),
+                })
             }
         },
         move |current, total, action| {

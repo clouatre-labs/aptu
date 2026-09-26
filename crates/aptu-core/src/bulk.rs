@@ -52,6 +52,19 @@ impl<I, T> Default for BulkResult<I, T> {
     }
 }
 
+/// Outcome of a single processor invocation, carrying an optional skip trigger.
+///
+/// `Ok(Some)`/`Ok(None)` from a processor is expressed as [`BulkItem::Done`] /
+/// [`BulkItem::Skipped`]; the skip variant carries the deterministic trigger
+/// string that propagates to [`BulkOutcome::Skipped`].
+#[derive(Debug, Clone)]
+pub enum BulkItem<T> {
+    /// Item produced a result.
+    Done(T),
+    /// Item was skipped for the given reason (e.g. "bot-authored").
+    Skipped(String),
+}
+
 /// Process a collection of items concurrently with retry logic and progress tracking.
 ///
 /// # Type Parameters
@@ -59,21 +72,25 @@ impl<I, T> Default for BulkResult<I, T> {
 /// * `I` - Item identifier type (must be Clone + Display for progress messages)
 /// * `D` - Item data type (must be Clone + Send)
 /// * `T` - Result type for successful processing
-/// * `F` - Async processor function type
+/// * `F` - Async processor function type returning `Result<BulkItem<T>>`
 /// * `P` - Progress callback function type
 ///
 /// # Arguments
 ///
 /// * `items` - Collection of (identifier, data) pairs to process
 /// * `processor` - Async function that processes a single item, returning:
-///   - `Ok(Some(T))` for successful processing
-///   - `Ok(None)` for skipped items
+///   - `Ok(BulkItem::Done(t))` for successful processing
+///   - `Ok(BulkItem::Skipped(reason))` for skipped items, with the
+///     deterministic trigger string carried through to [`BulkOutcome::Skipped`]
 ///   - `Err(e)` for failures (will retry if retryable)
 /// * `progress_callback` - Called before processing each item with (current, total, `action_message`)
 ///
 /// # Returns
 ///
 /// A `BulkResult` containing counts and detailed outcomes for all items.
+/// Successful items map to [`BulkOutcome::Success`], skips map to
+/// [`BulkOutcome::Skipped`] with the processor-provided reason, and failures
+/// map to [`BulkOutcome::Failed`].
 ///
 /// # Concurrency
 ///
@@ -88,12 +105,12 @@ impl<I, T> Default for BulkResult<I, T> {
 /// # Example
 ///
 /// ```rust,no_run
-/// use aptu_core::bulk::{process_bulk, BulkResult};
+/// use aptu_core::bulk::{process_bulk, BulkItem, BulkResult};
 /// use anyhow::Result;
 ///
-/// async fn process_item(id: &str) -> Result<Option<String>> {
+/// async fn process_item(id: &str) -> Result<BulkItem<String>> {
 ///     // Process the item...
-///     Ok(Some(format!("Processed {}", id)))
+///     Ok(BulkItem::Done(format!("Processed {}", id)))
 /// }
 ///
 /// # async fn example() -> Result<()> {
@@ -125,7 +142,7 @@ where
     D: Clone + Send + 'static,
     T: Send + 'static,
     F: Fn((I, D)) -> Fut + Send + Sync + 'static,
-    Fut: std::future::Future<Output = Result<Option<T>>> + Send,
+    Fut: std::future::Future<Output = Result<BulkItem<T>>> + Send,
     P: Fn(usize, usize, &str) + Send + Sync + 'static,
 {
     let total = items.len();
@@ -184,16 +201,18 @@ where
 
     for (id, result) in outcomes {
         match result {
-            Ok(Some(value)) => {
-                bulk_result.succeeded += 1;
-                bulk_result.outcomes.push((id, BulkOutcome::Success(value)));
-            }
-            Ok(None) => {
-                bulk_result.skipped += 1;
-                bulk_result
-                    .outcomes
-                    .push((id, BulkOutcome::Skipped("Skipped".to_string())));
-            }
+            Ok(item) => match item {
+                BulkItem::Done(value) => {
+                    bulk_result.succeeded += 1;
+                    bulk_result.outcomes.push((id, BulkOutcome::Success(value)));
+                }
+                BulkItem::Skipped(reason) => {
+                    bulk_result.skipped += 1;
+                    bulk_result
+                        .outcomes
+                        .push((id, BulkOutcome::Skipped(reason)));
+                }
+            },
             Err(e) => {
                 bulk_result.failed += 1;
                 bulk_result
@@ -220,7 +239,7 @@ mod tests {
 
         let result = process_bulk(
             items,
-            |(id, value)| async move { Ok(Some(format!("{}: {}", id, value * 2))) },
+            |(id, value)| async move { Ok(BulkItem::Done(format!("{}: {}", id, value * 2))) },
             |_current, _total, _action| {},
         )
         .await;
@@ -243,8 +262,10 @@ mod tests {
             items,
             |(id, _value)| async move {
                 match id.as_str() {
-                    "success" => Ok(Some("done".to_string())),
-                    "skip" => Ok(None),
+                    "success" => Ok(BulkItem::Done("done".to_string())),
+                    "skip" => Ok(BulkItem::Skipped(
+                        "bot-authored (author is a bot)".to_string(),
+                    )),
                     "fail" => Err(anyhow::anyhow!("Processing failed")),
                     _ => unreachable!(),
                 }
@@ -257,6 +278,16 @@ mod tests {
         assert_eq!(result.failed, 1);
         assert_eq!(result.skipped, 1);
         assert_eq!(result.outcomes.len(), 3);
+        for (id, outcome) in &result.outcomes {
+            if id == "skip" {
+                match outcome {
+                    BulkOutcome::Skipped(reason) => {
+                        assert_eq!(reason, "bot-authored (author is a bot)");
+                    }
+                    other => panic!("expected Skipped, got {other:?}"),
+                }
+            }
+        }
     }
 
     #[tokio::test]
@@ -270,7 +301,7 @@ mod tests {
 
         let _result = process_bulk(
             items,
-            |(_id, _value)| async move { Ok(Some("done".to_string())) },
+            |(_id, _value)| async move { Ok(BulkItem::Done("done".to_string())) },
             move |current, total, action| {
                 progress_calls_clone
                     .lock()
