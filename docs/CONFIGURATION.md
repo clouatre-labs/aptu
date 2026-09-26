@@ -398,9 +398,32 @@ cp $(cargo locate-project --workspace --message-format plain | xargs dirname)/cr
 
 Built-in prompt fragments live in `crates/aptu-core/src/ai/prompts/` (guidelines as `.md`, response schemas as `.json`) and are embedded at compile time via `include_str!`. The builder functions (`build_triage_system_prompt`, etc.) in `prompts/mod.rs` are shared between production code and `tests/prompt_lint.rs` to guarantee tests exercise real construction logic.
 
+## Typed Judge (TypeSafe Jev)
+
+Aptu supports an opt-in typed-judge integration with TypeSafe Jev. The judge is disabled by default; enable it by adding a `[judge]` section to `~/.config/aptu/config.toml`:
+
+```toml
+[judge]
+enabled = true
+# Optional overrides:
+# api_base = "https://api.typesafe.jev"
+# model = "jev-systemone"
+```
+
+When enabled, every judge call:
+
+- Authenticates with a Bearer token read from the `TYPESAFE_API_KEY` environment variable at call time.
+- Posts a single batched `{ state, questions, model? }` request to `POST /v1/systemone`.
+- Rejects payloads larger than 256 KiB before any network traffic.
+- Returns a `{ fallback: true, error }` envelope instead of failing when anything goes wrong (missing key, HTTP error, parse failure), so callers can degrade gracefully.
+- Appends one JSONL telemetry record per call to `~/.local/share/aptu/judge_telemetry.jsonl` (append-only; write failures are logged as warnings and never fail the call).
+
+If `enabled` is set without `api_base`, the built-in default endpoint is used and a non-fatal warning is emitted at load time.
+
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `APTU_CONTEXT_FILE` | Path to write a JSONL file containing per-review context records for explainability and debugging. Each line is a JSON object recording fields such as `pr`, `model`, `files_total`, `budget_drops` (list of enrichment steps skipped due to budget), and `prompt_chars_final`; see [docs/GITHUB_ACTION.md](GITHUB_ACTION.md) for the full field-by-field schema. If unset, no file is written. |
 | `APTU_METRICS_FILE` | Path to write a JSONL file containing per-review token usage metrics. Used by the GitHub Action to capture `aptu-token-usage.jsonl` as an artifact. |
+| `TYPESAFE_API_KEY` | Bearer token for the opt-in typed judge (see [Typed Judge](#typed-judge-typesafe-jev)). Read at call time; when unset, judge calls return a fallback envelope. |

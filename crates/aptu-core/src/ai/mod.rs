@@ -13,6 +13,7 @@ pub mod provider;
 pub mod registry;
 pub mod review_context;
 pub mod types;
+pub mod typesafe_judge;
 
 pub use circuit_breaker::CircuitBreaker;
 pub use client::{AiClient, AuthMethod, is_free_model, resolve_anthropic_credential};
@@ -20,6 +21,7 @@ pub use dep_enrichment::enrich_dep_releases;
 pub use provider::AiProvider;
 pub use registry::{PROVIDER_ANTHROPIC, ProviderConfig, all_providers, get_provider};
 pub use types::{CreditsStatus, DepReleaseNote, TriageResponse};
+pub use typesafe_judge::{JudgeOutcome, judge};
 
 use crate::history::AiStats;
 
