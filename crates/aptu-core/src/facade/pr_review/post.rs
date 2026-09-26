@@ -131,6 +131,9 @@ pub(crate) enum SummaryDedupOutcome {
     Post,
     /// An existing marker review already covers this head SHA; skip entirely.
     Skip,
+    /// The head SHA changed but the diff hash recorded in the existing marker
+    /// equals the current diff hash; skip entirely (force-push revert).
+    SkipUnchangedDiff,
     /// An existing marker review covers a different (or unknown) head SHA;
     /// submitted reviews are immutable, so post a NEW review.
     Update,
@@ -150,11 +153,16 @@ pub(crate) enum SummaryDedupOutcome {
 pub(crate) fn summary_dedup_outcome(
     existing: Option<(u64, Option<String>)>,
     head_sha: &str,
+    stored_diff_hash: Option<&str>,
+    current_diff_hash: &str,
 ) -> SummaryDedupOutcome {
     match existing {
         None => SummaryDedupOutcome::Post,
         Some((_, sha)) => match sha {
             Some(sha) if sha == head_sha => SummaryDedupOutcome::Skip,
+            Some(_) if stored_diff_hash == Some(current_diff_hash) => {
+                SummaryDedupOutcome::SkipUnchangedDiff
+            }
             _ => SummaryDedupOutcome::Update,
         },
     }
@@ -178,6 +186,9 @@ pub(crate) fn summary_dedup_outcome(
 /// * `existing_comments` - Existing inline review comments for dedup
 /// * `dedup_summary` - When true, deduplicate the review against a prior
 ///   bot-authored PR review whose body carries the `<!-- APTU_REVIEW:<sha> -->` marker
+/// * `current_diff_hash` - Diff hash of the current PR file set; when the
+///   existing marker records an equal hash despite a changed head SHA, the
+///   review is skipped (force-push revert)
 ///
 /// # Returns
 ///
@@ -209,6 +220,7 @@ pub async fn post_pr_review(
     commit_id: &str,
     existing_comments: &[crate::ai::types::PrReviewCommentDetails],
     dedup_summary: bool,
+    current_diff_hash: &str,
 ) -> crate::Result<WriteOutcome<ReviewPostOutcome>> {
     use crate::github::pulls::{find_marker_review, list_pr_reviews, parse_pr_reference};
 
@@ -299,9 +311,40 @@ pub async fn post_pr_review(
             .await
             .map_err(crate::error::aptu_error_from_anyhow)?;
         let existing = find_marker_review(&reviews);
-        match summary_dedup_outcome(existing, commit_id) {
+        // Recover the stored diff hash from the same marker review (the marker
+        // payload is `<sha>:<diff_hash>`); legacy markers carry no hash and
+        // degrade to the always-post behavior.
+        let stored_diff_hash = existing.as_ref().and_then(|(id, _)| {
+            reviews
+                .iter()
+                .rev()
+                .find(|r| &r.id == id)
+                .and_then(|r| crate::triage::parse_aptu_summary_marker(&r.body))
+                .and_then(|m| m.diff_hash)
+        });
+        let existing_sha = existing
+            .as_ref()
+            .and_then(|(_, sha)| sha.as_ref().map(ToString::to_string));
+        match summary_dedup_outcome(
+            existing,
+            commit_id,
+            stored_diff_hash.as_deref(),
+            current_diff_hash,
+        ) {
             SummaryDedupOutcome::Skip => {
                 debug!("Head SHA unchanged; skipping review entirely");
+                return Ok(WriteOutcome::Applied(ReviewPostOutcome {
+                    review_id: 0,
+                    failed_comments: Vec::new(),
+                    summary: SummaryPostOutcome::Skipped,
+                }));
+            }
+            SummaryDedupOutcome::SkipUnchangedDiff => {
+                if let Some(sha) = existing_sha.as_deref() {
+                    tracing::info!(
+                        "diff unchanged since review at {sha}; skipping review entirely"
+                    );
+                }
                 return Ok(WriteOutcome::Applied(ReviewPostOutcome {
                     review_id: 0,
                     failed_comments: Vec::new(),
@@ -348,6 +391,7 @@ pub async fn post_pr_review(
     _commit_id: &str,
     _existing_comments: &[crate::ai::types::PrReviewCommentDetails],
     _dedup_summary: bool,
+    _current_diff_hash: &str,
 ) -> crate::Result<WriteOutcome<ReviewPostOutcome>> {
     crate::facade::wasm_unsupported!("post_pr_review");
 }

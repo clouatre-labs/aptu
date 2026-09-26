@@ -71,8 +71,24 @@ mod tests {
     fn summary_dedup_skips_when_head_sha_unchanged() {
         let existing = Some((42, Some("abc123".to_string())));
         assert_eq!(
-            summary_dedup_outcome(existing, "abc123"),
+            summary_dedup_outcome(existing, "abc123", None, "hash"),
             SummaryDedupOutcome::Skip
+        );
+    }
+
+    #[test]
+    fn summary_dedup_skips_when_diff_unchanged_after_force_push() {
+        // Changed head SHA but the marker's diff hash equals the current one:
+        // the diff is unchanged, so skip entirely.
+        let existing = Some((42, Some("old".to_string())));
+        assert_eq!(
+            summary_dedup_outcome(existing, "new", Some("h1"), "h1"),
+            SummaryDedupOutcome::SkipUnchangedDiff
+        );
+        // Differing hash means the diff actually changed -> new review.
+        assert_eq!(
+            summary_dedup_outcome(Some((42, Some("old".to_string()))), "new", Some("h1"), "h2"),
+            SummaryDedupOutcome::Update
         );
     }
 
@@ -80,12 +96,17 @@ mod tests {
     fn summary_dedup_updates_when_head_sha_changed_or_legacy() {
         // Changed SHA -> post a new review (submitted reviews are immutable).
         assert_eq!(
-            summary_dedup_outcome(Some((42, Some("old".to_string()))), "new"),
+            summary_dedup_outcome(Some((42, Some("old".to_string()))), "new", None, "h"),
+            SummaryDedupOutcome::Update
+        );
+        // Legacy marker without a diff hash -> always post.
+        assert_eq!(
+            summary_dedup_outcome(Some((42, Some("old".to_string()))), "new", None, "h"),
             SummaryDedupOutcome::Update
         );
         // Legacy SHA-less marker -> treated as stale -> new review.
         assert_eq!(
-            summary_dedup_outcome(Some((7, None)), "abc123"),
+            summary_dedup_outcome(Some((7, None)), "abc123", Some("h"), "h"),
             SummaryDedupOutcome::Update
         );
     }
@@ -93,7 +114,7 @@ mod tests {
     #[test]
     fn summary_dedup_posts_when_no_marker_comment() {
         assert_eq!(
-            summary_dedup_outcome(None, "abc123"),
+            summary_dedup_outcome(None, "abc123", None, "h"),
             SummaryDedupOutcome::Post
         );
     }
@@ -115,7 +136,7 @@ mod tests {
             },
             "newsha",
         );
-        assert!(body.contains("<!-- APTU_REVIEW:newsha -->"));
+        assert!(body.starts_with("<!-- APTU_REVIEW:newsha:"));
         assert!(!body.contains("oldsha"));
     }
 

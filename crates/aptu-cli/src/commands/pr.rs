@@ -168,6 +168,7 @@ pub async fn post(
             &analyze_result.pr_details.head_sha,
             &analyze_result.pr_details.review_comments,
             !no_dedup_summary,
+            &aptu_core::diff_hash(&analyze_result.pr_details.files),
         )
         .await?;
 

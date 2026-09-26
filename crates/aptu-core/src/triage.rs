@@ -365,34 +365,95 @@ pub const REVIEW_SUMMARY_MARKER_PREFIX: &str = "<!-- APTU_REVIEW:";
 ///
 /// `sha` is `None` for the legacy SHA-less marker (`<!-- APTU_REVIEW -->`),
 /// which is always treated as stale so the summary is refreshed.
+/// `diff_hash` is `None` for markers posted before the extended
+/// `<!-- APTU_REVIEW:<sha>:<diff_hash> -->` form existed; legacy markers
+/// degrade to the always-post behavior on a changed head SHA.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AptuSummaryMarker {
     /// Head commit SHA recorded when the summary was posted, if any.
     pub sha: Option<String>,
+    /// Diff hash recorded when the summary was posted, if any.
+    pub diff_hash: Option<String>,
 }
 
-/// Parses the `<!-- APTU_REVIEW:<sha> -->` summary marker from a comment body.
+/// Parses the `<!-- APTU_REVIEW:<sha>[:<diff_hash>] -->` summary marker from a
+/// comment body.
 ///
 /// Returns `None` when the body does not carry an Aptu review summary marker.
-/// The legacy SHA-less form (`<!-- APTU_REVIEW -->`) parses to `sha: None` and
-/// is treated as stale by callers so the summary is updated in place.
+/// The payload is split on `:` so the optional second field yields
+/// `diff_hash`; the legacy SHA-less form (`<!-- APTU_REVIEW -->`) parses to
+/// `sha: None, diff_hash: None` and is treated as stale by callers so the
+/// summary is updated in place. Legacy single-field markers still parse to a
+/// valid sha with `diff_hash: None`.
 #[must_use]
 pub fn parse_aptu_summary_marker(body: &str) -> Option<AptuSummaryMarker> {
     let trimmed = body.trim_start();
     // Legacy SHA-less marker has no colon separator; treat it as stale.
     if trimmed.starts_with("<!-- APTU_REVIEW -->") {
-        return Some(AptuSummaryMarker { sha: None });
+        return Some(AptuSummaryMarker {
+            sha: None,
+            diff_hash: None,
+        });
     }
     let rest = trimmed.strip_prefix(REVIEW_SUMMARY_MARKER_PREFIX)?;
     let end = rest.find("-->")?;
-    let sha = rest[..end].trim();
-    if sha.is_empty() {
-        Some(AptuSummaryMarker { sha: None })
+    let payload = rest[..end].trim();
+    let mut fields = payload.splitn(2, ':');
+    let sha_field = fields.next().unwrap_or("").trim();
+    let hash_field = fields.next().map(str::trim).filter(|h| !h.is_empty());
+    let sha = if sha_field.is_empty() {
+        None
     } else {
-        Some(AptuSummaryMarker {
-            sha: Some(sha.to_string()),
-        })
+        Some(sha_field.to_string())
+    };
+    Some(AptuSummaryMarker {
+        sha,
+        diff_hash: hash_field.map(ToString::to_string),
+    })
+}
+
+/// Encodes a SHA-256 digest as lowercase hex.
+fn digest_hex(digest: &[u8]) -> String {
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        let _ = write!(hex, "{byte:02x}");
     }
+    hex
+}
+
+/// Computes a deterministic SHA-256 diff hash (lowercase hex) over a PR file
+/// set. Per file, the fields `(filename, status, additions, deletions, patch)`
+/// are hashed with an 8-byte big-endian length prefix per string field so
+/// adversarial content cannot shift field boundaries; `patch` carries a
+/// presence discriminant byte so `None` (binary file) and `Some("")` hash
+/// differently. Files are sorted by filename so input order does not matter.
+/// Intentionally distinct from the diff reconstruction in
+/// `facade::pr_review::analyze`, which skips `patch: None` binary files and
+/// caps output size.
+#[must_use]
+pub fn diff_hash(files: &[PrFile]) -> String {
+    fn hash_str(hasher: &mut Sha256, field: &str) {
+        let bytes = field.as_bytes();
+        hasher.update(u64::try_from(bytes.len()).unwrap_or(u64::MAX).to_be_bytes());
+        hasher.update(bytes);
+    }
+    let mut sorted: Vec<&PrFile> = files.iter().collect();
+    sorted.sort_by(|a, b| a.filename.cmp(&b.filename));
+    let mut hasher = Sha256::new();
+    for f in sorted {
+        hash_str(&mut hasher, &f.filename);
+        hash_str(&mut hasher, &f.status);
+        hasher.update(f.additions.to_be_bytes());
+        hasher.update(f.deletions.to_be_bytes());
+        match &f.patch {
+            None => hasher.update([0_u8]),
+            Some(patch) => {
+                hasher.update([1_u8]);
+                hash_str(&mut hasher, patch);
+            }
+        }
+    }
+    digest_hex(&hasher.finalize())
 }
 
 /// Removes the content-hash marker line from a rendered body, producing the
@@ -535,9 +596,12 @@ pub fn render_pr_review_review_body(
     head_sha: &str,
 ) -> String {
     let verdict_badge = verdict_badge(&review.verdict);
+    // Extended marker carries the diff hash so re-runs can skip posting when
+    // only the head SHA changed but the diff is unchanged (force-push revert).
+    let hash = diff_hash(files);
     let mut body = format!(
-        "{}{} -->\n## Aptu Review\n\n**{}** — {}\n",
-        REVIEW_SUMMARY_MARKER_PREFIX, head_sha, verdict_badge, review.summary
+        "{}{}:{} -->\n## Aptu Review\n\n**{}** — {}\n",
+        REVIEW_SUMMARY_MARKER_PREFIX, head_sha, hash, verdict_badge, review.summary
     );
 
     render_structured_sections(&mut body, review);
@@ -824,11 +888,17 @@ mod tests {
         let files = vec![make_walkthrough_file("src/main.rs", 3, 1)];
         let body = render_pr_review_review_body(&review, &files, "abc123");
         // Marker is the literal first line and round-trips through the parser.
-        assert!(body.starts_with("<!-- APTU_REVIEW:abc123 -->\n"));
+        assert!(body.starts_with("<!-- APTU_REVIEW:abc123:"));
         assert_eq!(
             parse_aptu_summary_marker(&body),
             Some(AptuSummaryMarker {
-                sha: Some("abc123".to_string())
+                sha: Some("abc123".to_string()),
+                diff_hash: body
+                    .lines()
+                    .next()
+                    .and_then(|l| l.splitn(3, ':').nth(2))
+                    .and_then(|h| h.strip_suffix(" -->"))
+                    .map(ToString::to_string)
             })
         );
         // Verdict, summary, Concerns, and Files Changed table are present.
@@ -866,7 +936,7 @@ mod tests {
             disclaimer: None,
         };
         let body = render_pr_review_review_body(&review, &[], "abc123");
-        assert!(body.contains("<!-- APTU_REVIEW:abc123 -->"));
+        assert!(body.starts_with("<!-- APTU_REVIEW:abc123:"));
         assert!(!body.contains("Strengths"));
         assert!(!body.contains("Concerns"));
         assert!(!body.contains("Suggestions"));
@@ -956,11 +1026,15 @@ mod tests {
         // Marker is the literal first line and parses back to the head SHA.
         let review = make_pr_review();
         let body = render_pr_review_review_body(&review, &[], "deadbeef");
-        assert_eq!(body.lines().next(), Some("<!-- APTU_REVIEW:deadbeef -->"));
         assert_eq!(
             parse_aptu_summary_marker(&body).and_then(|m| m.sha),
             Some("deadbeef".to_string())
         );
+        // The extended marker carries a diff hash field.
+        assert!(body
+            .lines()
+            .next()
+            .is_some_and(|l| l.starts_with("<!-- APTU_REVIEW:deadbeef:") && l.ends_with(" -->")));
     }
 
     #[test]
@@ -977,7 +1051,23 @@ mod tests {
         assert_eq!(
             marker,
             Some(AptuSummaryMarker {
-                sha: Some("0123abcd".to_string())
+                sha: Some("0123abcd".to_string()),
+                diff_hash: None
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_aptu_summary_marker_with_diff_hash() {
+        // Extended marker yields sha and hash as separate fields.
+        let marker = parse_aptu_summary_marker(
+            "<!-- APTU_REVIEW:0123abcd:cafe1234 -->\n## Aptu Review\n\nbody",
+        );
+        assert_eq!(
+            marker,
+            Some(AptuSummaryMarker {
+                sha: Some("0123abcd".to_string()),
+                diff_hash: Some("cafe1234".to_string())
             })
         );
     }
@@ -986,7 +1076,13 @@ mod tests {
     fn test_parse_aptu_summary_marker_legacy_sha_less() {
         // Legacy marker (no SHA) parses to sha: None and is treated as stale.
         let marker = parse_aptu_summary_marker("<!-- APTU_REVIEW -->\n## Aptu Review");
-        assert_eq!(marker, Some(AptuSummaryMarker { sha: None }));
+        assert_eq!(
+            marker,
+            Some(AptuSummaryMarker {
+                sha: None,
+                diff_hash: None
+            })
+        );
         // No marker at all.
         assert_eq!(parse_aptu_summary_marker("just a comment"), None);
         // Marker mentioned mid-body is not anchored; prefix match requires start.
@@ -994,6 +1090,25 @@ mod tests {
             parse_aptu_summary_marker("see <!-- APTU_REVIEW:deadbeef -->"),
             None
         );
+    }
+
+    #[test]
+    fn test_diff_hash_distinguishes_binary_file_changes() {
+        // Two file sets differing only in a patch:None (binary) file produce
+        // different hashes: the binary file's counts are still hashed.
+        let a = vec![make_walkthrough_file("bin.png", 0, 0)];
+        let b = vec![make_walkthrough_file("bin.png", 2, 0)];
+        assert_ne!(diff_hash(&a), diff_hash(&b));
+        // Identical sets hash equal regardless of input order.
+        let c = vec![
+            make_walkthrough_file("a.rs", 1, 0),
+            make_walkthrough_file("b.rs", 0, 1),
+        ];
+        let d = vec![
+            make_walkthrough_file("b.rs", 0, 1),
+            make_walkthrough_file("a.rs", 1, 0),
+        ];
+        assert_eq!(diff_hash(&c), diff_hash(&d));
     }
 
     #[test]
