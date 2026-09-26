@@ -61,10 +61,12 @@ No production latency or cost data exists on this machine (`~/.local/share/aptu/
 `ai::registry` is a static registry of four OpenAI-compatible completion providers (`ai/registry/mod.rs:33-34`); Jev is a typed-question endpoint, not a completion provider — forcing it into the registry would be anti-KISS.
 
 **Patterns that would be new, not follow-ons (validated corrections):**
+
 - Telemetry: `history.rs` writes `history.json` as a JSON array, not JSONL. A per-call JSONL telemetry line is a new pattern.
 - Caching: `cache.rs` provides TTL/etag file caching (`CacheEntry<T>` :43-84, `FileCacheImpl` :154-201), not content-hash keying. Hash-keyed response caching (as jevgate does) would be new.
 
 **Guardrails transferred from the coder-skill audits (dotfiles #946/#949):**
+
 - Propose deterministically; Jev validates (confirm-ride). The judge may confirm or soften but never originate a stop; stops require evidence-backed deterministic signals.
 - Gate on predicate-positive noul with a validated threshold; re-running a fixed case battery is required after any question re-wording.
 - A never-fatal fallback must emit a visible log line — the prior live pilot found a fallback silently never executing, indistinguishable from a skip.
