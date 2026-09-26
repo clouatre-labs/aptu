@@ -114,17 +114,6 @@ pub struct ValidatedFinding {
     pub model_version: Option<String>,
 }
 
-/// LLM validation result for a single finding.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ValidationResult {
-    /// Index of the finding in the batch (0-based).
-    pub index: usize,
-    /// Whether the finding is valid.
-    pub is_valid: bool,
-    /// Reasoning for the decision.
-    pub reasoning: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
