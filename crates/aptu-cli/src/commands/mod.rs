@@ -373,6 +373,14 @@ async fn review_single_pr(
         );
     }
 
+    // Warn about per-file patches truncated or skipped at prompt assembly
+    if !context_record.truncated_patch_files.is_empty() {
+        eprintln!(
+            "warning: patch(es) truncated or skipped to fit prompt budget: {}.\n  Raise limits under [review] in ~/.config/aptu/config.toml",
+            context_record.truncated_patch_files.join(", ")
+        );
+    }
+
     // Log metrics (fire-and-forget)
     aptu_core::metrics::append_jsonl(&ai_stats);
     aptu_core::metrics::write_context_jsonl(&context_record);

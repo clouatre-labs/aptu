@@ -125,6 +125,7 @@ pub async fn build_review_context(
         max_patch_chars_per_file: review_config.max_patch_chars_per_file,
         files_truncated: 0,
         truncated_chars_dropped: 0,
+        truncated_patch_files: Vec::new(),
         files_total,
         files_with_patch,
         dep_enrichments_count,

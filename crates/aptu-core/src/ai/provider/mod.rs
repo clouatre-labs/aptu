@@ -166,7 +166,7 @@ pub trait AiProvider: Send + Sync {
         &self,
         ctx: crate::ai::review_context::ReviewContext,
         review_config: &crate::config::ReviewConfig,
-    ) -> Result<(PrReviewResponse, AiStats, Vec<String>)> {
+    ) -> Result<(PrReviewResponse, AiStats, Vec<String>, Vec<String>)> {
         self::review::review_pr(self, ctx, review_config).await
     }
 

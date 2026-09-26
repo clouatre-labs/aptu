@@ -61,7 +61,7 @@ pub(super) async fn review_pr(
     provider: &(impl AiProvider + ?Sized),
     mut ctx: crate::ai::review_context::ReviewContext,
     review_config: &crate::config::ReviewConfig,
-) -> Result<(PrReviewResponse, AiStats, Vec<String>)> {
+) -> Result<(PrReviewResponse, AiStats, Vec<String>, Vec<String>)> {
     debug!(model = %provider.model(), "Calling {} API for PR review", provider.name());
 
     // Build request
@@ -145,7 +145,7 @@ pub(super) async fn review_pr(
         "PR review complete with stats"
     );
 
-    Ok((review, ai_stats, finish_reasons))
+    Ok((review, ai_stats, finish_reasons, ctx.truncated_patch_files))
 }
 
 #[cfg(test)]
