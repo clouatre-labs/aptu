@@ -224,21 +224,23 @@ enum FileSectionOutcome {
 }
 
 /// Writes one file's `File:`, patch, and full-content sections into `prompt`.
+///
+/// Returns the outcome plus names of any truncated or skipped patches to record.
 fn write_pr_file_section(
     prompt: &mut String,
     file: &super::types::PrFile,
     ctx: &ReviewContext,
-    dropped_patches: &HashSet<&str>,
-    dropped_full_content: &HashSet<&str>,
+    dropped_patches: &HashSet<String>,
+    dropped_full_content: &HashSet<String>,
     total_diff_size: usize,
-) -> FileSectionOutcome {
-    let filename = &file.filename;
+) -> (FileSectionOutcome, Vec<String>) {
+    let filename = file.filename.clone();
+    let mut recorded_names: Vec<String> = Vec::new();
     let _ = writeln!(prompt, "File: {filename} ({})", file.status);
 
-    let patch_was_budget_dropped =
-        file.patch.is_none() && dropped_patches.contains(filename.as_str());
+    let patch_was_budget_dropped = file.patch.is_none() && dropped_patches.contains(&filename);
     let full_content_was_budget_dropped =
-        file.full_content.is_none() && dropped_full_content.contains(filename.as_str());
+        file.full_content.is_none() && dropped_full_content.contains(&filename);
 
     let mut diff_chars_added = 0;
 
@@ -251,8 +253,15 @@ fn write_pr_file_section(
         let mut sanitized_patch = sanitize_prompt_field(patch);
         let mut patch_size = sanitized_patch.len();
 
+        // Waive the per-file cap when the full patch fits the remaining total
+        // diff budget: a small PR should never have its patches truncated.
+        let patch_fits_total_budget =
+            total_diff_size.saturating_add(patch_size) <= ctx.max_diff_chars;
+        let waive_per_file_cap =
+            patch_size > ctx.max_patch_chars_per_file && patch_fits_total_budget;
+
         // Truncate patch if it exceeds per-file max (instead of dropping silently)
-        if patch_size > ctx.max_patch_chars_per_file {
+        if patch_size > ctx.max_patch_chars_per_file && !waive_per_file_cap {
             tracing::warn!(
                 file = %filename,
                 patch_chars = patch_size,
@@ -269,11 +278,17 @@ fn write_pr_file_section(
             );
             sanitized_patch = truncated;
             patch_size = sanitized_patch.len();
+            recorded_names.push(filename.clone());
         }
 
         // Check if adding this patch would exceed total diff size limit
-        if total_diff_size + patch_size > ctx.max_diff_chars {
-            return FileSectionOutcome::Skipped;
+        if total_diff_size.saturating_add(patch_size) > ctx.max_diff_chars {
+            // Record the skipped file so it is never silently omitted.
+            // Avoid duplicating a name already recorded for per-file truncation.
+            if !recorded_names.contains(&filename) {
+                recorded_names.push(filename.clone());
+            }
+            return (FileSectionOutcome::Skipped, recorded_names);
         }
 
         // Add annotation if patch was truncated by GitHub API
@@ -301,14 +316,14 @@ fn write_pr_file_section(
             let _ = writeln!(
                 prompt,
                 "<file_content path=\"{}\">\n{}\n[APTU: file content truncated by size budget -- do not speculate on missing content]\n</file_content>\n",
-                sanitize_prompt_field(filename),
+                sanitize_prompt_field(&filename),
                 truncated
             );
         } else {
             let _ = writeln!(
                 prompt,
                 "<file_content path=\"{}\">\n{}\n</file_content>\n",
-                sanitize_prompt_field(filename),
+                sanitize_prompt_field(&filename),
                 sanitized
             );
         }
@@ -319,25 +334,31 @@ fn write_pr_file_section(
         );
     }
 
-    FileSectionOutcome::Included { diff_chars_added }
+    (
+        FileSectionOutcome::Included { diff_chars_added },
+        recorded_names,
+    )
 }
 
 /// Writes the `<pull_request>` files section (patches and full content) into `prompt`.
-fn write_pr_files_section(prompt: &mut String, ctx: &ReviewContext) {
-    let dropped_patches: HashSet<&str> = ctx
+fn write_pr_files_section(prompt: &mut String, ctx: &mut ReviewContext) {
+    let dropped_patches: HashSet<String> = ctx
         .budget_drops
         .iter()
         .filter_map(|s| s.strip_prefix("patch:"))
+        .map(str::to_string)
         .collect();
-    let dropped_full_content: HashSet<&str> = ctx
+    let dropped_full_content: HashSet<String> = ctx
         .budget_drops
         .iter()
         .filter_map(|s| s.strip_prefix("file_content:"))
+        .map(str::to_string)
         .collect();
 
     let mut files_included = 0;
     let mut files_skipped = 0;
     let mut total_diff_size = 0;
+    let mut truncated_patch_files: Vec<String> = Vec::new();
 
     for file in &ctx.pr.files {
         if files_included >= MAX_FILES {
@@ -353,13 +374,19 @@ fn write_pr_files_section(prompt: &mut String, ctx: &ReviewContext) {
             &dropped_full_content,
             total_diff_size,
         ) {
-            FileSectionOutcome::Skipped => files_skipped += 1,
-            FileSectionOutcome::Included { diff_chars_added } => {
+            (FileSectionOutcome::Skipped, mut names) => {
+                files_skipped += 1;
+                truncated_patch_files.append(&mut names);
+            }
+            (FileSectionOutcome::Included { diff_chars_added }, mut names) => {
                 total_diff_size += diff_chars_added;
                 files_included += 1;
+                truncated_patch_files.append(&mut names);
             }
         }
     }
+
+    ctx.truncated_patch_files.extend(truncated_patch_files);
 
     if files_skipped > 0 {
         let _ = writeln!(
@@ -925,7 +952,7 @@ mod tests {
                 inferred_repo_path: None,
                 cwd_inferred: false,
                 max_patch_chars_per_file: CAP,
-                max_diff_chars: 200_000,
+                max_diff_chars: CAP,
                 max_chars_per_file: 100,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
@@ -1465,5 +1492,206 @@ mod tests {
         assert!(prompt.contains("- @alice:"));
         assert!(prompt.contains("x".repeat(499).as_str()));
         assert!(!prompt.contains("x".repeat(500).as_str()));
+    }
+
+    /// Builds a minimal `ReviewContext` with caller-supplied files and budgets.
+    fn make_waiver_ctx(
+        files: Vec<super::super::types::PrFile>,
+        max_patch: usize,
+        max_diff: usize,
+    ) -> ReviewContext {
+        use super::super::types::PrDetails;
+
+        let pr = PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number: 1709,
+            title: "Test PR".to_string(),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: "https://github.com/test/repo/pull/1709".to_string(),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        };
+
+        ReviewContext {
+            pr,
+            max_patch_chars_per_file: max_patch,
+            max_diff_chars: max_diff,
+            ..Default::default()
+        }
+    }
+
+    /// Waiver: a patch exceeding the per-file cap is included in full when it
+    /// fits the remaining total diff budget (regression test for issue #1709).
+    #[test]
+    fn test_patch_over_per_file_cap_waived_when_total_budget_allows() {
+        use super::super::types::PrFile;
+
+        // Arrange: 30k patch against a 25k per-file cap but a 200k total budget
+        let files = vec![PrFile {
+            filename: "src/big.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 100,
+            deletions: 1,
+            patch: Some("x".repeat(30_000)),
+            patch_truncated: false,
+            full_content: None,
+        }];
+        let mut ctx = make_waiver_ctx(files, 25_000, 200_000);
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: full patch present, no aptu-side truncation annotation,
+        // and nothing recorded as truncated
+        assert!(
+            prompt.contains(&"x".repeat(30_000)),
+            "full 30k patch must be included when the total budget allows"
+        );
+        assert!(
+            !prompt.contains("[APTU: patch truncated from"),
+            "waived patch must not carry an aptu-side truncation annotation"
+        );
+        assert!(
+            ctx.truncated_patch_files.is_empty(),
+            "waived patch must not be recorded as truncated"
+        );
+    }
+
+    /// Waiver + total-budget interaction: a patch that passes the per-file
+    /// waiver but exceeds the remaining total budget is skipped AND recorded.
+    #[test]
+    fn test_waived_patch_exceeding_remaining_budget_is_skipped_and_recorded() {
+        use super::super::types::PrFile;
+
+        // Arrange: first file consumes 150 of a 200 total budget; second file
+        // has a 120-char patch against a 100 per-file cap. Waiver fails
+        // (150+120 > 200), truncation to 100 still leaves 150+100 > 200, so
+        // the file is skipped -- its name must still be recorded.
+        let files = vec![
+            PrFile {
+                filename: "src/first.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some("a".repeat(150)),
+                patch_truncated: false,
+                full_content: None,
+            },
+            PrFile {
+                filename: "src/second.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some("b".repeat(120)),
+                patch_truncated: false,
+                full_content: None,
+            },
+        ];
+        let mut ctx = make_waiver_ctx(files, 100, 200);
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert
+        assert!(
+            prompt.contains("File: src/first.rs"),
+            "first file must be included"
+        );
+        assert!(
+            prompt.contains("files omitted due to size limits"),
+            "second file must be reported as omitted"
+        );
+        assert!(
+            !prompt.contains("b".repeat(120).as_str()),
+            "oversized second patch must not appear in the prompt"
+        );
+        assert!(
+            ctx.truncated_patch_files
+                .contains(&"src/second.rs".to_string()),
+            "skipped patch must be recorded, never silently omitted"
+        );
+        assert!(
+            !ctx.truncated_patch_files
+                .contains(&"src/first.rs".to_string()),
+            "included patch within budget must not be recorded"
+        );
+    }
+
+    /// The truncated-patch-names list is populated when aptu-side truncation
+    /// occurs (no waiver possible) and stays empty otherwise.
+    #[test]
+    fn test_truncated_patch_files_populated_on_truncation() {
+        use super::super::types::PrFile;
+
+        // Arrange: 150-char patch against a 100 per-file cap and a 120-char
+        // total diff budget, so the waiver is denied (150 > 120) and
+        // truncation applies; the truncated 100-char patch still fits.
+        let files = vec![PrFile {
+            filename: "src/truncated.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 1,
+            patch: Some("c".repeat(150)),
+            patch_truncated: false,
+            full_content: None,
+        }];
+        let mut ctx = make_waiver_ctx(files, 100, 120);
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: truncated to 100 chars, annotation present, name recorded
+        assert!(
+            prompt.contains("[APTU: patch truncated from 150 to 100 chars]"),
+            "over-budget patch must carry the truncation annotation"
+        );
+        assert_eq!(
+            ctx.truncated_patch_files,
+            vec!["src/truncated.rs".to_string()],
+            "truncated patch filename must be recorded"
+        );
+    }
+
+    /// A file that is first per-file truncated and then skipped by the
+    /// remaining total-budget check is recorded exactly once.
+    #[test]
+    fn test_truncated_then_skipped_file_recorded_once() {
+        use super::super::types::PrFile;
+
+        // Arrange: 150-char patch against a 100 per-file cap with a 50-char
+        // total diff budget. The waiver is denied (150 > 50), the patch is
+        // truncated to 100, and 100 still exceeds the 50-char budget, so the
+        // file is both truncated and skipped. Its name must appear once.
+        let files = vec![PrFile {
+            filename: "src/dup.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 1,
+            patch: Some("d".repeat(150)),
+            patch_truncated: false,
+            full_content: None,
+        }];
+        let mut ctx = make_waiver_ctx(files, 100, 50);
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert
+        assert!(
+            prompt.contains("files omitted due to size limits"),
+            "file exceeding remaining budget must be reported as omitted"
+        );
+        assert_eq!(
+            ctx.truncated_patch_files,
+            vec!["src/dup.rs".to_string()],
+            "filename must be recorded at most once"
+        );
     }
 }

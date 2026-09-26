@@ -35,6 +35,8 @@ pub struct ReviewContext {
     pub files_truncated: usize,
     /// Total characters dropped across all truncated files.
     pub truncated_chars_dropped: usize,
+    /// Names of files whose patches were truncated or skipped at prompt assembly.
+    pub truncated_patch_files: Vec<String>,
     /// Total number of files in the PR.
     pub files_total: usize,
     /// Number of files with a patch (non-empty diff).
@@ -151,6 +153,7 @@ impl Default for ReviewContext {
                 .max_patch_chars_per_file,
             files_truncated: 0,
             truncated_chars_dropped: 0,
+            truncated_patch_files: Vec::new(),
             files_total: 0,
             files_with_patch: 0,
             dep_enrichments_count: 0,

@@ -230,19 +230,20 @@ pub async fn analyze_pr(
     let trace_id = uuid::Uuid::new_v4().simple().to_string();
 
     // Use fallback chain if configured
-    let (response, mut ai_stats, finish_reasons) = crate::facade::ai_client::try_with_fallback(
-        provider,
-        &provider_name,
-        &model_name,
-        ai_config,
-        TaskType::Review,
-        |client| {
-            let review_ctx = ctx.clone();
-            let review_cfg = review_config.clone();
-            async move { client.review_pr(review_ctx, &review_cfg).await }
-        },
-    )
-    .await?;
+    let (response, mut ai_stats, finish_reasons, truncated_patch_files) =
+        crate::facade::ai_client::try_with_fallback(
+            provider,
+            &provider_name,
+            &model_name,
+            ai_config,
+            TaskType::Review,
+            |client| {
+                let review_ctx = ctx.clone();
+                let review_cfg = review_config.clone();
+                async move { client.review_pr(review_ctx, &review_cfg).await }
+            },
+        )
+        .await?;
 
     // Set trace_id on ai_stats
     ai_stats.trace_id = Some(trace_id.clone());
@@ -261,6 +262,7 @@ pub async fn analyze_pr(
         files_with_patch: ctx.files_with_patch,
         files_truncated: ctx.files_truncated,
         truncated_chars_dropped: ctx.truncated_chars_dropped,
+        truncated_patch_files,
         ast_context_chars: ctx.ast_context.len(),
         call_graph_chars: ctx.call_graph.len(),
         dep_enrichments_count: ctx.dep_enrichments_count,

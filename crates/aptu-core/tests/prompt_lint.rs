@@ -220,6 +220,7 @@ fn all_system_prompts_contain_schema() {
         max_patch_chars_per_file: 10_000,
         files_truncated: 0,
         truncated_chars_dropped: 0,
+        truncated_patch_files: Vec::new(),
         files_total: 0,
         files_with_patch: 0,
         dep_enrichments_count: 0,
