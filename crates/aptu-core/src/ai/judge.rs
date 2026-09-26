@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! `TypeSafe` Jev typed-judge client.
+//! Typed-judge client.
 //!
 //! Posts a batched judgment request to `POST /v1/systemone` with Bearer auth
-//! from `TYPESAFE_API_KEY` (read at call time). Any failure returns a
+//! from `JUDGE_API_KEY` (read at call time). Any failure returns a
 //! `{ fallback: true, error }` envelope instead of propagating an error, so
 //! callers can degrade gracefully. Every call appends one JSONL telemetry
 //! record (failure-tolerant, only when the judge is enabled).
@@ -22,8 +22,8 @@ pub const MAX_PAYLOAD_BYTES: usize = 256 * 1024;
 /// body is read incrementally with a hard cap before any JSON parsing.
 pub const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 
-/// Default `TypeSafe` Jev API base.
-pub const DEFAULT_API_BASE: &str = "https://api.typesafe.jev";
+/// Default judge API base.
+pub const DEFAULT_API_BASE: &str = "https://api.typesafe.ai";
 
 /// Hard deadline for the judge API request. The judge must never hang on
 /// API latency: the HTTP client enforces it via `Client::builder().timeout`
@@ -80,7 +80,7 @@ struct SystemOneResponse {
 /// Append-only JSONL telemetry record: metadata only, never answer verdicts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JudgeTelemetryRecord {
-    /// Purpose of the call (always `typesafe_judge`).
+    /// Purpose of the call (always `judge`).
     pub purpose: String,
     /// `ok` or `fallback`.
     pub outcome: String,
@@ -104,7 +104,7 @@ fn fallback_outcome(error: &str) -> JudgeOutcome {
     }
 }
 
-/// Run a typed-judge call against the `TypeSafe` Jev API.
+/// Run a typed-judge call against the judge API.
 ///
 /// Never returns an error across the boundary: any failure (missing API key,
 /// oversized payload, HTTP error, parse failure) yields a
@@ -126,7 +126,7 @@ pub async fn judge(
     _state: &str,
     _questions: Vec<JudgmentQuestion>,
 ) -> JudgeOutcome {
-    fallback_outcome("typesafe_judge is not supported on wasm32-unknown-unknown")
+    fallback_outcome("judge is not supported on wasm32-unknown-unknown")
 }
 
 /// Like [`judge`], with an explicit telemetry path for testability.
@@ -212,7 +212,7 @@ async fn send_and_parse(
         }
         Err(_) => {
             tracing::warn!(
-                purpose = "typesafe_judge",
+                purpose = "judge",
                 outcome = "fallback",
                 reason = "judge API request timed out",
                 timeout_secs = REQUEST_TIMEOUT.as_secs()
@@ -269,19 +269,15 @@ async fn judge_enabled_body(
     state: &str,
     questions: Vec<JudgmentQuestion>,
 ) -> (JudgeOutcome, usize, Option<usize>) {
-    let api_key = match std::env::var("TYPESAFE_API_KEY") {
+    let api_key = match std::env::var("JUDGE_API_KEY") {
         Ok(k) if !k.is_empty() => k,
         _ => {
             tracing::warn!(
-                purpose = "typesafe_judge",
+                purpose = "judge",
                 outcome = "fallback",
-                reason = "TYPESAFE_API_KEY not set or empty"
+                reason = "JUDGE_API_KEY not set or empty"
             );
-            return (
-                fallback_outcome("TYPESAFE_API_KEY not set or empty"),
-                0,
-                None,
-            );
+            return (fallback_outcome("JUDGE_API_KEY not set or empty"), 0, None);
         }
     };
 
@@ -308,7 +304,7 @@ async fn judge_enabled_body(
     };
     if payload.len() > MAX_PAYLOAD_BYTES {
         tracing::warn!(
-            purpose = "typesafe_judge",
+            purpose = "judge",
             outcome = "fallback",
             reason = "payload exceeds 256 KiB cap",
             payload_bytes = payload.len()
@@ -361,7 +357,7 @@ fn write_telemetry(
     };
     // Metadata only per the issue spec: never persist answer verdicts.
     let record = JudgeTelemetryRecord {
-        purpose: "typesafe_judge".to_string(),
+        purpose: "judge".to_string(),
         outcome: if outcome.fallback { "fallback" } else { "ok" }.to_string(),
         error: outcome.error.clone(),
         answer_count: outcome.answers.len(),
@@ -430,7 +426,7 @@ mod tests {
     #[allow(unsafe_code)]
     async fn test_missing_api_key_returns_fallback_envelope() {
         // SAFETY: single-threaded test process; no concurrent env reads.
-        unsafe { std::env::remove_var("TYPESAFE_API_KEY") };
+        unsafe { std::env::remove_var("JUDGE_API_KEY") };
         let outcome = judge_with_telemetry(&enabled_config(None), "s", vec![], None).await;
         assert!(outcome.fallback);
         assert!(outcome.error.is_some());
@@ -442,7 +438,7 @@ mod tests {
     #[allow(unsafe_code)]
     async fn test_missing_key_appends_exactly_one_telemetry_record() {
         // SAFETY: single-threaded test process; no concurrent env reads.
-        unsafe { std::env::remove_var("TYPESAFE_API_KEY") };
+        unsafe { std::env::remove_var("JUDGE_API_KEY") };
         let dir = std::env::temp_dir().join(format!("aptu-judge-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("create temp dir");
         let path = dir.join("telemetry-missing-key.jsonl");
@@ -462,7 +458,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Sets a dummy TYPESAFE_API_KEY for the calling serial test.
+    /// Sets a dummy `JUDGE_API_KEY` for the calling serial test.
     ///
     /// # Safety
     ///
@@ -471,7 +467,7 @@ mod tests {
     #[allow(unsafe_code)]
     fn set_api_key() {
         // SAFETY: guarded by #[serial]; no concurrent env access.
-        unsafe { std::env::set_var("TYPESAFE_API_KEY", "test-key") };
+        unsafe { std::env::set_var("JUDGE_API_KEY", "test-key") };
     }
 
     #[tokio::test]
@@ -516,7 +512,7 @@ mod tests {
     }
 
     /// Spawns a one-shot mock HTTP server responding 200 OK with `body`.
-    /// Returns the base URL to use as the judge api_base.
+    /// Returns the base URL to use as the judge `api_base`.
     async fn spawn_mock_server(body: String) -> String {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await

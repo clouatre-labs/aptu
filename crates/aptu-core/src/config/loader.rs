@@ -205,7 +205,7 @@ pub struct AppConfig {
     /// Prompt injection defence settings.
     #[serde(default)]
     pub prompt: PromptConfig,
-    /// Typed-judge (`TypeSafe` Jev) settings. Disabled by default.
+    /// Typed-judge settings. Disabled by default.
     #[serde(default)]
     pub judge: crate::config::JudgeConfig,
 }
