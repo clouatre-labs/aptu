@@ -95,4 +95,3 @@ lto = false
 codegen-units = 256
 panic = "unwind"
 strip = false
-# ci: trigger full workflow run on ready PR (path-filter no-op)
