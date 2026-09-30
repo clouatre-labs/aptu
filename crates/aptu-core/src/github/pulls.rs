@@ -158,6 +158,7 @@ async fn fetch_pr_files(
                 .await
                 {
                     file.patch = Some(content);
+                    file.patch_truncated = false;
                 }
             }
         }
@@ -398,19 +399,13 @@ pub async fn fetch_pr_details(
 
 /// Detects if a patch is truncated mid-hunk by GitHub API.
 ///
-/// A patch is considered truncated if the last non-empty line starts with '+' or '-',
-/// indicating an incomplete hunk.
+/// A patch is considered truncated if the last hunk header declares more lines
+/// than were actually delivered. When no hunk header can be parsed, the patch
+/// is assumed complete and not truncated.
 fn is_patch_truncated(patch: &str) -> bool {
     let lines: Vec<&str> = patch.lines().collect();
 
-    // Rule 1: Check if last non-empty line starts with '+' or '-' (mid-hunk cutoff)
-    if let Some(last_line) = lines.iter().rev().find(|line| !line.trim().is_empty())
-        && (last_line.starts_with('+') || last_line.starts_with('-'))
-    {
-        return true;
-    }
-
-    // Rule 2: Check if declared hunk size matches actual lines delivered
+    // Rule: Check if declared hunk size matches actual lines delivered
     // Parse the last @@ -a,b +c,d @@ header and verify line count
     if let Some(last_hunk_header) = lines.iter().rev().find(|line| line.contains("@@")) {
         // Extract the +c,d part from the hunk header
@@ -1973,12 +1968,13 @@ mod tests {
     }
 
     #[test]
-    fn test_is_patch_truncated_no_hunk_header_but_last_line_plus() {
-        // Test: patch with no @@ header but last line is '+'
-        let truncated_patch = "line1\nline2\n+";
+    fn test_is_patch_truncated_complete_added_file_diff() {
+        // Test: complete added-file diff where hunk counts match and last line starts with '+'
+        let body: Vec<String> = (1..=63).map(|i| format!("+line{i}")).collect();
+        let complete_patch = format!("@@ -0,0 +1,63 @@\n{}", body.join("\n"));
         assert!(
-            is_patch_truncated(truncated_patch),
-            "patch with no @@ header but ending with + should be detected as truncated"
+            !is_patch_truncated(&complete_patch),
+            "complete added-file diff should not be detected as truncated"
         );
     }
 
