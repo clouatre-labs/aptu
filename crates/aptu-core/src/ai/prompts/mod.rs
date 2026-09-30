@@ -293,6 +293,11 @@ fn write_pr_file_section(
 
         // Add annotation if patch was truncated by GitHub API
         if file.patch_truncated {
+            // Record the file so it appears in truncated_patch_files telemetry.
+            // Avoid duplicating a name already recorded for per-file truncation.
+            if !recorded_names.contains(&filename) {
+                recorded_names.push(filename.clone());
+            }
             let _ = writeln!(
                 prompt,
                 "[APTU: patch truncated by GitHub API -- do not speculate on missing content]\n```diff\n{sanitized_patch}\n```\n"
@@ -1692,6 +1697,99 @@ mod tests {
             ctx.truncated_patch_files,
             vec!["src/dup.rs".to_string()],
             "filename must be recorded at most once"
+        );
+    }
+
+    /// A file that is both per-file budget-truncated and flagged
+    /// patch_truncated by the GitHub API is recorded exactly once.
+    #[test]
+    fn test_budget_truncated_and_api_flagged_recorded_once() {
+        use super::super::types::PrFile;
+
+        // Arrange: 150-char patch against a 100 per-file cap with a 120-char
+        // total budget. The waiver is denied (150 > 120), so the patch is
+        // budget-truncated to 100; the file is also API-flagged. Both paths
+        // record names, so the file must appear exactly once in telemetry.
+        let files = vec![PrFile {
+            filename: "src/dual.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 1,
+            patch: Some("d".repeat(150)),
+            patch_truncated: true,
+            full_content: None,
+        }];
+        let mut ctx = make_waiver_ctx(files, 100, 120);
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert
+        assert!(
+            prompt.contains("[APTU: patch truncated from 150 to 100 chars]"),
+            "budget truncation must be annotated"
+        );
+        assert!(
+            prompt.contains("[APTU: patch truncated by GitHub API"),
+            "API truncation must be annotated"
+        );
+        assert_eq!(
+            ctx.truncated_patch_files,
+            vec!["src/dual.rs".to_string()],
+            "filename must be recorded at most once"
+        );
+    }
+
+    /// A file flagged patch_truncated by the GitHub API carries the
+    /// API-truncation annotation and is recorded; an unflagged file gets
+    /// neither.
+    #[test]
+    fn test_patch_truncated_flag_drives_annotation_and_recording() {
+        use super::super::types::PrFile;
+
+        // Arrange: one file with patch_truncated=true and one with false,
+        // both with small patches well within budget.
+        let files = vec![
+            PrFile {
+                filename: "src/flagged.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some("+a".to_string()),
+                patch_truncated: true,
+                full_content: None,
+            },
+            PrFile {
+                filename: "src/clean.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some("+b".to_string()),
+                patch_truncated: false,
+                full_content: None,
+            },
+        ];
+        let mut ctx = make_waiver_ctx(files, 1_000, 1_000);
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert
+        assert!(
+            prompt.contains(
+                "[APTU: patch truncated by GitHub API -- do not speculate on missing content]"
+            ),
+            "patch_truncated=true must emit the API truncation annotation"
+        );
+        assert!(
+            ctx.truncated_patch_files
+                .contains(&"src/flagged.rs".to_string()),
+            "patch_truncated=true filename must be recorded"
+        );
+        assert!(
+            !ctx.truncated_patch_files
+                .contains(&"src/clean.rs".to_string()),
+            "patch_truncated=false filename must not be recorded"
         );
     }
 }

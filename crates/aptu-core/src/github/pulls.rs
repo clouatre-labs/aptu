@@ -158,6 +158,7 @@ async fn fetch_pr_files(
                 .await
                 {
                     file.patch = Some(content);
+                    file.patch_truncated = false;
                 }
             }
         }
@@ -398,19 +399,23 @@ pub async fn fetch_pr_details(
 
 /// Detects if a patch is truncated mid-hunk by GitHub API.
 ///
-/// A patch is considered truncated if the last non-empty line starts with '+' or '-',
-/// indicating an incomplete hunk.
+/// A patch is considered truncated if the last hunk header declares more lines
+/// than were actually delivered. A non-empty patch with no parseable hunk
+/// header is treated as truncated: GitHub always includes a hunk header in
+/// non-empty patch fields, so its absence means the patch cannot be verified
+/// and the Contents API fallback should supply the full file. Empty patches
+/// are considered complete.
 fn is_patch_truncated(patch: &str) -> bool {
     let lines: Vec<&str> = patch.lines().collect();
 
-    // Rule 1: Check if last non-empty line starts with '+' or '-' (mid-hunk cutoff)
-    if let Some(last_line) = lines.iter().rev().find(|line| !line.trim().is_empty())
-        && (last_line.starts_with('+') || last_line.starts_with('-'))
-    {
+    // A non-empty patch without a hunk header cannot be verified; GitHub always
+    // emits one for text diffs, so treat its absence as truncation and let the
+    // Contents API fallback recover the full content.
+    if !patch.trim().is_empty() && !lines.iter().any(|line| line.contains("@@")) {
         return true;
     }
 
-    // Rule 2: Check if declared hunk size matches actual lines delivered
+    // Rule: Check if declared hunk size matches actual lines delivered
     // Parse the last @@ -a,b +c,d @@ header and verify line count
     if let Some(last_hunk_header) = lines.iter().rev().find(|line| line.contains("@@")) {
         // Extract the +c,d part from the hunk header
@@ -1973,12 +1978,13 @@ mod tests {
     }
 
     #[test]
-    fn test_is_patch_truncated_no_hunk_header_but_last_line_plus() {
-        // Test: patch with no @@ header but last line is '+'
-        let truncated_patch = "line1\nline2\n+";
+    fn test_is_patch_truncated_complete_added_file_diff() {
+        // Test: complete added-file diff where hunk counts match and last line starts with '+'
+        let body: Vec<String> = (1..=63).map(|i| format!("+line{i}")).collect();
+        let complete_patch = format!("@@ -0,0 +1,63 @@\n{}", body.join("\n"));
         assert!(
-            is_patch_truncated(truncated_patch),
-            "patch with no @@ header but ending with + should be detected as truncated"
+            !is_patch_truncated(&complete_patch),
+            "complete added-file diff should not be detected as truncated"
         );
     }
 
@@ -1989,6 +1995,18 @@ mod tests {
         assert!(
             !is_patch_truncated(empty_patch),
             "empty patch should not be detected as truncated"
+        );
+    }
+
+    #[test]
+    fn test_is_patch_truncated_non_empty_without_hunk_header() {
+        // Test: non-empty patch with no hunk header cannot be verified; GitHub
+        // always emits a header for text diffs, so treat its absence as
+        // truncated to route the file through the Contents API fallback.
+        let headerless = "line1\nline2\n+added";
+        assert!(
+            is_patch_truncated(headerless),
+            "non-empty patch without a hunk header should be treated as truncated"
         );
     }
 
