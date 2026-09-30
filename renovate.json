@@ -1,28 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:best-practices"],
-  "labels": ["dependencies"],
-  "minimumReleaseAge": "3 days",
-  "platformAutomerge": true,
-  "dependencyDashboard": false,
+  "extends": ["local>clouatre-labs/.github//default"],
   "ignorePaths": ["fuzz/**"],
-  "schedule": ["before 6am on monday"],
-  "timezone": "UTC",
   "packageRules": [
     {
       "matchPackageNames": ["reqwest"],
       "allowedVersions": ">=0.12.0 <0.13.0"
-    },
-    {
-      "groupName": "non-major",
-      "matchUpdateTypes": ["patch", "minor", "digest", "pin", "lockFileMaintenance"],
-      "automerge": true
-    },
-    {
-      "groupName": "github-actions",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["major", "minor", "patch", "digest", "pin", "lockFileMaintenance"],
-      "automerge": true
     }
   ]
 }
