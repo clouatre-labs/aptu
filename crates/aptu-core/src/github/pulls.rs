@@ -400,10 +400,20 @@ pub async fn fetch_pr_details(
 /// Detects if a patch is truncated mid-hunk by GitHub API.
 ///
 /// A patch is considered truncated if the last hunk header declares more lines
-/// than were actually delivered. When no hunk header can be parsed, the patch
-/// is assumed complete and not truncated.
+/// than were actually delivered. A non-empty patch with no parseable hunk
+/// header is treated as truncated: GitHub always includes a hunk header in
+/// non-empty patch fields, so its absence means the patch cannot be verified
+/// and the Contents API fallback should supply the full file. Empty patches
+/// are considered complete.
 fn is_patch_truncated(patch: &str) -> bool {
     let lines: Vec<&str> = patch.lines().collect();
+
+    // A non-empty patch without a hunk header cannot be verified; GitHub always
+    // emits one for text diffs, so treat its absence as truncation and let the
+    // Contents API fallback recover the full content.
+    if !patch.trim().is_empty() && !lines.iter().any(|line| line.contains("@@")) {
+        return true;
+    }
 
     // Rule: Check if declared hunk size matches actual lines delivered
     // Parse the last @@ -a,b +c,d @@ header and verify line count
@@ -1985,6 +1995,18 @@ mod tests {
         assert!(
             !is_patch_truncated(empty_patch),
             "empty patch should not be detected as truncated"
+        );
+    }
+
+    #[test]
+    fn test_is_patch_truncated_non_empty_without_hunk_header() {
+        // Test: non-empty patch with no hunk header cannot be verified; GitHub
+        // always emits a header for text diffs, so treat its absence as
+        // truncated to route the file through the Contents API fallback.
+        let headerless = "line1\nline2\n+added";
+        assert!(
+            is_patch_truncated(headerless),
+            "non-empty patch without a hunk header should be treated as truncated"
         );
     }
 
