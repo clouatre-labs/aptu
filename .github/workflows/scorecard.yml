@@ -1,10 +1,10 @@
 name: OpenSSF Scorecard
 
+# Results refresh from the weekly schedule; push-triggered runs measured at
+# ~8 redundant runs/week (~29s each) and are not a merge gate.
 on:
   schedule:
     - cron: '0 6 * * 1'
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
