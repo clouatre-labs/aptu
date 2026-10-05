@@ -145,9 +145,9 @@ dependencies = [
 
 [[package]]
 name = "aptu-coder-core"
-version = "0.36.1"
+version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcdb4ee816e2cbbd09b7c24b67ba603dd8dd32fde5385181b674fd67c2d51aac"
+checksum = "17f420761e28239966de7cfa2c5f86b85d5768a6d50101b86f0fe27bcca7c90b"
 dependencies = [
  "base64 0.23.1",
  "blake3",
@@ -616,9 +616,9 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "0.15.26"
+version = "0.15.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "790374c727a4cb20877dd2cc99ce7011cbe03b0b8df083acccd37df0d161304d"
+checksum = "38e9fbc53afcec54441422f1c596cd054655b32e70e1cbac956651b7b175a404"
 dependencies = [
  "pathdiff",
  "serde_core",
