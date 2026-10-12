@@ -31,7 +31,7 @@ Each repository must install the dispatch handler workflows from [aptu-github-ap
 
 **Mention commands:** Comment `@aptu` on an issue or PR to trigger the app manually. The commenter must be a repository collaborator. Mention commands work regardless of whether automatic dispatch is enabled in `.github/aptu.yml`.
 
-**Automatic security scanning:** When `scan.enabled: true` is set in `.github/aptu.yml`, the app runs `aptu scan-security` on every PR push event, uploads SARIF results to GitHub Code Scanning, and posts a commit status. Scanning is local pattern matching only and does not require an `ai` block. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md#app-managed-scanning).
+**Automatic security scanning:** With `scan.enabled: true` in `.github/aptu.yml`, the app runs `aptu scan-security` on every PR push event, uploads SARIF results to GitHub Code Scanning, and posts a commit status. Scanning is local pattern matching only and does not require an `ai` block. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md#app-managed-scanning).
 
 **Quotas:** The app enforces per-installation (50 events per event type per 24h) and global (500 per 24h) rate limits. When a quota is exceeded, the webhook returns `429 Too Many Requests` with a `Retry-After` header.
 
@@ -74,7 +74,7 @@ aptu+mercury-2 is **17x cheaper** and **8x faster** than a raw `claude-opus-4.6`
 
 ## CLI and Action Installation
 
-The CLI and GitHub Action are self-managed entry points: install and configure them yourself. For a zero-setup, org-wide rollout, use the [GitHub App](#github-app) instead.
+Install and configure the CLI and GitHub Action yourself. For a zero-setup, org-wide rollout, use the [GitHub App](#github-app) instead.
 
 ```bash
 # Homebrew (macOS/Linux)
@@ -169,11 +169,11 @@ For the governance model behind Aptu's harness design, see [AI SDLC Governance: 
 
 ## Roadmap
 
-See [docs/ROADMAP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ROADMAP.md) for the project direction across near-term, medium-term, and long-term horizons.
+See [docs/ROADMAP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ROADMAP.md) for the project direction.
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines. See [docs/REPO-STANDARDS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/REPO-STANDARDS.md) for a full artifact map and rationale covering CI workflows, tooling, and security controls.
+We welcome contributions! See [CONTRIBUTING.md](https://github.com/clouatre-labs/aptu/blob/main/CONTRIBUTING.md) for guidelines and [docs/REPO-STANDARDS.md](https://github.com/clouatre-labs/aptu/blob/main/docs/REPO-STANDARDS.md) for a full artifact map and rationale covering CI workflows, tooling, and security controls.
 
 ## License
 

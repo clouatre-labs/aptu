@@ -15,7 +15,7 @@ With a spec (explicit `--config` or a repo-root `issue-lint-specs.toml`), the bo
 - at least one fenced code block or file-path reference, when `require_code_examples = true`
 - at least one external URL or `#N` issue reference, when `require_external_link = true`
 
-All spec checks operate on visible text only: HTML comments and fenced-block contents are stripped before matching, consistent with generic mode.
+All spec checks operate on visible text only: HTML comments and fenced-block contents are stripped before matching, as in generic mode.
 
 Without any spec, generic mode applies four deterministic checks derived from issue-readiness research (arXiv 2512.21426, Table I):
 
@@ -93,5 +93,5 @@ A demo workflow posting the `aptu/lint-issue` commit status lives in `.github/wo
 
 - GitHub issue forms are unsupported in v1: `refactor.yml`-style form-derived bodies do not carry the same H2 structure and are left to triage. Markdown templates only.
 - Headings are matched as plain `## ` lines; headings inside fenced code blocks and HTML comments are ignored, as are blockquoted headings.
-- No auto-closing or blocking: the operation only reports (text, JSON, or annotations); enforcement (comment/label/status) is the workflow or App layer's job.
+- No auto-closing or blocking: the operation only reports (text, JSON, or annotations); enforcement (comment/label/status) belongs to the workflow or App layer.
 - App-managed linting on `issues` events (comment + label) is tracked separately in the aptu-github-app repository.

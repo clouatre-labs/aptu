@@ -42,7 +42,7 @@ jobs:
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
-The action will comment on the issue with triage analysis and may apply labels if configured in the repository.
+The action comments on the issue with triage analysis and may apply labels if configured in the repository.
 
 ## PR Review
 
@@ -108,7 +108,7 @@ The action writes token usage to `$GITHUB_STEP_SUMMARY` by default. Example outp
 | OpenRouter | 12,000 | 3,500 | 0% | 7.75 |
 ```
 
-Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploaded as a workflow artifact (`aptu-token-usage-<run-id>`), and summarized in `$GITHUB_STEP_SUMMARY` with columns for ETU and Cache%.
+Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploaded as a workflow artifact (`aptu-token-usage-<run-id>`).
 
 ## Permissions
 
@@ -439,4 +439,3 @@ To scan only changed files, pass a diff file via `scan-security-diff` instead:
 ```
 
 The scan step outputs SARIF and is non-blocking. See [docs/SECURITY_SCANNING.md](https://github.com/clouatre-labs/aptu/blob/main/docs/SECURITY_SCANNING.md) for the workflow example and CI self-audit gate pattern.
-
