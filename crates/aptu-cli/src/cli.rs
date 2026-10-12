@@ -382,3 +382,37 @@ pub enum PrCommand {
         limit: u32,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regenerate the committed CLI reference:
+    ///
+    /// ```sh
+    /// UPDATE_CLI_REFERENCE=1 cargo test -p aptu-cli --bin aptu cli_reference -- --nocapture
+    /// ```
+    const CLI_REFERENCE_PATH: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/CLI_REFERENCE.md");
+
+    fn cli_reference_markdown() -> String {
+        clap_markdown::help_markdown::<Cli>()
+    }
+
+    #[test]
+    fn cli_reference_is_current() {
+        let markdown = cli_reference_markdown();
+        if std::env::var_os("UPDATE_CLI_REFERENCE").is_some() {
+            std::fs::write(CLI_REFERENCE_PATH, &markdown)
+                .expect("failed to write docs/CLI_REFERENCE.md");
+            return;
+        }
+        let committed =
+            std::fs::read_to_string(CLI_REFERENCE_PATH).expect("docs/CLI_REFERENCE.md is missing");
+        assert_eq!(
+            markdown, committed,
+            "docs/CLI_REFERENCE.md is stale; regenerate with \
+             UPDATE_CLI_REFERENCE=1 cargo test -p aptu-cli --bin aptu cli_reference"
+        );
+    }
+}

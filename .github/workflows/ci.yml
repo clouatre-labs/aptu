@@ -360,7 +360,9 @@ jobs:
         with:
           bun-version: "1"
       - name: Run markdownlint
-        run: bunx markdownlint-cli2@0.23.2 "**/*.md" "#node_modules"
+        # docs/CLI_REFERENCE.md is generated from the clap definition; its
+        # heading structure is fixed by clap-markdown and violates MD001.
+        run: bunx markdownlint-cli2@0.23.2 "**/*.md" "!docs/CLI_REFERENCE.md" "#node_modules"
 
   ci-result:
     name: CI Result

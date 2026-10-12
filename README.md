@@ -76,6 +76,8 @@ aptu+mercury-2 is **17x cheaper** and **8x faster** than a raw `claude-opus-4.6`
 
 Install and configure the CLI and GitHub Action yourself. For a zero-setup, org-wide rollout, use the [GitHub App](#github-app) instead.
 
+The full command reference is generated from the CLI definition in [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
+
 ```bash
 # Homebrew (macOS/Linux)
 brew install clouatre-labs/tap/aptu
