@@ -20,7 +20,7 @@ All spec checks operate on visible text only: HTML comments and fenced-block con
 Without any spec, generic mode applies four deterministic checks derived from issue-readiness research (arXiv 2512.21426, Table I):
 
 1. body length above a one-liner floor (100 characters)
-2. an acceptance-criteria-like section (heading containing "acceptance") with at least 2 checkboxes
+2. an acceptance-criteria-like section with at least 2 checkboxes: a heading containing "acceptance", "checklist", "tasks", "todo", or "criteria" (case-insensitive) qualifies its section; if no such heading exists, the checkbox count falls back to the whole body
 3. at least one file-path reference or code fence
 4. at least one external URL or `#N` issue reference
 

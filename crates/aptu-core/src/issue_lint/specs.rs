@@ -199,23 +199,45 @@ fn lint_generic(body: &str) -> IssueLintResult {
     }
 }
 
+/// Heading keywords that qualify a section as acceptance-criteria-like.
+const ACCEPTANCE_HEADING_KEYWORDS: [&str; 5] =
+    ["acceptance", "checklist", "tasks", "todo", "criteria"];
+
 /// Counts `- [ ]` / `- [x]` checkboxes under an acceptance-criteria-like
-/// heading (heading name containing "acceptance", case-insensitive).
+/// heading (heading containing one of the keywords, case-insensitive). If
+/// no qualifying heading exists, falls back to counting all checkboxes in
+/// the body.
 fn acceptance_checkbox_count(body: &str) -> usize {
     let mut in_section = false;
+    let mut qualifying_heading_seen = false;
     let mut count = 0;
+    let mut total = 0;
     for line in body.lines() {
         let line = line.trim_end_matches('\r');
         if let Some(heading) = line.strip_prefix("## ") {
-            in_section = heading.to_lowercase().contains("acceptance");
-        } else if in_section {
+            let lower = heading.to_lowercase();
+            in_section = ACCEPTANCE_HEADING_KEYWORDS
+                .iter()
+                .any(|kw| lower.contains(kw));
+            if in_section {
+                qualifying_heading_seen = true;
+            }
+        } else {
             let lower = line.trim_start().to_lowercase();
-            if lower.starts_with("- [ ]") || lower.starts_with("- [x]") {
+            let is_checkbox = lower.starts_with("- [ ]") || lower.starts_with("- [x]");
+            if in_section && is_checkbox {
                 count += 1;
+            }
+            if is_checkbox {
+                total += 1;
             }
         }
     }
-    count
+    if qualifying_heading_seen {
+        count
+    } else {
+        total
+    }
 }
 
 #[cfg(test)]
@@ -383,6 +405,102 @@ mod tests {
                 .iter()
                 .any(|v| v.rule == "generic/acceptance-criteria")
         );
+    }
+
+    /// Generic mode: each synonym heading (acceptance, checklist, tasks,
+    /// todo, criteria) qualifies its section.
+    #[test]
+    fn test_generic_mode_synonym_headings_pass() {
+        for heading in [
+            "## Acceptance Criteria",
+            "## Execution checklist",
+            "## Tasks",
+            "## TODO",
+            "## Criteria",
+        ] {
+            let body = [
+                heading,
+                "- [ ] first item",
+                "- [ ] second item",
+                "Implemented like crates/aptu-core/src/lib.rs per https://example.com/spec (#1702).",
+            ]
+            .join("\n");
+            let result = lint_issue(&body, None);
+            assert!(
+                result.passed,
+                "heading {heading:?} should pass, violations: {:?}",
+                result.violations
+            );
+        }
+    }
+
+    /// Generic mode: without a qualifying heading, the body-wide checkbox
+    /// count is used as a fallback.
+    #[test]
+    fn test_generic_mode_headingless_body_fallback() {
+        let passing = [
+            "- [ ] first item",
+            "- [ ] second item",
+            "Implemented like crates/aptu-core/src/lib.rs per https://example.com/spec (#1702).",
+        ]
+        .join("\n");
+        let failing = [
+            "- [ ] only one item",
+            "Implemented like crates/aptu-core/src/lib.rs per https://example.com/spec (#1702).",
+        ]
+        .join("\n");
+
+        let result_pass = lint_issue(&passing, None);
+        let result_fail = lint_issue(&failing, None);
+
+        assert!(
+            result_pass.passed,
+            "violations: {:?}",
+            result_pass.violations
+        );
+        assert!(
+            result_fail
+                .violations
+                .iter()
+                .any(|v| v.rule == "generic/acceptance-criteria")
+        );
+    }
+
+    /// Generic mode: hidden checkboxes stay ignored under a synonym heading
+    /// and in a headingless body.
+    #[test]
+    fn test_generic_mode_hidden_checkboxes_ignored_with_new_matching() {
+        let under_synonym = [
+            "## Execution checklist",
+            "<!--",
+            "- [ ] hidden in comment",
+            "- [ ] also hidden",
+            "-->",
+            "Implemented like crates/aptu-core/src/lib.rs per https://example.com/spec (#1702).",
+        ]
+        .join("\n");
+        let headingless = [
+            "<!--",
+            "- [ ] hidden in comment",
+            "- [ ] also hidden",
+            "-->",
+            "Implemented like crates/aptu-core/src/lib.rs per https://example.com/spec (#1702).",
+        ]
+        .join("\n");
+
+        let result_synonym = lint_issue(&under_synonym, None);
+        let result_headingless = lint_issue(&headingless, None);
+
+        for result in [result_synonym, result_headingless] {
+            assert!(
+                result
+                    .violations
+                    .iter()
+                    .any(|v| v.rule == "generic/acceptance-criteria"),
+                "violations: {:?}",
+                result.violations
+            );
+        }
     }
 
     /// TOML parsing accepts the documented `[[spec]]` schema.
