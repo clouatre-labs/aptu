@@ -1,5 +1,3 @@
-# aptu-dev GitHub App
-
 The `aptu-dev` GitHub App automates issue triage, PR review, and security scanning without installing the GitHub Action in each repository. A Cloudflare Worker validates webhook signatures, checks the owner allowlist, reads `.github/aptu.yml` from the target repo, and dispatches `repository_dispatch` events to a central workflow in `clouatre-labs/aptu-github-app`.
 
 For the architectural rationale behind Aptu's review-gate model, see [AI SDLC Governance: Three Layers for Engineering Leaders](https://clouatre.ca/posts/ai-sdlc-governance-stack/).
@@ -23,7 +21,7 @@ The App never has access to your repository secrets or API keys. The `ai.provide
 
 ## Owner Allowlist
 
-The Worker enforces a hard `ALLOWED_OWNERS` gate before any event processing. Requests whose `repository.owner.login` (or `organization.login`) does not appear in the allowlist are rejected with `403 Forbidden`. The current allowlist is `clouatre-labs,clouatre`. External organizations must be added to this list by the App operator before the App will process their webhooks.
+The Worker enforces a hard `ALLOWED_OWNERS` gate before any event processing. Requests whose `repository.owner.login` (or `organization.login`) does not appear in the allowlist are rejected with `403 Forbidden`. The current allowlist is `clouatre-labs,clouatre`. The App operator must add external organizations to this list before the App will process their webhooks.
 
 ## Installation Walkthrough
 
@@ -49,14 +47,14 @@ The Worker enforces a hard `ALLOWED_OWNERS` gate before any event processing. Re
 
 4. **Configure the AI key secret:** In the target repository, go to **Settings > Secrets and variables > Actions** and add a repository secret named after your chosen provider (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`). The secret must contain a valid API key for the specified provider. The Worker never sees the secret value; the dispatch handler resolves it in the caller's Actions runtime.
 
-5. **Verify:** Open a test issue or PR in the target repository. If the config is valid and the feature is enabled, the Worker dispatches the corresponding workflow and returns `204 No Content`. If the config is absent, invalid, or the feature is disabled, the Worker returns `200 OK` with no dispatch. Check the target repository's Actions tab for dispatched workflow runs.
+5. **Verify:** Open a test issue or PR in the target repository. If the config is valid and the feature is enabled, the Worker dispatches the corresponding workflow and returns `204 No Content`. If the config is absent or invalid, or the feature is disabled, the Worker returns `200 OK` with no dispatch. Check the target repository's Actions tab for dispatched workflow runs.
 
 ## Quota Model
 
 The Worker enforces two tiers of rate limits, both using a rolling 24-hour window:
 
-- **Per-installation quota:** 50 events per event type (triage, review, scan) per 24-hour rolling window. When exceeded, the webhook returns `429 Too Many Requests` with a `Retry-After` header indicating seconds until the oldest event in the window expires.
-- **Global quota:** 500 events across all installations per 24-hour rolling window (configurable via `GLOBAL_QUOTA_LIMIT`). Exhaustion returns `429` with a `Retry-After` header.
+- **Per-installation quota:** 50 events per event type (triage, review, scan). When exceeded, the webhook returns `429 Too Many Requests` with a `Retry-After` header indicating seconds until the oldest event in the window expires.
+- **Global quota:** 500 events across all installations (configurable via `GLOBAL_QUOTA_LIMIT`). Exhaustion returns `429` with a `Retry-After` header.
 
 Quota counters do not reset at a fixed time; timestamps older than 24 hours are pruned on each request.
 

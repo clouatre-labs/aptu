@@ -34,7 +34,7 @@ External APIs (GitHub, AI Provider)
 Format & Display Output
 ```
 
-A typical aptu invocation follows this path: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a prompt with AST and call-graph context; the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
+A typical aptu invocation proceeds as follows: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a prompt with AST and call-graph context; the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
 
 The GitHub App path: a Cloudflare Worker receives webhook events, validates HMAC signatures, reads `.github/aptu.yml` from the repository, and dispatches `repository_dispatch` events to a central workflow. The central workflow runs the same `aptu-core` triage, review, and scan logic as the CLI, posting results as the `aptu[bot]` GitHub App user.
 
@@ -71,7 +71,7 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Z.A
 7. Post inline review comments via GitHub REST API
 8. Post or update the review summary as an issue comment: the summary carries an `<!-- APTU_REVIEW:<sha> -->` marker keyed to the PR head SHA. An existing Aptu bot summary for the same head SHA is left untouched (dedup); a summary for a different or unknown SHA is updated in place; a missing summary is created after the review posts
 
-The `ReviewContext` struct centralises all enrichment decisions: AST context, call graph, instructions, dependency release notes, and budget enforcement are all managed there before the prompt is assembled. Repo-path is inferred from CWD when not explicitly supplied via `--repo-path`.
+The `ReviewContext` struct centralizes all enrichment decisions: AST context, call graph, instructions, dependency release notes, and budget enforcement are all managed there before the prompt is assembled. Repo-path is inferred from CWD when not explicitly supplied via `--repo-path`.
 
 ### Facade Functions
 
@@ -91,9 +91,7 @@ AI client construction and fallback-provider resolution live in `facade/ai_clien
 
 ### AstContextOutput
 
-`AstContextOutput` (in `ast_context.rs`) is returned by the AST context builder instead of a plain string. It carries:
-
-- `text: String` -- the rendered AST summary for prompt injection
+`AstContextOutput` (in `ast_context.rs`) is returned by the AST context builder instead of a plain string. It carries `text: String`, the rendered AST summary for prompt injection.
 
 ### Prompt System
 
@@ -109,7 +107,7 @@ At runtime, two override mechanisms are applied in order:
 1. **File override** - If `~/.config/aptu/prompts/<operation>.md` exists, it fully replaces the compiled-in guideline for that operation
 2. **Custom guidance** - `AiConfig.custom_guidance` (from `config.toml`) is appended to every system prompt after the tooling context
 
-This means users can tune AI behavior without recompiling, and developers can audit the exact prompts from source.
+Users can therefore tune AI behavior without recompiling, and developers can audit the exact prompts from source.
 
 ## Security Boundaries
 

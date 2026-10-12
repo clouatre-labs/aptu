@@ -2,8 +2,6 @@
 
 Living reference mapping every CI artifact, workflow, and tooling choice to its purpose and rationale. Accurate against the current repository state; aspirational items are marked **TODO**.
 
----
-
 ## Workflow Artifact Map
 
 | File | Trigger | Purpose | Rationale |
@@ -19,17 +17,13 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 | `.github/workflows/scheduled-security-audit.yml` | weekly cron (Monday 02:00 UTC), workflow_dispatch | Full-repo zizmor audit | Covers the whole repository independent of any diff; never runs on push |
 | `.github/workflows/lint-issue-demo.yml` | demo/lint helper for issue workflows | Exercises and validates the issue-triage linting path without opening real issues | Keeps issue automation verifiable without noise |
 
----
-
 ## Required Status Checks
 
 The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the sole required status check in the branch ruleset. All other individual jobs are gated through it.
 
 `ci.yml` has no dedicated branch-currency ("check-base") job. The main branch ruleset's `strict_required_status_checks_policy: true` already enforces that a PR branch is up to date with `main` before merge, at zero Actions cost, so a job that re-checks the same thing with `git merge-base` would be redundant.
 
-`security.yml`'s two controls (TruffleHog secret scan, zizmor SHA-pin audit) run as sequential steps inside a single `security-result` job rather than as separate jobs feeding an aggregator; the zizmor step is marked `if: always()` so it still runs and reports even if the trufflehog step fails, and is additionally gated on a `dorny/paths-filter` check so it only runs when `.github/workflows/**` changed (full-repo zizmor audits run weekly via `scheduled-security-audit.yml`, independent of any diff and never on push). `security-result` is not currently in the branch ruleset's `required_status_checks` list (only `CI Result` is required) — that predates this change and is unaffected by it.
-
----
+`security.yml`'s two controls (TruffleHog secret scan, zizmor SHA-pin audit) run as sequential steps inside a single `security-result` job rather than as separate jobs feeding an aggregator. The zizmor step is marked `if: always()` so it still runs and reports even if the trufflehog step fails, and is additionally gated on a `dorny/paths-filter` check so it only runs when `.github/workflows/**` changed (full-repo zizmor audits run weekly via `scheduled-security-audit.yml`). `security-result` is not currently in the branch ruleset's `required_status_checks` list (only `CI Result` is required) — that predates this change and is unaffected by it.
 
 ## Cargo Profiles
 
@@ -38,9 +32,7 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 | `release` | `z` (size) | `true` (full) | `1` | `abort` | `true` | Production binary; smallest size, deterministic |
 | `ci` | inherits | `false` | `256` | `unwind` (explicit) | `false` (explicit) | CI builds; test-safe (`panic = "unwind"`) with faster link time |
 
-`panic = "abort"` in release is intentional: no unwinding overhead. `--profile ci` is safe for `cargo test`: the profile explicitly sets `panic = "unwind"` and `strip = false`, so it does not abort the test harness.
-
----
+`panic = "abort"` in release is intentional; it avoids unwinding overhead. `--profile ci` is safe for `cargo test`: the profile explicitly sets `panic = "unwind"` and `strip = false`, so it does not abort the test harness.
 
 ## Tooling
 
@@ -55,15 +47,13 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 
 ### Lint suppressions
 
-**Cognitive complexity threshold.** `clippy::cognitive_complexity` is enforced at a threshold of 30 (set in `clippy.toml`); `-D warnings` promotes violations to hard errors in CI. When a function legitimately exceeds the threshold and splitting it would reduce clarity rather than improve it, suppress with an attribute and a mandatory `reason` field:
+**Cognitive complexity threshold.** `clippy::cognitive_complexity` is enforced at a threshold of 30 (set in `clippy.toml`); `-D warnings` promotes violations to hard errors in CI. When a function legitimately exceeds the threshold and splitting it would reduce clarity, suppress with an attribute and a mandatory `reason` field:
 
 ```rust
 #[allow(clippy::cognitive_complexity, reason = "<why this function cannot be meaningfully split>")]
 ```
 
-Do not raise the global threshold to accommodate a single outlier. The `reason` field is required: it documents intent for reviewers and makes the suppression searchable. Macro-expanded code can inflate scores artificially; this is a known upstream limitation (rust-lang/rust-clippy#14417).
-
----
+Do not raise the global threshold to accommodate a single outlier. The required `reason` field documents intent for reviewers and makes the suppression searchable. Macro-expanded code can inflate scores artificially; this is a known upstream limitation (rust-lang/rust-clippy#14417).
 
 ## Security Controls
 
@@ -80,8 +70,6 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 | OpenSSF Scorecard | `scorecard.yml` on schedule and push to main | Tracks supply-chain security best practices over time |
 | cargo-deny | `cargo deny check` | Audit Rust dependency tree for CVEs and license policy |
 
----
-
 ## Dependency Management
 
 - **Renovate** manages all dependency updates automatically (config: `renovate.json` at the repo root).
@@ -89,8 +77,6 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 - Rust crates fall under the generic non-major group (patch/minor/digest/pin/lockFileMaintenance automerge); major crate updates are manual.
 - `minimumReleaseAge: 3 days` prevents merging dependencies the same day they are published (typosquatting window).
 - `cargo deny check` runs in CI to audit the resolved dependency tree against known CVEs and the project license policy.
-
----
 
 ## Versioning and Release Conventions
 
@@ -100,8 +86,6 @@ Do not raise the global threshold to accommodate a single outlier. The `reason` 
 - Version numbers are bumped in `Cargo.toml` workspace manifests and committed before the tag is pushed.
 - GitHub Releases are created by `release.yml` automatically on tag push.
 - CHANGELOG is generated from conventional commits.
-
----
 
 ## Applying to a New Repository
 

@@ -75,7 +75,7 @@ timeout_seconds = 180  # extend review timeout beyond the 120s default
 
 When `small_model` and `large_model` are both configured for a task, aptu automatically routes between them based on the estimated prompt size. This lets you use a fast, cheap model for small requests and a more capable model for complex ones.
 
-The routing decision uses the `routing_threshold_chars` value (default: 60000 for review). If the estimated prompt size is below the threshold, `small_model` is used; otherwise `large_model` is used.
+The routing decision uses the `routing_threshold_chars` value (default: 60000 for review). If the estimated prompt size is below the threshold, aptu selects `small_model`; otherwise it selects `large_model`.
 
 If `model` is explicitly set in the task override, it bypasses routing entirely.
 
@@ -133,7 +133,7 @@ chain = [
 ]
 ```
 
-When the primary provider fails with a non-retryable error, Aptu automatically tries each provider in the fallback chain. It also walks the fallback chain when the primary provider returns a rate-limit error that persists after in-loop retries are exhausted. If a fallback entry specifies a model override, that model is used; otherwise, the primary model is used. Circuit breaker errors are not retried via fallback.
+When fallback triggers, Aptu tries each provider in the chain in order. If a fallback entry specifies a model override, that model is used; otherwise, the primary model is used.
 
 **Use Cases:**
 
@@ -158,7 +158,7 @@ Override the configured provider and model with global flags:
 aptu --provider openrouter --model mistralai/mistral-small-2603 issue triage owner/repo#123
 ```
 
-Flags can be used independently (`--model` alone uses configured provider). CLI flags take precedence over config file.
+Flags can be used independently (`--model` alone uses the configured provider); CLI flags take precedence over the config file.
 
 ## AI Provider Setup
 
@@ -304,9 +304,7 @@ max_diff_bytes          = 524288  # 512 KiB — PR diff (injection-defence pre-c
 max_commit_message_bytes = 4096   # 4 KiB   — individual commit messages
 ```
 
-When a field exceeds its limit:
-
-- **CLI** (`aptu issue triage`, `aptu pr review`): exits non-zero with a diagnostic message.
+When a field exceeds its limit, the CLI (`aptu issue triage`, `aptu pr review`) exits non-zero with a diagnostic message.
 
 Note: `aptu scan-security` performs local pattern matching and does not invoke AI; these limits do not apply to it.
 

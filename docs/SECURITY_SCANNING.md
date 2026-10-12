@@ -3,7 +3,7 @@
 
 # Security Scanning
 
-Aptu includes built-in security pattern detection. Scanning is performed locally using pattern matching; no code is sent to external services.
+Aptu includes built-in security pattern detection. Scans run locally using pattern matching; no code is sent to external services.
 
 ## Standalone scan
 
@@ -131,7 +131,7 @@ When output is SARIF, these fields populate `tool.driver.rules[]`:
 - `help.text` and `help.markdown` from `remediation`
 - `helpUri` from `authority_url`
 
-This enables IDE integrations and code scanning UIs to surface actionable guidance alongside each finding.
+This lets IDE integrations and code scanning UIs surface remediation guidance alongside each finding.
 
 ## App-Managed Scanning
 
