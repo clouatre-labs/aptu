@@ -381,17 +381,17 @@ Supported operation names:
 
 | File | Replaces |
 |------|----------|
-| `~/.config/aptu/prompts/triage.md` | Issue triage system prompt |
-| `~/.config/aptu/prompts/review.md` | PR review system prompt |
-| `~/.config/aptu/prompts/pr_label.md` | PR label suggestion system prompt |
+| `~/.config/aptu/prompts/triage_system.md` | Issue triage system prompt |
+| `~/.config/aptu/prompts/pr_review_system.md` | PR review system prompt |
+| `~/.config/aptu/prompts/pr_label_system.md` | PR label suggestion system prompt |
 
 **Example:** customize the triage prompt for a monorepo:
 
 ```bash
 mkdir -p ~/.config/aptu/prompts
 cp $(cargo locate-project --workspace --message-format plain | xargs dirname)/crates/aptu-core/src/ai/prompts/triage_guidelines.md \
-   ~/.config/aptu/prompts/triage.md
-# Now edit ~/.config/aptu/prompts/triage.md with your changes
+   ~/.config/aptu/prompts/triage_system.md
+# Now edit ~/.config/aptu/prompts/triage_system.md with your changes
 ```
 
 ### Developer note
