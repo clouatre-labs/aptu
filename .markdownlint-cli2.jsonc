@@ -1,0 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Aptu Contributors
+// SPDX-License-Identifier: Apache-2.0
+{
+  // Exclusions from markdownlint for all repo globs.
+  // docs/CLI_REFERENCE.md is generated from the clap definition
+  // (UPDATE_CLI_REFERENCE=1 cargo test -p aptu-cli --bin aptu cli_reference);
+  // its heading structure is fixed by clap-markdown and violates MD001.
+  "ignoreGlobs": ["docs/CLI_REFERENCE.md"]
+}
