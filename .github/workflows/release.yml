@@ -312,18 +312,48 @@ jobs:
           sed -i "s/SHA256_LINUX_ARM_PLACEHOLDER/${shas["aptu-cli-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
           sed -i "s/SHA256_LINUX_INTEL_PLACEHOLDER/${shas["aptu-cli-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
 
-      - name: Create feature branch and commit formula update
+      - name: Create feature branch and commit formula update via GraphQL
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
+          set -euo pipefail
           cd homebrew-tap
           RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           BRANCH_NAME="update-aptu-${RELEASE_TAG}"
-          
-          git config user.email "hugues@linux.com"
-          git config user.name "Hugues Clouatre"
-          git checkout -b "$BRANCH_NAME"
-          git add Formula/aptu.rb
-          git commit --signoff -m "Update aptu formula for ${RELEASE_TAG}"
-          git push origin "$BRANCH_NAME"
+          REPO="clouatre-labs/homebrew-tap"
+
+          # Resolve main branch head; the branch ref is created from it.
+          MAIN_SHA=$(gh api "repos/${REPO}/git/ref/heads/main" --jq '.object.sha')
+
+          # Create the feature branch ref first (createCommitOnBranch requires it).
+          gh api "repos/${REPO}/git/refs" \
+            -f ref="refs/heads/${BRANCH_NAME}" \
+            -f sha="${MAIN_SHA}" > /dev/null
+
+          # Commit via GraphQL createCommitOnBranch so GitHub signs the commit
+          # (committer "GitHub <noreply@github.com>"); raw git commits are
+          # unsigned and blocked by the org required_signatures ruleset.
+          # No author is set: GitHub bot-signature rules require the default.
+          B64_CONTENT=$(base64 -w0 Formula/aptu.rb)
+          jq -n \
+            --arg branch "${BRANCH_NAME}" \
+            --arg expectedHeadOid "${MAIN_SHA}" \
+            --arg message "Update aptu formula for ${RELEASE_TAG}" \
+            --arg path "Formula/aptu.rb" \
+            --arg b64 "${B64_CONTENT}" \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {
+                input: {
+                  branch: { repositoryNameWithOwner: "clouatre-labs/homebrew-tap", branchName: $branch },
+                  expectedHeadOid: $expectedHeadOid,
+                  message: { headline: $message },
+                  fileChanges: {
+                    additions: [ { path: $path, contents: $b64 } ]
+                  }
+                }
+              }
+            }' | gh api graphql --input -
 
       - name: Create pull request with auto-merge
         env:
