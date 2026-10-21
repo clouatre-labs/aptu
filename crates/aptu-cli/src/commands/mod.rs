@@ -4,9 +4,7 @@
 
 pub mod auth;
 pub mod common;
-pub mod completion;
 pub mod issue;
-pub mod issue_lint;
 pub mod pr;
 pub mod scan_security;
 pub mod triage;
@@ -22,8 +20,7 @@ use rayon::prelude::*;
 use tracing::debug;
 
 use crate::cli::{
-    AuthCommand, Commands, CompletionCommand, IssueCommand, IssueState, OutputContext,
-    OutputFormat, PrCommand,
+    AuthCommand, Commands, IssueCommand, IssueState, OutputContext, OutputFormat, PrCommand,
 };
 use crate::commands::common::maybe_spinner;
 use crate::commands::types::{OutcomeInfo, PrReviewResult};
@@ -256,22 +253,6 @@ async fn triage_single_issue_impl(cfg: &TriageConfig<'_>) -> Result<BulkItem<typ
     // Phase 3: Apply labels and milestone if requested (independent of comment posting)
     if !cfg.no_apply {
         apply_triage_labels(&issue_details, &analyze_result.triage, cfg.ctx, &mut result).await?;
-    }
-
-    // Record to history only if comment was posted
-    if let Some(url) = &comment_url {
-        let contribution = aptu_core::history::Contribution {
-            id: uuid::Uuid::new_v4(),
-            repo: format!("{}/{}", issue_details.owner, issue_details.repo),
-            issue: issue_details.number,
-            action: "triage".to_string(),
-            timestamp: chrono::Utc::now(),
-            comment_url: url.clone(),
-            status: aptu_core::history::ContributionStatus::Pending,
-            ai_stats: Some(analyze_result.ai_stats),
-        };
-        aptu_core::history::add_contribution(contribution)?;
-        debug!("Contribution recorded to history");
     }
 
     // Show success messages
@@ -671,17 +652,6 @@ async fn run_pr_command(
             repo,
             dry_run,
         } => pr::run_label_command(reference, repo, dry_run, ctx, config, inferred_repo).await,
-        PrCommand::Queue { repo, limit } => {
-            pr::run_queue_command(repo, limit, ctx, config, inferred_repo).await
-        }
-    }
-}
-
-/// Run the completion command.
-fn run_completion_command(completion_cmd: &CompletionCommand, _ctx: OutputContext) -> Result<()> {
-    match completion_cmd {
-        CompletionCommand::Generate { shell } => completion::run_generate(*shell),
-        CompletionCommand::Install { shell, dry_run } => completion::run_install(*shell, *dry_run),
     }
 }
 
@@ -697,7 +667,6 @@ pub async fn run(
             run_issue_command(issue_cmd, ctx, config, inferred_repo).await
         }
         Commands::Pr(pr_cmd) => run_pr_command(pr_cmd, ctx, config, inferred_repo).await,
-        Commands::Completion(completion_cmd) => run_completion_command(&completion_cmd, ctx),
         Commands::ScanSecurity {
             path,
             diff,
@@ -715,14 +684,6 @@ pub async fn run(
                 config,
             )
             .await
-        }
-        Commands::LintIssue {
-            file,
-            issue_type,
-            config: lint_config,
-        } => {
-            issue_lint::run_lint_issue_command(file, issue_type, lint_config, ctx.format, config)
-                .await
         }
     }
 }

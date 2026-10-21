@@ -7,7 +7,7 @@
 //! confirmation flow (render issue before asking).
 
 use anyhow::Result;
-use aptu_core::history::AiStats;
+use aptu_core::metrics::AiStats;
 use aptu_core::{IssueDetails, TriageResponse};
 use tracing::{debug, info, instrument};
 

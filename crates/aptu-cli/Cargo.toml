@@ -19,7 +19,6 @@ aptu-core = { workspace = true, features = ["keyring", "ast-context"] }
 
 # CLI framework
 clap = { workspace = true }
-clap_complete = { workspace = true }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -42,7 +41,6 @@ comfy-table = { workspace = true }
 
 # Time and IDs
 chrono = { workspace = true }
-uuid = { workspace = true }
 
 # Security
 secrecy = { workspace = true }

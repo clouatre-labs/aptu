@@ -3,7 +3,7 @@
 //! Issue analysis and triage facade functions.
 
 use secrecy::SecretString;
-use tracing::{debug, error, instrument};
+use tracing::{debug, instrument};
 
 use crate::ai::provider::MAX_LABELS;
 use crate::ai::types::{IssueDetails, TriageResponse};
@@ -89,7 +89,7 @@ pub async fn analyze_issue(
     provider: &dyn TokenProvider,
     issue: &IssueDetails,
     ai_config: &AiConfig,
-) -> crate::Result<(AiResponse, crate::history::AiStats)> {
+) -> crate::Result<(AiResponse, crate::metrics::AiStats)> {
     // Load config for prompt injection defence settings
     let app_config = load_config().unwrap_or_default();
 
@@ -151,18 +151,7 @@ pub async fn analyze_issue(
         .into_iter()
         .filter(|f| f.pattern_id.starts_with("prompt-injection"))
         .collect();
-    if !injection_findings.is_empty() {
-        let pattern_ids: Vec<&str> = injection_findings
-            .iter()
-            .map(|f| f.pattern_id.as_str())
-            .collect();
-        let message = format!(
-            "Prompt injection patterns detected: {}",
-            pattern_ids.join(", ")
-        );
-        error!(patterns = ?pattern_ids, message = %message, "Prompt injection detected; operation blocked");
-        return Err(AptuError::SecurityScan { message });
-    }
+    super::block_on_prompt_injection(&injection_findings)?;
 
     // Resolve task-specific provider and model
     let (provider_name, model_name) =
@@ -191,7 +180,7 @@ pub async fn analyze_issue(
     _provider: &dyn crate::auth::TokenProvider,
     _issue: &crate::ai::types::IssueDetails,
     _ai_config: &crate::config::AiConfig,
-) -> crate::Result<(crate::ai::AiResponse, crate::history::AiStats)> {
+) -> crate::Result<(crate::ai::AiResponse, crate::metrics::AiStats)> {
     crate::facade::wasm_unsupported!("analyze_issue");
 }
 

@@ -68,7 +68,7 @@ pub(crate) fn should_enable_call_graph(budget_remaining: usize, config: &ReviewC
 }
 
 /// Applies budget drop order: `call_graph` -> `ast_context` ->
-/// `dep_enrichments` -> `full_content` -> patches.
+/// `full_content` -> patches.
 /// Enforces the prompt budget by dropping enrichment sections in priority order.
 ///
 /// When the assembled prompt exceeds `max_prompt_chars`, sections are cleared in
@@ -76,9 +76,8 @@ pub(crate) fn should_enable_call_graph(budget_remaining: usize, config: &ReviewC
 ///
 /// 1. `call_graph` -- dropped first
 /// 2. `ast_context` -- dropped second
-/// 3. `dep_enrichments` -- dropped third
-/// 4. file `full_content` -- dropped largest-first
-/// 5. file patches -- dropped largest-first as last resort, so the diff itself
+/// 3. file `full_content` -- dropped largest-first
+/// 4. file patches -- dropped largest-first as last resort, so the diff itself
 ///    (the highest-value context for a review) is preserved as long as possible
 ///
 /// Each drop is logged at `WARN` level with the section name and character count.
@@ -124,8 +123,6 @@ pub(crate) fn apply_budget_drops(
         }
     }
 
-    drop_dep_enrichments_by_size(pr, &mut estimated_size, max_prompt_chars, budget_drops);
-
     drop_full_content_by_size(
         &mut pr.files,
         &mut estimated_size,
@@ -139,33 +136,6 @@ pub(crate) fn apply_budget_drops(
         max_prompt_chars,
         budget_drops,
     );
-}
-
-/// Drops `dep_enrichments` if the prompt is still over budget.
-pub(crate) fn drop_dep_enrichments_by_size(
-    pr: &mut PrDetails,
-    estimated_size: &mut usize,
-    max_prompt_chars: usize,
-    budget_drops: &mut Vec<String>,
-) {
-    if *estimated_size <= max_prompt_chars {
-        return;
-    }
-    let dropped_chars: usize = pr
-        .dep_enrichments
-        .iter()
-        .map(|d| d.body.len() + d.package_name.len() + d.github_url.len())
-        .sum();
-    if dropped_chars > 0 {
-        tracing::warn!(
-            section = "dep_enrichments",
-            chars = dropped_chars,
-            "Dropping section: prompt budget exceeded"
-        );
-        pr.dep_enrichments.clear();
-        *estimated_size -= dropped_chars;
-        budget_drops.push("dep_enrichments".to_string());
-    }
 }
 
 /// Drops file patches in descending size order until under budget.
@@ -323,7 +293,7 @@ pub(crate) fn drop_full_content_by_size(
 
 /// Estimates the total character size of a PR review prompt.
 ///
-/// Sums title, body, file metadata, patches, `full_content`, `dep_enrichments`,
+/// Sums title, body, file metadata, patches, `full_content`,
 /// `ast_context`, `call_graph`, `system_overhead` (system prompt plus repository
 /// instructions), and overhead.
 #[must_use]
@@ -347,11 +317,6 @@ pub(crate) fn estimate_pr_size(
         if let Some(content) = &file.full_content {
             size += content.len();
         }
-    }
-
-    // Enrichments
-    for dep in &pr.dep_enrichments {
-        size += dep.package_name.len() + dep.body.len() + dep.github_url.len();
     }
 
     // Context
@@ -427,7 +392,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: Vec::new(),
             instructions: None,
-            dep_enrichments: Vec::new(),
         };
         let without = estimate_pr_size(&pr, "", "", 0);
         let with = estimate_pr_size(&pr, "", "", 5_000);

@@ -8,32 +8,6 @@
 use std::io::IsTerminal;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use clap_complete::Shell;
-
-/// Extended help text for the generate subcommand with shell-specific examples.
-const COMPLETION_GENERATE_HELP: &str = r#"EXAMPLES
-
-  bash
-    Add to ~/.bashrc or ~/.bash_profile:
-      eval "$(aptu completion generate bash)"
-
-  zsh
-    Generate completion file:
-      mkdir -p ~/.zsh/completions
-      aptu completion generate zsh > ~/.zsh/completions/_aptu
-
-    Add to ~/.zshrc (before compinit):
-      fpath=(~/.zsh/completions $fpath)
-      autoload -U compinit && compinit -i
-
-  fish
-    Generate completion file:
-      aptu completion generate fish > ~/.config/fish/completions/aptu.fish
-
-  PowerShell
-    Add to $PROFILE:
-      aptu completion generate powershell | Out-String | Invoke-Expression
-"#;
 
 /// Output format for CLI results.
 #[derive(Clone, Copy, Default, ValueEnum)]
@@ -184,10 +158,6 @@ pub enum Commands {
     #[command(subcommand)]
     Pr(PrCommand),
 
-    /// Generate or install shell completion scripts
-    #[command(subcommand)]
-    Completion(CompletionCommand),
-
     /// Scan a file or directory for security issues
     ScanSecurity {
         /// Path to scan (file or directory)
@@ -205,20 +175,6 @@ pub enum Commands {
         /// Write SARIF output to this file
         #[arg(long, value_name = "PATH")]
         sarif_output: Option<std::path::PathBuf>,
-    },
-
-    /// Lint an issue body file against template headings
-    LintIssue {
-        /// Path to the issue body markdown file
-        #[arg(long, value_name = "FILE")]
-        file: std::path::PathBuf,
-        /// Issue template type to validate against (for example feature, bug).
-        /// Required when an explicit --config is supplied; optional otherwise.
-        #[arg(long, value_name = "TYPE")]
-        issue_type: Option<String>,
-        /// Path to a TOML specs file overriding repo-root and generic specs
-        #[arg(long, value_name = "FILE")]
-        config: Option<std::path::PathBuf>,
     },
 }
 
@@ -271,29 +227,6 @@ pub enum IssueCommand {
         /// Bypass 'already triaged' detection
         #[arg(short, long)]
         force: bool,
-    },
-}
-
-/// Completion subcommands
-#[derive(Subcommand)]
-pub enum CompletionCommand {
-    /// Generate completion script for a shell (output to stdout)
-    #[command(after_long_help = COMPLETION_GENERATE_HELP)]
-    Generate {
-        /// Shell to generate completions for
-        #[arg(value_enum)]
-        shell: Shell,
-    },
-
-    /// Install completion script to standard location
-    Install {
-        /// Shell to install completions for (auto-detected from $SHELL if not provided)
-        #[arg(long, value_enum)]
-        shell: Option<Shell>,
-
-        /// Preview installation without writing files
-        #[arg(long)]
-        dry_run: bool,
     },
 }
 
@@ -363,23 +296,6 @@ pub enum PrCommand {
         /// Preview labels without applying
         #[arg(long)]
         dry_run: bool,
-    },
-
-    /// List and rank open pull requests by reviewability
-    ///
-    /// Fetches open PRs for a repository and ranks them by a composite score:
-    /// 60% size (smaller = higher priority) + 40% age (older = higher priority).
-    /// Draft PRs are excluded from the ranking (not ready for review).
-    ///
-    /// Default limit is 10; use --limit 0 to show all.
-    Queue {
-        /// Repository in owner/repo format (inferred from git if not provided)
-        #[arg(long, short = 'r')]
-        repo: Option<String>,
-
-        /// Maximum number of PRs to display (0 = no limit)
-        #[arg(long, default_value = "10")]
-        limit: u32,
     },
 }
 

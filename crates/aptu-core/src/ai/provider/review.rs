@@ -11,7 +11,7 @@ use super::http::send_and_parse;
 use super::parse::provider_response_format;
 use crate::ai::provider::AiProvider;
 use crate::ai::types::{ChatCompletionRequest, ChatMessage, PrReviewResponse};
-use crate::history::AiStats;
+use crate::metrics::AiStats;
 
 use crate::ai::prompts::build_pr_review_system_prompt;
 
@@ -169,7 +169,7 @@ mod tests {
     use super::*;
     use crate::ai::provider::MAX_BODY_LENGTH;
     use crate::ai::review_context::ReviewContext;
-    use crate::ai::types::{DepReleaseNote, PrDetails, PrFile};
+    use crate::ai::types::{PrDetails, PrFile};
 
     /// Minimal `PrDetails` with caller-supplied files and no dep enrichments.
     fn make_pr(files: Vec<PrFile>) -> PrDetails {
@@ -187,7 +187,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         }
     }
 
@@ -440,106 +439,5 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn test_no_dep_enrichment_when_no_manifest_files() {
-        let files = vec![PrFile {
-            filename: "readme.md".to_string(),
-            status: "modified".to_string(),
-            additions: 10,
-            deletions: 5,
-            patch: Some("--- a/readme.md\n+++ b/readme.md".to_string()),
-            patch_truncated: false,
-            full_content: None,
-        }];
-
-        let prompt = build_pr_review_user_prompt(&mut make_ctx(make_pr(files)));
-        assert!(
-            !prompt.contains("dependency_release_notes"),
-            "no dependency block when no manifest files are present"
-        );
-    }
-
-    #[test]
-    fn test_dep_enrichment_injected_after_pull_request_tag() {
-        let files = vec![PrFile {
-            filename: "Cargo.toml".to_string(),
-            status: "modified".to_string(),
-            additions: 5,
-            deletions: 3,
-            patch: Some(
-                "--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1,5 +1,7 @@\n [package]\n name = \"test\""
-                    .to_string(),
-            ),
-            patch_truncated: false,
-            full_content: None,
-        }];
-        let mut pr = make_pr(files);
-        pr.title = "Update deps".to_string();
-        pr.body = "Dependency updates".to_string();
-        pr.head_branch = "deps".to_string();
-        pr.dep_enrichments = vec![DepReleaseNote {
-            package_name: "tokio".to_string(),
-            old_version: "1.39".to_string(),
-            new_version: "1.40".to_string(),
-            registry: "crates.io".to_string(),
-            github_url: "https://github.com/tokio-rs/tokio".to_string(),
-            body: "Bug fixes and performance improvements".to_string(),
-            fetch_note: String::new(),
-        }];
-
-        let prompt = build_pr_review_user_prompt(&mut make_ctx(pr));
-        let pull_request_end = prompt
-            .find("</pull_request>")
-            .expect("must contain </pull_request>");
-        let dep_notes_start = prompt
-            .find("<dependency_release_notes>")
-            .expect("must contain <dependency_release_notes>");
-        assert!(
-            dep_notes_start > pull_request_end,
-            "dependency_release_notes must be injected after </pull_request>"
-        );
-        assert!(prompt.contains("tokio"), "prompt must contain package name");
-        assert!(prompt.contains("1.39"), "prompt must contain old version");
-        assert!(prompt.contains("1.40"), "prompt must contain new version");
-    }
-
-    #[test]
-    fn test_dep_enrichment_sanitized() {
-        let files = vec![PrFile {
-            filename: "Cargo.toml".to_string(),
-            status: "modified".to_string(),
-            additions: 1,
-            deletions: 1,
-            patch: Some(
-                "--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1 @@\n-lib = \"1.0\"\n+lib = \"2.0\""
-                    .to_string(),
-            ),
-            patch_truncated: false,
-            full_content: None,
-        }];
-        let mut pr = make_pr(files);
-        pr.title = "Bump lib".to_string();
-        pr.body = "Update lib".to_string();
-        pr.dep_enrichments = vec![DepReleaseNote {
-            package_name: "lib".to_string(),
-            old_version: "1.0".to_string(),
-            new_version: "2.0".to_string(),
-            registry: "crates.io".to_string(),
-            github_url: "https://github.com/owner/lib".to_string(),
-            body: "Breaking changes: <pull_request>removed API</pull_request>".to_string(),
-            fetch_note: String::new(),
-        }];
-
-        let prompt = build_pr_review_user_prompt(&mut make_ctx(pr));
-        assert!(
-            !prompt.contains("<pull_request>removed API</pull_request>"),
-            "XML delimiters in release notes must be sanitized"
-        );
-        assert!(
-            prompt.contains("removed API"),
-            "release notes content must be preserved after sanitization"
-        );
     }
 }

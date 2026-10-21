@@ -15,7 +15,6 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 | `.github/workflows/pr-review.yml` | pull_request (opened, synchronize), workflow_dispatch | AI PR review and labeling; path-filtered to code changes | Advisory review on every code-touching PR |
 | `.github/workflows/security.yml` | push/PR main | TruffleHog secret scan and zizmor workflow audit in a single `security-result` job | Consolidated security gate; zizmor step runs even if the secret scan fails |
 | `.github/workflows/scheduled-security-audit.yml` | weekly cron (Monday 02:00 UTC), workflow_dispatch | Full-repo zizmor audit | Covers the whole repository independent of any diff; never runs on push |
-| `.github/workflows/lint-issue-demo.yml` | demo/lint helper for issue workflows | Exercises and validates the issue-triage linting path without opening real issues | Keeps issue automation verifiable without noise |
 
 ## Required Status Checks
 

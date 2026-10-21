@@ -401,35 +401,6 @@ fn write_pr_files_section(prompt: &mut String, ctx: &mut ReviewContext) {
     }
 }
 
-/// Writes the `<dependency_release_notes>` section into `prompt`, if any enrichments exist.
-fn write_dep_enrichments_section(prompt: &mut String, ctx: &ReviewContext) {
-    if ctx.pr.dep_enrichments.is_empty() {
-        return;
-    }
-    prompt.push_str("\n<dependency_release_notes>\n");
-    for dep in &ctx.pr.dep_enrichments {
-        let _ = writeln!(
-            prompt,
-            "Package: {} ({})\nOld: {} -> New: {}\nGitHub: {}\n",
-            sanitize_prompt_field(&dep.package_name),
-            dep.registry,
-            dep.old_version,
-            dep.new_version,
-            sanitize_prompt_field(&dep.github_url)
-        );
-        if !dep.body.is_empty() {
-            let _ = writeln!(
-                prompt,
-                "Release Notes:\n{}\n",
-                sanitize_prompt_field(&dep.body)
-            );
-        } else if !dep.fetch_note.is_empty() {
-            let _ = writeln!(prompt, "Note: {}\n", dep.fetch_note);
-        }
-    }
-    prompt.push_str("</dependency_release_notes>\n");
-}
-
 /// Writes the `<existing_review_comments>` section into `prompt`, if any comments exist.
 fn write_existing_review_comments_section(prompt: &mut String, ctx: &ReviewContext) {
     if ctx.pr.review_comments.is_empty() {
@@ -487,8 +458,6 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
 
     prompt.push_str("</pull_request>\n");
 
-    write_dep_enrichments_section(&mut prompt, ctx);
-
     if !ctx.ast_context.is_empty() {
         prompt.push_str(&ctx.ast_context);
     }
@@ -545,8 +514,26 @@ pub fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]
 
 #[cfg(test)]
 mod tests {
-    use super::super::types::{IssueDetails, PrDetails, PrReviewCommentDetails};
+    use super::super::types::{IssueDetails, PrDetails, PrFile, PrReviewCommentDetails};
     use super::*;
+
+    fn test_pr(number: u64, files: Vec<PrFile>) -> PrDetails {
+        PrDetails {
+            owner: "test".to_string(),
+            repo: "repo".to_string(),
+            number,
+            title: format!("Test PR {number}"),
+            body: "Description".to_string(),
+            head_branch: "feature".to_string(),
+            base_branch: "main".to_string(),
+            url: format!("https://github.com/test/repo/pull/{number}"),
+            files,
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+        }
+    }
 
     #[test]
     fn test_build_system_prompt_contains_json_schema() {
@@ -747,22 +734,7 @@ mod tests {
             full_content: Some("A".repeat(10_000)),
         }];
 
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 1,
-            title: "Test PR".to_string(),
-            body: "Description".to_string(),
-            head_branch: "feature".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/1".to_string(),
-            files,
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
+        let pr = test_pr(1, files);
 
         let prompt =
             build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
@@ -819,22 +791,7 @@ mod tests {
             full_content: Some("B".repeat(10_000)),
         }];
 
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 2,
-            title: "Test PR 2".to_string(),
-            body: "Description".to_string(),
-            head_branch: "feature".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/2".to_string(),
-            files,
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
+        let pr = test_pr(2, files);
 
         let prompt =
             build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
@@ -891,7 +848,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         };
 
         let prompt =
@@ -945,7 +901,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         };
 
         // Act: build prompt with explicit per-file patch cap
@@ -1022,7 +977,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         };
 
         // Act: build prompt with cap equal to patch size
@@ -1084,7 +1038,6 @@ mod tests {
             head_sha: String::new(),
             review_comments,
             instructions: None,
-            dep_enrichments: vec![],
         };
 
         super::super::review_context::ReviewContext {
@@ -1188,7 +1141,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         };
 
         let mut ctx = super::super::review_context::ReviewContext {
@@ -1242,7 +1194,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         };
 
         let mut ctx = super::super::review_context::ReviewContext {
@@ -1282,22 +1233,7 @@ mod tests {
             full_content: Some("file content".to_string()),
         }];
 
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 102,
-            title: "Test PR".to_string(),
-            body: "Description".to_string(),
-            head_branch: "feature".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/102".to_string(),
-            files,
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
+        let pr = test_pr(102, files);
 
         let mut ctx = super::super::review_context::ReviewContext {
             pr,
@@ -1342,22 +1278,7 @@ mod tests {
             full_content: Some("fn new_fn() {}".to_string()),
         }];
 
-        let pr = PrDetails {
-            owner: "test".to_string(),
-            repo: "repo".to_string(),
-            number: 103,
-            title: "Test PR".to_string(),
-            body: "Description".to_string(),
-            head_branch: "feature".to_string(),
-            base_branch: "main".to_string(),
-            url: "https://github.com/test/repo/pull/103".to_string(),
-            files,
-            labels: vec![],
-            head_sha: String::new(),
-            review_comments: vec![],
-            instructions: None,
-            dep_enrichments: vec![],
-        };
+        let pr = test_pr(103, files);
 
         let mut ctx = super::super::review_context::ReviewContext {
             pr,
@@ -1445,7 +1366,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         };
 
         let mut ctx = super::super::review_context::ReviewContext {
@@ -1521,7 +1441,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         };
 
         ReviewContext {

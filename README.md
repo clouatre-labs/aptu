@@ -44,7 +44,6 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 | Config-as-code (`.github/aptu.yml`) | Yes | - | - |
 | AI Triage | Yes | Yes | Yes |
 | PR Analysis | Yes | Yes | Yes |
-| Dependency Enrichment | Yes | Yes | Yes |
 | Multiple Providers | Yes | Yes | Yes |
 | Prompt Customization | Yes | Yes | Yes |
 | Observability | - | Yes | Yes |
@@ -165,7 +164,7 @@ See [SECURITY.md](https://github.com/clouatre-labs/aptu/blob/main/SECURITY.md) f
 
 ## Architecture
 
-Aptu assembles structured context (AST, cross-file call-graph, security scanner output, and dependency release notes) before any AI call. A prompt-injection byte cap and local-only security scanning ensure no raw source code is sent to external services without explicit review. The GitHub App, CLI, and GitHub Action share a common `aptu-core` library; see [docs/ARCHITECTURE.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ARCHITECTURE.md) for the full crate structure, data flow, and key dependencies.
+Aptu assembles structured context (AST, cross-file call-graph, and security scanner output) before any AI call. A prompt-injection byte cap and local-only security scanning ensure no raw source code is sent to external services without explicit review. The GitHub App, CLI, and GitHub Action share a common `aptu-core` library; see [docs/ARCHITECTURE.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ARCHITECTURE.md) for the full crate structure, data flow, and key dependencies.
 
 For the governance model behind Aptu's harness design, see [AI SDLC Governance: Three Layers for Engineering Leaders](https://clouatre.ca/posts/ai-sdlc-governance-stack/).
 

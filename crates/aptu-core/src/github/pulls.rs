@@ -386,7 +386,6 @@ pub async fn fetch_pr_details(
         labels,
         review_comments,
         instructions: None,
-        dep_enrichments: Vec::new(),
     };
 
     debug!(

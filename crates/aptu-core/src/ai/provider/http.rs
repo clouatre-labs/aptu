@@ -16,7 +16,7 @@ use crate::ai::provider::AiProvider;
 use crate::ai::registry::consts::PROVIDER_ZAI;
 use crate::ai::types::{ChatCompletionRequest, ChatCompletionResponse};
 use crate::error::AptuError;
-use crate::history::AiStats;
+use crate::metrics::AiStats;
 use crate::retry::{extract_retry_after, is_retryable_anyhow};
 
 /// Conservative provider-agnostic ceiling for escalated `max_tokens`.

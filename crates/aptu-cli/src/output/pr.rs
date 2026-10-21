@@ -5,118 +5,12 @@
 use std::io::{self, Write};
 
 use console::style;
-use serde::Serialize;
 
 use crate::cli::OutputContext;
 use crate::commands::types::{
     BulkPrReviewResult, PrLabelResult, PrReviewResult, SinglePrReviewOutcome,
 };
 use crate::output::Renderable;
-
-/// Maximum title length in characters for text table output.
-const QUEUE_TITLE_MAX_CHARS: usize = 50;
-
-/// A single PR in the queue result.
-#[derive(Debug, Clone, Serialize)]
-pub struct QueuedPr {
-    /// PR number
-    pub number: u64,
-    /// PR title
-    pub title: String,
-    /// Author login
-    pub author: String,
-    /// Age in days
-    pub age_days: f64,
-    /// Additions
-    pub additions: u64,
-    /// Deletions
-    pub deletions: u64,
-    /// Reviewability score (0.0-1.0)
-    pub score: f64,
-    /// Is draft
-    pub draft: bool,
-}
-
-/// Result from `pr queue` command.
-#[derive(Debug, Serialize)]
-pub struct PrQueueResult {
-    /// Queued PRs sorted by score DESC
-    pub prs: Vec<QueuedPr>,
-    /// Total number of open PRs (including drafts)
-    pub total_open: usize,
-    /// Number of draft PRs excluded
-    pub drafts_excluded: usize,
-}
-
-/// Format age in days as "Xd" or "Xmo".
-fn format_age(age_days: f64) -> String {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    if age_days < 30.0 {
-        format!("{}d", age_days.round() as u32)
-    } else if age_days < 365.0 {
-        format!("{}mo", (age_days / 30.0).round() as u32)
-    } else {
-        format!("{}y", (age_days / 365.0).round() as u32)
-    }
-}
-
-impl Renderable for PrQueueResult {
-    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        if self.prs.is_empty() {
-            writeln!(w, "{}", style("No open PRs found.").yellow())?;
-            return Ok(());
-        }
-
-        writeln!(w)?;
-        writeln!(
-            w,
-            "{}",
-            style("Open PRs ranked by reviewability (size 60%, age 40%)".to_string()).bold()
-        )?;
-        writeln!(w)?;
-
-        // Header
-        writeln!(
-            w,
-            "{}",
-            style(format!(
-                // Column widths: title=QUEUE_TITLE_MAX_CHARS, author=20, age=8, changes=12, score=3
-                "{:>4}  {:<50}  {:<20}  {:<8}  {:<12}  {:>3}",
-                "Rank", "Title", "Author", "Age", "Changes", "Score"
-            ))
-            .bold()
-        )?;
-        writeln!(w, "{}", style("-".repeat(120)).dim())?;
-
-        for (idx, pr) in self.prs.iter().enumerate() {
-            let rank = idx + 1;
-            let title = aptu_core::utils::truncate(&pr.title, QUEUE_TITLE_MAX_CHARS);
-            let age_str = format_age(pr.age_days);
-            let changes = format!("+{}-{}", pr.additions, pr.deletions);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let score_int = (pr.score * 100.0).round() as u32;
-
-            writeln!(
-                w,
-                "{:>4}  {:<50}  {:<20}  {:<8}  {:<12}  {:>3}",
-                rank, title, pr.author, age_str, changes, score_int
-            )?;
-        }
-
-        writeln!(w)?;
-        let footer = format!(
-            "Showing {} of {} open PR{} ({} draft{} excluded)",
-            self.prs.len(),
-            self.total_open,
-            if self.total_open == 1 { "" } else { "s" },
-            self.drafts_excluded,
-            if self.drafts_excluded == 1 { "" } else { "s" }
-        );
-        writeln!(w, "{}", style(footer).dim())?;
-
-        Ok(())
-    }
-}
 
 fn render_security_findings_text(
     w: &mut dyn Write,
@@ -443,7 +337,7 @@ mod tests {
                 disclaimer: None,
             },
             verdict: "approve".to_string(),
-            ai_stats: aptu_core::history::AiStats {
+            ai_stats: aptu_core::metrics::AiStats {
                 provider: "openrouter".to_string(),
                 model: "test-model".to_string(),
                 input_tokens: 100,
@@ -466,9 +360,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_render_text_security_findings_hint_in_normal_mode() {
-        let finding = aptu_core::Finding {
+    fn test_finding() -> aptu_core::Finding {
+        aptu_core::Finding {
             pattern_id: "test-pattern".to_string(),
             description: "Test vulnerability".to_string(),
             severity: aptu_core::Severity::High,
@@ -477,14 +370,21 @@ mod tests {
             line_number: 42,
             matched_text: "unsafe { }".to_string(),
             cwe: Some("CWE-123".to_string()),
-        };
+        }
+    }
 
-        let result = build_test_result(Some(vec![finding]));
+    fn render_security_findings(verbose: bool) -> String {
+        let result = build_test_result(Some(vec![test_finding()]));
         let mut output = Vec::new();
-        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Text, false);
+        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Text, verbose);
 
         result.render_text(&mut output, &ctx).unwrap();
-        let text = String::from_utf8(output).unwrap();
+        String::from_utf8(output).unwrap()
+    }
+
+    #[test]
+    fn test_render_text_security_findings_hint_in_normal_mode() {
+        let text = render_security_findings(false);
 
         assert!(text.contains("Security Scan"));
         assert!(text.contains("(use --verbose for details)"));
@@ -492,23 +392,7 @@ mod tests {
 
     #[test]
     fn test_render_text_security_findings_no_hint_in_verbose_mode() {
-        let finding = aptu_core::Finding {
-            pattern_id: "test-pattern".to_string(),
-            description: "Test vulnerability".to_string(),
-            severity: aptu_core::Severity::High,
-            confidence: aptu_core::Confidence::High,
-            file_path: "src/main.rs".to_string(),
-            line_number: 42,
-            matched_text: "unsafe { }".to_string(),
-            cwe: Some("CWE-123".to_string()),
-        };
-
-        let result = build_test_result(Some(vec![finding]));
-        let mut output = Vec::new();
-        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Text, true);
-
-        result.render_text(&mut output, &ctx).unwrap();
-        let text = String::from_utf8(output).unwrap();
+        let text = render_security_findings(true);
 
         assert!(text.contains("Security Findings"));
         assert!(!text.contains("(use --verbose for details)"));
