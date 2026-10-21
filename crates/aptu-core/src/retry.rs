@@ -93,7 +93,11 @@ pub(crate) fn is_retryable_anyhow(e: &anyhow::Error) -> bool {
         }
     }
 
-    // Check if it's our AptuError with RateLimited or TruncatedResponse
+    // Check if it's our AptuError with RateLimited or TruncatedResponse.
+    // ContextLengthExceeded is intentionally non-retryable here: resending
+    // the identical prompt would fail identically, so the provider loop
+    // must fail fast. The review facade owns the single re-trim retry
+    // (halved effective budget) for that variant.
     if let Some(aptu_err) = e.downcast_ref::<crate::error::AptuError>() {
         return matches!(
             aptu_err,
@@ -218,6 +222,17 @@ mod tests {
             retry_after: 60,
         });
         assert!(is_retryable_anyhow(&err));
+    }
+
+    #[test]
+    fn test_is_retryable_anyhow_context_length_is_not_retryable() {
+        // Context-length errors must fail fast in the provider loop: the
+        // facade owns the single re-trim retry, so resending the identical
+        // prompt here would double-retry and fail identically.
+        let err = anyhow::anyhow!(crate::error::AptuError::ContextLengthExceeded {
+            message: "OpenRouter API error (HTTP 413): prompt is too long".to_string(),
+        });
+        assert!(!is_retryable_anyhow(&err));
     }
 
     #[test]

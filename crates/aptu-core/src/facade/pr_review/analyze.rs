@@ -2,7 +2,7 @@
 
 //! PR review analysis: fetch, diff reconstruction, and AI analysis.
 
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 
 use crate::ai::provider::AiProvider;
 use crate::ai::types::PrDetails;
@@ -239,6 +239,82 @@ fn routing_size_estimate(pr_details: &PrDetails, instructions_overhead: usize) -
     )
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(provider, review_config, review_ctx), fields(provider = %provider_name, model = %model_name))]
+async fn call_review_ai(
+    provider: &dyn TokenProvider,
+    provider_name: &str,
+    model_name: &str,
+    ai_config: &AiConfig,
+    review_config: &crate::config::ReviewConfig,
+    review_ctx: &crate::ai::review_context::ReviewContext,
+) -> crate::Result<(
+    crate::ai::types::PrReviewResponse,
+    crate::history::AiStats,
+    Vec<String>,
+    Vec<String>,
+)> {
+    crate::facade::ai_client::try_with_fallback(
+        provider,
+        provider_name,
+        model_name,
+        ai_config,
+        TaskType::Review,
+        |client| {
+            let review_ctx = review_ctx.clone();
+            let review_cfg = review_config.clone();
+            async move { client.review_pr(review_ctx, &review_cfg).await }
+        },
+    )
+    .await
+}
+
+/// Runs the AI review call, performing at most one re-trim retry when the
+/// provider classifies the prompt as exceeding the model context window.
+///
+/// The `retrim` closure is only invoked on
+/// [`AptuError::ContextLengthExceeded`]; it must rebuild the review context
+/// at a reduced budget (so `apply_budget_drops` applies its semantic drop
+/// order) and retry. A second context-length rejection inside `retrim`
+/// propagates as a failure; no further retries occur.
+///
+/// Returns the call result paired with the review context actually used, so
+/// telemetry reflects the final attempt.
+#[cfg(not(target_arch = "wasm32"))]
+/// Computes the input budget for the context-length re-trim retry.
+///
+/// Halves the *effective* budget (after the context-window cap is applied),
+/// so the re-trim always reduces the input budget regardless of whether the
+/// configured `max_prompt_chars` or the model context window is binding.
+#[must_use]
+fn retrim_budget(max_prompt_chars: usize, context_window: Option<u32>, max_tokens: u32) -> usize {
+    crate::ai::review_context::effective_budget(max_prompt_chars, context_window, max_tokens) / 2
+}
+
+async fn retry_once_on_context_length<T, F, Fut, G, GFut>(
+    first: F,
+    retrim: G,
+) -> crate::Result<(T, crate::ai::review_context::ReviewContext)>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = crate::Result<(T, crate::ai::review_context::ReviewContext)>>,
+    G: FnOnce() -> GFut,
+    GFut:
+        std::future::Future<Output = crate::Result<(T, crate::ai::review_context::ReviewContext)>>,
+{
+    match first().await {
+        Ok(ok) => Ok(ok),
+        Err(AptuError::ContextLengthExceeded { message }) => {
+            warn!(
+                error = %message,
+                "Provider rejected prompt as exceeding context length; re-trimming once at half budget"
+            );
+            retrim().await
+        }
+        Err(e) => Err(e),
+    }
+}
+
 /// Analyzes PR details with AI to generate a review.
 ///
 /// This function takes pre-fetched PR details and performs AI analysis.
@@ -330,7 +406,7 @@ pub async fn analyze_pr(
     // Build review context with all enrichment decisions centralized
     let ctx = crate::ai::review_context::build_review_context(
         pr_details.clone(),
-        repo_path,
+        repo_path.clone(),
         &review_config,
         context_window,
         ai_config.max_tokens,
@@ -371,18 +447,55 @@ pub async fn analyze_pr(
     // Generate trace ID for this review operation
     let trace_id = uuid::Uuid::new_v4().simple().to_string();
 
-    // Use fallback chain if configured (provider/model resolved pre-context above)
-    let (response, mut ai_stats, finish_reasons, truncated_patch_files) =
-        crate::facade::ai_client::try_with_fallback(
-            provider,
-            &provider_name,
-            &model_name,
-            ai_config,
-            TaskType::Review,
-            |client| {
-                let review_ctx = ctx.clone();
-                let review_cfg = review_config.clone();
-                async move { client.review_pr(review_ctx, &review_cfg).await }
+    // Use fallback chain if configured (provider/model resolved pre-context
+    // above). On a provider context-length rejection, re-trim the review
+    // context once at half the effective budget (so `apply_budget_drops`
+    // applies its semantic drop order) and retry exactly once; a second
+    // rejection propagates as a failure. The re-trim is recorded in
+    // `budget_drops` telemetry.
+    let ((response, mut ai_stats, finish_reasons, truncated_patch_files), ctx) =
+        retry_once_on_context_length(
+            || async {
+                call_review_ai(
+                    provider,
+                    &provider_name,
+                    &model_name,
+                    ai_config,
+                    &review_config,
+                    &ctx,
+                )
+                .await
+                .map(|result| (result, ctx.clone()))
+            },
+            || async {
+                let mut halved_config = review_config.clone();
+                halved_config.max_prompt_chars = retrim_budget(
+                    review_config.max_prompt_chars,
+                    context_window,
+                    ai_config.max_tokens,
+                );
+                let mut retrimmed = crate::ai::review_context::build_review_context(
+                    pr_details.clone(),
+                    repo_path.clone(),
+                    &halved_config,
+                    context_window,
+                    ai_config.max_tokens,
+                    ai_config.custom_guidance.as_deref(),
+                )
+                .await?;
+                retrimmed
+                    .budget_drops
+                    .push("context_length_retrim".to_string());
+                call_review_ai(
+                    provider,
+                    &provider_name,
+                    &model_name,
+                    ai_config,
+                    &review_config,
+                    &retrimmed,
+                )
+                .await
+                .map(|result| (result, retrimmed))
             },
         )
         .await?;
@@ -520,5 +633,132 @@ mod tests {
             fold_model_windows(&listed, "openrouter", &["missing"], None);
         assert_eq!(none_resolved, 0);
         assert_eq!(none_min, None);
+    }
+
+    /// Minimal `ReviewContext` wrapping `make_pr` for re-trim helper tests.
+    fn make_ctx() -> crate::ai::review_context::ReviewContext {
+        crate::ai::review_context::ReviewContext {
+            pr: make_pr(),
+            ast_context: String::new(),
+            call_graph: String::new(),
+            inferred_repo_path: None,
+            cwd_inferred: false,
+            max_chars_per_file: 1_000,
+            max_diff_chars: 10_000,
+            max_patch_chars_per_file: 1_000,
+            files_truncated: 0,
+            truncated_chars_dropped: 0,
+            truncated_patch_files: Vec::new(),
+            files_total: 1,
+            files_with_patch: 1,
+            dep_enrichments_count: 0,
+            dep_enrichments_chars: 0,
+            budget_drops: Vec::new(),
+            prompt_chars_final: 0,
+            estimated_size: 0,
+            context_window: None,
+        }
+    }
+
+    fn context_length_error() -> AptuError {
+        AptuError::ContextLengthExceeded {
+            message: "openrouter API error (HTTP 413): prompt is too long".to_string(),
+        }
+    }
+
+    /// Happy path: a first-attempt success performs no re-trim and returns the
+    /// context from the first (only) call.
+    #[tokio::test]
+    async fn test_retrim_first_attempt_success_makes_single_call() {
+        let calls = std::cell::Cell::new(0u32);
+        let ctx = make_ctx();
+        let (value, used_ctx) = retry_once_on_context_length(
+            || {
+                calls.set(calls.get() + 1);
+                std::future::ready(Ok::<_, AptuError>((42u32, ctx.clone())))
+            },
+            || {
+                panic!("retrim must not run when the first attempt succeeds");
+                #[allow(unreachable_code)]
+                std::future::ready(Err(AptuError::CircuitOpen))
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(value, 42);
+        assert_eq!(calls.get(), 1);
+        assert_eq!(used_ctx.files_total, ctx.files_total);
+    }
+
+    /// Happy path: one `ContextLengthExceeded` triggers exactly one
+    /// re-trimmed retry that succeeds; the re-trimmed context is the one
+    /// returned for telemetry.
+    #[tokio::test]
+    async fn test_retrim_retries_exactly_once_and_succeeds() {
+        let first_calls = std::cell::Cell::new(0u32);
+        let retrim_calls = std::cell::Cell::new(0u32);
+        let mut retrimmed = make_ctx();
+        retrimmed.budget_drops.push("call_graph".to_string());
+
+        let (value, used_ctx) = retry_once_on_context_length(
+            || {
+                first_calls.set(first_calls.get() + 1);
+                std::future::ready(Err(context_length_error()))
+            },
+            || {
+                retrim_calls.set(retrim_calls.get() + 1);
+                std::future::ready(Ok::<_, AptuError>((7u32, retrimmed.clone())))
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(value, 7);
+        assert_eq!(first_calls.get(), 1, "first attempt must run once");
+        assert_eq!(retrim_calls.get(), 1, "exactly one re-trim retry");
+        assert_eq!(
+            used_ctx.budget_drops,
+            vec!["call_graph".to_string()],
+            "telemetry must come from the re-trimmed context"
+        );
+    }
+
+    /// Happy path: when the model context window (not the configured max)
+    /// is the binding constraint, the re-trim halves the effective budget
+    /// (the context cap), guaranteeing a reduced input budget.
+    #[test]
+    fn test_retrim_budget_context_capped_yields_halved_cap() {
+        // Arrange: config max (100k) far exceeds the context cap (28k).
+        // Act
+        let budget = retrim_budget(100_000, Some(10_000), 2_000);
+        // Assert: effective = min(100_000, (10_000 - 2_000) * 3.5) = 28_000
+        assert_eq!(budget, 14_000);
+    }
+
+    /// Edge case: when the configured max is binding (no known context
+    /// window), the re-trim still halves the configured budget.
+    #[test]
+    fn test_retrim_budget_config_bound_halves_config() {
+        // Act
+        let budget = retrim_budget(80_000, None, 4_000);
+        // Assert
+        assert_eq!(budget, 40_000);
+    }
+
+    /// Edge case: a second `ContextLengthExceeded` inside the re-trim
+    /// propagates as a failure; no further retries occur.
+    #[tokio::test]
+    async fn test_retrim_second_context_length_failure_propagates() {
+        let retrim_calls = std::cell::Cell::new(0u32);
+        let err = retry_once_on_context_length(
+            || std::future::ready(Err::<(u32, _), _>(context_length_error())),
+            || {
+                retrim_calls.set(retrim_calls.get() + 1);
+                std::future::ready(Err(context_length_error()))
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(err, AptuError::ContextLengthExceeded { .. }));
+        assert_eq!(retrim_calls.get(), 1, "no retry after the re-trim");
     }
 }

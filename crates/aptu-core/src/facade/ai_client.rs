@@ -220,6 +220,20 @@ where
     match operation(ai_client).await {
         Ok(response) => return Ok(response),
         Err(e) => {
+            // Context-length errors must not hit the fallback chain: the
+            // identical oversized prompt would fail on any provider. Return
+            // the typed error untouched so the review facade can perform its
+            // single re-trim retry.
+            if let Some(AptuError::ContextLengthExceeded { .. }) = e.downcast_ref::<AptuError>() {
+                return match e.downcast::<AptuError>() {
+                    Ok(err) => Err(err),
+                    Err(e) => Err(AptuError::AI {
+                        message: e.to_string(),
+                        status: None,
+                        provider: primary_provider.to_string(),
+                    }),
+                };
+            }
             if is_retryable_anyhow(&e) {
                 // RateLimited falls through to the fallback chain after in-loop
                 // retry exhaustion; other retryable errors return early.

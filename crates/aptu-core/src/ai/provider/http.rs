@@ -41,6 +41,22 @@ fn is_zai_insufficient_balance(error_body: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Heuristic detection of provider context-length errors.
+///
+/// Providers surface "prompt too long" failures as HTTP `413` or as plain
+/// HTTP `400` with a body marker. Markers are lowercase-matched and drawn from
+/// documented provider error strings (`OpenAI` `context_length_exceeded`,
+/// Anthropic `prompt is too long`, and common `reduce the length` /
+/// "maximum context" phrasings). Provider-agnostic by design: this module
+/// has no knowledge of the calling use case.
+fn is_context_length_error(error_body: &str) -> bool {
+    let body = error_body.to_ascii_lowercase();
+    body.contains("context_length_exceeded")
+        || body.contains("prompt is too long")
+        || body.contains("reduce the length")
+        || body.contains("maximum context")
+}
+
 fn map_http_error(
     status: u16,
     provider_name: &str,
@@ -73,6 +89,17 @@ fn map_http_error(
                 retry_after: retry_after_val,
             })
         }
+        // Context-length errors get a typed variant so the facade can
+        // perform a single re-trim retry; other 400s stay in the generic AI
+        // bucket.
+        400 | 413 if is_context_length_error(error_body) => Err(AptuError::ContextLengthExceeded {
+            message: format!(
+                "{} API error (HTTP {}): {}",
+                provider_name,
+                status,
+                redact_api_error_body(error_body)
+            ),
+        }),
         _ => Err(AptuError::AI {
             message: format!(
                 "{} API error (HTTP {}): {}",
@@ -491,6 +518,39 @@ mod tests {
         let body = r#"{"error":{"code":"1001","message":"rate limited"}}"#;
         let err = map_http_error(429, "zai", "ZAI_API_KEY", None, body).unwrap_err();
         assert!(err.to_string().to_lowercase().contains("rate limit"));
+    }
+
+    #[test]
+    fn test_map_http_error_413_and_400_context_length_bodies_typed() {
+        // 413 with a length marker yields the typed variant.
+        let body = r#"{"error":{"message":"This model's maximum context length is exceeded"}}"#;
+        let err = map_http_error(413, "openrouter", "OPENROUTER_API_KEY", None, body).unwrap_err();
+        assert!(matches!(err, AptuError::ContextLengthExceeded { .. }));
+
+        // Plain 400 carrying a context-length marker is also typed.
+        let body = r#"{"error":{"code":"context_length_exceeded"}}"#;
+        let err = map_http_error(400, "openrouter", "OPENROUTER_API_KEY", None, body).unwrap_err();
+        assert!(matches!(err, AptuError::ContextLengthExceeded { .. }));
+
+        // "prompt is too long" marker on 400.
+        let body = r#"{"error":{"message":"prompt is too long: 250000 tokens > 200000 maximum"}}"#;
+        let err = map_http_error(400, "anthropic", "ANTHROPIC_API_KEY", None, body).unwrap_err();
+        assert!(matches!(err, AptuError::ContextLengthExceeded { .. }));
+    }
+
+    #[test]
+    fn test_map_http_error_400_without_length_markers_stays_generic_ai() {
+        let body = r#"{"error":{"message":"invalid model id"}}"#;
+        let err = map_http_error(400, "openrouter", "OPENROUTER_API_KEY", None, body).unwrap_err();
+        match err {
+            AptuError::AI { status, .. } => assert_eq!(status, Some(400)),
+            other => panic!("expected generic AI error, got: {other:?}"),
+        }
+
+        // Context-length markers on statuses other than 400/413 stay generic.
+        let body = r#"{"error":{"message":"prompt is too long"}}"#;
+        let err = map_http_error(500, "openrouter", "OPENROUTER_API_KEY", None, body).unwrap_err();
+        assert!(matches!(err, AptuError::AI { .. }));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
