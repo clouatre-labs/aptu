@@ -89,10 +89,20 @@ fn map_http_error(
                 retry_after: retry_after_val,
             })
         }
-        // Context-length errors get a typed variant so the facade can
+        // HTTP 413 (Payload Too Large) is unambiguous: the request itself
+        // was too large, regardless of body shape.
+        413 => Err(AptuError::ContextLengthExceeded {
+            message: format!(
+                "{} API error (HTTP {}): {}",
+                provider_name,
+                status,
+                redact_api_error_body(error_body)
+            ),
+        }),
+        // Context-length errors on 400 get a typed variant so the facade can
         // perform a single re-trim retry; other 400s stay in the generic AI
         // bucket.
-        400 | 413 if is_context_length_error(error_body) => Err(AptuError::ContextLengthExceeded {
+        400 if is_context_length_error(error_body) => Err(AptuError::ContextLengthExceeded {
             message: format!(
                 "{} API error (HTTP {}): {}",
                 provider_name,
@@ -524,6 +534,12 @@ mod tests {
     fn test_map_http_error_413_and_400_context_length_bodies_typed() {
         // 413 with a length marker yields the typed variant.
         let body = r#"{"error":{"message":"This model's maximum context length is exceeded"}}"#;
+        let err = map_http_error(413, "openrouter", "OPENROUTER_API_KEY", None, body).unwrap_err();
+        assert!(matches!(err, AptuError::ContextLengthExceeded { .. }));
+
+        // A generic 413 body (no length markers) is still typed: the status
+        // alone is unambiguous.
+        let body = r#"{"error":{"message":"payload too large"}}"#;
         let err = map_http_error(413, "openrouter", "OPENROUTER_API_KEY", None, body).unwrap_err();
         assert!(matches!(err, AptuError::ContextLengthExceeded { .. }));
 

@@ -138,7 +138,27 @@ pub(crate) fn apply_budget_drops(
     );
 }
 
+/// Minimal chars kept for a budget-truncated patch. Guarantees the diff header
+/// plus at least one hunk slice survives truncation, so a patch is never
+/// emptied by the final-tier truncation path.
+const MIN_PER_PATCH_TRUNCATION_CHARS: usize = 200;
+
+/// Marker appended to patches truncated on the final budget tier. Mirrors the
+/// convention used by `prompts/mod.rs`.
+const PATCH_TRUNCATED_MARKER: &str =
+    "[APTU: patch truncated due to prompt budget -- do not speculate on missing content]";
+
 /// Drops file patches in descending size order until under budget.
+///
+/// This is the final budget tier: instead of nulling patches (which would
+/// trigger `EmptyReviewContext` on a non-empty PR), each patch that must be
+/// reduced is truncated to its leading hunks within a per-patch char budget
+/// (even split of the total budget across the PR's patch files), so partial
+/// context always survives. The per-patch budget is the budget remaining
+/// after non-patch consumption, split evenly across the PR's patch files, so
+/// a fully truncated PR still fits the prompt. Whole-patch drops in the
+/// non-final tiers
+/// (call graph, AST context, dep enrichments, full content) are unchanged.
 pub(crate) fn drop_patches_by_size(
     files: &mut [crate::ai::types::PrFile],
     estimated_size: &mut usize,
@@ -148,6 +168,25 @@ pub(crate) fn drop_patches_by_size(
     if *estimated_size <= max_prompt_chars {
         return;
     }
+
+    let patch_files = files
+        .iter()
+        .filter(|f| f.patch.as_deref().is_some_and(|p| !p.is_empty()))
+        .count();
+    if patch_files == 0 {
+        return;
+    }
+    // Per-patch budget comes from the budget REMAINING after non-patch
+    // consumption (estimated_size already includes the patch bytes), split
+    // evenly across the PR's patch files, so a fully truncated PR still
+    // fits the prompt.
+    let total_patch_chars: usize = files
+        .iter()
+        .map(|f| f.patch.as_ref().map_or(0, String::len))
+        .sum();
+    let non_patch_chars = (*estimated_size).saturating_sub(total_patch_chars);
+    let patch_headroom = max_prompt_chars.saturating_sub(non_patch_chars);
+    let per_patch_budget = (patch_headroom / patch_files).max(MIN_PER_PATCH_TRUNCATION_CHARS);
 
     let mut file_sizes: Vec<(usize, usize)> = files
         .iter()
@@ -160,17 +199,29 @@ pub(crate) fn drop_patches_by_size(
         if *estimated_size <= max_prompt_chars {
             break;
         }
-        if patch_size > 0 {
-            tracing::warn!(
-                file = %files[file_idx].filename,
-                patch_chars = patch_size,
-                "Dropping patch: prompt budget exceeded"
-            );
-            let filename = files[file_idx].filename.clone();
-            files[file_idx].patch = None;
-            *estimated_size -= patch_size;
-            budget_drops.push(format!("patch:{filename}"));
+        if patch_size == 0 || patch_size <= per_patch_budget {
+            // Nothing to reclaim from this patch; keep it intact.
+            continue;
         }
+        let patch = files[file_idx].patch.as_deref().unwrap_or_default();
+        // Reserve room for the marker so the final string stays within the
+        // per-patch budget (and strictly smaller than the original patch).
+        let core_budget = per_patch_budget
+            .saturating_sub(PATCH_TRUNCATED_MARKER.len() + 1)
+            .max(1);
+        let truncated = super::truncation::truncate_at_line_boundary(patch, core_budget);
+        let truncated = format!("{truncated}\n{PATCH_TRUNCATED_MARKER}");
+        let removed = patch_size.saturating_sub(truncated.len());
+        tracing::warn!(
+            file = %files[file_idx].filename,
+            patch_chars = patch_size,
+            truncated_chars = truncated.len(),
+            "Truncating patch to leading hunks: prompt budget exceeded"
+        );
+        let filename = files[file_idx].filename.clone();
+        files[file_idx].patch = Some(truncated);
+        *estimated_size = estimated_size.saturating_sub(removed);
+        budget_drops.push(format!("patch_truncated:{filename}"));
     }
 }
 
