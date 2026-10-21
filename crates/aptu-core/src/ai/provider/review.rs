@@ -88,6 +88,14 @@ pub(super) async fn review_pr(
         );
     }
 
+    // Effective budget: cap max_prompt_chars at the model context window
+    // minus the request's max_tokens output allowance when the window is known
+    let effective = crate::ai::review_context::effective_budget(
+        review_config.max_prompt_chars,
+        ctx.context_window,
+        provider.max_tokens(),
+    );
+
     // Assemble full prompt to measure actual size
     let assembled_prompt = crate::ai::prompts::build_pr_review_user_prompt(&mut ctx);
     let actual_prompt_chars = assembled_prompt.len();
@@ -96,8 +104,16 @@ pub(super) async fn review_pr(
     tracing::info!(
         actual_prompt_chars,
         max_chars = review_config.max_prompt_chars,
+        effective_budget_chars = effective,
         "PR review prompt assembled"
     );
+    if actual_prompt_chars > effective {
+        tracing::warn!(
+            actual_prompt_chars,
+            effective_budget_chars = effective,
+            "Assembled review prompt exceeds effective budget; consider lowering max_prompt_chars"
+        );
+    }
 
     let mut messages = vec![
         ChatMessage {

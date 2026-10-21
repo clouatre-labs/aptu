@@ -5,7 +5,9 @@
 use std::path::PathBuf;
 
 use super::ReviewContext;
-use super::budget::{apply_budget_drops, estimate_pr_size, should_enable_call_graph};
+use super::budget::{
+    apply_budget_drops, effective_budget, estimate_pr_size, should_enable_call_graph,
+};
 use crate::ai::types::PrDetails;
 use crate::config::ReviewConfig;
 
@@ -23,14 +25,23 @@ use crate::config::ReviewConfig;
 /// * `pr` - Pull request details
 /// * `repo_path` - Optional explicit repository path (overrides CWD inference)
 /// * `review_config` - Review configuration with budget thresholds
+/// * `context_window` - Optional model context window (tokens) capping the budget
+/// * `max_tokens` - The request's output token budget; subtracted from the
+///   context window before computing the input cap
+/// * `custom_guidance` - Optional provider custom guidance included in the system
+///   prompt, so the size estimate matches the actually-sent request
 ///
 /// # Returns
 ///
 /// A `ReviewContext` with all enrichment fields populated according to budget constraints.
+#[allow(clippy::too_many_lines)]
 pub async fn build_review_context(
     mut pr: PrDetails,
     repo_path: Option<String>,
     review_config: &ReviewConfig,
+    context_window: Option<u32>,
+    max_tokens: u32,
+    custom_guidance: Option<&str>,
 ) -> crate::Result<ReviewContext> {
     // Step 1: Resolve repo_path (explicit or inferred from CWD)
     #[cfg(not(target_arch = "wasm32"))]
@@ -54,10 +65,37 @@ pub async fn build_review_context(
     // Step 3: Enrich with dependency release notes
     pr.dep_enrichments = enrich_deps(&pr.files, review_config).await;
 
+    // Step 3.5: Resolve the exact system prompt that `review_pr` will send so the
+    // size estimate matches the actual request. This honors the provider's custom
+    // guidance and the cfg-gated override file, mirroring the construction in
+    // `provider/review.rs`.
+    let guidance = crate::ai::context::load_custom_guidance(custom_guidance);
+    #[cfg(not(target_arch = "wasm32"))]
+    let system_prompt =
+        match crate::ai::context::load_system_prompt_override("pr_review_system").await {
+            Some(override_prompt) => override_prompt,
+            None => crate::ai::prompts::build_pr_review_system_prompt(&guidance),
+        };
+    #[cfg(target_arch = "wasm32")]
+    let system_prompt = crate::ai::prompts::build_pr_review_system_prompt(&guidance);
+    let instructions_overhead = pr.instructions.as_deref().map_or(0, |instructions| {
+        let escaped = instructions
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;");
+        format!("<repo_instructions>\n{escaped}\n</repo_instructions>\n\n").len()
+    });
+    let system_overhead = system_prompt.len() + instructions_overhead;
+
+    // Effective budget caps max_prompt_chars at the model context window
+    // minus the max_tokens output allowance (3.5 chars/token) when known;
+    // None stays unbounded.
+    let max_prompt_chars =
+        effective_budget(review_config.max_prompt_chars, context_window, max_tokens);
+
     // Step 4: Estimate total chars and decide call_graph budget
     // (call_graph not yet built, pass empty)
-    let estimated_size = estimate_pr_size(&pr, &ast_context, "");
-    let max_prompt_chars = review_config.max_prompt_chars;
+    let estimated_size = estimate_pr_size(&pr, &ast_context, "", system_overhead);
     let budget_remaining = max_prompt_chars.saturating_sub(estimated_size);
 
     // Step 5: Build call_graph if decided
@@ -69,7 +107,7 @@ pub async fn build_review_context(
     };
 
     // Re-estimate with actual call_graph for accurate routing
-    let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph);
+    let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph, system_overhead);
 
     // Step 6: Apply budget drop order
     let had_patches_pre_drop = pr
@@ -83,6 +121,7 @@ pub async fn build_review_context(
         &mut ast_context,
         &mut call_graph,
         max_prompt_chars,
+        system_overhead,
         &mut budget_drops,
         repo_path_ref.as_deref(),
     );
@@ -133,6 +172,7 @@ pub async fn build_review_context(
         budget_drops,
         prompt_chars_final: 0,
         estimated_size: final_estimated_size,
+        context_window,
     })
 }
 
