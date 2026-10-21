@@ -36,7 +36,7 @@ pub struct TriageResult {
     /// AI triage analysis.
     pub triage: TriageResponse,
     /// AI usage statistics.
-    pub ai_stats: aptu_core::history::AiStats,
+    pub ai_stats: aptu_core::metrics::AiStats,
     /// URL of posted comment (if posted).
     pub comment_url: Option<String>,
     /// Whether this was a dry run.
@@ -150,7 +150,7 @@ pub struct PrReviewResult {
     /// Review verdict (`approve`, `request_changes`, `comment`).
     pub verdict: String,
     /// AI usage statistics.
-    pub ai_stats: aptu_core::history::AiStats,
+    pub ai_stats: aptu_core::metrics::AiStats,
     /// Whether this was a dry run.
     pub dry_run: bool,
     /// PR labels.

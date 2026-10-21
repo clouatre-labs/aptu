@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "aptu-cli"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "aptu-core",
@@ -123,7 +123,6 @@ dependencies = [
  "chrono",
  "clap",
  "clap-markdown",
- "clap_complete",
  "comfy-table",
  "console",
  "dialoguer",
@@ -140,7 +139,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
  "walkdir",
 ]
 
@@ -184,7 +182,7 @@ dependencies = [
 
 [[package]]
 name = "aptu-core"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "apple-native-keyring-store",
@@ -559,15 +557,6 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
-]
-
-[[package]]
-name = "clap_complete"
-version = "4.6.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "037e2a1a92236d0aff7e845093f64661d6df4c02c9fcc61a60e9e1d736fa392f"
-dependencies = [
- "clap",
 ]
 
 [[package]]
