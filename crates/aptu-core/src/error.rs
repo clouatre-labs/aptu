@@ -59,6 +59,18 @@ pub enum AptuError {
         provider: String,
     },
 
+    /// Provider rejected the prompt because it exceeds the model context
+    /// window (HTTP 413, or HTTP 400 with a context-length body marker).
+    ///
+    /// Intentionally not retried by the provider retry loop: resending the
+    /// identical prompt would fail identically. The review facade owns the
+    /// single re-trim retry (halved effective budget) for this variant.
+    #[error("Context length exceeded: {message}")]
+    ContextLengthExceeded {
+        /// HTTP status and redacted provider error body snippet.
+        message: String,
+    },
+
     /// Configuration file error.
     #[error("Configuration error: {message}")]
     Config {

@@ -101,6 +101,11 @@ pub fn format_error(error: &Error) -> String {
                     "{aptu_err}\n\nTip: The {provider} AI provider returned an incomplete response. This may be due to token limits. Try again in a moment."
                 )
             }
+            AptuError::ContextLengthExceeded { message: _ } => {
+                format!(
+                    "{aptu_err}\n\nTip: The prompt exceeded the model's context window. The input was re-trimmed once automatically; if this persists, reduce `review.max_prompt_chars` in ~/.config/aptu/config.toml."
+                )
+            }
             AptuError::TypeMismatch {
                 number: _,
                 expected: _,
