@@ -41,10 +41,6 @@ pub struct ReviewContext {
     pub files_total: usize,
     /// Number of files with a patch (non-empty diff).
     pub files_with_patch: usize,
-    /// Number of dependency enrichments applied.
-    pub dep_enrichments_count: usize,
-    /// Total characters in dependency enrichments.
-    pub dep_enrichments_chars: usize,
     /// Names of context items dropped due to budget constraints.
     pub budget_drops: Vec<String>,
     /// Final assembled prompt character count.
@@ -74,17 +70,6 @@ impl ReviewContext {
                 path.display(),
                 inferred_label
             );
-        }
-
-        // Enrichment summary
-        if !self.pr.dep_enrichments.is_empty() {
-            let packages: Vec<&str> = self
-                .pr
-                .dep_enrichments
-                .iter()
-                .map(|d| d.package_name.as_str())
-                .collect();
-            let _ = writeln!(summary, "Dependency enrichments: {}", packages.join(", "));
         }
 
         // Context sizes
@@ -143,7 +128,6 @@ impl Default for ReviewContext {
                 head_sha: String::new(),
                 review_comments: Vec::new(),
                 instructions: None,
-                dep_enrichments: Vec::new(),
             },
             ast_context: String::new(),
             call_graph: String::new(),
@@ -158,8 +142,6 @@ impl Default for ReviewContext {
             truncated_patch_files: Vec::new(),
             files_total: 0,
             files_with_patch: 0,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
             budget_drops: Vec::new(),
             prompt_chars_final: 0,
             estimated_size: 0,
@@ -186,11 +168,11 @@ pub(crate) use budget::{
     PROMPT_OVERHEAD_CHARS, apply_budget_drops, build_file_outline, estimate_pr_size,
 };
 #[allow(unused_imports)]
-pub(crate) use builder::{build_ctx_ast, build_ctx_call_graph, enrich_deps};
+pub(crate) use builder::{build_ctx_ast, build_ctx_call_graph};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::types::{DepReleaseNote, PrFile};
+    use crate::ai::types::PrFile;
     use crate::config::ReviewConfig;
 
     fn make_pr_with_content(patch_chars: usize, full_content_chars: usize) -> PrDetails {
@@ -218,26 +200,13 @@ mod tests {
                 additions: 1,
                 deletions: 0,
             }],
-            dep_enrichments: vec![],
             instructions: None,
             labels: vec![],
         }
     }
 
-    fn make_dep(package_name: &str) -> DepReleaseNote {
-        DepReleaseNote {
-            package_name: package_name.to_string(),
-            old_version: "1.0.0".to_string(),
-            new_version: "1.0.1".to_string(),
-            registry: "crates.io".to_string(),
-            github_url: format!("https://github.com/owner/{package_name}"),
-            body: "release notes".to_string(),
-            fetch_note: String::new(),
-        }
-    }
-
     /// Verifies that `apply_budget_drops` enforces the documented drop order:
-    /// `call_graph` -> `ast_context` -> `dep_enrichments` -> `patches` -> `full_content`.
+    /// `call_graph` -> `ast_context` -> `patches` -> `full_content`.
     #[test]
     fn test_apply_budget_drops_order() {
         let mut pr = make_pr_with_content(500, 500);
@@ -251,7 +220,7 @@ mod tests {
         let max_prompt_chars = 600;
 
         let mut drops = Vec::new();
-        // Priority order: call_graph -> ast_context -> dep_enrichments -> patches -> full_content
+        // Priority order: call_graph -> ast_context -> patches -> full_content
         apply_budget_drops(
             &mut pr,
             &mut ast_context,
@@ -266,45 +235,6 @@ mod tests {
         assert!(
             call_graph.is_empty(),
             "call_graph should be dropped first when over budget"
-        );
-    }
-
-    /// Verifies that `dep_enrichments` are dropped before file patches.
-    #[test]
-    fn test_apply_budget_drops_dep_enrichments_before_patches() {
-        let mut pr = make_pr_with_content(200, 0);
-        // Add a large dep enrichment body to make it over budget
-        pr.dep_enrichments.push(make_dep("serde"));
-        pr.dep_enrichments[0].body = "d".repeat(400);
-        let mut ast_context = String::new();
-        let mut call_graph = String::new();
-
-        // Budget: just under (patch + dep_body + overhead) to force dep drop but not patch drop.
-        // Base estimate (without dep): patch(200) + metadata(~30) + PROMPT_OVERHEAD_CHARS(1000) = ~1230
-        // With dep: + package_name(6) + body(400) + github_url(~30) = ~1666
-        // Budget between 1230 and 1666 so dep is dropped but patch is retained.
-        let max_prompt_chars = 1400;
-
-        let mut drops = Vec::new();
-        apply_budget_drops(
-            &mut pr,
-            &mut ast_context,
-            &mut call_graph,
-            max_prompt_chars,
-            0,
-            &mut drops,
-            None,
-        );
-
-        // dep_enrichments dropped before patches
-        assert!(
-            pr.dep_enrichments.is_empty(),
-            "dep_enrichments should be dropped before file patches"
-        );
-        // patch should still be present (dep drop was enough to fit)
-        assert!(
-            pr.files[0].patch.is_some(),
-            "file patch should be retained when dep drop brought size within budget"
         );
     }
 
@@ -701,9 +631,8 @@ mod tests {
 
     #[test]
     fn test_verbose_summary_all_fields() {
-        // Arrange: ReviewContext with repo path (inferred), dep enrichments, ast, call graph
-        let mut pr = make_pr_with_content(10, 0);
-        pr.dep_enrichments = vec![make_dep("tokio"), make_dep("serde")];
+        // Arrange: ReviewContext with repo path (inferred), ast, call graph
+        let pr = make_pr_with_content(10, 0);
         let ctx = ReviewContext {
             pr,
             ast_context: "fn foo() {}".to_string(),
@@ -724,15 +653,6 @@ mod tests {
         assert!(
             summary.contains("(inferred)"),
             "summary should mark CWD-inferred path"
-        );
-        // Assert: dep package names
-        assert!(
-            summary.contains("tokio"),
-            "summary should list dep package names"
-        );
-        assert!(
-            summary.contains("serde"),
-            "summary should list dep package names"
         );
         // Assert: context sizes
         assert!(

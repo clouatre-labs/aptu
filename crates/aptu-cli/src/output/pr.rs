@@ -360,9 +360,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_render_text_security_findings_hint_in_normal_mode() {
-        let finding = aptu_core::Finding {
+    fn test_finding() -> aptu_core::Finding {
+        aptu_core::Finding {
             pattern_id: "test-pattern".to_string(),
             description: "Test vulnerability".to_string(),
             severity: aptu_core::Severity::High,
@@ -371,14 +370,21 @@ mod tests {
             line_number: 42,
             matched_text: "unsafe { }".to_string(),
             cwe: Some("CWE-123".to_string()),
-        };
+        }
+    }
 
-        let result = build_test_result(Some(vec![finding]));
+    fn render_security_findings(verbose: bool) -> String {
+        let result = build_test_result(Some(vec![test_finding()]));
         let mut output = Vec::new();
-        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Text, false);
+        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Text, verbose);
 
         result.render_text(&mut output, &ctx).unwrap();
-        let text = String::from_utf8(output).unwrap();
+        String::from_utf8(output).unwrap()
+    }
+
+    #[test]
+    fn test_render_text_security_findings_hint_in_normal_mode() {
+        let text = render_security_findings(false);
 
         assert!(text.contains("Security Scan"));
         assert!(text.contains("(use --verbose for details)"));
@@ -386,23 +392,7 @@ mod tests {
 
     #[test]
     fn test_render_text_security_findings_no_hint_in_verbose_mode() {
-        let finding = aptu_core::Finding {
-            pattern_id: "test-pattern".to_string(),
-            description: "Test vulnerability".to_string(),
-            severity: aptu_core::Severity::High,
-            confidence: aptu_core::Confidence::High,
-            file_path: "src/main.rs".to_string(),
-            line_number: 42,
-            matched_text: "unsafe { }".to_string(),
-            cwe: Some("CWE-123".to_string()),
-        };
-
-        let result = build_test_result(Some(vec![finding]));
-        let mut output = Vec::new();
-        let ctx = OutputContext::from_cli(crate::cli::OutputFormat::Text, true);
-
-        result.render_text(&mut output, &ctx).unwrap();
-        let text = String::from_utf8(output).unwrap();
+        let text = render_security_findings(true);
 
         assert!(text.contains("Security Findings"));
         assert!(!text.contains("(use --verbose for details)"));

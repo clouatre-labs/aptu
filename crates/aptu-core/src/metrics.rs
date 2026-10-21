@@ -10,8 +10,95 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use crate::history::AiStats;
 use serde::{Deserialize, Serialize};
+
+// ETU weight constants. These are the structural Anthropic cache pricing ratios;
+// they belong here alongside AiStats rather than in the provider layer.
+const ETU_WEIGHT_INPUT: f64 = 1.0;
+/// Cache-read tokens cost 0.1× input price (90% discount). Stable since Claude 3.
+const ETU_WEIGHT_CACHE_READ: f64 = 0.1;
+/// Cache-write tokens cost 1.25× input price (5-min TTL). Confirmed May 2026.
+const ETU_WEIGHT_CACHE_WRITE: f64 = 1.25;
+/// Output tokens cost 5× input price across all current models. Stable since Claude 3.
+const ETU_WEIGHT_OUTPUT: f64 = 5.0;
+
+/// Compute Effective Token Units from raw token counts.
+///
+/// ETU = 1.0·input + 0.1·`cache_read` + 1.25·`cache_write` + 5.0·output
+///
+/// Weights are structural Anthropic cache pricing ratios (not per-model prices),
+/// stable across all model generations since Claude 3. No pricing table needed.
+#[allow(clippy::cast_precision_loss)]
+pub(crate) fn compute_etu(input: u64, cache_read: u64, cache_write: u64, output: u64) -> f64 {
+    ETU_WEIGHT_INPUT * input as f64
+        + ETU_WEIGHT_CACHE_READ * cache_read as f64
+        + ETU_WEIGHT_CACHE_WRITE * cache_write as f64
+        + ETU_WEIGHT_OUTPUT * output as f64
+}
+
+/// AI usage statistics for an AI-backed operation.
+///
+/// Deserialization uses `serde(default)` on every field (notably
+/// `effective_token_units`) so legacy JSONL rows that predate newer
+/// fields still load.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct AiStats {
+    /// Provider name (e.g., "openrouter", "anthropic").
+    #[serde(default)]
+    pub provider: String,
+    /// Model used for analysis.
+    #[serde(default)]
+    pub model: String,
+    /// Number of input tokens.
+    #[serde(default)]
+    pub input_tokens: u64,
+    /// Number of output tokens.
+    #[serde(default)]
+    pub output_tokens: u64,
+    /// Duration of the API call in milliseconds.
+    #[serde(default)]
+    pub duration_ms: u64,
+    /// Cost in USD (from `OpenRouter` API, `None` if not reported).
+    #[serde(default)]
+    pub cost_usd: Option<f64>,
+    /// Fallback provider used if primary failed (None if primary succeeded).
+    #[serde(default)]
+    pub fallback_provider: Option<String>,
+    /// Prompt size in characters.
+    #[serde(default)]
+    pub prompt_chars: usize,
+    /// Number of cache read tokens (from Anthropic API).
+    #[serde(default)]
+    pub cache_read_tokens: u64,
+    /// Number of cache write tokens (from Anthropic API).
+    #[serde(default)]
+    pub cache_write_tokens: u64,
+    /// Effective Token Units: a normalized throughput signal comparable across operations.
+    /// Computed via [`compute_etu`]; see that function for the formula and weight rationale.
+    #[serde(default)]
+    pub effective_token_units: f64,
+    /// Trace ID for correlating with context records (optional, not serialized if None).
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
+}
+
+impl AiStats {
+    /// Recompute and set `effective_token_units` from the current token counts.
+    ///
+    /// Call at the end of any construction chain to ensure ETU stays consistent
+    /// with the token fields rather than being set manually at each site.
+    #[must_use]
+    pub fn with_computed_etu(mut self) -> Self {
+        self.effective_token_units = compute_etu(
+            self.input_tokens,
+            self.cache_read_tokens,
+            self.cache_write_tokens,
+            self.output_tokens,
+        );
+        self
+    }
+}
 
 /// Append an AI statistics record to the metrics JSONL file.
 ///
@@ -73,10 +160,6 @@ pub struct ReviewContextRecord {
     pub ast_context_chars: usize,
     /// Characters in call graph context.
     pub call_graph_chars: usize,
-    /// Number of dependency enrichments applied.
-    pub dep_enrichments_count: usize,
-    /// Total characters in dependency enrichments.
-    pub dep_enrichments_chars: usize,
     /// Names of context items dropped due to budget (e.g., `call_graph`, `full_content`).
     pub budget_drops: Vec<String>,
     /// Whether the repository path was inferred from CWD.
@@ -286,8 +369,6 @@ mod tests {
             truncated_patch_files: vec![],
             ast_context_chars: 1000,
             call_graph_chars: 2000,
-            dep_enrichments_count: 2,
-            dep_enrichments_chars: 500,
             budget_drops: vec![],
             cwd_inferred: false,
             prompt_chars_final: 5000,
@@ -318,8 +399,6 @@ mod tests {
             truncated_patch_files: vec!["big.rs".to_string()],
             ast_context_chars: 1000,
             call_graph_chars: 2000,
-            dep_enrichments_count: 2,
-            dep_enrichments_chars: 500,
             budget_drops: vec!["call_graph".to_string()],
             cwd_inferred: true,
             prompt_chars_final: 5000,
@@ -357,8 +436,6 @@ mod tests {
             truncated_patch_files: vec![],
             ast_context_chars: 100,
             call_graph_chars: 50,
-            dep_enrichments_count: 2,
-            dep_enrichments_chars: 200,
             budget_drops: vec![],
             cwd_inferred: false,
             prompt_chars_final: 5000,

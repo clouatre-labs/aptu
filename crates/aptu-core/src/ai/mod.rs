@@ -7,8 +7,6 @@
 pub mod circuit_breaker;
 pub mod client;
 pub mod context;
-pub mod dep_enrichment;
-pub mod judge;
 pub mod prompts;
 pub mod provider;
 pub mod registry;
@@ -17,13 +15,11 @@ pub mod types;
 
 pub use circuit_breaker::CircuitBreaker;
 pub use client::{AiClient, AuthMethod, is_free_model, resolve_anthropic_credential};
-pub use dep_enrichment::enrich_dep_releases;
-pub use judge::{JudgeOutcome, judge};
 pub use provider::AiProvider;
 pub use registry::{PROVIDER_ANTHROPIC, ProviderConfig, all_providers, get_provider};
-pub use types::{CreditsStatus, DepReleaseNote, TriageResponse};
+pub use types::{CreditsStatus, TriageResponse};
 
-use crate::history::AiStats;
+use crate::metrics::AiStats;
 
 /// Response from AI analysis containing both triage data and usage stats.
 #[derive(Debug, Clone)]

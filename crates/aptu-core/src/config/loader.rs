@@ -90,11 +90,6 @@ impl ConfigSource for TomlConfigSource {
             tracing::warn!("{}", warning);
         }
 
-        // Validate judge configuration consistency at load time (non-fatal warnings).
-        for warning in app_config.judge.validate_consistency() {
-            tracing::warn!("{}", warning);
-        }
-
         Ok(app_config)
     }
 }
@@ -205,9 +200,6 @@ pub struct AppConfig {
     /// Prompt injection defence settings.
     #[serde(default)]
     pub prompt: PromptConfig,
-    /// Typed-judge settings. Disabled by default.
-    #[serde(default)]
-    pub judge: crate::config::JudgeConfig,
 }
 
 /// Returns the Aptu configuration directory.

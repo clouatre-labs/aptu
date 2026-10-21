@@ -17,7 +17,7 @@ use crate::facade::issues::WriteOutcome;
 use crate::github::auth::create_client_from_provider;
 use crate::sanitize::{redact_secrets, sanitise_user_field};
 /// Outcome payload for [`label_pr`]: PR number, title, URL, applied labels, and AI stats.
-pub type LabelPrOutcome = (u64, String, String, Vec<String>, crate::history::AiStats);
+pub type LabelPrOutcome = (u64, String, String, Vec<String>, crate::metrics::AiStats);
 
 /// Auto-label a pull request based on conventional commit prefix and file paths.
 ///
@@ -100,7 +100,7 @@ pub async fn label_pr(
         .map(|f| f.filename.clone())
         .collect();
     let mut labels = labels_from_pr_metadata(&pr_details.title, &file_paths);
-    let mut ai_stats: Option<crate::history::AiStats> = None;
+    let mut ai_stats: Option<crate::metrics::AiStats> = None;
 
     // If no labels found, try AI fallback
     if labels.is_empty() {
@@ -140,7 +140,7 @@ pub async fn label_pr(
 
     // If no AI stats were captured, create a default one
     let stats = ai_stats.unwrap_or_else(|| {
-        crate::history::AiStats {
+        crate::metrics::AiStats {
             provider: "unknown".to_string(),
             model: "unknown".to_string(),
             input_tokens: 0,

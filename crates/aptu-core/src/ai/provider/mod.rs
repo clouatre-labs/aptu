@@ -21,7 +21,7 @@ use crate::ai::registry::ProviderConfig;
 use crate::ai::types::{
     ChatCompletionRequest, ChatCompletionResponse, IssueDetails, PrReviewResponse,
 };
-use crate::history::AiStats;
+use crate::metrics::AiStats;
 
 pub(crate) use crate::ai::provider::parse::{SCHEMA_PREAMBLE, sanitize_prompt_field};
 

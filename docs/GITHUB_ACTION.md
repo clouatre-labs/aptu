@@ -147,9 +147,7 @@ Each line is a JSON object (`ReviewContextRecord`) with the following fields:
 | `truncated_chars_dropped` | integer | Total characters dropped from truncated files. |
 | `ast_context_chars` | integer | Characters in AST context. |
 | `call_graph_chars` | integer | Characters in call graph context. |
-| `dep_enrichments_count` | integer | Number of dependency enrichments applied. |
-| `dep_enrichments_chars` | integer | Total characters in dependency enrichments. |
-| `budget_drops` | string[] | Names of context items dropped due to budget (e.g. `call_graph`, `dep_enrichments`, `file_content:<path>`, `patch:<path>`). |
+| `budget_drops` | string[] | Names of context items dropped due to budget (e.g. `call_graph`, `file_content:<path>`, `patch:<path>`). |
 | `cwd_inferred` | boolean | Whether the repository path was inferred from CWD. |
 | `prompt_chars_final` | integer | Final assembled prompt character count. |
 | `finish_reasons` | string[] | Finish reasons from the AI response. |

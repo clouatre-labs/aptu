@@ -31,7 +31,6 @@ These items address known gaps and complete features already partially implement
 - **SARIF v2.2 full compliance**: complete SARIF export for security scan results, including rule metadata and suppression entries
 - **Config validation**: `aptu config validate` reports missing keys and unknown fields on startup
 - **API key memory hygiene**: apply `zeroize` on drop to all secret-typed fields in `aptu-core`; prevents secrets from lingering in freed memory after deallocation (single-dependency hardening)
-- **Deterministic issue linting** (#1702): `aptu lint-issue` validates issue bodies against template headings and readiness checks with no AI call, plus GitHub Action inputs and a `aptu/lint-issue` commit-status demo workflow
 
 ## Medium-Term (6-18 months)
 
@@ -40,9 +39,7 @@ These items require significant design work or external dependencies.
 - **Android SDK (KMP)**: expose `aptu-core` to Kotlin via UniFFI-generated bindings; ship an Android companion app for mobile triage review. iOS app is parked indefinitely.
 - **Provider health dashboard**: real-time availability and latency reporting across configured providers, sourced from the provider registry cache
 - **SQLite-backed persistent cache**: replace file-based TTL cache with a SQLite database for faster lookups and cross-session persistence
-- **History export**: JSON and CSV export of the local `history.json` contribution log for personal productivity tracking
 - **Multi-forge support**: extend the GitHub API abstractions in `aptu-core` to cover GitLab (cloud + self-managed), Gitea/Forgejo/Codeberg, and Azure DevOps; core triage and review flows work identically across forges
-- **Merge queue advisory view**: `aptu pr queue` lists open PRs ranked by a reviewability score (size, age, conflict status, CI result) and highlights next-to-review candidates; advisory only, no auto-merge
 
 ## Long-Term (18+ months)
 

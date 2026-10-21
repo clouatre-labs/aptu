@@ -261,8 +261,6 @@ max_diff_chars = 200000            # Max total diff characters across all files 
 max_patch_chars_per_file = 25000   # Max chars per individual file patch; patches exceeding this are dropped entirely (default: 25 000)
 max_instructions_chars = 1500      # Max chars of instructions file content included in review prompt (default: 1 500)
 min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
-max_dep_packages = 3               # Max dependency bump packages for which upstream release notes are fetched (default: 3)
-max_dep_release_chars = 2000       # Max chars of upstream release notes included per dependency package (default: 2 000)
 ```
 
 The call graph is enabled only when `budget_remaining > min_budget_for_call_graph`, where
@@ -272,7 +270,7 @@ Setting it above half of `max_prompt_chars` means call graph will only be built 
 The prefix section "When the assembled prompt exceeds..." describes how call graph is the first section dropped,
 so a value that rarely enables call graph is typically acceptable.
 
-When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, dependency enrichments, full file content (largest first), diff patches (largest first). The system prompt and PR metadata are never dropped.
+When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest first), diff patches (largest first). The system prompt and PR metadata are never dropped.
 
 ## Cache Configuration
 
@@ -396,32 +394,9 @@ cp $(cargo locate-project --workspace --message-format plain | xargs dirname)/cr
 
 Built-in prompt fragments live in `crates/aptu-core/src/ai/prompts/` (guidelines as `.md`, response schemas as `.json`) and are embedded at compile time via `include_str!`. The builder functions (`build_triage_system_prompt`, etc.) in `prompts/mod.rs` are shared between production code and `tests/prompt_lint.rs` to guarantee tests exercise real construction logic.
 
-## Typed Judge
-
-Aptu supports an opt-in typed-judge integration. The judge is disabled by default; enable it by adding a `[judge]` section to `~/.config/aptu/config.toml`:
-
-```toml
-[judge]
-enabled = true
-# Optional overrides:
-# api_base = "https://api.typesafe.ai"
-# model = "jev-latest"
-```
-
-When enabled, every judge call:
-
-- Authenticates with a Bearer token read from the `JUDGE_API_KEY` environment variable at call time.
-- Posts a single batched `{ state, questions, model? }` request to `POST /v1/systemone`.
-- Rejects payloads larger than 256 KiB before any network traffic.
-- Returns a `{ fallback: true, error }` envelope instead of failing when anything goes wrong (missing key, HTTP error, parse failure), so callers can degrade gracefully.
-- Appends one JSONL telemetry record per call to `~/.local/share/aptu/judge_telemetry.jsonl` (append-only; write failures are logged as warnings and never fail the call).
-
-If `enabled` is set without `api_base`, the built-in default endpoint is used and a non-fatal warning is emitted at load time.
-
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `APTU_CONTEXT_FILE` | Path to write a JSONL file containing per-review context records for explainability and debugging. Each line is a JSON object recording fields such as `pr`, `model`, `files_total`, `budget_drops` (list of enrichment steps skipped due to budget), and `prompt_chars_final`; see [docs/GITHUB_ACTION.md](GITHUB_ACTION.md) for the full field-by-field schema. If unset, no file is written. |
 | `APTU_METRICS_FILE` | Path to write a JSONL file containing per-review token usage metrics. Used by the GitHub Action to capture `aptu-token-usage.jsonl` as an artifact. |
-| `JUDGE_API_KEY` | Bearer token for the opt-in typed judge (see [Typed Judge](#typed-judge)). Read at call time; when unset, judge calls return a fallback envelope. |

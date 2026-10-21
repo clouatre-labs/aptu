@@ -20,6 +20,25 @@ macro_rules! wasm_unsupported {
     };
 }
 
+/// Blocks the operation when prompt-injection findings are present.
+///
+/// Logs an `error!` with the same fields as the original inline blocks and
+/// returns `AptuError::SecurityScan`.
+pub(crate) fn block_on_prompt_injection(
+    findings: &[crate::security::Finding],
+) -> crate::Result<()> {
+    if findings.is_empty() {
+        return Ok(());
+    }
+    let pattern_ids: Vec<&str> = findings.iter().map(|f| f.pattern_id.as_str()).collect();
+    let message = format!(
+        "Prompt injection patterns detected: {}",
+        pattern_ids.join(", ")
+    );
+    tracing::error!(patterns = ?pattern_ids, message = %message, "Prompt injection detected; operation blocked");
+    Err(crate::error::AptuError::SecurityScan { message })
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) use wasm_unsupported;
 

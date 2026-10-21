@@ -11,7 +11,7 @@ use super::http::send_and_parse;
 use super::parse::provider_response_format;
 use crate::ai::provider::AiProvider;
 use crate::ai::types::{ChatCompletionRequest, ChatMessage, PrLabelResponse};
-use crate::history::AiStats;
+use crate::metrics::AiStats;
 
 /// Builds the system prompt for PR label suggestion.
 #[must_use]

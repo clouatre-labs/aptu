@@ -67,12 +67,6 @@ pub use octocrab::params::State;
 pub use ai::types::CreditsStatus;
 
 // ============================================================================
-// History Tracking
-// ============================================================================
-
-pub use history::{AiStats, Contribution, ContributionStatus, HistoryData};
-
-// ============================================================================
 // Triage Detection
 // ============================================================================
 
@@ -137,7 +131,6 @@ pub mod config;
 pub mod error;
 pub mod facade;
 pub mod github;
-pub mod history;
 pub mod issue_lint;
 pub mod metrics;
 pub mod retry;

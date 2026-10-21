@@ -2,7 +2,7 @@
 
 //! PR review analysis: fetch, diff reconstruction, and AI analysis.
 
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, instrument, warn};
 
 use crate::ai::provider::AiProvider;
 use crate::ai::types::PrDetails;
@@ -250,7 +250,7 @@ async fn call_review_ai(
     review_ctx: &crate::ai::review_context::ReviewContext,
 ) -> crate::Result<(
     crate::ai::types::PrReviewResponse,
-    crate::history::AiStats,
+    crate::metrics::AiStats,
     Vec<String>,
     Vec<String>,
 )> {
@@ -345,7 +345,7 @@ pub async fn analyze_pr(
     repo_path: Option<String>,
 ) -> crate::Result<(
     crate::ai::types::PrReviewResponse,
-    crate::history::AiStats,
+    crate::metrics::AiStats,
     crate::metrics::ReviewContextRecord,
 )> {
     // Load config once at function entry to ensure consistent review settings
@@ -431,18 +431,7 @@ pub async fn analyze_pr(
         .into_iter()
         .filter(|f| f.pattern_id.starts_with("prompt-injection"))
         .collect();
-    if !injection_findings.is_empty() {
-        let pattern_ids: Vec<&str> = injection_findings
-            .iter()
-            .map(|f| f.pattern_id.as_str())
-            .collect();
-        let message = format!(
-            "Prompt injection patterns detected: {}",
-            pattern_ids.join(", ")
-        );
-        error!(patterns = ?pattern_ids, message = %message, "Prompt injection detected; operation blocked");
-        return Err(AptuError::SecurityScan { message });
-    }
+    crate::facade::block_on_prompt_injection(&injection_findings)?;
 
     // Generate trace ID for this review operation
     let trace_id = uuid::Uuid::new_v4().simple().to_string();
@@ -520,8 +509,6 @@ pub async fn analyze_pr(
         truncated_patch_files,
         ast_context_chars: ctx.ast_context.len(),
         call_graph_chars: ctx.call_graph.len(),
-        dep_enrichments_count: ctx.dep_enrichments_count,
-        dep_enrichments_chars: ctx.dep_enrichments_chars,
         budget_drops: ctx.budget_drops,
         cwd_inferred: ctx.cwd_inferred,
         prompt_chars_final: ai_stats.prompt_chars,
@@ -540,7 +527,7 @@ pub async fn analyze_pr(
     _repo_path: Option<String>,
 ) -> crate::Result<(
     crate::ai::types::PrReviewResponse,
-    crate::history::AiStats,
+    crate::metrics::AiStats,
     crate::metrics::ReviewContextRecord,
 )> {
     crate::facade::wasm_unsupported!("analyze_pr");
@@ -581,7 +568,6 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         }
     }
 
@@ -651,8 +637,6 @@ mod tests {
             truncated_patch_files: Vec::new(),
             files_total: 1,
             files_with_patch: 1,
-            dep_enrichments_count: 0,
-            dep_enrichments_chars: 0,
             budget_drops: Vec::new(),
             prompt_chars_final: 0,
             estimated_size: 0,

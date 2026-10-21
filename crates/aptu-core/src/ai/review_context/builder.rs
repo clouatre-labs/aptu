@@ -62,9 +62,6 @@ pub async fn build_review_context(
     #[cfg(not(feature = "ast-context"))]
     let ast_context = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
 
-    // Step 3: Enrich with dependency release notes
-    pr.dep_enrichments = enrich_deps(&pr.files, review_config).await;
-
     // Step 3.5: Resolve the exact system prompt that `review_pr` will send so the
     // size estimate matches the actual request. This honors the provider's custom
     // guidance and the cfg-gated override file, mirroring the construction in
@@ -98,7 +95,7 @@ pub async fn build_review_context(
     let estimated_size = estimate_pr_size(&pr, &ast_context, "", system_overhead);
     let budget_remaining = max_prompt_chars.saturating_sub(estimated_size);
 
-    // Step 5: Build call_graph if decided
+    // Step 4: Build call_graph if decided
     let should_enable_cg = should_enable_call_graph(budget_remaining, review_config);
     let mut call_graph = if should_enable_cg {
         build_ctx_call_graph(repo_path_ref.as_deref(), &pr.files).await
@@ -109,7 +106,7 @@ pub async fn build_review_context(
     // Re-estimate with actual call_graph for accurate routing
     let final_estimated_size = estimate_pr_size(&pr, &ast_context, &call_graph, system_overhead);
 
-    // Step 6: Apply budget drop order
+    // Step 5: Apply budget drop order
     let had_patches_pre_drop = pr
         .files
         .iter()
@@ -133,12 +130,6 @@ pub async fn build_review_context(
         .iter()
         .filter(|f| f.patch.as_deref().is_some_and(|p| !p.is_empty()))
         .count();
-    let dep_enrichments_count = pr.dep_enrichments.len();
-    let dep_enrichments_chars = pr
-        .dep_enrichments
-        .iter()
-        .map(|d| serde_json::to_string(d).unwrap_or_default().len())
-        .sum();
 
     if had_patches_pre_drop && files_with_patch == 0 {
         tracing::warn!(
@@ -167,8 +158,6 @@ pub async fn build_review_context(
         truncated_patch_files: Vec::new(),
         files_total,
         files_with_patch,
-        dep_enrichments_count,
-        dep_enrichments_chars,
         budget_drops,
         prompt_chars_final: 0,
         estimated_size: final_estimated_size,
@@ -191,19 +180,6 @@ fn resolve_repo_path(
     } else {
         (None, false)
     }
-}
-
-/// Enriches PR with dependency release notes if manifest files are detected.
-pub(crate) async fn enrich_deps(
-    files: &[crate::ai::types::PrFile],
-    config: &ReviewConfig,
-) -> Vec<crate::ai::types::DepReleaseNote> {
-    crate::ai::dep_enrichment::enrich_dep_releases(
-        files,
-        config.max_dep_packages,
-        config.max_dep_release_chars,
-    )
-    .await
 }
 
 /// Builds AST context for changed files.

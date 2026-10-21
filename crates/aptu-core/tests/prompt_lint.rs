@@ -207,7 +207,6 @@ fn all_system_prompts_contain_schema() {
         head_sha: String::new(),
         review_comments: vec![],
         instructions: None,
-        dep_enrichments: vec![],
     };
     let mut ctx = aptu_core::ai::review_context::ReviewContext {
         pr,
@@ -223,8 +222,6 @@ fn all_system_prompts_contain_schema() {
         truncated_patch_files: Vec::new(),
         files_total: 0,
         files_with_patch: 0,
-        dep_enrichments_count: 0,
-        dep_enrichments_chars: 0,
         budget_drops: Vec::new(),
         prompt_chars_final: 0,
         estimated_size: 0,
@@ -275,7 +272,6 @@ mod fetch_file_contents_tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
-            dep_enrichments: vec![],
         }
     }
 
@@ -398,17 +394,8 @@ mod fetch_file_contents_tests {
 
     #[test]
     fn test_review_context_injection_order() {
-        // Arrange: construct ReviewContext with all enrichments populated
-        let mut pr = make_pr(None);
-        pr.dep_enrichments = vec![aptu_core::ai::types::DepReleaseNote {
-            package_name: "serde".to_string(),
-            registry: "crates.io".to_string(),
-            old_version: "1.0.0".to_string(),
-            new_version: "1.0.200".to_string(),
-            body: "v1.0.200 notes".to_string(),
-            github_url: "https://github.com/serde-rs/serde".to_string(),
-            fetch_note: String::new(),
-        }];
+        // Arrange: construct ReviewContext with enrichments populated
+        let pr = make_pr(None);
         let mut ctx = aptu_core::ai::review_context::ReviewContext {
             ast_context: "fn foo() {}".to_string(),
             call_graph: "foo -> bar".to_string(),
@@ -422,12 +409,6 @@ mod fetch_file_contents_tests {
         let pull_request_end = prompt
             .find("</pull_request>")
             .expect("should contain </pull_request>");
-        let dep_notes_start = prompt
-            .find("<dependency_release_notes>")
-            .expect("should contain <dependency_release_notes>");
-        let dep_notes_end = prompt
-            .find("</dependency_release_notes>")
-            .expect("should contain </dependency_release_notes>");
         let ast_start = prompt
             .find("fn foo() {}")
             .expect("should contain ast_context content");
@@ -436,12 +417,8 @@ mod fetch_file_contents_tests {
             .expect("should contain call_graph content");
 
         assert!(
-            pull_request_end < dep_notes_start,
-            "pull_request section should end before dep_enrichments starts"
-        );
-        assert!(
-            dep_notes_end < ast_start,
-            "dep_enrichments section should end before ast_context starts"
+            pull_request_end < ast_start,
+            "pull_request section should end before ast_context starts"
         );
         assert!(
             ast_start < call_graph_start,
@@ -451,17 +428,8 @@ mod fetch_file_contents_tests {
 
     #[test]
     fn test_verbose_summary_format() {
-        // Arrange: construct ReviewContext with enrichments and inferred repo path
-        let mut pr = make_pr(None);
-        pr.dep_enrichments = vec![aptu_core::ai::types::DepReleaseNote {
-            package_name: "tokio".to_string(),
-            registry: "crates.io".to_string(),
-            old_version: "1.37".to_string(),
-            new_version: "1.38".to_string(),
-            body: "v1.38 notes".to_string(),
-            github_url: "https://github.com/tokio-rs/tokio".to_string(),
-            fetch_note: String::new(),
-        }];
+        // Arrange: construct ReviewContext with inferred repo path
+        let pr = make_pr(None);
         let ctx = aptu_core::ai::review_context::ReviewContext {
             ast_context: "fn bar() {}".to_string(),
             inferred_repo_path: Some(std::path::PathBuf::from("/tmp/repo")),
@@ -473,10 +441,6 @@ mod fetch_file_contents_tests {
         let summary = ctx.verbose_summary();
 
         // Assert: summary contains expected content
-        assert!(
-            summary.contains("tokio"),
-            "summary should contain package name"
-        );
         assert!(
             summary.contains("AST"),
             "summary should mention ast context"
