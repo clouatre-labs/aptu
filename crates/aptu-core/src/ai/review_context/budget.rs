@@ -16,6 +16,50 @@ use crate::config::ReviewConfig;
 /// non-content characters when estimating total prompt size.
 pub(crate) const PROMPT_OVERHEAD_CHARS: usize = 1_000;
 
+/// Estimated characters per token (in tenths, 35/10 = 3.5). Heuristic used to
+/// convert a model's token-based context window into the character budget used
+/// by prompt budgeting. This is intentionally a conservative approximation.
+pub(crate) const CHARS_PER_TOKEN_TENTHS: usize = 35;
+
+/// Minimal effective budget floor (characters). When the request's
+/// `max_tokens` output allowance consumes the entire (or more than the entire)
+/// model context window, the input cap saturates to this floor rather than
+/// zero, leaving room for a minimal prompt instead of hard-failing every
+/// request.
+pub(crate) const MIN_EFFECTIVE_BUDGET_CHARS: usize = 1_000;
+
+/// Computes the effective prompt character budget available for input.
+///
+/// Caps `max_prompt_chars` at `(context_window - max_tokens) * 3.5` when a
+/// context window is known, reserving the request's `max_tokens` completion
+/// budget so input plus output fits within the model's context. When
+/// `max_tokens >= context_window`, the cap saturates to
+/// [`MIN_EFFECTIVE_BUDGET_CHARS`]. A `None` context window is treated as
+/// unbounded: `max_prompt_chars` is returned unchanged.
+///
+/// Note: the truncation-retry escalation in `provider/http.rs` can raise
+/// `max_tokens` at request time; that escalated value is not knowable at
+/// budget time, so the configured/requested initial `max_tokens` is used.
+#[must_use]
+pub(crate) fn effective_budget(
+    max_prompt_chars: usize,
+    context_window: Option<u32>,
+    max_tokens: u32,
+) -> usize {
+    match context_window {
+        None => max_prompt_chars,
+        Some(window) => {
+            // Saturating u64 math guards the window * 3.5 conversion against
+            // overflow on 32-bit targets or absurd registry values.
+            let input_window = u64::from(window).saturating_sub(u64::from(max_tokens));
+            let cap =
+                usize::try_from(input_window.saturating_mul(CHARS_PER_TOKEN_TENTHS as u64) / 10)
+                    .unwrap_or(usize::MAX);
+            max_prompt_chars.min(cap.max(MIN_EFFECTIVE_BUDGET_CHARS))
+        }
+    }
+}
+
 /// Determines whether to enable call graph context based on the remaining
 /// prompt budget. Call-graph context is auto-enabled whenever the estimated
 /// prompt leaves more than `min_budget_for_call_graph` characters available.
@@ -44,10 +88,11 @@ pub(crate) fn apply_budget_drops(
     ast_context: &mut String,
     call_graph: &mut String,
     max_prompt_chars: usize,
+    system_overhead: usize,
     budget_drops: &mut Vec<String>,
     repo_path: Option<&str>,
 ) {
-    let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph);
+    let mut estimated_size = estimate_pr_size(pr, ast_context, call_graph, system_overhead);
 
     // Drop call_graph if over budget
     if estimated_size > max_prompt_chars {
@@ -279,9 +324,15 @@ pub(crate) fn drop_full_content_by_size(
 /// Estimates the total character size of a PR review prompt.
 ///
 /// Sums title, body, file metadata, patches, `full_content`, `dep_enrichments`,
-/// `ast_context`, `call_graph`, and overhead.
+/// `ast_context`, `call_graph`, `system_overhead` (system prompt plus repository
+/// instructions), and overhead.
 #[must_use]
-pub(crate) fn estimate_pr_size(pr: &PrDetails, ast_context: &str, call_graph: &str) -> usize {
+pub(crate) fn estimate_pr_size(
+    pr: &PrDetails,
+    ast_context: &str,
+    call_graph: &str,
+    system_overhead: usize,
+) -> usize {
     let mut size = 0;
 
     // PR metadata
@@ -312,5 +363,74 @@ pub(crate) fn estimate_pr_size(pr: &PrDetails, ast_context: &str, call_graph: &s
     // Overhead
     size += PROMPT_OVERHEAD_CHARS;
 
+    // System prompt + repository instructions
+    size += system_overhead;
+
     size
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_effective_budget_caps_at_context_window() {
+        // 10k tokens * 3.5 = 35k chars < 120k max_prompt_chars
+        assert_eq!(effective_budget(120_000, Some(10_000), 0), 35_000);
+    }
+
+    #[test]
+    fn test_effective_budget_subtracts_max_tokens() {
+        // (10k window - 4k max_tokens) * 3.5 = 21k chars < 120k max_prompt_chars
+        assert_eq!(effective_budget(120_000, Some(10_000), 4_000), 21_000);
+    }
+
+    #[test]
+    fn test_effective_budget_none_is_unbounded() {
+        assert_eq!(effective_budget(120_000, None, 4_000), 120_000);
+    }
+
+    #[test]
+    fn test_effective_budget_overflow_saturates() {
+        // window * 3.5 must not overflow; huge windows just leave the cap
+        // at max_prompt_chars
+        assert_eq!(effective_budget(120_000, Some(u32::MAX), 0), 120_000);
+    }
+
+    #[test]
+    fn test_effective_budget_max_tokens_saturates_to_floor() {
+        // max_tokens consuming the whole window (and beyond) must not reduce
+        // the cap to zero; it saturates to MIN_EFFECTIVE_BUDGET_CHARS.
+        assert_eq!(
+            effective_budget(120_000, Some(4_000), 4_000),
+            MIN_EFFECTIVE_BUDGET_CHARS
+        );
+        assert_eq!(
+            effective_budget(120_000, Some(4_000), 10_000),
+            MIN_EFFECTIVE_BUDGET_CHARS
+        );
+    }
+
+    #[test]
+    fn test_estimate_pr_size_includes_system_overhead() {
+        let pr = PrDetails {
+            title: "t".into(),
+            body: "b".into(),
+            head_branch: "h".into(),
+            base_branch: "m".into(),
+            owner: "o".into(),
+            repo: "r".into(),
+            number: 1,
+            url: String::new(),
+            files: Vec::new(),
+            labels: Vec::new(),
+            head_sha: String::new(),
+            review_comments: Vec::new(),
+            instructions: None,
+            dep_enrichments: Vec::new(),
+        };
+        let without = estimate_pr_size(&pr, "", "", 0);
+        let with = estimate_pr_size(&pr, "", "", 5_000);
+        assert_eq!(with, without + 5_000);
+    }
 }

@@ -228,6 +228,7 @@ fn all_system_prompts_contain_schema() {
         budget_drops: Vec::new(),
         prompt_chars_final: 0,
         estimated_size: 0,
+        context_window: None,
     };
     let pr_review_user = aptu_core::ai::prompts::build_pr_review_user_prompt(&mut ctx);
     assert!(

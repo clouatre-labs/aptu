@@ -15,7 +15,8 @@ use serde::{Deserialize, Serialize};
 /// - `max_chars_per_file`: 32,000 chars per file gives adequate context for most files
 ///   without dominating the prompt budget; budget drop logic trims below 120k if needed.
 /// - `max_instructions_chars`: 1,500 chars caps repository instructions to prevent prompt bloat.
-/// - `max_diff_chars`: 200,000 chars caps the total diff content across all files in the prompt.
+/// - `max_diff_chars`: 120,000 chars caps the total diff content across all files in the prompt
+///   (aligned with `max_prompt_chars` so the diff budget never exceeds the prompt budget).
 /// - `max_patch_chars_per_file`: 25,000 chars caps each individual file patch before dropping it entirely.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
@@ -26,7 +27,7 @@ pub struct ReviewConfig {
     pub max_full_content_files: usize,
     /// Maximum characters per file's full content (default: `32_000`).
     pub max_chars_per_file: usize,
-    /// Maximum total diff characters across all files in the prompt (default: `200_000`).
+    /// Maximum total diff characters across all files in the prompt (default: `120_000`).
     pub max_diff_chars: usize,
     /// Maximum characters per individual file patch before the patch is dropped entirely (default: `25_000`).
     pub max_patch_chars_per_file: usize,
@@ -119,6 +120,22 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_consistency_max_diff_over_prompt_warns_once() {
+        let config = ReviewConfig {
+            max_diff_chars: 200_000,
+            max_prompt_chars: 120_000,
+            ..ReviewConfig::default()
+        };
+        let warnings = config.validate_consistency();
+        assert_eq!(warnings.len(), 1, "should produce exactly 1 warning");
+        assert!(
+            warnings[0].contains("max_diff_chars"),
+            "warning should mention max_diff_chars: {}",
+            warnings[0]
+        );
+    }
+
+    #[test]
     fn test_default_max_patch_chars_per_file() {
         let config = ReviewConfig::default();
         assert_eq!(
@@ -134,7 +151,7 @@ impl Default for ReviewConfig {
             max_prompt_chars: 120_000,
             max_full_content_files: 10,
             max_chars_per_file: 32_000,
-            max_diff_chars: 200_000,
+            max_diff_chars: 120_000,
             max_patch_chars_per_file: 25_000,
             max_instructions_chars: 1_500,
             instructions_file: None,
@@ -169,6 +186,16 @@ impl ReviewConfig {
             warnings.push(format!(
                 "min_budget_for_call_graph ({}) exceeds half of max_prompt_chars ({}): call_graph will only be built for the largest diffs; consider lowering the threshold",
                 self.min_budget_for_call_graph, self.max_prompt_chars
+            ));
+        }
+
+        // Warning 3: max_diff_chars > max_prompt_chars means the per-file diff
+        // budgets can produce more diff content than the prompt can hold, so
+        // budget drops would evict diff content silently.
+        if self.max_diff_chars > self.max_prompt_chars {
+            warnings.push(format!(
+                "max_diff_chars ({}) exceeds max_prompt_chars ({}): diff content will be dropped by budget logic; lower max_diff_chars to at most max_prompt_chars",
+                self.max_diff_chars, self.max_prompt_chars
             ));
         }
 

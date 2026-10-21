@@ -119,6 +119,126 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
     diff
 }
 
+/// Resolves the minimum context window (in tokens) across the selected model
+/// and any configured fallback models, so the prompt budget respects the
+/// smallest window the request could target.
+///
+/// Semantics are intentionally conservative: a model whose registry lookup
+/// fails (provider registry unreachable, or model absent from the listing) is
+/// EXCLUDED from the minimum rather than silently continuing with the known
+/// windows. Only when no model at all resolves (selected plus every fallback)
+/// does this degrade to `None` (treated as unbounded), with a debug log. A
+/// model that resolves but advertises no `context_window` is also treated as
+/// unbounded and does not constrain the minimum.
+/// Folds the context windows of `models` resolved from the registry listing
+/// `listed` into `min_window` (conservatively excluding models that are absent
+/// from the listing). Returns the updated minimum and the number of models
+/// that resolved.
+#[cfg(not(target_arch = "wasm32"))]
+fn fold_model_windows(
+    listed: &[crate::ai::registry::CachedModel],
+    prov: &str,
+    models: &[&str],
+    mut min_window: Option<u32>,
+) -> (Option<u32>, usize) {
+    let mut resolved = 0;
+    for model in models {
+        // Conservative: a model that cannot be resolved in the registry is
+        // excluded from the minimum instead of silently continuing with the
+        // known windows.
+        match listed.iter().find(|m| m.id == *model) {
+            Some(found) => {
+                resolved += 1;
+                if let Some(window) = found.context_window {
+                    min_window = Some(min_window.map_or(window, |cur| cur.min(window)));
+                }
+            }
+            None => {
+                debug!(
+                    provider = prov,
+                    model = model,
+                    "Model not found in registry; excluded from context-window cap"
+                );
+            }
+        }
+    }
+    (min_window, resolved)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn resolve_context_window(
+    provider: &dyn TokenProvider,
+    ai_config: &AiConfig,
+    provider_name: &str,
+    model_name: &str,
+) -> Option<u32> {
+    use crate::ai::registry::{CachedModelRegistry, ModelRegistry};
+    use std::collections::BTreeMap;
+
+    let registry = CachedModelRegistry::new(
+        crate::cache::cache_dir(),
+        crate::cache::DEFAULT_MODEL_TTL_SECS,
+        provider,
+    );
+
+    // Collect (provider -> models) pairs: selected model plus the fallback chain.
+    let mut targets: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    targets.entry(provider_name).or_default().push(model_name);
+    if let Some(fallback) = &ai_config.fallback {
+        for entry in &fallback.chain {
+            targets
+                .entry(entry.provider.as_str())
+                .or_default()
+                .push(entry.model.as_deref().unwrap_or(ai_config.model.as_str()));
+        }
+    }
+
+    let mut min_window: Option<u32> = None;
+    let mut resolved_any = false;
+    for (prov, models) in targets {
+        match registry.list_models(prov).await {
+            Ok(listed) => {
+                let (folded, resolved) = fold_model_windows(&listed, prov, &models, min_window);
+                min_window = folded;
+                resolved_any = resolved_any || resolved > 0;
+            }
+            Err(e) => {
+                debug!(
+                    provider = prov,
+                    error = %e,
+                    "Model registry unavailable; provider models excluded from context-window cap"
+                );
+            }
+        }
+    }
+    if !resolved_any {
+        debug!(
+            "No models resolved from registry (selected plus fallbacks); context window treated as unbounded"
+        );
+        return None;
+    }
+    min_window
+}
+
+/// Computes a pre-context routing size estimate: the user-prompt content plus
+/// the static default system-prompt overhead. The exact system prompt sent by
+/// `review_pr` depends on the resolved provider's custom guidance (and the
+/// cfg-gated override file), so routing cannot use it without creating a
+/// circular dependency (estimate -> resolve -> build). Routing instead uses
+/// this static approximation, which is accurate for the default prompt.
+#[cfg(not(target_arch = "wasm32"))]
+fn routing_size_estimate(pr_details: &PrDetails, instructions_overhead: usize) -> usize {
+    let default_system_prompt = crate::ai::prompts::build_pr_review_system_prompt(
+        &crate::ai::context::load_custom_guidance(None),
+    );
+    crate::ai::review_context::estimate_pr_size(
+        pr_details,
+        "",
+        "",
+        default_system_prompt.len() + instructions_overhead,
+    )
+}
+
 /// Analyzes PR details with AI to generate a review.
 ///
 /// This function takes pre-fetched PR details and performs AI analysis.
@@ -184,11 +304,37 @@ pub async fn analyze_pr(
             other => other,
         })?;
 
+    // Resolve task-specific provider and model BEFORE building the review
+    // context, so the selected model's registry context window can cap the
+    // prompt budget. Routing uses a pre-context size estimate (user-prompt
+    // content plus the static default system-prompt overhead) so
+    // estimated-size-based model-tier routing keeps working; the exact system
+    // prompt depends on the resolved provider, so the static approximation
+    // breaks that circular dependency (see `routing_size_estimate`).
+    let instructions_overhead = pr_details
+        .instructions
+        .as_deref()
+        .map_or(0, |instructions| {
+            let escaped = instructions
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;");
+            format!("<repo_instructions>\n{escaped}\n</repo_instructions>\n\n").len()
+        });
+    let routing_estimate = routing_size_estimate(pr_details, instructions_overhead);
+    let (provider_name, model_name) =
+        ai_config.resolve_for_task(TaskType::Review, Some(routing_estimate));
+    let context_window =
+        resolve_context_window(provider, ai_config, &provider_name, &model_name).await;
+
     // Build review context with all enrichment decisions centralized
     let ctx = crate::ai::review_context::build_review_context(
         pr_details.clone(),
         repo_path,
         &review_config,
+        context_window,
+        ai_config.max_tokens,
+        ai_config.custom_guidance.as_deref(),
     )
     .await?;
 
@@ -201,10 +347,6 @@ pub async fn analyze_pr(
             eprintln!("{summary}");
         }
     }
-
-    // Resolve task-specific provider and model
-    let (provider_name, model_name) =
-        ai_config.resolve_for_task(TaskType::Review, Some(ctx.estimated_size));
 
     // Pre-AI prompt injection scan (advisory gate)
     let diff = reconstruct_diff_from_pr(&pr_details.files);
@@ -229,7 +371,7 @@ pub async fn analyze_pr(
     // Generate trace ID for this review operation
     let trace_id = uuid::Uuid::new_v4().simple().to_string();
 
-    // Use fallback chain if configured
+    // Use fallback chain if configured (provider/model resolved pre-context above)
     let (response, mut ai_stats, finish_reasons, truncated_patch_files) =
         crate::facade::ai_client::try_with_fallback(
             provider,
@@ -304,4 +446,79 @@ pub(crate) enum DedupOutcome {
         comment_id: u64,
         rendered_body: String,
     },
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    /// Minimal `PrDetails` for routing-estimate tests.
+    fn make_pr() -> PrDetails {
+        PrDetails {
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+            number: 1,
+            title: "title".to_string(),
+            body: "body".to_string(),
+            head_branch: "feat".to_string(),
+            base_branch: "main".to_string(),
+            url: String::new(),
+            files: vec![],
+            labels: vec![],
+            head_sha: String::new(),
+            review_comments: vec![],
+            instructions: None,
+            dep_enrichments: vec![],
+        }
+    }
+
+    /// Verifies the pre-context routing estimate is non-zero (so
+    /// `resolve_for_task` receives a non-`None`, meaningful size) and that the
+    /// instructions overhead is included additively.
+    #[test]
+    fn test_routing_size_estimate_positive_and_includes_overhead() {
+        let pr = make_pr();
+        let base = routing_size_estimate(&pr, 0);
+        assert!(
+            base > 0,
+            "routing estimate must be non-zero so model-tier routing engages"
+        );
+        let with_overhead = routing_size_estimate(&pr, 5_000);
+        assert_eq!(
+            with_overhead - base,
+            5_000,
+            "instructions overhead must be included additively in the routing estimate"
+        );
+    }
+
+    /// Verifies the conservative fallback fold: models absent from the registry
+    /// listing are excluded, the minimum is taken over resolved windows, and
+    /// when nothing resolves there is no minimum (degrades to unbounded).
+    #[test]
+    fn test_fold_model_windows_excludes_unresolved_and_takes_min() {
+        use crate::ai::registry::CachedModel;
+        let make_model = |id: &str, window: u32| CachedModel {
+            id: id.to_string(),
+            name: None,
+            is_free: None,
+            context_window: Some(window),
+            provider: "openrouter".to_string(),
+            capabilities: vec![],
+            pricing: None,
+        };
+        let listed = [make_model("small", 200_000), make_model("tiny", 8_000)];
+
+        // "missing" is not in the listing, so it must be excluded; the min is
+        // taken over the resolved windows only.
+        let (min_window, resolved) =
+            fold_model_windows(&listed, "openrouter", &["small", "missing", "tiny"], None);
+        assert_eq!(resolved, 2, "unresolved models must not count as resolved");
+        assert_eq!(min_window, Some(8_000), "min must be over resolved windows");
+
+        // No model resolves -> no minimum (degrades to unbounded upstream).
+        let (none_min, none_resolved) =
+            fold_model_windows(&listed, "openrouter", &["missing"], None);
+        assert_eq!(none_resolved, 0);
+        assert_eq!(none_min, None);
+    }
 }

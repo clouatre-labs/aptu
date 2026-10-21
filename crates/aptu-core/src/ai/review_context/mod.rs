@@ -51,6 +51,8 @@ pub struct ReviewContext {
     pub prompt_chars_final: usize,
     /// Estimated total character size of the PR review prompt before budget drops.
     pub estimated_size: usize,
+    /// Model context window in tokens (if known), used for prompt budget capping.
+    pub context_window: Option<u32>,
 }
 
 impl ReviewContext {
@@ -161,6 +163,7 @@ impl Default for ReviewContext {
             budget_drops: Vec::new(),
             prompt_chars_final: 0,
             estimated_size: 0,
+            context_window: None,
         }
     }
 }
@@ -168,6 +171,8 @@ impl Default for ReviewContext {
 mod budget;
 mod builder;
 mod truncation;
+
+pub(crate) use budget::effective_budget;
 
 pub use builder::build_review_context;
 pub(crate) use truncation::truncate_at_line_boundary;
@@ -252,6 +257,7 @@ mod tests {
             &mut ast_context,
             &mut call_graph,
             max_prompt_chars,
+            0,
             &mut drops,
             None,
         );
@@ -285,6 +291,7 @@ mod tests {
             &mut ast_context,
             &mut call_graph,
             max_prompt_chars,
+            0,
             &mut drops,
             None,
         );
@@ -319,6 +326,7 @@ mod tests {
             &mut ast_context,
             &mut call_graph,
             max_prompt_chars,
+            0,
             &mut drops,
             None,
         );
@@ -353,6 +361,7 @@ mod tests {
             &mut ast_context,
             &mut call_graph,
             max_prompt_chars,
+            0,
             &mut drops,
             None,
         );
@@ -384,6 +393,7 @@ mod tests {
             &mut ast_context,
             &mut call_graph,
             max_prompt_chars,
+            0,
             &mut drops,
             None,
         );
@@ -624,6 +634,7 @@ mod tests {
             &mut ast_context,
             &mut call_graph,
             max_prompt_chars,
+            0,
             &mut drops,
             None,
         );
@@ -671,6 +682,7 @@ mod tests {
             &mut ast_context,
             &mut call_graph,
             max_prompt_chars,
+            0,
             &mut drops,
             None,
         );
@@ -866,8 +878,8 @@ mod tests {
         let pr = make_pr_with_content(0, 0);
         let ast_context = "";
         let call_graph = "fn foo() -> bar\nfn baz() -> qux";
-        let size = estimate_pr_size(&pr, ast_context, call_graph);
-        let without_call_graph = estimate_pr_size(&pr, ast_context, "");
+        let size = estimate_pr_size(&pr, ast_context, call_graph, 0);
+        let without_call_graph = estimate_pr_size(&pr, ast_context, "", 0);
         // Delta between with and without call_graph should be exactly call_graph.len()
         assert_eq!(size - without_call_graph, call_graph.len());
         // Total should include PROMPT_OVERHEAD_CHARS
@@ -881,7 +893,7 @@ mod tests {
         let pr = make_pr_with_content(50, 100);
         let ast_context = "fn foo() {}";
         let call_graph = "caller -> callee\nother -> thing";
-        let size = estimate_pr_size(&pr, ast_context, call_graph);
+        let size = estimate_pr_size(&pr, ast_context, call_graph, 0);
         assert!(
             size >= call_graph.len() + PROMPT_OVERHEAD_CHARS,
             "estimated size {} should be >= call_graph.len() {} + overhead {}",
@@ -918,7 +930,7 @@ mod tests {
         };
 
         // Act
-        let ctx = build_review_context(pr, Some(repo_path), &review_config)
+        let ctx = build_review_context(pr, Some(repo_path), &review_config, None, 0, None)
             .await
             .expect("build_review_context should succeed for a valid repo_path");
 
@@ -958,6 +970,9 @@ mod tests {
             pr,
             Some("/nonexistent-aptu-test-repo-path".to_string()),
             &review_config,
+            None,
+            0,
+            None,
         )
         .await;
 
@@ -990,6 +1005,9 @@ mod tests {
             pr,
             Some("/nonexistent-aptu-test-repo-path".to_string()),
             &review_config,
+            None,
+            0,
+            None,
         )
         .await;
 
@@ -1016,6 +1034,9 @@ mod tests {
             pr,
             Some("/nonexistent-aptu-test-repo-path".to_string()),
             &review_config,
+            None,
+            0,
+            None,
         )
         .await;
 
