@@ -347,7 +347,10 @@ jobs:
                 input: {
                   branch: { repositoryNameWithOwner: "clouatre-labs/homebrew-tap", branchName: $branch },
                   expectedHeadOid: $expectedHeadOid,
-                  message: { headline: $message },
+                  message: {
+                    headline: $message,
+                    body: "Signed-off-by: Hugues Clouâtre <hugues@linux.com>"
+                  },
                   fileChanges: {
                     additions: [ { path: $path, contents: $b64 } ]
                   }
