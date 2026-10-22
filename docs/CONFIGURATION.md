@@ -262,6 +262,9 @@ max_patch_chars_per_file = 25000   # Max chars per individual file patch; patche
 max_instructions_chars = 1500      # Max chars of instructions file content included in review prompt (default: 1 500)
 min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
 ast_context = false                # Opt-in AST context and call-graph enrichment (default: false)
+verify_enabled = true              # AI verification pass on candidate findings before posting (default: true)
+min_confidence = 0.7               # Minimum verified confidence (0.0-1.0) to keep a finding (default: 0.7)
+suppress_info = true               # Suppress info-severity findings from the posted review (default: true)
 ```
 
 AST context and call-graph enrichment are opt-in: set `ast_context = true` to inject

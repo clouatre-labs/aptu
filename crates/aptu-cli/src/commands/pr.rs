@@ -412,6 +412,7 @@ mod tests {
             line: Some(42),
             comment: "Test comment".to_string(),
             severity: CommentSeverity::Warning,
+            confidence: 1.0,
             suggested_code: None,
         };
         let header = format_comment_header(&comment);
@@ -425,6 +426,7 @@ mod tests {
             line: None,
             comment: "Test comment".to_string(),
             severity: CommentSeverity::Info,
+            confidence: 1.0,
             suggested_code: None,
         };
         let header = format_comment_header(&comment);

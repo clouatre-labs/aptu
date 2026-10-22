@@ -1397,6 +1397,7 @@ mod tests {
             line: Some(42),
             comment: "Consider using a match here.".to_string(),
             severity: CommentSeverity::Suggestion,
+            confidence: 1.0,
             suggested_code: None,
         }];
 
@@ -1428,6 +1429,7 @@ mod tests {
                 line: None,
                 comment: "General file comment.".to_string(),
                 severity: CommentSeverity::Info,
+                confidence: 1.0,
                 suggested_code: None,
             },
             PrReviewComment {
@@ -1435,6 +1437,7 @@ mod tests {
                 line: Some(10),
                 comment: "Inline comment.".to_string(),
                 severity: CommentSeverity::Warning,
+                confidence: 1.0,
                 suggested_code: None,
             },
         ];

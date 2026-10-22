@@ -288,6 +288,7 @@ mod tests {
             line: Some(10),
             comment: "Duplicate feedback".to_string(),
             severity: CommentSeverity::Suggestion,
+            confidence: 1.0,
             suggested_code: None,
         };
 
@@ -366,6 +367,7 @@ mod tests {
             line: None,
             comment: "Another general PR comment".to_string(),
             severity: CommentSeverity::Info,
+            confidence: 1.0,
             suggested_code: None,
         };
 
@@ -390,6 +392,7 @@ mod tests {
             line: Some(10),
             comment: "Same feedback".to_string(),
             severity: CommentSeverity::Info,
+            confidence: 1.0,
             suggested_code: None,
         };
         let rendered = crate::triage::render_pr_review_comment_body(&comment);
@@ -414,6 +417,7 @@ mod tests {
             line: Some(10),
             comment: "Legacy feedback".to_string(),
             severity: CommentSeverity::Info,
+            confidence: 1.0,
             suggested_code: None,
         });
         let legacy_body = rendered
@@ -446,6 +450,7 @@ mod tests {
             line: Some(10),
             comment: "Legacy feedback".to_string(),
             severity: CommentSeverity::Info,
+            confidence: 1.0,
             suggested_code: None,
         };
         assert!(
@@ -474,6 +479,7 @@ mod tests {
             line: Some(10),
             comment: "Existing feedback".to_string(),
             severity: CommentSeverity::Suggestion,
+            confidence: 1.0,
             suggested_code: None,
         };
         let existing = vec![PrReviewCommentDetails {
@@ -494,6 +500,7 @@ mod tests {
             line: Some(10),
             comment: "Revised feedback".to_string(),
             severity: CommentSeverity::Suggestion,
+            confidence: 1.0,
             suggested_code: None,
         };
 
@@ -526,6 +533,7 @@ mod tests {
             line: Some(10),
             comment: "Same feedback".to_string(),
             severity: CommentSeverity::Info,
+            confidence: 1.0,
             suggested_code: None,
         };
         let existing = vec![PrReviewCommentDetails {
@@ -672,6 +680,7 @@ mod tests {
             line: Some(10),
             comment: "New body".to_string(),
             severity: CommentSeverity::Info,
+            confidence: 1.0,
             suggested_code: None,
         };
         match dedup_outcome(&dedup, &incoming) {
@@ -720,6 +729,7 @@ mod tests {
             line: Some(1),
             comment: "text".to_string(),
             severity: CommentSeverity::Info,
+            confidence: 1.0,
             suggested_code: None,
         });
         assert!(

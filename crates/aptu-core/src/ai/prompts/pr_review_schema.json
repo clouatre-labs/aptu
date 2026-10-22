@@ -9,7 +9,8 @@
       "line": 42,
       "comment": "",
       "severity": "info|suggestion|warning|issue",
-      "suggested_code": null
+      "suggested_code": null,
+      "confidence": 0.9
     }
   ],
   "suggestions": ["suggestion1", "suggestion2"],

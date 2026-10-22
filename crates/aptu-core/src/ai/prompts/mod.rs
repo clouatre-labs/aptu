@@ -22,6 +22,8 @@ pub const TRIAGE_SCHEMA: &str = include_str!("triage_schema.json");
 pub const TRIAGE_GUIDELINES: &str = include_str!("triage_guidelines.md");
 /// JSON schema for PR review responses.
 pub const PR_REVIEW_SCHEMA: &str = include_str!("pr_review_schema.json");
+/// JSON schema for the PR review findings verification pass.
+pub const PR_VERIFY_SCHEMA: &str = include_str!("pr_verify_schema.json");
 /// Guidelines for PR review system prompts.
 pub const PR_REVIEW_GUIDELINES: &str = include_str!("pr_review_guidelines.md");
 /// JSON schema for PR label suggestion responses.
@@ -68,6 +70,16 @@ pub fn build_pr_label_system_prompt(context: &str) -> String {
          {context}\n\n\
          {PR_LABEL_GUIDELINES}\
          {SCHEMA_PREAMBLE}{PR_LABEL_SCHEMA}"
+    )
+}
+
+/// Builds the system prompt for the findings verification pass.
+#[must_use]
+pub fn build_verify_findings_system_prompt() -> String {
+    format!(
+        "You are an adversarial code reviewer. Your mission is to verify candidate review \
+         findings against the actual diff and drop any finding you cannot confirm.\n\n\
+         {SCHEMA_PREAMBLE}{PR_VERIFY_SCHEMA}"
     )
 }
 
@@ -523,6 +535,44 @@ pub fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]
     }
 
     prompt.push_str("</pull_request>");
+
+    prompt
+}
+
+/// Builds the user prompt for the findings verification pass.
+///
+/// Each candidate finding is listed with its index, and the diff is truncated
+/// to `max_diff_chars` at a line boundary so the verification prompt respects
+/// the existing review prompt budget.
+#[must_use]
+pub fn build_verify_findings_user_prompt(
+    comments: &[crate::ai::types::PrReviewComment],
+    diff: &str,
+    max_diff_chars: usize,
+) -> String {
+    let mut prompt = String::new();
+
+    prompt.push_str("<candidate_findings>\n");
+    for (i, comment) in comments.iter().enumerate() {
+        let _ = writeln!(prompt, "[finding {i}]");
+        let _ = writeln!(prompt, "file: {}", sanitize_prompt_field(&comment.file));
+        if let Some(line) = comment.line {
+            let _ = writeln!(prompt, "line: {line}");
+        }
+        let _ = writeln!(prompt, "severity: {}", comment.severity.as_str());
+        let _ = writeln!(
+            prompt,
+            "comment: {}",
+            sanitize_prompt_field(&comment.comment)
+        );
+        prompt.push('\n');
+    }
+    prompt.push_str("</candidate_findings>\n\n");
+
+    let truncated_diff = truncate_at_line_boundary(diff, max_diff_chars);
+    prompt.push_str("<diff>\n");
+    prompt.push_str(&sanitize_prompt_field(&truncated_diff));
+    prompt.push_str("\n</diff>\n");
 
     prompt
 }

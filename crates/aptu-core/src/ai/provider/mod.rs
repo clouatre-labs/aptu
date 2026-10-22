@@ -170,6 +170,20 @@ pub trait AiProvider: Send + Sync {
         self::review::review_pr(self, ctx, review_config).await
     }
 
+    /// Verifies candidate review findings against the diff with one AI call.
+    async fn verify_findings(
+        &self,
+        comments: &[crate::ai::types::PrReviewComment],
+        diff: &str,
+        review_config: &crate::config::ReviewConfig,
+    ) -> Result<(
+        crate::ai::types::VerifyFindingsResponse,
+        AiStats,
+        Vec<String>,
+    )> {
+        self::review::verify_findings(self, comments, diff, review_config).await
+    }
+
     /// Suggests labels for a pull request using the provider's API.
     async fn suggest_pr_labels(
         &self,

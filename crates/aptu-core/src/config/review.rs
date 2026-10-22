@@ -55,6 +55,28 @@ pub struct ReviewConfig {
     /// budget-based enablement and drop-order behavior below apply.
     #[serde(default)]
     pub ast_context: bool,
+    /// Enable the AI findings verification pass (default: `true`).
+    ///
+    /// When `true`, one extra small-model call per review verifies each
+    /// candidate finding against the diff; unverifiable or low-confidence
+    /// findings are dropped before posting.
+    #[serde(default = "default_true")]
+    pub verify_enabled: bool,
+    /// Minimum confidence (0.0-1.0) a finding must reach in the verification
+    /// pass to be kept (default: `0.7`).
+    #[serde(default = "default_min_confidence")]
+    pub min_confidence: f32,
+    /// Suppress info-severity findings from the posted review (default: `true`).
+    #[serde(default = "default_true")]
+    pub suppress_info: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_min_confidence() -> f32 {
+    0.7
 }
 
 fn default_max_instructions_chars() -> usize {
@@ -136,6 +158,20 @@ mod tests {
             "default max_patch_chars_per_file should be 25_000"
         );
     }
+
+    #[test]
+    fn test_review_verification_defaults() {
+        let config = ReviewConfig::default();
+        assert!(
+            config.verify_enabled,
+            "verify_enabled should default to true"
+        );
+        assert_eq!(
+            config.min_confidence, 0.7,
+            "default min_confidence should be 0.7"
+        );
+        assert!(config.suppress_info, "suppress_info should default to true");
+    }
 }
 
 impl Default for ReviewConfig {
@@ -150,6 +186,9 @@ impl Default for ReviewConfig {
             instructions_file: None,
             min_budget_for_call_graph: 20_000,
             ast_context: false,
+            verify_enabled: true,
+            min_confidence: 0.7,
+            suppress_info: true,
         }
     }
 }
