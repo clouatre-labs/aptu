@@ -6,6 +6,11 @@
 //! including file diffs for AI review.
 
 use anyhow::{Context, Result};
+
+/// GitHub caps compare-commits output at 300 files; hitting the cap means the
+/// returned file list may be silently truncated for a large push.
+const COMPARE_FILES_API_CAP: usize = 300;
+
 #[cfg(not(target_arch = "wasm32"))]
 use backon::Retryable;
 #[cfg(not(target_arch = "wasm32"))]
@@ -386,6 +391,7 @@ pub async fn fetch_pr_details(
         labels,
         review_comments,
         instructions: None,
+        prior_findings: None,
     };
 
     debug!(
@@ -394,6 +400,95 @@ pub async fn fetch_pr_details(
     );
 
     Ok(details)
+}
+
+/// Maps octocrab compare-commits `DiffEntry` items to `PrFile` entries.
+///
+/// Pure helper shared by the incremental-review path: a patch that is absent
+/// (binary/removed files) or truncated mid-hunk is reported as
+/// `patch_truncated = true` so downstream budget logic treats it accordingly.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn compare_files_to_pr_files(files: &[octocrab::models::repos::DiffEntry]) -> Vec<PrFile> {
+    files
+        .iter()
+        .map(|f| {
+            let patch = f.patch.clone();
+            let patch_truncated = match &patch {
+                Some(p) => is_patch_truncated(p),
+                None => true,
+            };
+            PrFile {
+                filename: f.filename.clone(),
+                status: format!("{:?}", f.status).to_lowercase(),
+                additions: f.additions,
+                deletions: f.deletions,
+                patch,
+                patch_truncated,
+                full_content: None,
+            }
+        })
+        .collect()
+}
+
+/// Fetches the file set changed between the last-reviewed SHA and the current
+/// head SHA via the compare-commits API (incremental review path).
+///
+/// Returns `Some(files)` only when the range is complete, non-empty, and at
+/// least one mapped file carries a usable (non-empty) patch: a compare result
+/// containing only binary or otherwise patchless files yields no reviewable
+/// context, so `None` is returned and the caller falls back to the full PR
+/// file set. This never fails the review: incremental detection is
+/// best-effort by design.
+#[cfg(not(target_arch = "wasm32"))]
+#[instrument(skip(client), fields(owner = %owner, repo = %repo))]
+pub async fn fetch_pr_files_since(
+    client: &Octocrab,
+    owner: &str,
+    repo: &str,
+    last_sha: &str,
+    head_sha: &str,
+) -> Option<Vec<PrFile>> {
+    match client
+        .repos(owner, repo)
+        .compare_commits(last_sha.to_string(), head_sha.to_string())
+        .send()
+        .await
+    {
+        Ok(comparison) => {
+            let files = comparison.files.unwrap_or_default();
+            if !compare_range_complete(files.len()) {
+                debug!(last_sha = %last_sha, head_sha = %head_sha, "Compare range hit API file cap; falling back to full review");
+                None
+            } else if files.is_empty() {
+                debug!(last_sha = %last_sha, head_sha = %head_sha, "Compare range empty; falling back to full review");
+                None
+            } else {
+                let mapped = compare_files_to_pr_files(&files);
+                if mapped
+                    .iter()
+                    .all(|f| f.patch.as_deref().is_none_or(str::is_empty))
+                {
+                    debug!(last_sha = %last_sha, head_sha = %head_sha, "Compare range has no patchable files; falling back to full review");
+                    None
+                } else {
+                    debug!(last_sha = %last_sha, head_sha = %head_sha, count = mapped.len(), "Fetched incremental compare range");
+                    Some(mapped)
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "Compare-commits fetch failed; falling back to full review");
+            None
+        }
+    }
+}
+
+/// GitHub caps the compare-commits API output at 300 files; a range at the cap
+/// may be silently truncated, so treat it as incomplete and force full review.
+#[must_use]
+pub fn compare_range_complete(file_count: usize) -> bool {
+    file_count < COMPARE_FILES_API_CAP
 }
 
 /// Detects if a patch is truncated mid-hunk by GitHub API.
@@ -2231,5 +2326,158 @@ mod tests {
             Some(crate::facade::pr_review::DEFAULT_COMMENT_SIDE.to_string())
         );
         assert_eq!(kept[0].commit_id, "abc123");
+    }
+
+    fn diff_entry_from_json(json: &str) -> octocrab::models::repos::DiffEntry {
+        serde_json::from_str(json).expect("valid DiffEntry JSON")
+    }
+
+    #[test]
+    fn test_compare_files_maps_fields_and_complete_patch() {
+        // Arrange: compare entry with a complete hunk header.
+        let entry = diff_entry_from_json(
+            r#"{
+                "filename": "src/lib.rs",
+                "status": "modified",
+                "additions": 3,
+                "deletions": 1,
+                "changes": 4,
+                "contents_url": "https://api.github.com/repos/o/r/contents/src/lib.rs",
+                "patch": "@@ -1,2 +1,2 @@\n context\n+added"
+            }"#,
+        );
+
+        // Act
+        let files = compare_files_to_pr_files(&[entry]);
+
+        // Assert
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].filename, "src/lib.rs");
+        assert_eq!(files[0].status, "modified");
+        assert_eq!(files[0].additions, 3);
+        assert_eq!(files[0].deletions, 1);
+        assert!(files[0].patch.is_some());
+        assert!(!files[0].patch_truncated);
+        assert!(files[0].full_content.is_none());
+    }
+
+    #[test]
+    fn test_compare_files_emits_lowercase_statuses() {
+        // Arrange: compare entries with varying GitHub status values.
+        let added = diff_entry_from_json(
+            r#"{
+                "filename": "src/new.rs",
+                "status": "added",
+                "additions": 5,
+                "deletions": 0,
+                "changes": 5,
+                "contents_url": "https://api.github.com/repos/o/r/contents/src/new.rs"
+            }"#,
+        );
+        let removed = diff_entry_from_json(
+            r#"{
+                "filename": "src/old.rs",
+                "status": "removed",
+                "additions": 0,
+                "deletions": 7,
+                "changes": 7,
+                "contents_url": "https://api.github.com/repos/o/r/contents/src/old.rs"
+            }"#,
+        );
+
+        // Act
+        let files = compare_files_to_pr_files(&[added, removed]);
+
+        // Assert: statuses match the lowercase convention used by fetch_pr_files.
+        assert_eq!(files[0].status, "added");
+        assert_eq!(files[1].status, "removed");
+    }
+
+    #[test]
+    fn test_compare_files_marks_truncated_and_missing_patches() {
+        // Arrange: one mid-hunk truncated patch and one absent patch (binary).
+        let truncated = diff_entry_from_json(
+            r#"{
+                "filename": "src/big.rs",
+                "status": "modified",
+                "additions": 900,
+                "deletions": 0,
+                "changes": 900,
+                "contents_url": "https://api.github.com/repos/o/r/contents/src/big.rs",
+                "patch": "@@ -1,10 +1,500 @@\n+line"
+            }"#,
+        );
+        let binary = diff_entry_from_json(
+            r#"{
+                "filename": "assets/logo.png",
+                "status": "added",
+                "additions": 0,
+                "deletions": 0,
+                "changes": 0,
+                "contents_url": "https://api.github.com/repos/o/r/contents/assets/logo.png"
+            }"#,
+        );
+
+        // Act
+        let files = compare_files_to_pr_files(&[truncated, binary]);
+
+        // Assert
+        assert_eq!(files.len(), 2);
+        assert!(files[0].patch_truncated, "mid-hunk patch is truncated");
+        assert!(
+            files[1].patch_truncated,
+            "absent patch (binary) is treated as truncated"
+        );
+        assert!(files[1].patch.is_none());
+    }
+
+    #[test]
+    fn test_incremental_path_rejects_all_patchless_ranges() {
+        // Arrange: a compare range consisting only of patchless files (binary,
+        // absent patch) must be unusable for incremental review. This mirrors
+        // the predicate `fetch_pr_files_since` applies before returning Some.
+        let binary = diff_entry_from_json(
+            r#"{
+                "filename": "assets/logo.png",
+                "status": "added",
+                "additions": 0,
+                "deletions": 0,
+                "changes": 0,
+                "contents_url": "https://api.github.com/repos/o/r/contents/assets/logo.png"
+            }"#,
+        );
+        let empty_patch = diff_entry_from_json(
+            r#"{
+                "filename": "src/empty.rs",
+                "status": "modified",
+                "additions": 0,
+                "deletions": 0,
+                "changes": 0,
+                "contents_url": "https://api.github.com/repos/o/r/contents/src/empty.rs",
+                "patch": ""
+            }"#,
+        );
+
+        // Act
+        let files = compare_files_to_pr_files(&[binary, empty_patch]);
+        let has_patchable = files
+            .iter()
+            .any(|f| f.patch.as_deref().is_some_and(|p| !p.is_empty()));
+
+        // Assert: no patchable file means the incremental path must fall back.
+        assert!(!has_patchable, "all-patchless ranges must yield no Some");
+    }
+
+    #[test]
+    fn test_compare_range_complete_detects_api_cap() {
+        // Arrange: counts at and below the GitHub compare API cap of 300 files.
+
+        // Act
+        let below_cap = compare_range_complete(COMPARE_FILES_API_CAP - 1);
+        let at_cap = compare_range_complete(COMPARE_FILES_API_CAP);
+
+        // Assert: at-cap ranges may be truncated, so they are incomplete.
+        assert!(below_cap, "ranges below the cap are considered complete");
+        assert!(!at_cap, "ranges at the API cap may be silently truncated");
     }
 }

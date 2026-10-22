@@ -76,6 +76,46 @@ pub async fn fetch_pr_for_review(
     )
     .await;
 
+    // Incremental review: if a prior bot marker review records a different head
+    // SHA, review only the range diff (last_sha..head). Any failure (listing
+    // error, missing/unchanged SHA, compare error, empty range) falls back to
+    // the full file set; the incremental path must never fail the review.
+    if let Ok(reviews) = crate::github::pulls::list_pr_reviews(&client, &owner, &repo, number).await
+    {
+        let marker_sha =
+            crate::github::pulls::find_marker_review(&reviews).and_then(|(_, sha)| sha);
+        if let Some(last_sha) = incremental_range(marker_sha.as_deref(), &pr.head_sha) {
+            match crate::github::pulls::fetch_pr_files_since(
+                &client,
+                &owner,
+                &repo,
+                last_sha,
+                &pr.head_sha,
+            )
+            .await
+            {
+                Some(files) => {
+                    debug!(
+                        last_sha = %last_sha,
+                        head_sha = %pr.head_sha,
+                        count = files.len(),
+                        "Using incremental file set since last review"
+                    );
+                    pr.prior_findings = Some(crate::ai::review_context::prior_findings_summary(
+                        &pr.review_comments,
+                    ));
+                    pr.files = files;
+                }
+                None => {
+                    debug!(
+                        last_sha = %last_sha,
+                        "Incremental compare unavailable or empty; falling back to full review"
+                    );
+                }
+            }
+        }
+    }
+
     Ok(pr)
 }
 
@@ -86,6 +126,37 @@ pub async fn fetch_pr_for_review(
     _repo_context: Option<&str>,
 ) -> crate::Result<crate::ai::types::PrDetails> {
     crate::facade::wasm_unsupported!("fetch_pr_for_review");
+}
+
+/// Decides the incremental review range: `Some(last_sha)` when a prior marker
+/// review records a SHA that differs from the current head, `None` otherwise
+/// (no marker, legacy SHA-less marker, or unchanged SHA) so the caller uses the
+/// full file set.
+fn incremental_range<'a>(marker_sha: Option<&'a str>, head_sha: &str) -> Option<&'a str> {
+    match marker_sha {
+        Some(last) if !last.is_empty() && last != head_sha => Some(last),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod incremental_range_tests {
+    use super::incremental_range;
+
+    #[test]
+    fn test_incremental_range_uses_marker_sha_when_different_from_head() {
+        assert_eq!(incremental_range(Some("abc"), "def"), Some("abc"));
+    }
+
+    #[test]
+    fn test_incremental_range_falls_back_when_absent_or_unchanged() {
+        // No marker at all (edge case).
+        assert_eq!(incremental_range(None, "def"), None);
+        // Legacy SHA-less marker.
+        assert_eq!(incremental_range(Some(""), "def"), None);
+        // Head SHA unchanged since the last review.
+        assert_eq!(incremental_range(Some("def"), "def"), None);
+    }
 }
 
 /// Reconstructs a unified diff string from PR file patches for security scanning.
@@ -411,6 +482,7 @@ pub async fn analyze_pr(
         context_window,
         ai_config.max_tokens,
         ai_config.custom_guidance.as_deref(),
+        pr_details.prior_findings.clone(),
     )
     .await?;
 
@@ -470,6 +542,7 @@ pub async fn analyze_pr(
                     context_window,
                     ai_config.max_tokens,
                     ai_config.custom_guidance.as_deref(),
+                    pr_details.prior_findings.clone(),
                 )
                 .await?;
                 retrimmed
@@ -612,6 +685,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         }
     }
 
@@ -685,6 +759,7 @@ mod tests {
             prompt_chars_final: 0,
             estimated_size: 0,
             context_window: None,
+            prior_findings: None,
         }
     }
 

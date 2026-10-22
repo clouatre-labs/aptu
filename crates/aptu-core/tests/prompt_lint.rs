@@ -207,6 +207,7 @@ fn all_system_prompts_contain_schema() {
         head_sha: String::new(),
         review_comments: vec![],
         instructions: None,
+        prior_findings: None,
     };
     let mut ctx = aptu_core::ai::review_context::ReviewContext {
         pr,
@@ -226,6 +227,7 @@ fn all_system_prompts_contain_schema() {
         prompt_chars_final: 0,
         estimated_size: 0,
         context_window: None,
+        prior_findings: None,
     };
     let pr_review_user = aptu_core::ai::prompts::build_pr_review_user_prompt(&mut ctx);
     assert!(
@@ -272,6 +274,7 @@ mod fetch_file_contents_tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         }
     }
 

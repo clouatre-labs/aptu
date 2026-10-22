@@ -42,6 +42,7 @@ pub async fn build_review_context(
     context_window: Option<u32>,
     max_tokens: u32,
     custom_guidance: Option<&str>,
+    prior_findings: Option<String>,
 ) -> crate::Result<ReviewContext> {
     // Step 1: Resolve repo_path (explicit or inferred from CWD)
     #[cfg(not(target_arch = "wasm32"))]
@@ -97,6 +98,14 @@ pub async fn build_review_context(
     // None stays unbounded.
     let max_prompt_chars =
         effective_budget(review_config.max_prompt_chars, context_window, max_tokens);
+
+    // The prior-findings summary is rendered into the user prompt, so its
+    // section length (plus tags/headers overhead) must be part of the size
+    // estimate and budget-drop math to keep the total within budget.
+    let prior_findings_overhead = prior_findings
+        .as_deref()
+        .map_or(0, |summary| summary.len() + PRIOR_FINDINGS_SECTION_OVERHEAD);
+    let system_overhead = system_overhead + prior_findings_overhead;
 
     // Step 4: Estimate total chars and decide call_graph budget
     // (call_graph not yet built, pass empty)
@@ -171,7 +180,59 @@ pub async fn build_review_context(
         prompt_chars_final: 0,
         estimated_size: final_estimated_size,
         context_window,
+        prior_findings,
     })
+}
+
+/// Maximum characters for the prior-findings summary threaded into the prompt.
+/// Kept well within existing prompt budgets; larger summaries are truncated.
+pub(crate) const PRIOR_FINDINGS_MAX_CHARS: usize = 2_000;
+
+/// Overhead for the prior-findings section tags/headers added by the prompt
+/// builder; included in size estimates so budget math covers the full section.
+pub(crate) const PRIOR_FINDINGS_SECTION_OVERHEAD: usize = 64;
+
+/// Builds a short prior-findings summary from existing APTU review comments
+/// (the dedup map source): one `path:line` entry per comment, first line only.
+/// The result is capped to `PRIOR_FINDINGS_MAX_CHARS` so it never saturates
+/// the prompt budget on PRs with many prior comments.
+#[must_use]
+pub fn prior_findings_summary(comments: &[crate::ai::types::PrReviewCommentDetails]) -> String {
+    const MAX_LINE_CHARS: usize = 120;
+    let mut summary = String::new();
+    for comment in comments {
+        let first_line = comment
+            .body
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("");
+        if first_line.is_empty() {
+            continue;
+        }
+        let first_line = truncate_at_char_boundary(first_line, MAX_LINE_CHARS);
+        let location = match comment.line {
+            Some(line) => format!("{}:{}", comment.path, line),
+            None => comment.path.clone(),
+        };
+        let entry = format!("- {}: {}\n", location, first_line);
+        if summary.len() + entry.len() > PRIOR_FINDINGS_MAX_CHARS {
+            break;
+        }
+        summary.push_str(&entry);
+    }
+    summary
+}
+
+/// Truncates at a char boundary with an ellipsis marker.
+fn truncate_at_char_boundary(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        return s;
+    }
+    let mut end = max;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
 }
 
 /// Resolves the repository path from explicit argument or CWD inference.
@@ -332,4 +393,91 @@ fn parse_origin_owner_repo(url: &str) -> Option<(String, String)> {
     let owner = parts[0].to_lowercase();
     let repo = parts[1].to_lowercase();
     Some((owner, repo))
+}
+
+#[cfg(test)]
+mod prior_findings_tests {
+    use super::prior_findings_summary;
+    use crate::ai::types::PrReviewCommentDetails;
+
+    fn comment(path: &str, line: Option<u64>, body: &str) -> PrReviewCommentDetails {
+        PrReviewCommentDetails {
+            id: 1,
+            author: "aptu[bot]".to_string(),
+            is_bot: true,
+            body: body.to_string(),
+            path: path.to_string(),
+            line,
+            side: Some("RIGHT".to_string()),
+            commit_id: "abc".to_string(),
+            original_line: None,
+        }
+    }
+
+    #[test]
+    fn test_summary_lists_path_and_first_line() {
+        // Arrange: one prior finding with a multi-line body.
+        let comments = vec![comment(
+            "src/lib.rs",
+            Some(15),
+            "Possible unwrap panic\n\nMore detail here",
+        )];
+
+        // Act
+        let summary = prior_findings_summary(&comments);
+
+        // Assert
+        assert!(summary.contains("src/lib.rs:15"));
+        assert!(summary.contains("Possible unwrap panic"));
+        assert!(!summary.contains("More detail"));
+    }
+
+    #[test]
+    fn test_summary_omits_line_when_absent() {
+        // Arrange: a prior finding with no line number.
+        let comments = vec![comment("src/lib.rs", None, "Possible unwrap panic")];
+
+        // Act
+        let summary = prior_findings_summary(&comments);
+
+        // Assert: path without a `:line` suffix.
+        assert!(summary.contains("- src/lib.rs: Possible unwrap panic"));
+    }
+
+    #[test]
+    fn test_summary_skips_blank_bodies() {
+        // Arrange: one prior finding whose body is only whitespace.
+        let comments = vec![comment("src/lib.rs", Some(15), "   \n\t\n")];
+
+        // Act
+        let summary = prior_findings_summary(&comments);
+
+        // Assert: blank-bodied comments contribute no entry.
+        assert!(summary.is_empty());
+    }
+
+    #[test]
+    fn test_summary_capped_to_char_budget() {
+        // Arrange: many long prior findings.
+        let comments: Vec<_> = (0..500)
+            .map(|i| {
+                comment(
+                    &format!("file{i}.rs"),
+                    Some(1),
+                    &format!("finding {} {}", i, "x".repeat(200)),
+                )
+            })
+            .collect();
+
+        // Act
+        let summary = prior_findings_summary(&comments);
+
+        // Assert: within the configured cap (plus per-entry overhead guard).
+        assert!(summary.len() <= super::PRIOR_FINDINGS_MAX_CHARS + 300);
+    }
+
+    #[test]
+    fn test_summary_empty_when_no_comments() {
+        assert!(prior_findings_summary(&[]).is_empty());
+    }
 }

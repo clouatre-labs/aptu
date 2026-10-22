@@ -440,6 +440,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         }
     }
 

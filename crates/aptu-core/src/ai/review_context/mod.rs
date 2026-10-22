@@ -49,6 +49,10 @@ pub struct ReviewContext {
     pub estimated_size: usize,
     /// Model context window in tokens (if known), used for prompt budget capping.
     pub context_window: Option<u32>,
+    /// Short capped summary of findings from the prior review (incremental path only;
+    /// `None` for full reviews). Lists prior file+line findings so the AI avoids
+    /// restating them.
+    pub prior_findings: Option<String>,
 }
 
 impl ReviewContext {
@@ -128,6 +132,7 @@ impl Default for ReviewContext {
                 head_sha: String::new(),
                 review_comments: Vec::new(),
                 instructions: None,
+                prior_findings: None,
             },
             ast_context: String::new(),
             call_graph: String::new(),
@@ -146,6 +151,7 @@ impl Default for ReviewContext {
             prompt_chars_final: 0,
             estimated_size: 0,
             context_window: None,
+            prior_findings: None,
         }
     }
 }
@@ -157,6 +163,7 @@ mod truncation;
 pub(crate) use budget::effective_budget;
 
 pub use builder::build_review_context;
+pub use builder::prior_findings_summary;
 pub(crate) use truncation::truncate_at_line_boundary;
 
 #[allow(unused_imports)]
@@ -203,6 +210,7 @@ mod tests {
                 deletions: 0,
             }],
             instructions: None,
+            prior_findings: None,
             labels: vec![],
         }
     }
@@ -1008,9 +1016,79 @@ mod tests {
             ast_context: ast_enabled,
             ..ReviewConfig::default()
         };
-        build_review_context(pr, Some(repo_path), &review_config, None, 0, None)
+        build_review_context(pr, Some(repo_path), &review_config, None, 0, None, None)
             .await
             .expect("build_review_context should succeed for a valid repo_path")
+    }
+
+    /// The prior-findings summary is rendered into the prompt, so the size
+    /// estimate for a context built with `prior_findings` must exceed the same
+    /// context built without it, and the estimate must still stay within the
+    /// configured budget (the summary is capped, so budget math covers it).
+    #[tokio::test]
+    async fn test_build_review_context_prior_findings_counted_in_estimate() {
+        // Arrange: identical PR, budget that fits the base context plus the
+        // capped prior-findings summary, with and without prior findings.
+        let repo_path = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+        let make_pr = || {
+            let mut pr = make_pr_with_content(0, 0);
+            pr.files = vec![PrFile {
+                filename: "src/ast_context.rs".to_string(),
+                status: "modified".to_string(),
+                patch: Some("+// touched".to_string()),
+                patch_truncated: false,
+                full_content: None,
+                additions: 1,
+                deletions: 0,
+            }];
+            pr
+        };
+        let review_config = ReviewConfig {
+            ast_context: false,
+            ..ReviewConfig::default()
+        };
+        // Maximal prior-findings summary: cap + per-entry overhead guard
+        // matches the bound asserted in builder.rs's prior_findings_tests.
+        let prior_findings = "x".repeat(super::builder::PRIOR_FINDINGS_MAX_CHARS);
+
+        // Act
+        let without = build_review_context(
+            make_pr(),
+            Some(repo_path.clone()),
+            &review_config,
+            None,
+            0,
+            None,
+            None,
+        )
+        .await
+        .expect("context without prior findings");
+        let with = build_review_context(
+            make_pr(),
+            Some(repo_path),
+            &review_config,
+            None,
+            0,
+            None,
+            Some(prior_findings),
+        )
+        .await
+        .expect("context with prior findings");
+
+        // Assert: prior findings enlarge the estimate; budget stays intact.
+        assert!(
+            with.estimated_size > without.estimated_size,
+            "estimate with prior_findings ({}) must exceed estimate without ({})",
+            with.estimated_size,
+            without.estimated_size
+        );
+        let max_prompt_chars = review_config.max_prompt_chars;
+        assert!(
+            with.estimated_size <= max_prompt_chars,
+            "estimate with prior_findings ({}) must stay within budget ({})",
+            with.estimated_size,
+            max_prompt_chars
+        );
     }
 
     /// Regression test for #1571 (structural graph removal): `build_review_context()`
@@ -1079,6 +1157,7 @@ mod tests {
             None,
             0,
             None,
+            None,
         )
         .await;
 
@@ -1130,6 +1209,7 @@ mod tests {
             None,
             0,
             None,
+            None,
         )
         .await;
 
@@ -1158,6 +1238,7 @@ mod tests {
             &review_config,
             None,
             0,
+            None,
             None,
         )
         .await;

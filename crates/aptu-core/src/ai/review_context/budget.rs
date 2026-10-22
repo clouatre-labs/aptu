@@ -443,6 +443,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: Vec::new(),
             instructions: None,
+            prior_findings: None,
         };
         let without = estimate_pr_size(&pr, "", "", 0);
         let with = estimate_pr_size(&pr, "", "", 5_000);

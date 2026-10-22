@@ -396,6 +396,11 @@ pub struct PrDetails {
     /// Repository instructions (AGENTS.md or .github/instructions/pr-review.md) for context.
     #[serde(default)]
     pub instructions: Option<String>,
+    /// Short capped summary of findings from a prior review (incremental review path only;
+    /// `None` for full reviews). Rendered as a `<prior_findings>` prompt section so the AI
+    /// avoids restating already-posted feedback.
+    #[serde(default)]
+    pub prior_findings: Option<String>,
 }
 
 /// A file changed in a pull request.
