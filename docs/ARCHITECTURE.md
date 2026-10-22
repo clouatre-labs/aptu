@@ -34,7 +34,7 @@ External APIs (GitHub, AI Provider)
 Format & Display Output
 ```
 
-A typical aptu invocation proceeds as follows: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a prompt with AST and call-graph context; the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
+A typical aptu invocation proceeds as follows: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a review prompt with AST and call-graph context (both opt-in via `review.ast_context`, disabled by default); the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
 
 The GitHub App path: a Cloudflare Worker receives webhook events, validates HMAC signatures, reads `.github/aptu.yml` from the repository, and dispatches `repository_dispatch` events to a central workflow. The central workflow runs the same `aptu-core` triage, review, and scan logic as the CLI, posting results as the `aptu[bot]` GitHub App user.
 
@@ -64,8 +64,8 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Z.A
 
 1. Fetch PR diff and metadata via Octocrab
 2. Fetch full file content for changed files via GitHub Contents API (capped at `max_full_content_files`, `max_chars_per_file`)
-3. Build AST context: function signatures and imports for each changed file using `aptu-coder-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
-4. Build call-graph context: cross-file caller chains for changed functions; modified symbols are derived from PR diff hunks (declaration lines matching `fn`/`async fn`, `struct`, `enum`, `trait`, `impl` via a `SYMBOL_RE` static regex), not from the full graph; callers residing only in files the PR does not touch are intentionally excluded
+3. Build AST context (only when `review.ast_context = true`; disabled by default): function signatures and imports for each changed file using `aptu-coder-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
+4. Build call-graph context (only when `review.ast_context = true`; disabled by default): cross-file caller chains for changed functions; modified symbols are derived from PR diff hunks (declaration lines matching `fn`/`async fn`, `struct`, `enum`, `trait`, `impl` via a `SYMBOL_RE` static regex), not from the full graph; callers residing only in files the PR does not touch are intentionally excluded
 5. Enforce prompt budget (`max_prompt_chars`): drop sections in order (`call_graph` -> `ast_context` -> file `full_content` -> file patches) until budget is met
 6. Post inline review comments via GitHub REST API
 7. Post or update the review summary as an issue comment: the summary carries an `<!-- APTU_REVIEW:<sha> -->` marker keyed to the PR head SHA. An existing Aptu bot summary for the same head SHA is left untouched (dedup); a summary for a different or unknown SHA is updated in place; a missing summary is created after the review posts

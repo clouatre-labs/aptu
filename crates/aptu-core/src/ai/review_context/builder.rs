@@ -52,15 +52,23 @@ pub async fn build_review_context(
         .as_ref()
         .map(|p| p.to_string_lossy().into_owned());
 
-    // Step 2: Build AST context if repo_path resolved
+    // Step 2: Build AST context if repo_path resolved and opt-in enabled.
     // When `ast-context` feature is enabled, build_ctx_ast returns AstContextOutput
     // (which carries the text string); when disabled, it returns a plain String.
     #[cfg(feature = "ast-context")]
-    let ast_context = build_ctx_ast(repo_path_ref.as_deref(), &pr.files)
-        .await
-        .text;
+    let ast_context = if review_config.ast_context {
+        build_ctx_ast(repo_path_ref.as_deref(), &pr.files)
+            .await
+            .text
+    } else {
+        String::new()
+    };
     #[cfg(not(feature = "ast-context"))]
-    let ast_context = build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await;
+    let ast_context = if review_config.ast_context {
+        build_ctx_ast(repo_path_ref.as_deref(), &pr.files).await
+    } else {
+        String::new()
+    };
 
     // Step 3.5: Resolve the exact system prompt that `review_pr` will send so the
     // size estimate matches the actual request. This honors the provider's custom
@@ -95,8 +103,9 @@ pub async fn build_review_context(
     let estimated_size = estimate_pr_size(&pr, &ast_context, "", system_overhead);
     let budget_remaining = max_prompt_chars.saturating_sub(estimated_size);
 
-    // Step 4: Build call_graph if decided
-    let should_enable_cg = should_enable_call_graph(budget_remaining, review_config);
+    // Step 4: Build call_graph if decided (only when AST enrichment is opt-in enabled)
+    let should_enable_cg =
+        review_config.ast_context && should_enable_call_graph(budget_remaining, review_config);
     let mut call_graph = if should_enable_cg {
         build_ctx_call_graph(repo_path_ref.as_deref(), &pr.files).await
     } else {

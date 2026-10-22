@@ -70,7 +70,7 @@ jobs:
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
-By default, the action reviews all changed files. Call-graph context is injected automatically when the prompt budget allows (see [PR Review with AST Context](#pr-review-with-ast-context) below).
+By default, the action reviews all changed files without AST/call-graph enrichment; both are opt-in via `[review] ast_context = true` (see [PR Review with AST Context](#pr-review-with-ast-context) below).
 
 ## Configuration
 
@@ -214,7 +214,15 @@ jobs:
 
 ## PR Review with AST Context
 
-Pass the checked-out repository path to inject function signatures and call-graph context into the review prompt:
+AST context and call-graph enrichment are opt-in and disabled by default. To inject function signatures and call-graph context into the review prompt, enable `ast_context` in the `[review]` section of your `config.toml` and pass the checked-out repository path:
+
+```toml
+# ~/.config/aptu/config.toml (or $XDG_CONFIG_HOME/aptu/config.toml)
+[review]
+ast_context = true
+```
+
+Alternatively, set the `APTU_REVIEW__AST_CONTEXT: "true"` environment variable in the workflow step. The action loads its configuration from the standard aptu config location on the runner; copying the workflow below without this configuration leaves enrichment disabled.
 
 ```yaml
     steps:
@@ -225,6 +233,8 @@ Pass the checked-out repository path to inject function signatures and call-grap
           github-token: ${{ secrets.GITHUB_TOKEN }}
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
           repo-path: ${{ github.workspace }}
+        env:
+          APTU_REVIEW__AST_CONTEXT: "true"
 ```
 
 ## aptu-dev GitHub App
