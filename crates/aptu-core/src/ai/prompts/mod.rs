@@ -232,6 +232,7 @@ fn write_pr_file_section(
     ctx: &ReviewContext,
     dropped_patches: &HashSet<String>,
     dropped_full_content: &HashSet<String>,
+    budget_truncated_patches: &HashSet<String>,
     total_diff_size: usize,
 ) -> (FileSectionOutcome, Vec<String>) {
     let filename = file.filename.clone();
@@ -241,6 +242,8 @@ fn write_pr_file_section(
     let patch_was_budget_dropped = file.patch.is_none() && dropped_patches.contains(&filename);
     let full_content_was_budget_dropped =
         file.full_content.is_none() && dropped_full_content.contains(&filename);
+    let patch_was_budget_truncated =
+        file.patch.is_some() && budget_truncated_patches.contains(&filename);
 
     let mut diff_chars_added = 0;
 
@@ -303,6 +306,11 @@ fn write_pr_file_section(
                 "[APTU: patch truncated by GitHub API -- do not speculate on missing content]\n```diff\n{sanitized_patch}\n```\n"
             );
         } else {
+            // Record a prompt-budget-truncated patch so it appears in
+            // truncated_patch_files telemetry.
+            if patch_was_budget_truncated && !recorded_names.contains(&filename) {
+                recorded_names.push(filename.clone());
+            }
             let _ = writeln!(prompt, "```diff\n{sanitized_patch}\n```\n");
         }
         diff_chars_added = patch_size;
@@ -353,6 +361,12 @@ fn write_pr_files_section(prompt: &mut String, ctx: &mut ReviewContext) {
         .filter_map(|s| s.strip_prefix("patch:"))
         .map(str::to_string)
         .collect();
+    let budget_truncated_patches: HashSet<String> = ctx
+        .budget_drops
+        .iter()
+        .filter_map(|s| s.strip_prefix("patch_truncated:"))
+        .map(str::to_string)
+        .collect();
     let dropped_full_content: HashSet<String> = ctx
         .budget_drops
         .iter()
@@ -377,6 +391,7 @@ fn write_pr_files_section(prompt: &mut String, ctx: &mut ReviewContext) {
             ctx,
             &dropped_patches,
             &dropped_full_content,
+            &budget_truncated_patches,
             total_diff_size,
         ) {
             (FileSectionOutcome::Skipped, mut names) => {
