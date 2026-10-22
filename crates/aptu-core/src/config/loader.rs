@@ -819,6 +819,10 @@ model = "gemini-3.1-flash-lite"
             review_config.max_chars_per_file, 32_000,
             "max_chars_per_file should default to 32_000"
         );
+        assert!(
+            !review_config.ast_context,
+            "ast_context should default to false (opt-in)"
+        );
 
         // Assert: AppConfig::default().review equals ReviewConfig::default()
         let app_config = AppConfig::default();
@@ -833,6 +837,28 @@ model = "gemini-3.1-flash-lite"
         assert_eq!(
             app_config.review.max_chars_per_file, review_config.max_chars_per_file,
             "AppConfig review defaults should match ReviewConfig defaults"
+        );
+        assert_eq!(
+            app_config.review.ast_context, review_config.ast_context,
+            "AppConfig review defaults should match ReviewConfig defaults"
+        );
+    }
+
+    #[test]
+    fn test_ast_context_absent_key_defaults_to_false() {
+        // Arrange: TOML review section without an `ast_context` key (backward compat)
+        let toml_str = r#"
+[review]
+max_prompt_chars = 1000
+"#;
+
+        // Act
+        let config: AppConfig = toml::from_str(toml_str).expect("deserialization must succeed");
+
+        // Assert: absent key deserializes to false (serde default)
+        assert!(
+            !config.review.ast_context,
+            "absent ast_context key should default to false"
         );
     }
 

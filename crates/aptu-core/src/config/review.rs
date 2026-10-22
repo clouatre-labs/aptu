@@ -48,6 +48,13 @@ pub struct ReviewConfig {
     /// the largest diffs — consider lowering the threshold.
     #[serde(default = "default_min_budget_for_call_graph")]
     pub min_budget_for_call_graph: usize,
+    /// Enable AST context and call-graph enrichment (default: `false`).
+    ///
+    /// Opt-in: when `false`, AST context and call graph are never injected
+    /// into the review prompt regardless of budget. When `true`, the
+    /// budget-based enablement and drop-order behavior below apply.
+    #[serde(default)]
+    pub ast_context: bool,
 }
 
 fn default_max_instructions_chars() -> usize {
@@ -142,6 +149,7 @@ impl Default for ReviewConfig {
             max_instructions_chars: 1_500,
             instructions_file: None,
             min_budget_for_call_graph: 20_000,
+            ast_context: false,
         }
     }
 }

@@ -986,16 +986,12 @@ mod tests {
         );
     }
 
-    /// Regression test for #1571 (structural graph removal): `build_review_context()`
-    /// no longer threads a `GraphConfig` or builds `graph_context`/`graph_cache_hit`, but
-    /// its `ast_context` and `call_graph` enrichment paths must be completely unaffected
-    /// by that removal.
-    #[tokio::test]
-    async fn test_build_review_context_preserves_ast_and_call_graph() {
-        // Arrange: a fixture PR touching a real Rust source file in this crate, with
-        // min_budget_for_call_graph=0 to force call_graph building regardless of prompt
-        // budget (mirrors the fixture setup pattern used by ast_context.rs's own
-        // build_ast_context tests).
+    /// Shared fixture for the ast/call-graph opt-in tests: builds a review context
+    /// for a PR touching a real Rust source file in this crate, with
+    /// min_budget_for_call_graph=0 to force call_graph building regardless of
+    /// prompt budget (mirrors the fixture setup pattern used by ast_context.rs's
+    /// own build_ast_context tests), and `ast_enabled` controlling the opt-in flag.
+    async fn build_context_with_ast_optin(ast_enabled: bool) -> ReviewContext {
         let repo_path = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
         let mut pr = make_pr_with_content(0, 0);
         pr.files = vec![PrFile {
@@ -1009,13 +1005,22 @@ mod tests {
         }];
         let review_config = ReviewConfig {
             min_budget_for_call_graph: 0,
+            ast_context: ast_enabled,
             ..ReviewConfig::default()
         };
-
-        // Act
-        let ctx = build_review_context(pr, Some(repo_path), &review_config, None, 0, None)
+        build_review_context(pr, Some(repo_path), &review_config, None, 0, None)
             .await
-            .expect("build_review_context should succeed for a valid repo_path");
+            .expect("build_review_context should succeed for a valid repo_path")
+    }
+
+    /// Regression test for #1571 (structural graph removal): `build_review_context()`
+    /// no longer threads a `GraphConfig` or builds `graph_context`/`graph_cache_hit`, but
+    /// its `ast_context` and `call_graph` enrichment paths must be completely unaffected
+    /// by that removal.
+    #[tokio::test]
+    async fn test_build_review_context_preserves_ast_and_call_graph() {
+        // Act
+        let ctx = build_context_with_ast_optin(true).await;
 
         // Assert: shape is exactly what the standalone builders produce -- empty when
         // the `ast-context` feature is off, well-formed XML-tagged output when it's on.
@@ -1032,6 +1037,25 @@ mod tests {
         assert!(
             !ctx.ast_context.is_empty(),
             "ast_context should be populated for a real Rust fixture file when the ast-context feature is enabled"
+        );
+    }
+
+    /// AST/call-graph enrichment is opt-in (#1760): with the default config
+    /// (`ast_context = false`), both sections must stay empty even when a real
+    /// repo path is available and the budget would allow them.
+    #[tokio::test]
+    async fn test_build_review_context_omits_ast_and_call_graph_by_default() {
+        // Act: default config (ast_context=false), real repo path, min budget 0
+        let ctx = build_context_with_ast_optin(false).await;
+
+        // Assert: both sections are omitted entirely when opt-in is off
+        assert!(
+            ctx.ast_context.is_empty(),
+            "ast_context must be empty when ast_context opt-in is false"
+        );
+        assert!(
+            ctx.call_graph.is_empty(),
+            "call_graph must be empty when ast_context opt-in is false"
         );
     }
 
