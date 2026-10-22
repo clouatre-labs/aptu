@@ -312,9 +312,20 @@ jobs:
           sed -i "s/SHA256_LINUX_ARM_PLACEHOLDER/${shas["aptu-cli-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
           sed -i "s/SHA256_LINUX_INTEL_PLACEHOLDER/${shas["aptu-cli-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
 
+      - name: Mint homebrew-tap app token
+        id: tap-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.HOMEBREW_TAP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
+          owner: clouatre-labs
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Create feature branch and commit formula update via GraphQL
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
         run: |
           set -euo pipefail
           cd homebrew-tap
@@ -347,10 +358,7 @@ jobs:
                 input: {
                   branch: { repositoryNameWithOwner: "clouatre-labs/homebrew-tap", branchName: $branch },
                   expectedHeadOid: $expectedHeadOid,
-                  message: {
-                    headline: $message,
-                    body: "Signed-off-by: Hugues Clouâtre <hugues@linux.com>"
-                  },
+                  message: { headline: $message },
                   fileChanges: {
                     additions: [ { path: $path, contents: $b64 } ]
                   }
@@ -360,7 +368,7 @@ jobs:
 
       - name: Create pull request with auto-merge
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
         run: |
           cd homebrew-tap
           RELEASE_TAG="${GITHUB_REF#refs/tags/}"
