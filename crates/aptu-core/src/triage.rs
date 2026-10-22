@@ -865,6 +865,7 @@ mod tests {
                 line: Some(42),
                 comment: "Consider using a match here.".to_string(),
                 severity: CommentSeverity::Suggestion,
+                confidence: 1.0,
                 suggested_code: None,
             }],
             suggestions: vec!["Add a CHANGELOG entry.".to_string()],
@@ -1118,6 +1119,7 @@ mod tests {
             line: Some(1),
             comment: "test msg".to_string(),
             severity: CommentSeverity::Issue,
+            confidence: 1.0,
             suggested_code: None,
         };
         let cases = [
@@ -1146,6 +1148,7 @@ mod tests {
             line: Some(10),
             comment: "Use ? instead of unwrap.".to_string(),
             severity: CommentSeverity::Warning,
+            confidence: 1.0,
             suggested_code: Some("    let x = foo()?;\n".to_string()),
         };
         let body = render_pr_review_comment_body(&comment);
@@ -1161,6 +1164,7 @@ mod tests {
             line: Some(10),
             comment: "Consider refactoring this module.".to_string(),
             severity: CommentSeverity::Info,
+            confidence: 1.0,
             suggested_code: None,
         };
         let body = render_pr_review_comment_body(&comment);
@@ -1220,6 +1224,7 @@ mod tests {
             comment: comment_text.to_string(),
             severity,
             suggested_code: code.map(str::to_string),
+            confidence: 1.0,
         })
     }
 

@@ -10,7 +10,10 @@ use tracing::{debug, instrument};
 use super::http::send_and_parse;
 use super::parse::provider_response_format;
 use crate::ai::provider::AiProvider;
-use crate::ai::types::{ChatCompletionRequest, ChatMessage, PrReviewResponse};
+use crate::ai::types::{
+    ChatCompletionRequest, ChatMessage, CommentSeverity, FindingVerdict, PrReviewComment,
+    PrReviewResponse, VerifiedFinding, VerifyFindingsResponse,
+};
 use crate::metrics::AiStats;
 
 use crate::ai::prompts::build_pr_review_system_prompt;
@@ -164,12 +167,262 @@ pub(super) async fn review_pr(
     Ok((review, ai_stats, finish_reasons, ctx.truncated_patch_files))
 }
 
+/// Verifies candidate review findings against the diff with one AI call.
+///
+/// Sends all candidate comments plus the diff in a single structured-output
+/// request and returns a per-finding verdict (`keep`/`drop`) with confidence.
+/// The diff is truncated so the verification prompt respects the same
+/// effective budget used by the review prompt.
+///
+/// # Errors
+///
+/// Returns an error if the API request fails or the response cannot be
+/// parsed as valid JSON.
+#[instrument(skip(provider, comments, diff, review_config), fields(finding_count = comments.len()))]
+pub async fn verify_findings(
+    provider: &(impl AiProvider + ?Sized),
+    comments: &[PrReviewComment],
+    diff: &str,
+    review_config: &crate::config::ReviewConfig,
+) -> Result<(VerifyFindingsResponse, AiStats, Vec<String>)> {
+    debug!(
+        model = %provider.model(),
+        finding_count = comments.len(),
+        "Calling {} API for findings verification",
+        provider.name()
+    );
+
+    let system_content = crate::ai::prompts::build_verify_findings_system_prompt();
+
+    // Respect the same effective budget as the review prompt: reserve room
+    // for the system prompt and the candidate-findings section, then cap the
+    // diff with what remains.
+    let budget = crate::ai::review_context::effective_budget(
+        review_config.max_prompt_chars,
+        None,
+        provider.max_tokens(),
+    );
+    let comments_section_len: usize = comments
+        .iter()
+        .map(|c| c.comment.len() + c.file.len() + 64)
+        .sum();
+    let reserved = system_content.len() + comments_section_len + 256;
+    let max_diff_chars = budget.saturating_sub(reserved);
+
+    let user_prompt =
+        crate::ai::prompts::build_verify_findings_user_prompt(comments, diff, max_diff_chars);
+
+    let request = ChatCompletionRequest {
+        model: provider.model().to_string(),
+        messages: vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: Some(system_content),
+                reasoning: None,
+                cache_control: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some(user_prompt),
+                reasoning: None,
+                cache_control: None,
+            },
+        ],
+        response_format: provider_response_format(provider),
+        max_tokens: Some(provider.max_tokens()),
+        temperature: Some(provider.temperature()),
+        session_id: provider.session_id("verify"),
+    };
+
+    let (verdicts, ai_stats, finish_reasons) =
+        send_and_parse::<VerifyFindingsResponse>(provider, &request).await?;
+
+    debug!(
+        findings = verdicts.findings.len(),
+        input_tokens = ai_stats.input_tokens,
+        output_tokens = ai_stats.output_tokens,
+        "Findings verification complete"
+    );
+
+    Ok((verdicts, ai_stats, finish_reasons))
+}
+
+/// Filters candidate comments using verification verdicts.
+///
+/// Drops findings whose verdict is `drop` or whose confidence is below
+/// `min_confidence`; additionally drops info-severity findings when
+/// `suppress_info` is set. Verdicts are keyed by the model-provided explicit
+/// finding `index`, not by array position, so reordered or sparse responses
+/// cannot apply one verdict to a different comment. Fail closed: candidate
+/// findings with no matching verdict entry are dropped.
+#[must_use]
+pub fn filter_verified_findings(
+    comments: Vec<PrReviewComment>,
+    verdicts: &[VerifiedFinding],
+    min_confidence: f32,
+    suppress_info: bool,
+) -> Vec<PrReviewComment> {
+    comments
+        .into_iter()
+        .enumerate()
+        .filter(|(i, comment)| {
+            if suppress_info && comment.severity == CommentSeverity::Info {
+                return false;
+            }
+            match u32::try_from(*i) {
+                Ok(idx) => matches!(verdicts.iter().find(|v| v.index == idx), Some(v)
+                    if v.verdict == FindingVerdict::Keep && v.confidence >= min_confidence),
+                Err(_) => false,
+            }
+        })
+        .map(|(_, comment)| comment)
+        .collect()
+}
+
+/// Drops info-severity findings from the candidate comments.
+///
+/// Applied locally when the verification pass is disabled
+/// (`verify_enabled = false`) and `suppress_info` is set.
+#[must_use]
+pub fn drop_info_findings(comments: Vec<PrReviewComment>) -> Vec<PrReviewComment> {
+    comments
+        .into_iter()
+        .filter(|c| c.severity != CommentSeverity::Info)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ai::provider::MAX_BODY_LENGTH;
     use crate::ai::review_context::ReviewContext;
     use crate::ai::types::{PrDetails, PrFile};
+
+    /// Candidate comment with the given severity.
+    fn make_comment(severity: CommentSeverity) -> PrReviewComment {
+        PrReviewComment {
+            file: "a.rs".to_string(),
+            line: Some(1),
+            comment: "finding".to_string(),
+            severity,
+            suggested_code: None,
+            confidence: 0.9,
+        }
+    }
+
+    /// Verdict entry for finding `index`.
+    fn verdict(index: u32, v: FindingVerdict, confidence: f32) -> VerifiedFinding {
+        VerifiedFinding {
+            index,
+            verdict: v,
+            confidence,
+        }
+    }
+
+    #[test]
+    fn test_filter_verified_findings_drops_drop_verdict_and_low_confidence() {
+        // Arrange
+        let comments = vec![
+            make_comment(CommentSeverity::Warning),
+            make_comment(CommentSeverity::Warning),
+            make_comment(CommentSeverity::Warning),
+        ];
+        let verdicts = vec![
+            verdict(0, FindingVerdict::Keep, 0.9),
+            verdict(1, FindingVerdict::Drop, 0.9),
+            verdict(2, FindingVerdict::Keep, 0.5),
+        ];
+
+        // Act
+        let kept = filter_verified_findings(comments, &verdicts, 0.7, false);
+
+        // Assert
+        assert_eq!(
+            kept.len(),
+            1,
+            "drop verdict and below-threshold confidence must be filtered out"
+        );
+    }
+
+    #[test]
+    fn test_filter_verified_findings_suppresses_info_by_default() {
+        // Arrange
+        let comments = vec![
+            make_comment(CommentSeverity::Info),
+            make_comment(CommentSeverity::Warning),
+        ];
+        let verdicts = vec![
+            verdict(0, FindingVerdict::Keep, 1.0),
+            verdict(1, FindingVerdict::Keep, 1.0),
+        ];
+
+        // Act
+        let kept_default = filter_verified_findings(comments.clone(), &verdicts, 0.7, true);
+        let kept_opt_out = filter_verified_findings(comments, &verdicts, 0.7, false);
+
+        // Assert
+        assert_eq!(
+            kept_default.len(),
+            1,
+            "info-severity findings must be suppressed by default"
+        );
+        assert_eq!(
+            kept_opt_out.len(),
+            2,
+            "info-severity findings must be kept when suppression is disabled"
+        );
+    }
+
+    #[test]
+    fn test_filter_verified_findings_handles_reordered_sparse_and_partial_responses() {
+        // Arrange: three candidates; the model returned only two verdicts,
+        // reordered, and with a stale index that must not fall through.
+        let comments = vec![
+            make_comment(CommentSeverity::Warning),
+            make_comment(CommentSeverity::Warning),
+            make_comment(CommentSeverity::Warning),
+        ];
+        let reordered_sparse = vec![
+            verdict(2, FindingVerdict::Keep, 0.9),
+            verdict(0, FindingVerdict::Keep, 0.9),
+        ];
+
+        // Act
+        let kept = filter_verified_findings(comments.clone(), &reordered_sparse, 0.7, false);
+        let kept_no_verdicts = filter_verified_findings(comments.clone(), &[], 0.7, false);
+
+        // Assert: index-keyed lookup keeps findings 0 and 2, drops 1 (no
+        // verdict); a fully missing response fails closed and drops all.
+        assert_eq!(
+            kept.len(),
+            2,
+            "sparse response must drop unverified findings"
+        );
+        assert!(
+            kept_no_verdicts.is_empty(),
+            "partial verification must fail closed: no verdicts means no findings"
+        );
+    }
+
+    #[test]
+    fn test_drop_info_findings_local_filter() {
+        // Arrange
+        let comments = vec![
+            make_comment(CommentSeverity::Info),
+            make_comment(CommentSeverity::Suggestion),
+            make_comment(CommentSeverity::Issue),
+        ];
+
+        // Act
+        let kept = drop_info_findings(comments);
+
+        // Assert
+        assert_eq!(
+            kept.len(),
+            2,
+            "only info-severity findings must be dropped by the local filter"
+        );
+    }
 
     /// Minimal `PrDetails` with caller-supplied files and no dep enrichments.
     fn make_pr(files: Vec<PrFile>) -> PrDetails {

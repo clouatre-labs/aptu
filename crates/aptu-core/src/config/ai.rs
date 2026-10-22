@@ -18,6 +18,8 @@ pub enum TaskType {
     Review,
     /// Label creation task.
     Create,
+    /// Findings verification task (PR review post-processing).
+    Verify,
 }
 
 /// Task-specific AI model override.
@@ -52,6 +54,8 @@ pub struct TasksConfig {
     pub review: Option<TaskOverride>,
     /// Create task configuration.
     pub create: Option<TaskOverride>,
+    /// Findings verification task configuration.
+    pub verify: Option<TaskOverride>,
 }
 
 /// Single entry in the fallback provider chain.
@@ -190,11 +194,7 @@ impl AiConfig {
         task: TaskType,
         estimated_size: Option<usize>,
     ) -> (String, String) {
-        let task_override = match task {
-            TaskType::Triage => self.tasks.as_ref().and_then(|t| t.triage.as_ref()),
-            TaskType::Review => self.tasks.as_ref().and_then(|t| t.review.as_ref()),
-            TaskType::Create => self.tasks.as_ref().and_then(|t| t.create.as_ref()),
-        };
+        let task_override = self.task_override_for(task);
 
         let provider = task_override
             .and_then(|o| o.provider.clone())
@@ -213,7 +213,7 @@ impl AiConfig {
         ) {
             let default_threshold = match task {
                 TaskType::Review => 60_000,
-                TaskType::Triage | TaskType::Create => 8_192,
+                TaskType::Triage | TaskType::Create | TaskType::Verify => 8_192,
             };
             let threshold = task_override
                 .and_then(|o| o.routing_threshold_chars)
@@ -243,6 +243,17 @@ impl AiConfig {
         (provider, model)
     }
 
+    /// Return the per-task override for the given task, if configured.
+    fn task_override_for(&self, task: TaskType) -> Option<&TaskOverride> {
+        let tasks = self.tasks.as_ref()?;
+        match task {
+            TaskType::Triage => tasks.triage.as_ref(),
+            TaskType::Review => tasks.review.as_ref(),
+            TaskType::Create => tasks.create.as_ref(),
+            TaskType::Verify => tasks.verify.as_ref(),
+        }
+    }
+
     /// Resolve the effective request timeout in seconds for a specific task.
     ///
     /// Resolution order:
@@ -256,11 +267,7 @@ impl AiConfig {
     /// producing an immediately-timing-out client.
     #[must_use]
     pub fn effective_timeout_for_task(&self, task: TaskType) -> u64 {
-        let task_override = match task {
-            TaskType::Triage => self.tasks.as_ref().and_then(|t| t.triage.as_ref()),
-            TaskType::Review => self.tasks.as_ref().and_then(|t| t.review.as_ref()),
-            TaskType::Create => self.tasks.as_ref().and_then(|t| t.create.as_ref()),
-        };
+        let task_override = self.task_override_for(task);
 
         if let Some(timeout) = task_override
             .and_then(|o| o.timeout_seconds)
@@ -273,7 +280,7 @@ impl AiConfig {
             // Review operations get extra headroom by default since large
             // diffs take significantly longer to analyze.
             TaskType::Review => 120,
-            TaskType::Triage | TaskType::Create => {
+            TaskType::Triage | TaskType::Create | TaskType::Verify => {
                 if self.timeout_seconds > 0 {
                     self.timeout_seconds
                 } else {
@@ -294,6 +301,7 @@ mod tests {
         assert_eq!(config.effective_timeout_for_task(TaskType::Review), 120);
         assert_eq!(config.effective_timeout_for_task(TaskType::Triage), 30);
         assert_eq!(config.effective_timeout_for_task(TaskType::Create), 30);
+        assert_eq!(config.effective_timeout_for_task(TaskType::Verify), 30);
     }
 
     #[test]
@@ -339,5 +347,29 @@ mod tests {
         // Zero override and zero global both fall through to task defaults.
         assert_eq!(config.effective_timeout_for_task(TaskType::Triage), 30);
         assert_eq!(config.effective_timeout_for_task(TaskType::Review), 120);
+    }
+
+    #[test]
+    fn test_resolve_for_task_verify_uses_small_model_tier() {
+        let config = AiConfig {
+            provider: "gemini".to_string(),
+            model: "default-model".to_string(),
+            tasks: Some(TasksConfig {
+                verify: Some(TaskOverride {
+                    small_model: Some("small-verify".to_string()),
+                    large_model: Some("large-verify".to_string()),
+                    ..TaskOverride::default()
+                }),
+                ..TasksConfig::default()
+            }),
+            ..AiConfig::default()
+        };
+
+        // Small prompt routes to the small tier; large prompt to the large tier.
+        let (provider, model) = config.resolve_for_task(TaskType::Verify, Some(1_000));
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "small-verify");
+        let (_, large_model) = config.resolve_for_task(TaskType::Verify, Some(10_000));
+        assert_eq!(large_model, "large-verify");
     }
 }

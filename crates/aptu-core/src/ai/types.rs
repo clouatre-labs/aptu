@@ -500,6 +500,44 @@ pub struct PrReviewComment {
     /// Provide only the replacement lines (no diff markers).
     #[serde(default)]
     pub suggested_code: Option<String>,
+    /// Reviewer confidence in this finding (0.0-1.0). Defaults to 1.0 when
+    /// absent so legacy responses without confidence are never gated out.
+    #[serde(default = "default_confidence")]
+    pub confidence: f32,
+}
+
+/// Default confidence for findings that omit the field.
+fn default_confidence() -> f32 {
+    1.0
+}
+
+/// Verdict from the verification pass for a single candidate finding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum FindingVerdict {
+    /// Finding is confirmed against the diff; keep it.
+    Keep,
+    /// Finding could not be verified; drop it.
+    Drop,
+}
+
+/// Per-finding verification result from the verification pass.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct VerifiedFinding {
+    /// Index of the candidate comment in the verification input (0-based).
+    pub index: u32,
+    /// Whether the finding is confirmed (`keep`) or unverifiable (`drop`).
+    pub verdict: FindingVerdict,
+    /// Confidence in the finding (0.0-1.0).
+    pub confidence: f32,
+}
+
+/// Structured verification response from AI.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
+pub struct VerifyFindingsResponse {
+    /// Verification verdict for each candidate finding.
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub findings: Vec<VerifiedFinding>,
 }
 
 /// Structured PR review response from AI.
@@ -573,6 +611,21 @@ mod tests {
         let json = r#"{"summary":"Test","suggested_labels":[],"clarifying_questions":[],"potential_duplicates":[],"related_issues":[]}"#;
         let tr: TriageResponse = serde_json::from_str(json).unwrap();
         assert!(tr.complexity.is_none());
+    }
+
+    #[test]
+    fn test_pr_review_comment_confidence_defaults_when_absent() {
+        // Act
+        let comment: PrReviewComment = serde_json::from_str(
+            r#"{"file":"a.rs","line":1,"comment":"x","severity":"warning","suggested_code":null}"#,
+        )
+        .unwrap();
+
+        // Assert
+        assert_eq!(
+            comment.confidence, 1.0,
+            "absent confidence must deserialize to the 1.0 default"
+        );
     }
 
     #[test]

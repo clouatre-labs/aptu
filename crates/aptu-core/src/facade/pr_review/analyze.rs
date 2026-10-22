@@ -442,7 +442,7 @@ pub async fn analyze_pr(
     // applies its semantic drop order) and retry exactly once; a second
     // rejection propagates as a failure. The re-trim is recorded in
     // `budget_drops` telemetry.
-    let ((response, mut ai_stats, finish_reasons, truncated_patch_files), ctx) =
+    let ((mut response, mut ai_stats, finish_reasons, truncated_patch_files), ctx) =
         retry_once_on_context_length(
             || async {
                 call_review_ai(
@@ -488,6 +488,50 @@ pub async fn analyze_pr(
             },
         )
         .await?;
+
+    // Verification pass: exactly one extra small-model call confirms each
+    // candidate finding against the diff before anything is posted. When the
+    // pass is disabled, only the local info-suppression filter applies.
+    if review_config.verify_enabled && !response.comments.is_empty() {
+        let diff = reconstruct_diff_from_pr(&pr_details.files);
+        let verify_estimate = diff.len()
+            + response
+                .comments
+                .iter()
+                .map(|c| c.comment.len() + 64)
+                .sum::<usize>();
+        let (verify_provider_name, verify_model_name) =
+            ai_config.resolve_for_task(TaskType::Verify, Some(verify_estimate));
+        let (verdicts, verify_stats, _) = crate::facade::ai_client::try_with_fallback(
+            provider,
+            &verify_provider_name,
+            &verify_model_name,
+            ai_config,
+            TaskType::Verify,
+            |client| {
+                let comments = response.comments.clone();
+                let diff = diff.clone();
+                let verify_config = review_config.clone();
+                async move {
+                    client
+                        .verify_findings(&comments, &diff, &verify_config)
+                        .await
+                }
+            },
+        )
+        .await?;
+        response.comments = crate::ai::provider::review::filter_verified_findings(
+            response.comments,
+            &verdicts.findings,
+            review_config.min_confidence,
+            review_config.suppress_info,
+        );
+        ai_stats.input_tokens += verify_stats.input_tokens;
+        ai_stats.output_tokens += verify_stats.output_tokens;
+        ai_stats.duration_ms += verify_stats.duration_ms;
+    } else if review_config.suppress_info {
+        response.comments = crate::ai::provider::review::drop_info_findings(response.comments);
+    }
 
     // Set trace_id on ai_stats
     ai_stats.trace_id = Some(trace_id.clone());

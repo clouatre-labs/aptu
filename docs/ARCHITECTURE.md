@@ -67,8 +67,9 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Z.A
 3. Build AST context (only when `review.ast_context = true`; disabled by default): function signatures and imports for each changed file using `aptu-coder-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
 4. Build call-graph context (only when `review.ast_context = true`; disabled by default): cross-file caller chains for changed functions; modified symbols are derived from PR diff hunks (declaration lines matching `fn`/`async fn`, `struct`, `enum`, `trait`, `impl` via a `SYMBOL_RE` static regex), not from the full graph; callers residing only in files the PR does not touch are intentionally excluded
 5. Enforce prompt budget (`max_prompt_chars`): drop sections in order (`call_graph` -> `ast_context` -> file `full_content` -> file patches) until budget is met
-6. Post inline review comments via GitHub REST API
-7. Post or update the review summary as an issue comment: the summary carries an `<!-- APTU_REVIEW:<sha> -->` marker keyed to the PR head SHA. An existing Aptu bot summary for the same head SHA is left untouched (dedup); a summary for a different or unknown SHA is updated in place; a missing summary is created after the review posts
+6. Verify findings (one extra small-model call when `review.verify_enabled = true`, default): each candidate finding is checked against the diff; findings with a `drop` verdict or confidence below `review.min_confidence` (default 0.7) are dropped, and info-severity findings are suppressed when `review.suppress_info = true` (default). When verification is disabled, only the local info-suppression filter applies
+7. Post inline review comments via GitHub REST API
+8. Post or update the review summary as an issue comment: the summary carries an `<!-- APTU_REVIEW:<sha> -->` marker keyed to the PR head SHA. An existing Aptu bot summary for the same head SHA is left untouched (dedup); a summary for a different or unknown SHA is updated in place; a missing summary is created after the review posts
 
 The `ReviewContext` struct centralizes all enrichment decisions: AST context, call graph, instructions, and budget enforcement are all managed there before the prompt is assembled. Repo-path is inferred from CWD when not explicitly supplied via `--repo-path`.
 

@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "index": 0,
+      "verdict": "keep|drop",
+      "confidence": 0.9
+    }
+  ]
+}
