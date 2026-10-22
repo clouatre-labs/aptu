@@ -494,6 +494,15 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
 
     write_existing_review_comments_section(&mut prompt, ctx);
 
+    if let Some(prior) = ctx.prior_findings.as_deref().filter(|p| !p.is_empty()) {
+        prompt.push_str("\n<prior_findings>\n");
+        prompt.push_str(
+            "The following findings were already reported by a previous review of this PR:\n",
+        );
+        prompt.push_str(prior);
+        prompt.push_str("Do not repeat these findings; only report NEW issues in the changed range.\n</prior_findings>\n");
+    }
+
     prompt
 }
 
@@ -597,6 +606,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         }
     }
 
@@ -913,6 +923,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         };
 
         let prompt =
@@ -966,6 +977,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         };
 
         // Act: build prompt with explicit per-file patch cap
@@ -1042,6 +1054,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         };
 
         // Act: build prompt with cap equal to patch size
@@ -1103,6 +1116,7 @@ mod tests {
             head_sha: String::new(),
             review_comments,
             instructions: None,
+            prior_findings: None,
         };
 
         super::super::review_context::ReviewContext {
@@ -1206,6 +1220,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         };
 
         let mut ctx = super::super::review_context::ReviewContext {
@@ -1259,6 +1274,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         };
 
         let mut ctx = super::super::review_context::ReviewContext {
@@ -1431,6 +1447,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         };
 
         let mut ctx = super::super::review_context::ReviewContext {
@@ -1506,6 +1523,7 @@ mod tests {
             head_sha: String::new(),
             review_comments: vec![],
             instructions: None,
+            prior_findings: None,
         };
 
         ReviewContext {

@@ -70,7 +70,7 @@ jobs:
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
-By default, the action reviews all changed files without AST/call-graph enrichment; both are opt-in via `[review] ast_context = true` (see [PR Review with AST Context](#pr-review-with-ast-context) below).
+By default, the action reviews all changed files without AST/call-graph enrichment; both are opt-in via `[review] ast_context = true` (see [PR Review with AST Context](#pr-review-with-ast-context) below). On `synchronize` events, if a prior Aptu review marker records a different head SHA, the action reviews only the range diff since the last reviewed commit; any failure to fetch that range falls back to a full review of all changed files.
 
 ## Configuration
 
