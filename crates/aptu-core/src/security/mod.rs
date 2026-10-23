@@ -6,7 +6,6 @@
 //! Uses regex patterns to detect common vulnerabilities like hardcoded secrets,
 //! SQL injection, XSS, and other OWASP/CWE issues.
 
-pub mod cache;
 pub mod detection;
 pub mod ignore;
 pub mod patterns;
@@ -14,9 +13,6 @@ pub mod sarif;
 pub mod scanner;
 pub mod types;
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use cache::FindingCache;
-pub use cache::{CachedFinding, cache_key};
 pub use detection::needs_security_scan;
 pub use ignore::SecurityConfig;
 pub use patterns::PatternEngine;

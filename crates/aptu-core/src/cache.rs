@@ -33,9 +33,6 @@ pub const DEFAULT_REPO_TTL_HOURS: i64 = 24;
 /// Default TTL for model registry cache entries (in seconds).
 pub const DEFAULT_MODEL_TTL_SECS: u64 = 86400;
 
-/// Default TTL for security finding cache entries (in days).
-pub const DEFAULT_SECURITY_TTL_DAYS: i64 = 7;
-
 /// A cached entry with metadata.
 ///
 /// Wraps cached data with timestamp and optional etag for validation.
