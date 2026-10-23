@@ -434,11 +434,11 @@ pub fn compare_files_to_pr_files(files: &[octocrab::models::repos::DiffEntry]) -
 /// Fetches the file set changed between the last-reviewed SHA and the current
 /// head SHA via the compare-commits API (incremental review path).
 ///
-/// Returns `Some(files)` only when the range is complete, non-empty, and at
-/// least one mapped file carries a usable (non-empty) patch: a compare result
-/// containing only binary or otherwise patchless files yields no reviewable
-/// context, so `None` is returned and the caller falls back to the full PR
-/// file set. This never fails the review: incremental detection is
+/// Returns a tri-state outcome: [`IncrementalFiles::Empty`] when the compare
+/// range contains no files (nothing to review), [`IncrementalFiles::Fallback`]
+/// with a reason when the incremental path cannot be used (API cap, compare
+/// error, or no patchable files), or [`IncrementalFiles::Files`] with the
+/// reviewable file set. This never fails the review: incremental detection is
 /// best-effort by design.
 #[cfg(not(target_arch = "wasm32"))]
 #[instrument(skip(client), fields(owner = %owner, repo = %repo))]
@@ -448,7 +448,7 @@ pub async fn fetch_pr_files_since(
     repo: &str,
     last_sha: &str,
     head_sha: &str,
-) -> Option<Vec<PrFile>> {
+) -> IncrementalFiles {
     match client
         .repos(owner, repo)
         .compare_commits(last_sha.to_string(), head_sha.to_string())
@@ -459,28 +459,53 @@ pub async fn fetch_pr_files_since(
             let files = comparison.files.unwrap_or_default();
             if !compare_range_complete(files.len()) {
                 debug!(last_sha = %last_sha, head_sha = %head_sha, "Compare range hit API file cap; falling back to full review");
-                None
-            } else if files.is_empty() {
-                debug!(last_sha = %last_sha, head_sha = %head_sha, "Compare range empty; falling back to full review");
-                None
+                IncrementalFiles::Fallback(IncrementalFallbackReason::ApiCap)
             } else {
                 let mapped = compare_files_to_pr_files(&files);
-                if mapped
-                    .iter()
-                    .all(|f| f.patch.as_deref().is_none_or(str::is_empty))
-                {
-                    debug!(last_sha = %last_sha, head_sha = %head_sha, "Compare range has no patchable files; falling back to full review");
-                    None
-                } else {
-                    debug!(last_sha = %last_sha, head_sha = %head_sha, count = mapped.len(), "Fetched incremental compare range");
-                    Some(mapped)
-                }
+                classify_incremental_files(mapped)
             }
         }
         Err(e) => {
             tracing::warn!(error = %e, "Compare-commits fetch failed; falling back to full review");
-            None
+            IncrementalFiles::Fallback(IncrementalFallbackReason::CompareError)
         }
+    }
+}
+
+/// Reason the incremental review path falls back to a full review.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IncrementalFallbackReason {
+    /// The compare range reached the compare API file cap and may be truncated.
+    ApiCap,
+    /// The compare API request failed.
+    CompareError,
+    /// The compare range contains no files with a usable (non-empty) patch.
+    NoPatchableFiles,
+}
+
+/// Tri-state outcome of the incremental compare-range fetch.
+#[derive(Debug)]
+pub enum IncrementalFiles {
+    /// The compare range is empty: nothing has changed since the last review.
+    Empty,
+    /// The incremental path cannot be used; fall back to a full review.
+    Fallback(IncrementalFallbackReason),
+    /// The incremental file set to review.
+    Files(Vec<PrFile>),
+}
+
+/// Classifies a mapped compare-range file set into a tri-state outcome.
+#[must_use]
+fn classify_incremental_files(mapped: Vec<PrFile>) -> IncrementalFiles {
+    if mapped.is_empty() {
+        IncrementalFiles::Empty
+    } else if mapped
+        .iter()
+        .all(|f| f.patch.as_deref().is_none_or(str::is_empty))
+    {
+        IncrementalFiles::Fallback(IncrementalFallbackReason::NoPatchableFiles)
+    } else {
+        IncrementalFiles::Files(mapped)
     }
 }
 
@@ -2479,5 +2504,77 @@ mod tests {
         // Assert: at-cap ranges may be truncated, so they are incomplete.
         assert!(below_cap, "ranges below the cap are considered complete");
         assert!(!at_cap, "ranges at the API cap may be silently truncated");
+    }
+
+    fn patchable_file(name: &str) -> PrFile {
+        PrFile {
+            filename: name.to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 0,
+            patch: Some("+ new code".to_string()),
+            patch_truncated: false,
+            full_content: None,
+        }
+    }
+
+    fn patchless_file(name: &str) -> PrFile {
+        PrFile {
+            filename: name.to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 0,
+            patch: None,
+            patch_truncated: false,
+            full_content: None,
+        }
+    }
+
+    #[test]
+    fn test_classify_incremental_files_empty_range() {
+        // Arrange: an empty mapped compare range.
+
+        // Act
+        let outcome = classify_incremental_files(Vec::new());
+
+        // Assert: empty range is reported as Empty, not a fallback.
+        assert!(
+            matches!(outcome, IncrementalFiles::Empty),
+            "empty compare range must classify as Empty"
+        );
+    }
+
+    #[test]
+    fn test_classify_incremental_files_fallback_on_no_patchable_files() {
+        // Arrange: only binary or otherwise patchless files.
+
+        // Act
+        let outcome = classify_incremental_files(vec![patchless_file("bin.png")]);
+
+        // Assert: all-patchless ranges force a full-review fallback.
+        assert!(
+            matches!(
+                outcome,
+                IncrementalFiles::Fallback(IncrementalFallbackReason::NoPatchableFiles)
+            ),
+            "patchless ranges must classify as Fallback(NoPatchableFiles)"
+        );
+    }
+
+    #[test]
+    fn test_classify_incremental_files_returns_files_happy_path() {
+        // Arrange: a range with at least one usable patch.
+
+        // Act
+        let outcome =
+            classify_incremental_files(vec![patchless_file("bin.png"), patchable_file("a.rs")]);
+
+        // Assert: the file set is returned for incremental review.
+        match outcome {
+            IncrementalFiles::Files(files) => {
+                assert_eq!(files.len(), 2, "all mapped files are returned");
+            }
+            other => panic!("expected Files, got {other:?}"),
+        }
     }
 }
