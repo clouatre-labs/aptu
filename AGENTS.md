@@ -37,7 +37,7 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 
 ### AI & Transport
 
-- All providers share an OpenAI-compatible interface; registry in `aptu-core::ai::registry`; circuit breaker in `aptu-core::ai::circuit_breaker`
+- All providers share an OpenAI-compatible interface; registry in `aptu-core::ai::registry`
 - `AiProvider` trait (`ai/provider/mod.rs`) splits operation logic across `provider/{triage,review,label,http,parse}.rs`
 - User-prompt builders live in `ai/prompts/mod.rs`; do not inline them in provider files
 - Exponential backoff retry with `is_retryable_*` helpers in `aptu-core::retry`

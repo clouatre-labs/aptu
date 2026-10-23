@@ -178,8 +178,6 @@ mod tests {
             allow_paid_models: true,
             max_tokens: 2000,
             temperature: 0.7,
-            circuit_breaker_threshold: 3,
-            circuit_breaker_reset_seconds: 60,
             retry_max_attempts: 3,
             tasks: None,
             fallback: None,

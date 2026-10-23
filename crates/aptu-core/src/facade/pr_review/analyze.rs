@@ -783,7 +783,11 @@ mod tests {
             || {
                 panic!("retrim must not run when the first attempt succeeds");
                 #[allow(unreachable_code)]
-                std::future::ready(Err(AptuError::CircuitOpen))
+                std::future::ready(Err(AptuError::AI {
+                    provider: "mock".to_string(),
+                    message: "mock failure".to_string(),
+                    status: None,
+                }))
             },
         )
         .await

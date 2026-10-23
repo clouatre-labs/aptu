@@ -14,7 +14,6 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::circuit_breaker::CircuitBreaker;
 use super::provider::AiProvider;
 use super::registry::{PROVIDER_ANTHROPIC, PROVIDER_OPENROUTER, ProviderConfig, get_provider};
 use crate::config::AiConfig;
@@ -132,8 +131,6 @@ pub struct AiClient {
     temperature: f32,
     /// Maximum retry attempts for rate-limited requests.
     max_attempts: u32,
-    /// Circuit breaker for resilience.
-    circuit_breaker: CircuitBreaker,
     /// Optional custom guidance from config to inject into system prompts.
     custom_guidance: Option<String>,
     /// `OpenRouter` data collection setting.
@@ -190,10 +187,6 @@ impl AiClient {
             max_tokens: config.max_tokens,
             temperature: config.temperature,
             max_attempts: config.retry_max_attempts,
-            circuit_breaker: CircuitBreaker::new(
-                config.circuit_breaker_threshold,
-                config.circuit_breaker_reset_seconds,
-            ),
             custom_guidance: config.custom_guidance.clone(),
             openrouter_data_collection: config.openrouter_data_collection.clone(),
             openrouter_zdr: config.openrouter_zdr,
@@ -244,10 +237,6 @@ impl AiClient {
             max_tokens: config.max_tokens,
             temperature: config.temperature,
             max_attempts: config.retry_max_attempts,
-            circuit_breaker: CircuitBreaker::new(
-                config.circuit_breaker_threshold,
-                config.circuit_breaker_reset_seconds,
-            ),
             custom_guidance: config.custom_guidance.clone(),
             openrouter_data_collection: config.openrouter_data_collection.clone(),
             openrouter_zdr: config.openrouter_zdr,
@@ -376,12 +365,6 @@ impl AiClient {
     pub fn auth_method(&self) -> AuthMethod {
         self.auth_method
     }
-
-    /// Get the circuit breaker for this client.
-    #[must_use]
-    pub fn circuit_breaker(&self) -> &CircuitBreaker {
-        &self.circuit_breaker
-    }
 }
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -413,10 +396,6 @@ impl AiProvider for AiClient {
 
     fn max_attempts(&self) -> u32 {
         self.max_attempts
-    }
-
-    fn circuit_breaker(&self) -> Option<&super::CircuitBreaker> {
-        Some(&self.circuit_breaker)
     }
 
     fn custom_guidance(&self) -> Option<&str> {
@@ -491,8 +470,6 @@ mod tests {
             temperature: 0.3,
             timeout_seconds: 30,
             allow_paid_models: false,
-            circuit_breaker_threshold: 3,
-            circuit_breaker_reset_seconds: 60,
             retry_max_attempts: 3,
             tasks: None,
             fallback: None,

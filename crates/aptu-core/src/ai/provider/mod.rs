@@ -96,11 +96,6 @@ pub trait AiProvider: Send + Sync {
         3
     }
 
-    /// Returns the circuit breaker for this provider (optional).
-    fn circuit_breaker(&self) -> Option<&crate::ai::CircuitBreaker> {
-        None
-    }
-
     /// Builds HTTP headers for API requests.
     fn build_headers(&self) -> reqwest::header::HeaderMap {
         let mut headers = reqwest::header::HeaderMap::new();

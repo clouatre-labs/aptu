@@ -91,11 +91,6 @@ pub fn format_error(error: &Error) -> String {
                     "{aptu_err}\n\nTip: Your system keyring may be locked. Try unlocking it and try again."
                 )
             }
-            AptuError::CircuitOpen => {
-                format!(
-                    "{aptu_err}\n\nTip: The AI provider is temporarily unavailable. Please try again in a moment."
-                )
-            }
             AptuError::TruncatedResponse { provider } => {
                 format!(
                     "{aptu_err}\n\nTip: The {provider} AI provider returned an incomplete response. This may be due to token limits. Try again in a moment."
