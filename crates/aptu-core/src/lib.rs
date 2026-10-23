@@ -111,7 +111,6 @@ pub use github::pulls::{ReviewPostOutcome, SummaryPostOutcome};
 // ============================================================================
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use security::FindingCache;
 pub use security::{
     Confidence, Finding, PatternEngine, SarifReport, SecurityConfig, SecurityScanner, Severity,
     needs_security_scan,
