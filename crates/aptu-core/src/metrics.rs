@@ -156,14 +156,8 @@ pub struct ReviewContextRecord {
     pub truncated_chars_dropped: usize,
     /// Names of files whose patches were truncated or skipped at prompt assembly.
     pub truncated_patch_files: Vec<String>,
-    /// Characters in AST context.
-    pub ast_context_chars: usize,
-    /// Characters in call graph context.
-    pub call_graph_chars: usize,
-    /// Names of context items dropped due to budget (e.g., `call_graph`, `full_content`).
+    /// Names of context items dropped due to budget (e.g., `full_content`).
     pub budget_drops: Vec<String>,
-    /// Whether the repository path was inferred from CWD.
-    pub cwd_inferred: bool,
     /// Final assembled prompt character count.
     pub prompt_chars_final: usize,
     /// Finish reasons from the AI response.
@@ -367,10 +361,7 @@ mod tests {
             files_truncated: 0,
             truncated_chars_dropped: 0,
             truncated_patch_files: vec![],
-            ast_context_chars: 1000,
-            call_graph_chars: 2000,
             budget_drops: vec![],
-            cwd_inferred: false,
             prompt_chars_final: 5000,
             finish_reasons: vec!["stop".to_string()],
             max_prompt_chars: 120_000,
@@ -397,10 +388,7 @@ mod tests {
             files_truncated: 1,
             truncated_chars_dropped: 500,
             truncated_patch_files: vec!["big.rs".to_string()],
-            ast_context_chars: 1000,
-            call_graph_chars: 2000,
-            budget_drops: vec!["call_graph".to_string()],
-            cwd_inferred: true,
+            budget_drops: vec!["full_content".to_string()],
             prompt_chars_final: 5000,
             finish_reasons: vec!["stop".to_string()],
             max_prompt_chars: 120_000,
@@ -415,7 +403,7 @@ mod tests {
         assert!(content.contains("\"files_total\":5"));
         assert!(content.contains("\"files_with_patch\":4"));
         assert!(content.contains("\"github_actor\":\"test-actor\""));
-        assert!(content.contains("\"budget_drops\":[\"call_graph\"]"));
+        assert!(content.contains("\"budget_drops\":[\"full_content\"]"));
         assert!(content.contains("\"truncated_patch_files\":[\"big.rs\"]"));
         assert!(content.contains("\"finish_reasons\":[\"stop\"]"));
         assert!(content.ends_with('\n'));
@@ -434,10 +422,7 @@ mod tests {
             files_truncated: 0,
             truncated_chars_dropped: 0,
             truncated_patch_files: vec![],
-            ast_context_chars: 100,
-            call_graph_chars: 50,
             budget_drops: vec![],
-            cwd_inferred: false,
             prompt_chars_final: 5000,
             finish_reasons: vec!["stop".to_string()],
             max_prompt_chars: 120_000,

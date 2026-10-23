@@ -15,9 +15,9 @@ teardown() {
 
 write_fixture() {
     printf '%s\n' \
-        '{"trace_id":"t1","operation":"pr_review","pr":"owner/repo#1","model":"gpt-4","github_actor":"alice","files_total":10,"files_with_patch":5,"files_truncated":2,"truncated_chars_dropped":100,"ast_context_chars":0,"call_graph_chars":0,"dep_enrichments_count":0,"dep_enrichments_chars":0,"budget_drops":["call_graph"],"cwd_inferred":false,"prompt_chars_final":90000,"finish_reasons":["stop"],"max_prompt_chars":120000}' \
-        '{"trace_id":"t2","operation":"pr_review","pr":"owner/repo#2","model":"gpt-4","github_actor":"bob","files_total":3,"files_with_patch":3,"files_truncated":0,"truncated_chars_dropped":0,"ast_context_chars":0,"call_graph_chars":0,"dep_enrichments_count":0,"dep_enrichments_chars":0,"budget_drops":[],"cwd_inferred":false,"prompt_chars_final":30000,"finish_reasons":["stop"],"max_prompt_chars":120000}' \
-        '{"trace_id":"t3","operation":"pr_review","pr":"owner/repo#3","model":"claude-3","github_actor":"carol","files_total":1,"files_with_patch":1,"files_truncated":1,"truncated_chars_dropped":5,"ast_context_chars":0,"call_graph_chars":0,"dep_enrichments_count":0,"dep_enrichments_chars":0,"budget_drops":["full_content","call_graph"],"cwd_inferred":false,"prompt_chars_final":115000,"finish_reasons":["stop"],"max_prompt_chars":120000}' \
+        '{"trace_id":"t1","operation":"pr_review","pr":"owner/repo#1","model":"gpt-4","github_actor":"alice","files_total":10,"files_with_patch":5,"files_truncated":2,"truncated_chars_dropped":100,"dep_enrichments_count":0,"dep_enrichments_chars":0,"budget_drops":["full_content"],"prompt_chars_final":90000,"finish_reasons":["stop"],"max_prompt_chars":120000}' \
+        '{"trace_id":"t2","operation":"pr_review","pr":"owner/repo#2","model":"gpt-4","github_actor":"bob","files_total":3,"files_with_patch":3,"files_truncated":0,"truncated_chars_dropped":0,"dep_enrichments_count":0,"dep_enrichments_chars":0,"budget_drops":[],"prompt_chars_final":30000,"finish_reasons":["stop"],"max_prompt_chars":120000}' \
+        '{"trace_id":"t3","operation":"pr_review","pr":"owner/repo#3","model":"claude-3","github_actor":"carol","files_total":1,"files_with_patch":1,"files_truncated":1,"truncated_chars_dropped":5,"dep_enrichments_count":0,"dep_enrichments_chars":0,"budget_drops":["full_content"],"prompt_chars_final":115000,"finish_reasons":["stop"],"max_prompt_chars":120000}' \
         > "$CONTEXT_FILE"
 }
 
@@ -52,7 +52,7 @@ write_fixture() {
     assert_output "3"
 
     run jq -Sc '.budget_drop_reason_counts' "$DEST_FILE"
-    assert_output '{"call_graph":2,"full_content":1}'
+    assert_output '{"full_content":2}'
 
     run jq -Sc '.model_tier_counts' "$DEST_FILE"
     assert_output '{"claude-3":1,"gpt-4":2}'

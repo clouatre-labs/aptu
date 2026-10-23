@@ -275,10 +275,6 @@ pub enum PrCommand {
         #[arg(short, long)]
         force: bool,
 
-        /// Path to the local repository root for AST context injection. Optional when running from within the repo.
-        #[arg(long, value_name = "PATH")]
-        repo_path: Option<std::path::PathBuf>,
-
         /// Path to repository instructions file (overrides default AGENTS.md and .github/instructions/pr-review.md).
         #[arg(long, value_name = "PATH")]
         instructions_file: Option<std::path::PathBuf>,

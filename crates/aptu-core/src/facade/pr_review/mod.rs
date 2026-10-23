@@ -192,7 +192,7 @@ mod tests {
         };
 
         let provider = MockProvider;
-        let result = analyze_pr(&provider, &pr, &ai_config, None).await;
+        let result = analyze_pr(&provider, &pr, &ai_config).await;
 
         // Verify that the function returns a SecurityScan error
         match result {
@@ -201,35 +201,6 @@ mod tests {
             }
             other => panic!("Expected SecurityScan error, got: {other:?}"),
         }
-    }
-
-    #[test]
-    fn test_call_graph_auto_enabled_within_budget() {
-        // This test verifies that call graph is retained when remaining budget > 20k.
-        // The auto-enable logic in review_pr() checks:
-        // remaining_budget = max_prompt_chars - size_without_call_graph
-        // if remaining_budget > CALL_GRAPH_AUTO_THRESHOLD (20_000), skip first drop check.
-        // Example: max=100k, size_without_cg=70k, remaining=30k > 20k -> retain call_graph
-        let max_prompt_chars: usize = 100_000;
-        let size_without_call_graph: usize = 70_000;
-        let remaining_budget = max_prompt_chars.saturating_sub(size_without_call_graph);
-        assert!(
-            remaining_budget > 20_000,
-            "Remaining budget should exceed threshold"
-        );
-    }
-
-    #[test]
-    fn test_call_graph_suppressed_when_over_threshold() {
-        // This test verifies that call graph is dropped when remaining budget < 20k.
-        // Example: max=100k, size_without_cg=85k, remaining=15k < 20k -> drop call_graph
-        let max_prompt_chars: usize = 100_000;
-        let size_without_call_graph: usize = 85_000;
-        let remaining_budget = max_prompt_chars.saturating_sub(size_without_call_graph);
-        assert!(
-            remaining_budget < 20_000,
-            "Remaining budget should be below threshold"
-        );
     }
 
     #[test]

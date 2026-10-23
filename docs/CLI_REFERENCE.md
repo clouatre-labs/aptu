@@ -168,7 +168,6 @@ Review a pull request with AI assistance
 * `--no-comment` — Skip posting review comment to GitHub
 * `--no-dedup-summary` — Disable review summary dedup (always post a new summary comment)
 * `-f`, `--force` — Bypass confirmation prompts
-* `--repo-path <PATH>` — Path to the local repository root for AST context injection. Optional when running from within the repo
 * `--instructions-file <PATH>` — Path to repository instructions file (overrides default AGENTS.md and .github/instructions/pr-review.md)
 
 

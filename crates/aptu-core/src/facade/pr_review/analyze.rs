@@ -304,8 +304,6 @@ fn routing_size_estimate(pr_details: &PrDetails, instructions_overhead: usize) -
     );
     crate::ai::review_context::estimate_pr_size(
         pr_details,
-        "",
-        "",
         default_system_prompt.len() + instructions_overhead,
     )
 }
@@ -413,7 +411,6 @@ pub async fn analyze_pr(
     provider: &dyn TokenProvider,
     pr_details: &PrDetails,
     ai_config: &AiConfig,
-    repo_path: Option<String>,
 ) -> crate::Result<(
     crate::ai::types::PrReviewResponse,
     crate::metrics::AiStats,
@@ -477,7 +474,6 @@ pub async fn analyze_pr(
     // Build review context with all enrichment decisions centralized
     let ctx = crate::ai::review_context::build_review_context(
         pr_details.clone(),
-        repo_path.clone(),
         &review_config,
         context_window,
         ai_config.max_tokens,
@@ -537,7 +533,6 @@ pub async fn analyze_pr(
                 );
                 let mut retrimmed = crate::ai::review_context::build_review_context(
                     pr_details.clone(),
-                    repo_path.clone(),
                     &halved_config,
                     context_window,
                     ai_config.max_tokens,
@@ -624,10 +619,7 @@ pub async fn analyze_pr(
         files_truncated: ctx.files_truncated,
         truncated_chars_dropped: ctx.truncated_chars_dropped,
         truncated_patch_files,
-        ast_context_chars: ctx.ast_context.len(),
-        call_graph_chars: ctx.call_graph.len(),
         budget_drops: ctx.budget_drops,
-        cwd_inferred: ctx.cwd_inferred,
         prompt_chars_final: ai_stats.prompt_chars,
         finish_reasons,
         max_prompt_chars: review_config.max_prompt_chars,
@@ -641,7 +633,6 @@ pub async fn analyze_pr(
     _provider: &dyn crate::auth::TokenProvider,
     _pr_details: &crate::ai::types::PrDetails,
     _ai_config: &crate::config::AiConfig,
-    _repo_path: Option<String>,
 ) -> crate::Result<(
     crate::ai::types::PrReviewResponse,
     crate::metrics::AiStats,
@@ -743,10 +734,6 @@ mod tests {
     fn make_ctx() -> crate::ai::review_context::ReviewContext {
         crate::ai::review_context::ReviewContext {
             pr: make_pr(),
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
             max_chars_per_file: 1_000,
             max_diff_chars: 10_000,
             max_patch_chars_per_file: 1_000,
@@ -801,7 +788,7 @@ mod tests {
         let first_calls = std::cell::Cell::new(0u32);
         let retrim_calls = std::cell::Cell::new(0u32);
         let mut retrimmed = make_ctx();
-        retrimmed.budget_drops.push("call_graph".to_string());
+        retrimmed.budget_drops.push("full_content".to_string());
 
         let (value, used_ctx) = retry_once_on_context_length(
             || {
@@ -820,7 +807,7 @@ mod tests {
         assert_eq!(retrim_calls.get(), 1, "exactly one re-trim retry");
         assert_eq!(
             used_ctx.budget_drops,
-            vec!["call_graph".to_string()],
+            vec!["full_content".to_string()],
             "telemetry must come from the re-trimmed context"
         );
     }

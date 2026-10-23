@@ -70,7 +70,7 @@ jobs:
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
-By default, the action reviews all changed files without AST/call-graph enrichment; both are opt-in via `[review] ast_context = true` (see [PR Review with AST Context](#pr-review-with-ast-context) below). On `synchronize` events, if a prior Aptu review marker records a different head SHA, the action reviews only the range diff since the last reviewed commit; any failure to fetch that range falls back to a full review of all changed files.
+By default, the action reviews all changed files using patches and (where available) full file content. On `synchronize` events, if a prior Aptu review marker records a different head SHA, the action reviews only the range diff since the last reviewed commit; any failure to fetch that range falls back to a full review of all changed files.
 
 ## Configuration
 
@@ -145,10 +145,7 @@ Each line is a JSON object (`ReviewContextRecord`) with the following fields:
 | `files_with_patch` | integer | Number of files with a non-empty diff patch. |
 | `files_truncated` | integer | Number of files whose full content was truncated. |
 | `truncated_chars_dropped` | integer | Total characters dropped from truncated files. |
-| `ast_context_chars` | integer | Characters in AST context. |
-| `call_graph_chars` | integer | Characters in call graph context. |
-| `budget_drops` | string[] | Names of context items dropped due to budget (e.g. `call_graph`, `file_content:<path>`, `patch:<path>`). |
-| `cwd_inferred` | boolean | Whether the repository path was inferred from CWD. |
+| `budget_drops` | string[] | Names of context items dropped due to budget (e.g. `file_content:<path>`, `patch_truncated:<path>`). |
 | `prompt_chars_final` | integer | Final assembled prompt character count. |
 | `finish_reasons` | string[] | Finish reasons from the AI response. |
 | `max_prompt_chars` | integer | Maximum prompt character budget from review config. |
@@ -210,31 +207,6 @@ jobs:
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
           since: ${{ steps.date.outputs.since }}
           issue-state: open
-```
-
-## PR Review with AST Context
-
-AST context and call-graph enrichment are opt-in and disabled by default. To inject function signatures and call-graph context into the review prompt, enable `ast_context` in the `[review]` section of your `config.toml` and pass the checked-out repository path:
-
-```toml
-# ~/.config/aptu/config.toml (or $XDG_CONFIG_HOME/aptu/config.toml)
-[review]
-ast_context = true
-```
-
-Alternatively, set the `APTU_REVIEW__AST_CONTEXT: "true"` environment variable in the workflow step. The action loads its configuration from the standard aptu config location on the runner; copying the workflow below without this configuration leaves enrichment disabled.
-
-```yaml
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: clouatre-labs/aptu@v0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-          repo-path: ${{ github.workspace }}
-        env:
-          APTU_REVIEW__AST_CONTEXT: "true"
 ```
 
 ## aptu-dev GitHub App

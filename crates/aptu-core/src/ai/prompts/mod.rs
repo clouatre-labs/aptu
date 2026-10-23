@@ -485,13 +485,6 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
 
     prompt.push_str("</pull_request>\n");
 
-    if !ctx.ast_context.is_empty() {
-        prompt.push_str(&ctx.ast_context);
-    }
-    if !ctx.call_graph.is_empty() {
-        prompt.push_str(&ctx.call_graph);
-    }
-
     write_existing_review_comments_section(&mut prompt, ctx);
 
     if let Some(prior) = ctx.prior_findings.as_deref().filter(|p| !p.is_empty()) {
@@ -797,7 +790,7 @@ mod tests {
 
     #[test]
     fn test_full_content_whole_file_drop() {
-        use super::super::types::{PrDetails, PrFile};
+        use super::super::types::PrFile;
 
         let files = vec![PrFile {
             filename: "big_file.rs".to_string(),
@@ -814,10 +807,7 @@ mod tests {
         let prompt =
             build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
                 pr,
-                ast_context: String::new(),
-                call_graph: String::new(),
-                inferred_repo_path: None,
-                cwd_inferred: false,
+
                 max_chars_per_file: 100,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
@@ -854,7 +844,7 @@ mod tests {
 
     #[test]
     fn test_full_content_drop_keeps_patch() {
-        use super::super::types::{PrDetails, PrFile};
+        use super::super::types::PrFile;
 
         let files = vec![PrFile {
             filename: "file_with_content.rs".to_string(),
@@ -871,10 +861,7 @@ mod tests {
         let prompt =
             build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
                 pr,
-                ast_context: String::new(),
-                call_graph: String::new(),
-                inferred_repo_path: None,
-                cwd_inferred: false,
+
                 max_chars_per_file: 100,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
@@ -892,7 +879,7 @@ mod tests {
 
     #[test]
     fn test_full_content_utf8_boundary_no_panic() {
-        use super::super::types::{PrDetails, PrFile};
+        use super::super::types::PrFile;
 
         // Provide full_content whose char count exceeds the budget.
         // Using a literal multi-byte character to ensure the byte boundary
@@ -929,10 +916,7 @@ mod tests {
         let prompt =
             build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
                 pr,
-                ast_context: String::new(),
-                call_graph: String::new(),
-                inferred_repo_path: None,
-                cwd_inferred: false,
+
                 max_chars_per_file: 101,
                 files_truncated: 0,
                 truncated_chars_dropped: 0,
@@ -946,7 +930,7 @@ mod tests {
 
     #[test]
     fn test_patch_truncated_by_size_includes_annotation() {
-        use super::super::types::{PrDetails, PrFile};
+        use super::super::types::PrFile;
 
         // Arrange: patch longer than per-file patch cap
         const CAP: usize = 10_000;
@@ -984,10 +968,7 @@ mod tests {
         let prompt =
             build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
                 pr,
-                ast_context: String::new(),
-                call_graph: String::new(),
-                inferred_repo_path: None,
-                cwd_inferred: false,
+
                 max_patch_chars_per_file: CAP,
                 max_diff_chars: CAP,
                 max_chars_per_file: 100,
@@ -1023,7 +1004,7 @@ mod tests {
 
     #[test]
     fn test_patch_exactly_at_limit_not_truncated() {
-        use super::super::types::{PrDetails, PrFile};
+        use super::super::types::PrFile;
 
         // Arrange: patch exactly at the per-file cap
         const CAP: usize = 10_000;
@@ -1061,10 +1042,7 @@ mod tests {
         let prompt =
             build_pr_review_user_prompt(&mut super::super::review_context::ReviewContext {
                 pr,
-                ast_context: String::new(),
-                call_graph: String::new(),
-                inferred_repo_path: None,
-                cwd_inferred: false,
+
                 max_patch_chars_per_file: CAP,
                 max_diff_chars: 200_000,
                 max_chars_per_file: 100,
@@ -1121,10 +1099,7 @@ mod tests {
 
         super::super::review_context::ReviewContext {
             pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
+
             max_patch_chars_per_file: 10_000,
             max_diff_chars: 200_000,
             max_chars_per_file: 100,
@@ -1194,7 +1169,7 @@ mod tests {
     /// Regression test for issue #1548: verifies budget-dropped patches are annotated.
     #[test]
     fn test_budget_dropped_patch_annotated() {
-        use super::super::types::{PrDetails, PrFile};
+        use super::super::types::PrFile;
 
         let files = vec![PrFile {
             filename: "src/lib.rs".to_string(),
@@ -1225,10 +1200,7 @@ mod tests {
 
         let mut ctx = super::super::review_context::ReviewContext {
             pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
+
             budget_drops: vec!["patch:src/lib.rs".to_string()], // Record that patch was budget-dropped
             ..Default::default()
         };
@@ -1248,7 +1220,7 @@ mod tests {
     /// Regression test for issue #1548: verifies budget-dropped `full_content` is annotated.
     #[test]
     fn test_budget_dropped_full_content_annotated() {
-        use super::super::types::{PrDetails, PrFile};
+        use super::super::types::PrFile;
 
         let files = vec![PrFile {
             filename: "src/lib.rs".to_string(),
@@ -1279,10 +1251,7 @@ mod tests {
 
         let mut ctx = super::super::review_context::ReviewContext {
             pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
+
             budget_drops: vec!["file_content:src/lib.rs".to_string()], // Record that full_content was budget-dropped
             ..Default::default()
         };
@@ -1302,7 +1271,7 @@ mod tests {
     /// must NOT receive a budget-drop annotation.
     #[test]
     fn test_no_annotation_for_legitimate_missing_patch() {
-        use super::super::types::{PrDetails, PrFile};
+        use super::super::types::PrFile;
 
         let files = vec![PrFile {
             filename: "src/lib.rs".to_string(),
@@ -1318,10 +1287,7 @@ mod tests {
 
         let mut ctx = super::super::review_context::ReviewContext {
             pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
+
             budget_drops: vec![], // Empty: no budget drops occurred
             max_chars_per_file: 1000,
             ..Default::default()
@@ -1347,7 +1313,7 @@ mod tests {
     /// though the patch does not appear in the prompt.
     #[test]
     fn test_no_annotation_for_added_file_with_patch_skipped_by_design() {
-        use super::super::types::{PrDetails, PrFile};
+        use super::super::types::PrFile;
 
         let files = vec![PrFile {
             filename: "src/new_module.rs".to_string(),
@@ -1363,10 +1329,7 @@ mod tests {
 
         let mut ctx = super::super::review_context::ReviewContext {
             pr,
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
+
             budget_drops: vec![], // Empty: no budget drops occurred
             max_chars_per_file: 1000,
             ..Default::default()
