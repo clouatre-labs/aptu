@@ -42,7 +42,6 @@ pub(crate) fn block_on_prompt_injection(
 #[cfg(target_arch = "wasm32")]
 pub(crate) use wasm_unsupported;
 
-pub mod ai_client;
 pub mod issues;
 pub mod pr_review;
 
