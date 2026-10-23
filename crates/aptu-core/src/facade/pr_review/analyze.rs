@@ -323,7 +323,7 @@ async fn call_review_ai(
     Vec<String>,
     Vec<String>,
 )> {
-    crate::facade::ai_client::try_with_fallback(
+    crate::ai::client::try_with_fallback(
         provider,
         provider_name,
         model_name,
@@ -570,7 +570,7 @@ pub async fn analyze_pr(
                 .sum::<usize>();
         let (verify_provider_name, verify_model_name) =
             ai_config.resolve_for_task(TaskType::Verify, Some(verify_estimate));
-        let (verdicts, verify_stats, _) = crate::facade::ai_client::try_with_fallback(
+        let (verdicts, verify_stats, _) = crate::ai::client::try_with_fallback(
             provider,
             &verify_provider_name,
             &verify_model_name,

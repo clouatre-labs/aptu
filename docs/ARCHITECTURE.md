@@ -77,7 +77,6 @@ The `ReviewContext` struct centralizes all enrichment decisions: instructions an
 
 | File | Key exports |
 |------|-------------|
-| `ai_client.rs` | AI client construction and fallback-chain helpers |
 | `issues.rs` | `analyze_issue()`, `fetch_issue_for_triage()`, `post_triage_comment()`, `apply_triage_labels()` |
 | `pr_review/` | `fetch_pr_for_review()`, `analyze_pr()`, `post_pr_review()`, `label_pr()` |
 
@@ -85,7 +84,7 @@ Each function accepts a `&dyn TokenProvider` for credential resolution. Function
 
 Write operations (triage comment, labels, PR review) are gated on viewer permission and yield `WriteOutcome::Skipped` when the viewer lacks write access. Permission lookups are memoized process-wide with a 60s TTL.
 
-AI client construction and fallback-provider resolution live in `facade/ai_client.rs`: the `[ai.fallback]` config section defines an ordered chain of fallback entries (provider name or `{provider, model}`), each with its own client so a failing primary provider can be retried downstream.
+AI client construction and fallback-provider resolution live in `ai/client.rs`: the `[ai.fallback]` config section defines an ordered chain of fallback entries (provider name or `{provider, model}`), each with its own client so a failing primary provider can be retried downstream.
 
 ### Prompt System
 

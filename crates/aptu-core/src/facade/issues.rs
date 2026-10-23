@@ -158,7 +158,7 @@ pub async fn analyze_issue(
         ai_config.resolve_for_task(TaskType::Triage, Some(issue.body.len()));
 
     // Use fallback chain if configured
-    let ai_response = super::ai_client::try_with_fallback(
+    let ai_response = crate::ai::client::try_with_fallback(
         provider,
         &provider_name,
         &model_name,
