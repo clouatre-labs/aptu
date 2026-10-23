@@ -170,6 +170,18 @@ mod incremental_range_tests {
     }
 }
 
+/// Coverage metadata for the reconstructed verification diff.
+///
+/// Tracks what was dropped when the total output hit the size cap, so partial
+/// verification coverage can be surfaced in logs and the context JSONL record.
+#[derive(Debug, Default, PartialEq)]
+struct DiffCoverage {
+    /// Names of files dropped from the reconstructed diff at the size cap.
+    dropped_files: Vec<String>,
+    /// Total bytes (header plus patch content) dropped at the size cap.
+    dropped_bytes: usize,
+}
+
 /// Reconstructs a unified diff string from PR file patches for security scanning.
 ///
 /// Files with `patch: None` (e.g. binary files or files with no changes) are silently
@@ -179,17 +191,22 @@ mod incremental_range_tests {
 /// else, so corrupt hunks are skipped rather than causing errors.
 ///
 /// Total output is capped at `200_000` bytes to bound
-/// memory use on PRs with extremely large patches.
-fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
+/// memory use on PRs with extremely large patches. Files dropped at the cap
+/// are reported in the returned [`DiffCoverage`] so callers can surface
+/// partial verification coverage.
+fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> (String, DiffCoverage) {
     const MAX_RECONSTRUCT_DIFF_SIZE: usize = 200_000;
     let mut diff = String::new();
+    let mut coverage = DiffCoverage::default();
     for file in files {
         if let Some(patch) = &file.patch {
             // Cap check is intentionally pre-append (soft lower bound, not hard upper bound):
             // it avoids splitting a file header from its patch, which would produce a
             // malformed diff that confuses the scanner's file-path tracking.
             if diff.len() >= MAX_RECONSTRUCT_DIFF_SIZE {
-                break;
+                coverage.dropped_files.push(file.filename.clone());
+                coverage.dropped_bytes += file.filename.len() + patch.len();
+                continue;
             }
             diff.push_str("+++ b/");
             diff.push_str(&file.filename);
@@ -198,7 +215,7 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
             diff.push('\n');
         }
     }
-    diff
+    (diff, coverage)
 }
 
 /// Resolves the minimum context window (in tokens) across the selected model
@@ -417,7 +434,7 @@ pub async fn analyze_pr(
     }
 
     // Pre-AI prompt injection scan (advisory gate)
-    let diff = reconstruct_diff_from_pr(&pr_details.files);
+    let (diff, _) = reconstruct_diff_from_pr(&pr_details.files);
     let injection_findings: Vec<_> = SecurityScanner::new()
         .scan_diff(&diff)
         .into_iter()
@@ -484,8 +501,19 @@ pub async fn analyze_pr(
     // Verification pass: exactly one extra small-model call confirms each
     // candidate finding against the diff before anything is posted. When the
     // pass is disabled, only the local info-suppression filter applies.
+    let mut verification_dropped_files: Vec<String> = Vec::new();
+    let mut verification_dropped_bytes: usize = 0;
     if review_config.verify_enabled && !response.comments.is_empty() {
-        let diff = reconstruct_diff_from_pr(&pr_details.files);
+        let (diff, coverage) = reconstruct_diff_from_pr(&pr_details.files);
+        if !coverage.dropped_files.is_empty() {
+            warn!(
+                dropped_files = coverage.dropped_files.len(),
+                dropped_bytes = coverage.dropped_bytes,
+                "finding verification diff reconstructed partially; files dropped at size cap"
+            );
+            verification_dropped_files = coverage.dropped_files;
+            verification_dropped_bytes = coverage.dropped_bytes;
+        }
         let verify_estimate = diff.len()
             + response
                 .comments
@@ -547,6 +575,8 @@ pub async fn analyze_pr(
         prompt_chars_final: ai_stats.prompt_chars,
         finish_reasons,
         max_prompt_chars: review_config.max_prompt_chars,
+        verification_dropped_files,
+        verification_dropped_bytes,
     };
 
     Ok((response, ai_stats, context_record))
@@ -583,6 +613,44 @@ pub(crate) enum DedupOutcome {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
+
+    /// Cap-break path: files past the 200KB pre-append cap are dropped and
+    /// reported in the returned coverage (`dropped_files`, `dropped_bytes`).
+    #[test]
+    fn test_reconstruct_diff_reports_coverage_when_cap_exceeded() {
+        let big_patch = "x".repeat(200_100);
+        let small_patch = "y".repeat(10);
+        let files = [
+            crate::ai::types::PrFile {
+                filename: "big.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some(big_patch.clone()),
+                patch_truncated: false,
+                full_content: None,
+            },
+            crate::ai::types::PrFile {
+                filename: "late.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some(small_patch.clone()),
+                patch_truncated: false,
+                full_content: None,
+            },
+        ];
+
+        // Act: reconstruct the diff; the first file pushes past the cap, so
+        // the second must be dropped and reported.
+        let (diff, coverage) = reconstruct_diff_from_pr(&files);
+
+        // Assert: small file content is absent, and coverage reports the drop.
+        assert!(diff.contains("big.rs"));
+        assert!(!diff.contains("late.rs"));
+        assert_eq!(coverage.dropped_files, vec!["late.rs".to_string()]);
+        assert_eq!(coverage.dropped_bytes, "late.rs".len() + small_patch.len());
+    }
 
     /// Minimal `PrDetails` for routing-estimate tests.
     fn make_pr() -> PrDetails {

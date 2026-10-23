@@ -164,6 +164,12 @@ pub struct ReviewContextRecord {
     pub finish_reasons: Vec<String>,
     /// Maximum prompt character budget from review config.
     pub max_prompt_chars: usize,
+    /// Names of files dropped from the finding-verification diff at the size cap.
+    #[serde(default)]
+    pub verification_dropped_files: Vec<String>,
+    /// Total bytes dropped from the finding-verification diff at the size cap.
+    #[serde(default)]
+    pub verification_dropped_bytes: usize,
 }
 
 /// Append a PR review context record to the context JSONL file.
@@ -365,6 +371,8 @@ mod tests {
             prompt_chars_final: 5000,
             finish_reasons: vec!["stop".to_string()],
             max_prompt_chars: 120_000,
+            verification_dropped_files: vec![],
+            verification_dropped_bytes: 0,
         };
 
         // Should not panic or error
@@ -392,6 +400,8 @@ mod tests {
             prompt_chars_final: 5000,
             finish_reasons: vec!["stop".to_string()],
             max_prompt_chars: 120_000,
+            verification_dropped_files: vec!["late.rs".to_string()],
+            verification_dropped_bytes: 42,
         };
 
         write_context_jsonl_impl(&file_path_str, &record).unwrap();
@@ -426,6 +436,8 @@ mod tests {
             prompt_chars_final: 5000,
             finish_reasons: vec!["stop".to_string()],
             max_prompt_chars: 120_000,
+            verification_dropped_files: vec![],
+            verification_dropped_bytes: 0,
         };
 
         let json = serde_json::to_string(&record).expect("serialization failed");
