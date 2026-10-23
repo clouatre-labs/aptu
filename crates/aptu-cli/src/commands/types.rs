@@ -226,36 +226,6 @@ impl BulkPrReviewResult {
     }
 }
 
-/// Result from the PR label command.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct PrLabelResult {
-    /// PR number.
-    pub pr_number: u64,
-    /// PR title.
-    pub pr_title: String,
-    /// PR URL.
-    pub pr_url: String,
-    /// Labels extracted and applied.
-    pub labels: Vec<String>,
-    /// Whether this was a dry run.
-    pub dry_run: bool,
-}
-
-impl PrLabelResult {
-    /// Sentinel result for the skip branch: `pr_number` 0, empty title/url,
-    /// and no labels, echoing `dry_run`.
-    pub fn empty(dry_run: bool) -> Self {
-        Self {
-            pr_number: 0,
-            pr_title: String::new(),
-            pr_url: String::new(),
-            labels: Vec::new(),
-            dry_run,
-        }
-    }
-}
-
 /// Result from auth login or logout actions.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -264,19 +234,4 @@ pub struct AuthActionResult {
     pub action: String,
     /// Human-readable message describing the outcome.
     pub message: String,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::PrLabelResult;
-
-    #[test]
-    fn empty_returns_sentinel_values() {
-        let result = PrLabelResult::empty(true);
-        assert_eq!(result.pr_number, 0);
-        assert_eq!(result.pr_title, "");
-        assert_eq!(result.pr_url, "");
-        assert!(result.labels.is_empty());
-        assert!(result.dry_run);
-    }
 }

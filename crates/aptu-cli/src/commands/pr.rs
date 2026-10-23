@@ -19,7 +19,6 @@ use aptu_core::{
 };
 use tracing::{debug, info, instrument};
 
-use super::types::PrLabelResult;
 use crate::provider::CliTokenProvider;
 
 /// Intermediate result from analysis (before posting decision).
@@ -211,51 +210,6 @@ pub async fn post(
     Ok(())
 }
 
-/// Auto-label a pull request based on conventional commit prefix and file paths.
-///
-/// Fetches PR details, extracts labels from title and changed files,
-/// and applies them to the PR. Optionally previews without applying.
-///
-/// # Arguments
-///
-/// * `reference` - PR reference (URL, owner/repo#number, or bare number)
-/// * `repo_context` - Optional repository context for bare numbers
-/// * `dry_run` - If true, preview labels without applying
-/// * `ai_config` - AI configuration for fallback label suggestion
-#[instrument(skip_all, fields(reference = %reference))]
-pub async fn run_label(
-    reference: &str,
-    repo_context: Option<&str>,
-    dry_run: bool,
-    ai_config: &aptu_core::AiConfig,
-) -> Result<(PrLabelResult, AiStats)> {
-    // Create CLI token provider
-    let provider = crate::provider::CliTokenProvider;
-
-    // Call facade for PR label
-    let outcome =
-        aptu_core::label_pr(&provider, reference, repo_context, dry_run, ai_config).await?;
-
-    if outcome.is_skipped() {
-        eprintln!("No write access to this repository - labels not applied");
-        return Ok((PrLabelResult::empty(dry_run), AiStats::default()));
-    }
-
-    let (pr_number, pr_title, pr_url, labels, ai_stats) =
-        outcome.applied().expect("outcome checked for skip above");
-
-    Ok((
-        PrLabelResult {
-            pr_number: *pr_number,
-            pr_title: pr_title.clone(),
-            pr_url: pr_url.clone(),
-            labels: labels.clone(),
-            dry_run,
-        },
-        ai_stats.clone(),
-    ))
-}
-
 /// Run the PR review command.
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::fn_params_excessive_bools)]
@@ -371,32 +325,6 @@ pub async fn run_review(
         crate::output::render(&bulk_result, &ctx)?;
     }
 
-    Ok(())
-}
-
-/// Run the PR label command (spinner, metrics, rendering wrapper).
-pub async fn run_label_command(
-    reference: String,
-    repo: Option<String>,
-    dry_run: bool,
-    ctx: crate::cli::OutputContext,
-    config: &aptu_core::AppConfig,
-    inferred_repo: Option<String>,
-) -> Result<()> {
-    use crate::commands::common::maybe_spinner;
-
-    let repo_context = repo
-        .as_deref()
-        .or(inferred_repo.as_deref())
-        .or(config.user.default_repo.as_deref());
-
-    let spinner = maybe_spinner(&ctx, "Fetching PR and extracting labels...");
-    let (result, ai_stats) = run_label(&reference, repo_context, dry_run, &config.ai).await?;
-    if let Some(s) = spinner {
-        s.finish_and_clear();
-    }
-    aptu_core::metrics::append_jsonl(&ai_stats);
-    crate::output::render(&result, &ctx)?;
     Ok(())
 }
 

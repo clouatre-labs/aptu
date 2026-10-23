@@ -7,8 +7,7 @@
 //! therefore validate the exact strings the AI receives, not a copy.
 
 use aptu_core::ai::prompts::{
-    TOOLING_CONTEXT, build_pr_label_system_prompt, build_pr_review_system_prompt,
-    build_triage_system_prompt,
+    TOOLING_CONTEXT, build_pr_review_system_prompt, build_triage_system_prompt,
 };
 use aptu_core::ai::provider::AiProvider;
 use aptu_core::ai::types::{IssueDetails, PrDetails, PrFile};
@@ -53,7 +52,6 @@ fn all_system_prompts() -> Vec<(&'static str, String)> {
     vec![
         ("triage", build_triage_system_prompt(TOOLING_CONTEXT)),
         ("pr_review", build_pr_review_system_prompt(TOOLING_CONTEXT)),
-        ("pr_label", build_pr_label_system_prompt(TOOLING_CONTEXT)),
     ]
 }
 
@@ -161,13 +159,6 @@ fn all_system_prompts_contain_schema() {
         "pr_review system prompt missing schema fields"
     );
 
-    // pr_label system prompt
-    let pr_label_system = build_pr_label_system_prompt(TOOLING_CONTEXT);
-    assert!(
-        pr_label_system.contains("suggested_labels"),
-        "pr_label system prompt missing schema fields"
-    );
-
     // user prompts must NOT contain schema fields anymore
     let issue = IssueDetails::builder()
         .owner("test".to_string())
@@ -233,16 +224,6 @@ fn all_system_prompts_contain_schema() {
     assert!(
         !pr_review_user.contains("verdict"),
         "pr_review user prompt must not contain schema fields"
-    );
-
-    let pr_label_user = aptu_core::ai::prompts::build_pr_label_user_prompt(
-        "feat: add thing",
-        "body",
-        &["src/lib.rs".to_string()],
-    );
-    assert!(
-        !pr_label_user.contains("suggested_labels"),
-        "pr_label user prompt must not contain schema fields"
     );
 }
 

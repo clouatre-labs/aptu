@@ -115,7 +115,7 @@ Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploade
 | Permission | Required For |
 |------------|--------------|
 | `issues: write` | Issue triage (comments, labels) |
-| `pull-requests: write` | PR labeling and review (comments, labels) |
+| `pull-requests: write` | PR review (comments, labels) |
 | `contents: read` | Repository context (all features) |
 | `attestations: read` | SLSA binary verification (`gh attestation verify`) |
 

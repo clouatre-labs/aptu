@@ -647,11 +647,6 @@ async fn run_pr_command(
             )
             .await
         }
-        PrCommand::Label {
-            reference,
-            repo,
-            dry_run,
-        } => pr::run_label_command(reference, repo, dry_run, ctx, config, inferred_repo).await,
     }
 }
 

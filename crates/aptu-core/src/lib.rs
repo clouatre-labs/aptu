@@ -99,7 +99,7 @@ pub use facade::issues::WriteOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 pub use facade::{
     analyze_issue, analyze_pr, apply_triage_labels, fetch_issue_for_triage, fetch_pr_for_review,
-    label_pr, post_pr_review, post_triage_comment,
+    post_pr_review, post_triage_comment,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use github::issues::ApplyResult;

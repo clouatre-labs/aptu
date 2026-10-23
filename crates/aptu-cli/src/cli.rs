@@ -283,20 +283,6 @@ pub enum PrCommand {
         #[arg(long, value_name = "PATH")]
         instructions_file: Option<std::path::PathBuf>,
     },
-    /// Auto-label a pull request based on conventional commit prefix and file paths
-    Label {
-        /// PR reference (URL, owner/repo#number, or number)
-        #[arg(value_name = "REFERENCE")]
-        reference: String,
-
-        /// Repository for bare PR numbers (e.g., "block/goose")
-        #[arg(long, short = 'r')]
-        repo: Option<String>,
-
-        /// Preview labels without applying
-        #[arg(long)]
-        dry_run: bool,
-    },
 }
 
 #[cfg(test)]

@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! PR review and labeling facade functions.
+//! PR review facade functions.
 
 /// Default review comment side used for GitHub PR review comments.
 pub(crate) const DEFAULT_COMMENT_SIDE: &str = "RIGHT";
 
 mod analyze;
-mod label;
 mod post;
 
 pub use crate::github::pulls::{ReviewPostOutcome, SummaryPostOutcome};
 pub use analyze::{analyze_pr, fetch_pr_for_review};
-pub use label::{LabelPrOutcome, label_pr};
 pub use post::post_pr_review;
 
 #[allow(unused_imports)]
@@ -57,7 +55,7 @@ mod tests {
     #[test]
     fn pr_write_gate_denies_below_write_on_pr_path() {
         use crate::github::graphql::ViewerPermission;
-        // Same gate as post_pr_review and label_pr: READ/TRIAGE deny writes,
+        // Same gate as post_pr_review: READ/TRIAGE deny writes,
         // while None/unknown and WRITE-or-above allow them.
         assert!(!pr_write_allowed(Some(ViewerPermission::Read)));
         assert!(!pr_write_allowed(Some(ViewerPermission::Triage)));

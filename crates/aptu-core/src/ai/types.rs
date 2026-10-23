@@ -590,13 +590,6 @@ impl std::fmt::Display for ReviewEvent {
     }
 }
 
-/// Structured PR label response from AI.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct PrLabelResponse {
-    /// Suggested labels for the PR.
-    pub suggested_labels: Vec<String>,
-}
-
 #[cfg(test)]
 mod tests {
     use std::assert_matches;
