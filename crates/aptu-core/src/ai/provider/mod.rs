@@ -18,11 +18,61 @@ use secrecy::SecretString;
 
 use crate::ai::registry::ProviderConfig;
 use crate::ai::types::{
-    ChatCompletionRequest, ChatCompletionResponse, IssueDetails, PrReviewResponse,
+    ChatCompletionRequest, ChatCompletionResponse, ChatMessage, IssueDetails, PrReviewResponse,
 };
 use crate::metrics::AiStats;
 
+pub(super) use crate::ai::provider::parse::provider_response_format;
 pub(crate) use crate::ai::provider::parse::{SCHEMA_PREAMBLE, sanitize_prompt_field};
+
+/// Builds a [`ChatCompletionRequest`] with the system and user messages.
+///
+/// Injects cache control on the system message for Anthropic providers.
+///
+/// # Arguments
+///
+/// * `provider` - The AI provider (supplies model, limits, and session ID).
+/// * `system_content` - The assembled system prompt content.
+/// * `user_content` - The assembled user prompt content.
+/// * `session_kind` - Session kind passed to `session_id` (e.g. "triage", "review").
+#[must_use]
+pub(super) fn build_chat_request(
+    provider: &(impl AiProvider + ?Sized),
+    system_content: String,
+    user_content: String,
+    session_kind: &str,
+) -> ChatCompletionRequest {
+    let mut messages = vec![
+        ChatMessage {
+            role: "system".to_string(),
+            content: Some(system_content),
+            reasoning: None,
+            cache_control: None,
+        },
+        ChatMessage {
+            role: "user".to_string(),
+            content: Some(user_content),
+            reasoning: None,
+            cache_control: None,
+        },
+    ];
+
+    // Inject cache control on system message for Anthropic
+    if provider.is_anthropic()
+        && let Some(msg) = messages.first_mut()
+    {
+        msg.cache_control = Some(crate::ai::types::CacheControl::ephemeral());
+    }
+
+    ChatCompletionRequest {
+        model: provider.model().to_string(),
+        messages,
+        response_format: provider_response_format(provider),
+        max_tokens: Some(provider.max_tokens()),
+        temperature: Some(provider.temperature()),
+        session_id: provider.session_id(session_kind),
+    }
+}
 
 /// Maximum length for issue body to stay within token limits.
 pub const MAX_BODY_LENGTH: usize = 4000;

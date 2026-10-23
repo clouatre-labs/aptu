@@ -8,7 +8,7 @@ use anyhow::Result;
 use tracing::{debug, instrument};
 
 use super::http::send_and_parse;
-use super::parse::provider_response_format;
+use super::{build_chat_request, parse::provider_response_format};
 use crate::ai::provider::AiProvider;
 use crate::ai::types::{
     ChatCompletionRequest, ChatMessage, CommentSeverity, FindingVerdict, PrReviewComment,
@@ -118,36 +118,7 @@ pub(super) async fn review_pr(
         );
     }
 
-    let mut messages = vec![
-        ChatMessage {
-            role: "system".to_string(),
-            content: Some(system_content),
-            reasoning: None,
-            cache_control: None,
-        },
-        ChatMessage {
-            role: "user".to_string(),
-            content: Some(assembled_prompt),
-            reasoning: None,
-            cache_control: None,
-        },
-    ];
-
-    // Inject cache control on system message for Anthropic
-    if provider.is_anthropic()
-        && let Some(msg) = messages.first_mut()
-    {
-        msg.cache_control = Some(crate::ai::types::CacheControl::ephemeral());
-    }
-
-    let request = ChatCompletionRequest {
-        model: provider.model().to_string(),
-        messages,
-        response_format: provider_response_format(provider),
-        max_tokens: Some(provider.max_tokens()),
-        temperature: Some(provider.temperature()),
-        session_id: provider.session_id("review"),
-    };
+    let request = build_chat_request(provider, system_content, assembled_prompt, "review");
 
     // Send request and parse JSON with retry logic
     let (review, mut ai_stats, finish_reasons) =
