@@ -29,7 +29,7 @@ model = "mistralai/mistral-small-2603"  # fast and cheap for triage
 
 [ai.tasks.review]
 provider = "openrouter"
-model = "anthropic/claude-haiku-4.5"  # balanced for review
+model = "anthropic/claude-haiku-5.5"  # balanced for review
 ```
 
 All task-specific overrides are optional. If not specified, the default `provider` and `model` are used.
@@ -101,7 +101,7 @@ model = "mistralai/mistral-small-2603"  # default
 
 [ai.tasks.review]
 small_model = "mistralai/mistral-small-2603"  # fast and cheap for small PRs
-large_model = "anthropic/claude-sonnet-4.6"   # more capable for large PRs
+large_model = "anthropic/claude-sonnet-5.5"   # more capable for large PRs
 routing_threshold_chars = 60000
 ```
 
@@ -129,7 +129,7 @@ model = "gemini-3.1-flash-lite"
 [ai.fallback]
 chain = [
   { provider = "gemini", model = "gemini-3.1-flash-lite" },
-  { provider = "anthropic", model = "claude-haiku-4.5" }
+  { provider = "anthropic", model = "claude-haiku-5.5" }
 ]
 ```
 
@@ -148,6 +148,20 @@ When fallback triggers, Aptu tries each provider in the chain in order. If a fal
 - Each fallback provider must have a valid API key configured
 - Model overrides are optional; if not specified, the primary model is used
 - Fallback attempts are logged with `warn` level tracing
+
+## Context Windows
+
+The `[ai.context_windows]` section maps a model identifier to its context window size in tokens. These values are used for prompt budgeting and override the built-in defaults:
+
+```toml
+[ai.context_windows]
+"mistralai/mistral-small-2603" = 262144
+"anthropic/claude-sonnet-5.5" = 1000000
+```
+
+Each model's context window is resolved in order: user config, then the built-in default, then `None` (treated as unbounded). The only built-in default is `mistralai/mistral-small-2603 = 262144`; all other models have no built-in value. Models absent from both the user map and the built-in defaults resolve to `None`, preserving historical behavior for providers that advertise no window.
+
+When a fallback chain is active, the effective context window is the minimum across the selected model and every fallback-chain model. Models with no resolved window are excluded from the minimum rather than constraining it; if no model resolves a window at all, budgets are unbounded.
 
 ## CLI Overrides
 
@@ -179,7 +193,7 @@ Aptu supports multiple AI providers. Choose the one that works best for you:
    ```toml
    [ai]
    provider = "anthropic"
-   model = "claude-haiku-4-5"
+   model = "claude-haiku-5-5"
    ```
 
 **Claude OAuth:** Aptu also reads `~/.claude/credentials.json` (written by the Claude desktop app or `claude` CLI) as an alternative to setting `ANTHROPIC_API_KEY`. If that file exists and contains a valid OAuth token, it is used automatically; no config change is needed.
