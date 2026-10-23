@@ -385,7 +385,6 @@ async fn review_single_pr(
     opts: ReviewOptions,
     ctx: &OutputContext,
     config: &AppConfig,
-    repo_path: Option<String>,
 ) -> Result<Option<PrReviewResult>> {
     // Fetch PR details
     let pr_details = pr::fetch(reference, repo_context).await?;
@@ -395,8 +394,7 @@ async fn review_single_pr(
 
     // Analyze with AI
     let spinner = maybe_spinner(ctx, "Analyzing with AI...");
-    let (review, ai_stats, context_record) =
-        pr::analyze(&pr_details, &config.ai, repo_path).await?;
+    let (review, ai_stats, context_record) = pr::analyze(&pr_details, &config.ai).await?;
     if let Some(s) = spinner {
         s.finish_and_clear();
     }
@@ -557,7 +555,6 @@ async fn run_pr_command(
             no_apply,
             no_comment,
             force,
-            repo_path,
             instructions_file,
             no_dedup_summary,
         } => {
@@ -571,7 +568,6 @@ async fn run_pr_command(
                 no_apply,
                 no_comment,
                 force,
-                repo_path,
                 instructions_file,
                 ctx,
                 config,

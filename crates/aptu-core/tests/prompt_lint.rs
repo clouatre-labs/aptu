@@ -202,10 +202,6 @@ fn all_system_prompts_contain_schema() {
     };
     let mut ctx = aptu_core::ai::review_context::ReviewContext {
         pr,
-        ast_context: String::new(),
-        call_graph: String::new(),
-        inferred_repo_path: None,
-        cwd_inferred: false,
         max_chars_per_file: 32_000,
         max_diff_chars: 200_000,
         max_patch_chars_per_file: 10_000,
@@ -338,22 +334,6 @@ mod fetch_file_contents_tests {
     }
 
     #[test]
-    fn test_build_pr_review_prompt_includes_call_graph_when_present() {
-        // Just verify that the prompt builder itself includes call_graph when provided
-        let large_call_graph = "<call_graph>".to_string() + &"x".repeat(1000) + "</call_graph>";
-        let mut ctx = aptu_core::ai::review_context::ReviewContext {
-            call_graph: large_call_graph.clone(),
-            ..make_ctx(make_pr(None))
-        };
-        let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
-        // The prompt builder includes call_graph as-is; budget enforcement is done in review_pr
-        assert!(
-            prompt.contains(&large_call_graph),
-            "Call graph should be in prompt at builder level"
-        );
-    }
-
-    #[test]
     fn test_review_context_prompt_unchanged_without_enrichment() {
         let mut ctx = make_ctx(make_pr(None));
 
@@ -365,73 +345,6 @@ mod fetch_file_contents_tests {
         assert!(
             !prompt.contains("<dependency_release_notes>"),
             "prompt should NOT contain dependency_release_notes section when empty"
-        );
-        assert!(
-            !prompt.contains("<ast_context>"),
-            "prompt should NOT contain ast_context section when empty"
-        );
-        assert!(
-            !prompt.contains("<call_graph>"),
-            "prompt should NOT contain call_graph section when empty"
-        );
-    }
-
-    #[test]
-    fn test_review_context_injection_order() {
-        // Arrange: construct ReviewContext with enrichments populated
-        let pr = make_pr(None);
-        let mut ctx = aptu_core::ai::review_context::ReviewContext {
-            ast_context: "fn foo() {}".to_string(),
-            call_graph: "foo -> bar".to_string(),
-            ..make_ctx(pr)
-        };
-
-        // Act: call build_pr_review_user_prompt
-        let prompt = StubProvider::build_pr_review_user_prompt(&mut ctx);
-
-        // Assert: sections appear in correct order
-        let pull_request_end = prompt
-            .find("</pull_request>")
-            .expect("should contain </pull_request>");
-        let ast_start = prompt
-            .find("fn foo() {}")
-            .expect("should contain ast_context content");
-        let call_graph_start = prompt
-            .find("foo -> bar")
-            .expect("should contain call_graph content");
-
-        assert!(
-            pull_request_end < ast_start,
-            "pull_request section should end before ast_context starts"
-        );
-        assert!(
-            ast_start < call_graph_start,
-            "ast_context content should appear before call_graph content"
-        );
-    }
-
-    #[test]
-    fn test_verbose_summary_format() {
-        // Arrange: construct ReviewContext with inferred repo path
-        let pr = make_pr(None);
-        let ctx = aptu_core::ai::review_context::ReviewContext {
-            ast_context: "fn bar() {}".to_string(),
-            inferred_repo_path: Some(std::path::PathBuf::from("/tmp/repo")),
-            cwd_inferred: true,
-            ..make_ctx(pr)
-        };
-
-        // Act: call verbose_summary()
-        let summary = ctx.verbose_summary();
-
-        // Assert: summary contains expected content
-        assert!(
-            summary.contains("AST"),
-            "summary should mention ast context"
-        );
-        assert!(
-            summary.contains("inferred"),
-            "summary should mention that path was inferred"
         );
     }
 }

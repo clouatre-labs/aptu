@@ -32,9 +32,6 @@ config = { workspace = true }
 dirs = { workspace = true }
 keyring-core = { workspace = true, optional = true }
 
-# Optional: AST analysis for context injection
-aptu-coder-core = { version = "0.39.0", optional = true }
-
 
 # History
 chrono = { workspace = true }
@@ -95,8 +92,6 @@ harness = false
 default = []
 # Enable system keyring for secure token storage
 keyring = ["dep:keyring-core"]
-# Enable AST context injection for PR reviews
-ast-context = ["dep:aptu-coder-core"]
 
 [lints]
 workspace = true

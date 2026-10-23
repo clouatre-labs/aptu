@@ -67,7 +67,6 @@ pub async fn fetch(reference: &str, repo_context: Option<&str>) -> Result<PrDeta
 pub async fn analyze(
     pr_details: &PrDetails,
     ai_config: &aptu_core::AiConfig,
-    repo_path: Option<String>,
 ) -> Result<(
     PrReviewResponse,
     aptu_core::metrics::AiStats,
@@ -78,7 +77,7 @@ pub async fn analyze(
 
     // Call facade for analysis
     let (review, ai_stats, context_record) =
-        aptu_core::analyze_pr(&provider, pr_details, ai_config, repo_path).await?;
+        aptu_core::analyze_pr(&provider, pr_details, ai_config).await?;
 
     debug!("PR analyzed successfully");
     Ok((review, ai_stats, context_record))
@@ -224,7 +223,6 @@ pub async fn run_review(
     _no_apply: bool,
     no_comment: bool,
     force: bool,
-    repo_path: Option<std::path::PathBuf>,
     instructions_file: Option<std::path::PathBuf>,
     ctx: crate::cli::OutputContext,
     config: &aptu_core::AppConfig,
@@ -233,7 +231,6 @@ pub async fn run_review(
 ) -> Result<()> {
     use crate::cli::OutputFormat;
 
-    let repo_path_str = repo_path.map(|p| p.to_string_lossy().into_owned());
     let repo_context = repo
         .as_deref()
         .or(inferred_repo.as_deref())
@@ -264,7 +261,6 @@ pub async fn run_review(
     let ctx_for_progress = ctx.clone();
     let repo_context_owned = repo_context.map(std::string::ToString::to_string);
     let mut config_clone = config.clone();
-    let repo_path_str_owned = repo_path_str.clone();
     let instructions_file_str = instructions_file.map(|p| p.to_string_lossy().into_owned());
 
     // Override instructions_file in config if provided via CLI
@@ -278,7 +274,6 @@ pub async fn run_review(
             let ctx = ctx_for_processor.clone();
             let repo_context = repo_context_owned.clone();
             let config = config_clone.clone();
-            let repo_path_for_review = repo_path_str_owned.clone();
             async move {
                 let outcome = super::review_single_pr(
                     &pr_ref,
@@ -292,7 +287,6 @@ pub async fn run_review(
                     },
                     &ctx,
                     &config,
-                    repo_path_for_review,
                 )
                 .await?;
                 Ok(match outcome {

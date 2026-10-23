@@ -99,15 +99,6 @@ inputs:
       When set, overrides the default AGENTS.md and .github/instructions/pr-review.md files.
       Leave empty to use default file discovery.
     required: false
-  repo-path:
-    description: >
-      Path to the local repository root for AST context injection into PR review prompts.
-      When set (or inferred from the current working directory when omitted), `aptu pr review`
-      will analyse changed source files (Rust, Python, Go, Java, TypeScript, TSX, JavaScript,
-      C, C++, C#, Fortran) and append function signatures and call-graph context to the prompt.
-      Set to an explicit path to override CWD inference.
-    required: false
-    default: ''
   max-prompt-chars:
     description: >
       Total prompt character budget for PR review. When the assembled prompt exceeds
@@ -382,7 +373,6 @@ runs:
         DRY_RUN: ${{ inputs.dry-run }}
         INSTRUCTIONS_FILE: ${{ inputs.instructions-file }}
         NO_COMMENT: ${{ inputs.no-comment }}
-        REPO_PATH: ${{ inputs.repo-path }}
         APTU_REVIEW__MAX_PROMPT_CHARS: ${{ inputs.max-prompt-chars }}
         APTU_REVIEW__MAX_FULL_CONTENT_FILES: ${{ inputs.max-full-content-files }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
@@ -410,9 +400,6 @@ runs:
           ARGS+=(--no-comment)
         fi
 
-        if [[ -n "$REPO_PATH" ]]; then
-          ARGS+=(--repo-path "$REPO_PATH")
-        fi
         if [[ -n "$INSTRUCTIONS_FILE" ]]; then
           ARGS+=(--instructions-file "$INSTRUCTIONS_FILE")
         fi
