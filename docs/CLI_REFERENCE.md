@@ -13,7 +13,6 @@ This document contains the help content for the `aptu` command-line program.
 * [`aptu issue triage`↴](#aptu-issue-triage)
 * [`aptu pr`↴](#aptu-pr)
 * [`aptu pr review`↴](#aptu-pr-review)
-* [`aptu pr label`↴](#aptu-pr-label)
 * [`aptu scan-security`↴](#aptu-scan-security)
 
 ## `aptu`
@@ -143,7 +142,6 @@ Work with pull requests
 ###### **Subcommands:**
 
 * `review` — Review a pull request with AI assistance
-* `label` — Auto-label a pull request based on conventional commit prefix and file paths
 
 
 
@@ -170,23 +168,6 @@ Review a pull request with AI assistance
 * `-f`, `--force` — Bypass confirmation prompts
 * `--repo-path <PATH>` — Path to the local repository root for AST context injection. Optional when running from within the repo
 * `--instructions-file <PATH>` — Path to repository instructions file (overrides default AGENTS.md and .github/instructions/pr-review.md)
-
-
-
-## `aptu pr label`
-
-Auto-label a pull request based on conventional commit prefix and file paths
-
-**Usage:** `aptu pr label [OPTIONS] <REFERENCE>`
-
-###### **Arguments:**
-
-* `<REFERENCE>` — PR reference (URL, owner/repo#number, or number)
-
-###### **Options:**
-
-* `-r`, `--repo <REPO>` — Repository for bare PR numbers (e.g., "block/goose")
-* `--dry-run` — Preview labels without applying
 
 
 

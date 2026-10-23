@@ -7,9 +7,7 @@ use std::io::{self, Write};
 use console::style;
 
 use crate::cli::OutputContext;
-use crate::commands::types::{
-    BulkPrReviewResult, PrLabelResult, PrReviewResult, SinglePrReviewOutcome,
-};
+use crate::commands::types::{BulkPrReviewResult, PrReviewResult, SinglePrReviewOutcome};
 use crate::output::Renderable;
 
 fn render_security_findings_text(
@@ -281,38 +279,6 @@ impl Renderable for BulkPrReviewResult {
         if self.has_dry_run() {
             crate::output::common::show_dry_run_message(w, "DRY RUN MODE")?;
         }
-
-        Ok(())
-    }
-}
-
-impl Renderable for PrLabelResult {
-    fn render_text(&self, w: &mut dyn Write, _ctx: &OutputContext) -> io::Result<()> {
-        writeln!(w)?;
-        writeln!(
-            w,
-            "{} #{}: {}",
-            style("PR").cyan().bold(),
-            self.pr_number,
-            style(&self.pr_title).bold()
-        )?;
-        writeln!(w, "{}", style(&self.pr_url).dim())?;
-        writeln!(w)?;
-
-        if self.dry_run {
-            writeln!(w, "{}", style("DRY RUN MODE").yellow().bold())?;
-            writeln!(w)?;
-        }
-
-        if self.labels.is_empty() {
-            writeln!(w, "{}", style("No labels extracted").dim())?;
-        } else {
-            writeln!(w, "{}", style("Labels").cyan().bold())?;
-            for label in &self.labels {
-                writeln!(w, "  - {}", style(label).green())?;
-            }
-        }
-        writeln!(w)?;
 
         Ok(())
     }

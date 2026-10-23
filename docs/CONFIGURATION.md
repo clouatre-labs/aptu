@@ -388,7 +388,6 @@ Supported operation names:
 |------|----------|
 | `~/.config/aptu/prompts/triage_system.md` | Issue triage system prompt |
 | `~/.config/aptu/prompts/pr_review_system.md` | PR review system prompt |
-| `~/.config/aptu/prompts/pr_label_system.md` | PR label suggestion system prompt |
 
 **Example:** customize the triage prompt for a monorepo:
 

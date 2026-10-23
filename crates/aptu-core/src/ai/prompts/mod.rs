@@ -26,10 +26,6 @@ pub const PR_REVIEW_SCHEMA: &str = include_str!("pr_review_schema.json");
 pub const PR_VERIFY_SCHEMA: &str = include_str!("pr_verify_schema.json");
 /// Guidelines for PR review system prompts.
 pub const PR_REVIEW_GUIDELINES: &str = include_str!("pr_review_guidelines.md");
-/// JSON schema for PR label suggestion responses.
-pub const PR_LABEL_SCHEMA: &str = include_str!("pr_label_schema.json");
-/// Guidelines for PR label suggestion system prompts.
-pub const PR_LABEL_GUIDELINES: &str = include_str!("pr_label_guidelines.md");
 /// Best-practices context injected into all system prompts (tooling recommendations).
 pub const TOOLING_CONTEXT: &str = include_str!("tooling_context.md");
 
@@ -58,18 +54,6 @@ pub fn build_pr_review_system_prompt(context: &str) -> String {
          {context}\n\n\
          {PR_REVIEW_GUIDELINES}\
          {SCHEMA_PREAMBLE}{PR_REVIEW_SCHEMA}"
-    )
-}
-
-/// Builds the system prompt for PR label suggestion.
-#[must_use]
-pub fn build_pr_label_system_prompt(context: &str) -> String {
-    format!(
-        "You are a senior open-source maintainer. Your mission is to suggest the most relevant \
-         labels for a pull request based on its content.\n\n\
-         {context}\n\n\
-         {PR_LABEL_GUIDELINES}\
-         {SCHEMA_PREAMBLE}{PR_LABEL_SCHEMA}"
     )
 }
 
@@ -506,48 +490,6 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
     prompt
 }
 
-/// Builds the user prompt for PR label suggestion.
-#[must_use]
-pub fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]) -> String {
-    let mut prompt = String::new();
-
-    // Sanitize title and body to prevent prompt injection
-    let sanitized_title = sanitize_prompt_field(title);
-    let sanitized_body = sanitize_prompt_field(body);
-
-    prompt.push_str("<pull_request>\n");
-    let _ = writeln!(prompt, "Title: {sanitized_title}\n");
-
-    // PR description
-    let body_content = if sanitized_body.is_empty() {
-        "[No description provided]".to_string()
-    } else if sanitized_body.len() > MAX_BODY_LENGTH {
-        format!(
-            "{}...\n[APTU: description truncated by size budget -- do not speculate on missing content]",
-            truncate_at_char_boundary(&sanitized_body, MAX_BODY_LENGTH),
-        )
-    } else {
-        sanitized_body.clone()
-    };
-    let _ = writeln!(prompt, "Description:\n{body_content}\n");
-
-    // File paths
-    if !file_paths.is_empty() {
-        prompt.push_str("Files Changed:\n");
-        for path in file_paths.iter().take(20) {
-            let _ = writeln!(prompt, "- {path}");
-        }
-        if file_paths.len() > 20 {
-            let _ = writeln!(prompt, "- ... and {} more files", file_paths.len() - 20);
-        }
-        prompt.push('\n');
-    }
-
-    prompt.push_str("</pull_request>");
-
-    prompt
-}
-
 /// Builds the user prompt for the findings verification pass.
 ///
 /// Each candidate finding is listed with its index, and the diff is truncated
@@ -713,86 +655,6 @@ mod tests {
             prompt.contains("Normal title"),
             "non-injection content must be preserved"
         );
-    }
-
-    #[test]
-    fn test_build_pr_label_system_prompt_contains_json_schema() {
-        let system_prompt = build_pr_label_system_prompt("");
-        // Schema fields MUST appear in the system prompt now that schema injection
-        // happens at system-prompt build time.
-        assert!(system_prompt.contains("label1"));
-        assert!(system_prompt.contains("suggested_labels"));
-
-        // Schema must NOT appear in the user prompt.
-        let user_prompt =
-            build_pr_label_user_prompt("feat: add thing", "body", &["src/lib.rs".to_string()]);
-        assert!(!user_prompt.contains("label1"));
-    }
-
-    #[test]
-    fn test_build_pr_label_user_prompt_with_title_and_body() {
-        let title = "feat: add new feature";
-        let body = "This PR adds a new feature";
-        let files = vec!["src/main.rs".to_string(), "tests/test.rs".to_string()];
-
-        let prompt = build_pr_label_user_prompt(title, body, &files);
-        assert!(prompt.starts_with("<pull_request>"));
-        assert!(prompt.contains("</pull_request>"));
-        assert!(prompt.contains("feat: add new feature"));
-        assert!(prompt.contains("This PR adds a new feature"));
-        assert!(prompt.contains("src/main.rs"));
-        assert!(prompt.contains("tests/test.rs"));
-    }
-
-    #[test]
-    fn test_build_pr_label_user_prompt_empty_body() {
-        let title = "fix: bug fix";
-        let body = "";
-        let files = vec!["src/lib.rs".to_string()];
-
-        let prompt = build_pr_label_user_prompt(title, body, &files);
-        assert!(prompt.contains("[No description provided]"));
-        assert!(prompt.contains("src/lib.rs"));
-    }
-
-    #[test]
-    fn test_build_pr_label_user_prompt_truncates_long_body() {
-        let title = "test";
-        let long_body = "x".repeat(5000);
-        let files = vec![];
-
-        let prompt = build_pr_label_user_prompt(title, &long_body, &files);
-        assert!(prompt.contains(
-            "[APTU: description truncated by size budget -- do not speculate on missing content]"
-        ));
-    }
-
-    #[test]
-    fn test_build_pr_label_user_prompt_respects_file_limit() {
-        let title = "test";
-        let body = "test";
-        let mut files = Vec::new();
-        for i in 0..25 {
-            files.push(format!("file{i}.rs"));
-        }
-
-        let prompt = build_pr_label_user_prompt(title, body, &files);
-        assert!(prompt.contains("file0.rs"));
-        assert!(prompt.contains("file19.rs"));
-        assert!(!prompt.contains("file20.rs"));
-        assert!(prompt.contains("... and 5 more files"));
-    }
-
-    #[test]
-    fn test_build_pr_label_user_prompt_empty_files() {
-        let title = "test";
-        let body = "test";
-        let files: Vec<String> = vec![];
-
-        let prompt = build_pr_label_user_prompt(title, body, &files);
-        assert!(prompt.contains("Title: test"));
-        assert!(prompt.contains("Description:\ntest"));
-        assert!(!prompt.contains("Files Changed:"));
     }
 
     #[test]
@@ -1462,19 +1324,6 @@ mod tests {
     }
 
     #[test]
-    fn test_build_pr_label_user_prompt_multibyte_straddling_budget_no_panic() {
-        let title = "test";
-        let body = "x".repeat(1999) + &"é".repeat(2000);
-        let files: Vec<String> = vec![];
-
-        let prompt = build_pr_label_user_prompt(title, &body, &files);
-        assert!(prompt.contains(
-            "[APTU: description truncated by size budget -- do not speculate on missing content]"
-        ));
-        assert!(prompt.contains("x".repeat(1999).as_str()));
-        assert!(!prompt.contains("x".repeat(2000).as_str()));
-    }
-
     #[test]
     fn test_build_user_prompt_multibyte_comment_straddling_budget_no_panic() {
         let comment_body = "x".repeat(499) + &"é".repeat(100);

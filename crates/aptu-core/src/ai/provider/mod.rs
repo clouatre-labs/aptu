@@ -7,7 +7,6 @@
 //! request sending, and response parsing.
 
 pub mod http;
-pub mod label;
 pub mod parse;
 pub mod review;
 pub mod triage;
@@ -184,16 +183,6 @@ pub trait AiProvider: Send + Sync {
         self::review::verify_findings(self, comments, diff, review_config).await
     }
 
-    /// Suggests labels for a pull request using the provider's API.
-    async fn suggest_pr_labels(
-        &self,
-        title: &str,
-        body: &str,
-        file_paths: &[String],
-    ) -> Result<(Vec<String>, AiStats)> {
-        self::label::suggest_pr_labels(self, title, body, file_paths).await
-    }
-
     /// Builds the system prompt for PR review.
     #[must_use]
     fn build_pr_review_system_prompt(custom_guidance: Option<&str>) -> String {
@@ -204,18 +193,6 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_pr_review_user_prompt(ctx: &mut crate::ai::review_context::ReviewContext) -> String {
         self::review::build_pr_review_user_prompt(ctx)
-    }
-
-    /// Builds the system prompt for PR label suggestion.
-    #[must_use]
-    fn build_pr_label_system_prompt(custom_guidance: Option<&str>) -> String {
-        self::label::build_pr_label_system_prompt_fn(custom_guidance)
-    }
-
-    /// Builds the user prompt for PR label suggestion.
-    #[must_use]
-    fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]) -> String {
-        self::label::build_pr_label_user_prompt(title, body, file_paths)
     }
 }
 
