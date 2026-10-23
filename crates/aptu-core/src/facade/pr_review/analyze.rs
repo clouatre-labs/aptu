@@ -4,6 +4,8 @@
 
 use tracing::{debug, instrument, warn};
 
+use crate::github::pulls::IncrementalFiles;
+
 use crate::ai::provider::AiProvider;
 use crate::ai::types::PrDetails;
 use crate::auth::TokenProvider;
@@ -94,7 +96,7 @@ pub async fn fetch_pr_for_review(
             )
             .await
             {
-                Some(files) => {
+                IncrementalFiles::Files(files) => {
                     debug!(
                         last_sha = %last_sha,
                         head_sha = %pr.head_sha,
@@ -106,10 +108,19 @@ pub async fn fetch_pr_for_review(
                     ));
                     pr.files = files;
                 }
-                None => {
+                IncrementalFiles::Empty => {
                     debug!(
                         last_sha = %last_sha,
-                        "Incremental compare unavailable or empty; falling back to full review"
+                        head_sha = %pr.head_sha,
+                        "Incremental compare range empty; nothing changed since last review"
+                    );
+                    return Ok(pr);
+                }
+                IncrementalFiles::Fallback(reason) => {
+                    debug!(
+                        last_sha = %last_sha,
+                        reason = ?reason,
+                        "Incremental compare unavailable; falling back to full review"
                     );
                 }
             }
