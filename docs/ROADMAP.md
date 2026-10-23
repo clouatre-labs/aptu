@@ -27,7 +27,6 @@ This document describes the project direction across three time horizons. Items 
 
 These items address known gaps and complete features already partially implemented.
 
-- **Bulk triage improvements**: better progress reporting, per-repo rate limit awareness, and configurable concurrency
 - **SARIF v2.2 full compliance**: complete SARIF export for security scan results, including rule metadata and suppression entries
 - **Config validation**: `aptu config validate` reports missing keys and unknown fields on startup
 - **API key memory hygiene**: apply `zeroize` on drop to all secret-typed fields in `aptu-core`; prevents secrets from lingering in freed memory after deallocation (single-dependency hardening)

@@ -59,41 +59,6 @@ fn test_triage_single_reference() {
 }
 
 #[test]
-fn test_triage_since_flag_invalid_date() {
-    // Test that invalid date format is rejected
-    let output = run_cli(&[
-        "issue",
-        "triage",
-        "--repo",
-        "block/goose",
-        "--since",
-        "not-a-date",
-        "--dry-run",
-    ]);
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Invalid date format"));
-}
-
-#[test]
-fn test_triage_since_requires_repo() {
-    // Test that --since without explicit --repo works due to auto-inference.
-    // When running in a git repository (like the aptu repo itself), the repo
-    // is automatically inferred. The command may fail with auth error in CI
-    // (no token), but it should NOT fail with "--since requires --repo".
-    // This proves auto-inference is working.
-    let output = run_cli(&["issue", "triage", "--since", "2025-12-01", "--dry-run"]);
-
-    // Either succeeds (local with auth) or fails with auth error (CI without auth)
-    // but never with "--since requires --repo" (that would mean inference failed)
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        !stderr.contains("--since requires --repo"),
-        "Auto-inference should have found repo from git remote"
-    );
-}
-
-#[test]
 fn test_triage_no_comment_flag_recognized() {
     // Test that --no-comment flag is recognized in help
     let output = run_cli(&["issue", "triage", "--help"]);

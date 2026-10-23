@@ -40,7 +40,6 @@ console = { workspace = true }
 comfy-table = { workspace = true }
 
 # Time and IDs
-chrono = { workspace = true }
 
 # Security
 secrecy = { workspace = true }

@@ -120,7 +120,6 @@ dependencies = [
  "anyhow",
  "aptu-core",
  "assert_cmd",
- "chrono",
  "clap",
  "clap-markdown",
  "comfy-table",
