@@ -145,7 +145,6 @@ When fallback triggers, Aptu tries each provider in the chain in order. If a fal
 **Notes:**
 
 - Fallback triggers for non-retryable errors, and for rate-limit errors after in-loop retries are exhausted
-- Circuit breaker errors do not trigger fallback
 - Each fallback provider must have a valid API key configured
 - Model overrides are optional; if not specified, the primary model is used
 - Fallback attempts are logged with `warn` level tracing

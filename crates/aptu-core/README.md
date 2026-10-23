@@ -19,7 +19,7 @@ Core library for Aptu - AI-powered issue-triage and PR-review harness.
 - **Security Scanning** - Built-in security pattern detection with SARIF output
 - **Multiple Providers** - Anthropic, Gemini, `OpenRouter` (default), and Z.AI
 - **GitHub Integration** - Auth, issues, PRs, and GraphQL queries
-- **Resilient** - Exponential backoff, circuit breaker, rate limit handling
+- **Resilient** - Exponential backoff, rate limit handling
 
 ## Installation
 

@@ -121,10 +121,6 @@ pub struct AiConfig {
     pub max_tokens: u32,
     /// Temperature for API requests (0.0-1.0).
     pub temperature: f32,
-    /// Circuit breaker failure threshold before opening (default: 3).
-    pub circuit_breaker_threshold: u32,
-    /// Circuit breaker reset timeout in seconds (default: 60).
-    pub circuit_breaker_reset_seconds: u64,
     /// Maximum retry attempts for rate-limited requests (default: 3).
     #[serde(default = "default_retry_max_attempts")]
     pub retry_max_attempts: u32,
@@ -159,8 +155,6 @@ impl Default for AiConfig {
             allow_paid_models: true,
             max_tokens: 4096,
             temperature: 0.3,
-            circuit_breaker_threshold: 3,
-            circuit_breaker_reset_seconds: 60,
             retry_max_attempts: default_retry_max_attempts(),
             tasks: None,
             fallback: None,
