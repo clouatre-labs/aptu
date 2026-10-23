@@ -662,7 +662,7 @@ mod tests {
         assert!(!status.has_type_label);
         assert!(!status.has_priority_label);
         assert!(!status.has_aptu_comment);
-        assert!(status.label_names.is_empty());
+        assert_eq!(status.label_names, Vec::<String>::new());
     }
 
     #[test]
@@ -727,7 +727,7 @@ mod tests {
         assert!(!status.has_type_label);
         assert!(!status.has_priority_label);
         assert!(status.has_aptu_comment);
-        assert!(status.label_names.is_empty());
+        assert_eq!(status.label_names, Vec::<String>::new());
     }
 
     #[test]
@@ -767,7 +767,7 @@ mod tests {
         assert!(!status.is_triaged());
         assert!(!status.has_type_label);
         assert!(!status.has_priority_label);
-        assert!(status.label_names.is_empty());
+        assert_eq!(status.label_names, Vec::<String>::new());
     }
 
     #[test]

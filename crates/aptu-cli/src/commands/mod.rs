@@ -19,13 +19,11 @@ use dialoguer::Confirm;
 use rayon::prelude::*;
 use tracing::debug;
 
-use crate::cli::{
-    AuthCommand, Commands, IssueCommand, IssueState, OutputContext, OutputFormat, PrCommand,
-};
+use crate::cli::{AuthCommand, Commands, IssueCommand, OutputContext, OutputFormat, PrCommand};
 use crate::commands::common::maybe_spinner;
 use crate::commands::types::{OutcomeInfo, PrReviewResult};
 use crate::output;
-use aptu_core::{AppConfig, BulkItem, State, check_already_triaged};
+use aptu_core::{AppConfig, BulkItem, check_already_triaged};
 
 /// Options for PR review behavior.
 #[allow(clippy::struct_excessive_bools)]
@@ -387,7 +385,6 @@ async fn review_single_pr(
     opts: ReviewOptions,
     ctx: &OutputContext,
     config: &AppConfig,
-    repo_path: Option<String>,
 ) -> Result<Option<PrReviewResult>> {
     // Fetch PR details
     let pr_details = pr::fetch(reference, repo_context).await?;
@@ -397,8 +394,7 @@ async fn review_single_pr(
 
     // Analyze with AI
     let spinner = maybe_spinner(ctx, "Analyzing with AI...");
-    let (review, ai_stats, context_record) =
-        pr::analyze(&pr_details, &config.ai, repo_path).await?;
+    let (review, ai_stats, context_record) = pr::analyze(&pr_details, &config.ai).await?;
     if let Some(s) = spinner {
         s.finish_and_clear();
     }
@@ -531,71 +527,6 @@ async fn run_auth_command(
     }
 }
 
-/// Resolve issue references from --since flag.
-pub(crate) async fn resolve_triage_refs(
-    since: Option<String>,
-    state: IssueState,
-    repo_context: Option<&str>,
-    force: bool,
-    ctx: &OutputContext,
-) -> Result<Vec<String>> {
-    if let Some(since_date) = since {
-        // Fetch untriaged issues since the specified date
-        let repo_context = repo_context.ok_or_else(|| {
-            anyhow::anyhow!(
-                "--since requires --repo or default_repo config when no references provided"
-            )
-        })?;
-        let (owner, repo_name) = repo_context
-            .split_once('/')
-            .context("Invalid repo format, expected 'owner/repo'")?;
-
-        // Parse the date to RFC3339 format
-        let rfc3339_date = crate::cli::parse_date_to_rfc3339(&since_date)?;
-
-        // Convert IssueState to octocrab::params::State
-        let octocrab_state = match state {
-            IssueState::Open => State::Open,
-            IssueState::Closed => State::Closed,
-            IssueState::All => State::All,
-        };
-
-        let spinner = maybe_spinner(ctx, "Fetching issues needing triage...");
-        let client =
-            aptu_core::github::auth::create_client().context("Failed to create GitHub client")?;
-        let untriaged_issues = aptu_core::github::issues::fetch_issues_needing_triage(
-            &client,
-            owner,
-            repo_name,
-            Some(&rfc3339_date),
-            force,
-            octocrab_state,
-        )
-        .await?;
-        if let Some(s) = spinner {
-            s.finish_and_clear();
-        }
-
-        // Warn if pagination limit hit
-        if untriaged_issues.len() == 100 && matches!(ctx.format, OutputFormat::Text) {
-            println!(
-                "{}",
-                style(
-                    "Warning: Fetched 100 issues (pagination limit). There may be more untriaged issues."
-                )
-                    .yellow()
-            );
-        }
-
-        Ok(untriaged_issues
-            .into_iter()
-            .map(|issue| format!("{}#{}", repo_context, issue.number))
-            .collect())
-    } else {
-        Ok(Vec::new())
-    }
-}
-
 /// Run the issue command.
 async fn run_issue_command(
     issue_cmd: IssueCommand,
@@ -624,7 +555,6 @@ async fn run_pr_command(
             no_apply,
             no_comment,
             force,
-            repo_path,
             instructions_file,
             no_dedup_summary,
         } => {
@@ -638,7 +568,6 @@ async fn run_pr_command(
                 no_apply,
                 no_comment,
                 force,
-                repo_path,
                 instructions_file,
                 ctx,
                 config,
@@ -647,11 +576,6 @@ async fn run_pr_command(
             )
             .await
         }
-        PrCommand::Label {
-            reference,
-            repo,
-            dry_run,
-        } => pr::run_label_command(reference, repo, dry_run, ctx, config, inferred_repo).await,
     }
 }
 
@@ -778,7 +702,7 @@ mod tests {
         let trigger = super::deterministic_skip_trigger(&issue);
 
         // Assert
-        assert!(!lint.violations.is_empty());
+        assert_ne!(lint.violations, []);
         assert_eq!(trigger, None);
     }
 

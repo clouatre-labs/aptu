@@ -86,7 +86,6 @@ pub fn render_pr_review(
 }
 
 mod auth;
-mod bulk;
 pub mod common;
 pub mod pr;
 mod triage;

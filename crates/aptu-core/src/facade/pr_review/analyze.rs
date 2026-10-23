@@ -4,6 +4,8 @@
 
 use tracing::{debug, instrument, warn};
 
+use crate::github::pulls::IncrementalFiles;
+
 use crate::ai::provider::AiProvider;
 use crate::ai::types::PrDetails;
 use crate::auth::TokenProvider;
@@ -94,7 +96,7 @@ pub async fn fetch_pr_for_review(
             )
             .await
             {
-                Some(files) => {
+                IncrementalFiles::Files(files) => {
                     debug!(
                         last_sha = %last_sha,
                         head_sha = %pr.head_sha,
@@ -106,10 +108,19 @@ pub async fn fetch_pr_for_review(
                     ));
                     pr.files = files;
                 }
-                None => {
+                IncrementalFiles::Empty => {
                     debug!(
                         last_sha = %last_sha,
-                        "Incremental compare unavailable or empty; falling back to full review"
+                        head_sha = %pr.head_sha,
+                        "Incremental compare range empty; nothing changed since last review"
+                    );
+                    return Ok(pr);
+                }
+                IncrementalFiles::Fallback(reason) => {
+                    debug!(
+                        last_sha = %last_sha,
+                        reason = ?reason,
+                        "Incremental compare unavailable; falling back to full review"
                     );
                 }
             }
@@ -159,6 +170,18 @@ mod incremental_range_tests {
     }
 }
 
+/// Coverage metadata for the reconstructed verification diff.
+///
+/// Tracks what was dropped when the total output hit the size cap, so partial
+/// verification coverage can be surfaced in logs and the context JSONL record.
+#[derive(Debug, Default, PartialEq)]
+struct DiffCoverage {
+    /// Names of files dropped from the reconstructed diff at the size cap.
+    dropped_files: Vec<String>,
+    /// Total bytes (header plus patch content) dropped at the size cap.
+    dropped_bytes: usize,
+}
+
 /// Reconstructs a unified diff string from PR file patches for security scanning.
 ///
 /// Files with `patch: None` (e.g. binary files or files with no changes) are silently
@@ -168,17 +191,22 @@ mod incremental_range_tests {
 /// else, so corrupt hunks are skipped rather than causing errors.
 ///
 /// Total output is capped at `200_000` bytes to bound
-/// memory use on PRs with extremely large patches.
-fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
+/// memory use on PRs with extremely large patches. Files dropped at the cap
+/// are reported in the returned [`DiffCoverage`] so callers can surface
+/// partial verification coverage.
+fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> (String, DiffCoverage) {
     const MAX_RECONSTRUCT_DIFF_SIZE: usize = 200_000;
     let mut diff = String::new();
+    let mut coverage = DiffCoverage::default();
     for file in files {
         if let Some(patch) = &file.patch {
             // Cap check is intentionally pre-append (soft lower bound, not hard upper bound):
             // it avoids splitting a file header from its patch, which would produce a
             // malformed diff that confuses the scanner's file-path tracking.
             if diff.len() >= MAX_RECONSTRUCT_DIFF_SIZE {
-                break;
+                coverage.dropped_files.push(file.filename.clone());
+                coverage.dropped_bytes += file.filename.len() + patch.len();
+                continue;
             }
             diff.push_str("+++ b/");
             diff.push_str(&file.filename);
@@ -187,108 +215,22 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
             diff.push('\n');
         }
     }
-    diff
+    (diff, coverage)
 }
 
 /// Resolves the minimum context window (in tokens) across the selected model
 /// and any configured fallback models, so the prompt budget respects the
-/// smallest window the request could target.
-///
-/// Semantics are intentionally conservative: a model whose registry lookup
-/// fails (provider registry unreachable, or model absent from the listing) is
-/// EXCLUDED from the minimum rather than silently continuing with the known
-/// windows. Only when no model at all resolves (selected plus every fallback)
-/// does this degrade to `None` (treated as unbounded), with a debug log. A
-/// model that resolves but advertises no `context_window` is also treated as
-/// unbounded and does not constrain the minimum.
-/// Folds the context windows of `models` resolved from the registry listing
-/// `listed` into `min_window` (conservatively excluding models that are absent
-/// from the listing). Returns the updated minimum and the number of models
-/// that resolved.
+/// Resolves the effective context window for the selected model and its
+/// fallback chain from config-declared windows (user config layered over
+/// built-in defaults). Pure string lookup; see
+/// [`AiConfig::effective_context_window`] for the conservative fold semantics.
 #[cfg(not(target_arch = "wasm32"))]
-fn fold_model_windows(
-    listed: &[crate::ai::registry::CachedModel],
-    prov: &str,
-    models: &[&str],
-    mut min_window: Option<u32>,
-) -> (Option<u32>, usize) {
-    let mut resolved = 0;
-    for model in models {
-        // Conservative: a model that cannot be resolved in the registry is
-        // excluded from the minimum instead of silently continuing with the
-        // known windows.
-        match listed.iter().find(|m| m.id == *model) {
-            Some(found) => {
-                resolved += 1;
-                if let Some(window) = found.context_window {
-                    min_window = Some(min_window.map_or(window, |cur| cur.min(window)));
-                }
-            }
-            None => {
-                debug!(
-                    provider = prov,
-                    model = model,
-                    "Model not found in registry; excluded from context-window cap"
-                );
-            }
-        }
-    }
-    (min_window, resolved)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn resolve_context_window(
-    provider: &dyn TokenProvider,
+fn resolve_context_window(
     ai_config: &AiConfig,
     provider_name: &str,
     model_name: &str,
 ) -> Option<u32> {
-    use crate::ai::registry::{CachedModelRegistry, ModelRegistry};
-    use std::collections::BTreeMap;
-
-    let registry = CachedModelRegistry::new(
-        crate::cache::cache_dir(),
-        crate::cache::DEFAULT_MODEL_TTL_SECS,
-        provider,
-    );
-
-    // Collect (provider -> models) pairs: selected model plus the fallback chain.
-    let mut targets: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    targets.entry(provider_name).or_default().push(model_name);
-    if let Some(fallback) = &ai_config.fallback {
-        for entry in &fallback.chain {
-            targets
-                .entry(entry.provider.as_str())
-                .or_default()
-                .push(entry.model.as_deref().unwrap_or(ai_config.model.as_str()));
-        }
-    }
-
-    let mut min_window: Option<u32> = None;
-    let mut resolved_any = false;
-    for (prov, models) in targets {
-        match registry.list_models(prov).await {
-            Ok(listed) => {
-                let (folded, resolved) = fold_model_windows(&listed, prov, &models, min_window);
-                min_window = folded;
-                resolved_any = resolved_any || resolved > 0;
-            }
-            Err(e) => {
-                debug!(
-                    provider = prov,
-                    error = %e,
-                    "Model registry unavailable; provider models excluded from context-window cap"
-                );
-            }
-        }
-    }
-    if !resolved_any {
-        debug!(
-            "No models resolved from registry (selected plus fallbacks); context window treated as unbounded"
-        );
-        return None;
-    }
-    min_window
+    ai_config.effective_context_window(provider_name, model_name)
 }
 
 /// Computes a pre-context routing size estimate: the user-prompt content plus
@@ -304,8 +246,6 @@ fn routing_size_estimate(pr_details: &PrDetails, instructions_overhead: usize) -
     );
     crate::ai::review_context::estimate_pr_size(
         pr_details,
-        "",
-        "",
         default_system_prompt.len() + instructions_overhead,
     )
 }
@@ -325,7 +265,7 @@ async fn call_review_ai(
     Vec<String>,
     Vec<String>,
 )> {
-    crate::facade::ai_client::try_with_fallback(
+    crate::ai::client::try_with_fallback(
         provider,
         provider_name,
         model_name,
@@ -413,7 +353,6 @@ pub async fn analyze_pr(
     provider: &dyn TokenProvider,
     pr_details: &PrDetails,
     ai_config: &AiConfig,
-    repo_path: Option<String>,
 ) -> crate::Result<(
     crate::ai::types::PrReviewResponse,
     crate::metrics::AiStats,
@@ -471,13 +410,11 @@ pub async fn analyze_pr(
     let routing_estimate = routing_size_estimate(pr_details, instructions_overhead);
     let (provider_name, model_name) =
         ai_config.resolve_for_task(TaskType::Review, Some(routing_estimate));
-    let context_window =
-        resolve_context_window(provider, ai_config, &provider_name, &model_name).await;
+    let context_window = resolve_context_window(ai_config, &provider_name, &model_name);
 
     // Build review context with all enrichment decisions centralized
     let ctx = crate::ai::review_context::build_review_context(
         pr_details.clone(),
-        repo_path.clone(),
         &review_config,
         context_window,
         ai_config.max_tokens,
@@ -497,7 +434,7 @@ pub async fn analyze_pr(
     }
 
     // Pre-AI prompt injection scan (advisory gate)
-    let diff = reconstruct_diff_from_pr(&pr_details.files);
+    let (diff, _) = reconstruct_diff_from_pr(&pr_details.files);
     let injection_findings: Vec<_> = SecurityScanner::new()
         .scan_diff(&diff)
         .into_iter()
@@ -537,7 +474,6 @@ pub async fn analyze_pr(
                 );
                 let mut retrimmed = crate::ai::review_context::build_review_context(
                     pr_details.clone(),
-                    repo_path.clone(),
                     &halved_config,
                     context_window,
                     ai_config.max_tokens,
@@ -565,8 +501,19 @@ pub async fn analyze_pr(
     // Verification pass: exactly one extra small-model call confirms each
     // candidate finding against the diff before anything is posted. When the
     // pass is disabled, only the local info-suppression filter applies.
+    let mut verification_dropped_files: Vec<String> = Vec::new();
+    let mut verification_dropped_bytes: usize = 0;
     if review_config.verify_enabled && !response.comments.is_empty() {
-        let diff = reconstruct_diff_from_pr(&pr_details.files);
+        let (diff, coverage) = reconstruct_diff_from_pr(&pr_details.files);
+        if !coverage.dropped_files.is_empty() {
+            warn!(
+                dropped_files = coverage.dropped_files.len(),
+                dropped_bytes = coverage.dropped_bytes,
+                "finding verification diff reconstructed partially; files dropped at size cap"
+            );
+            verification_dropped_files = coverage.dropped_files;
+            verification_dropped_bytes = coverage.dropped_bytes;
+        }
         let verify_estimate = diff.len()
             + response
                 .comments
@@ -575,7 +522,7 @@ pub async fn analyze_pr(
                 .sum::<usize>();
         let (verify_provider_name, verify_model_name) =
             ai_config.resolve_for_task(TaskType::Verify, Some(verify_estimate));
-        let (verdicts, verify_stats, _) = crate::facade::ai_client::try_with_fallback(
+        let (verdicts, verify_stats, _) = crate::ai::client::try_with_fallback(
             provider,
             &verify_provider_name,
             &verify_model_name,
@@ -624,13 +571,12 @@ pub async fn analyze_pr(
         files_truncated: ctx.files_truncated,
         truncated_chars_dropped: ctx.truncated_chars_dropped,
         truncated_patch_files,
-        ast_context_chars: ctx.ast_context.len(),
-        call_graph_chars: ctx.call_graph.len(),
         budget_drops: ctx.budget_drops,
-        cwd_inferred: ctx.cwd_inferred,
         prompt_chars_final: ai_stats.prompt_chars,
         finish_reasons,
         max_prompt_chars: review_config.max_prompt_chars,
+        verification_dropped_files,
+        verification_dropped_bytes,
     };
 
     Ok((response, ai_stats, context_record))
@@ -641,7 +587,6 @@ pub async fn analyze_pr(
     _provider: &dyn crate::auth::TokenProvider,
     _pr_details: &crate::ai::types::PrDetails,
     _ai_config: &crate::config::AiConfig,
-    _repo_path: Option<String>,
 ) -> crate::Result<(
     crate::ai::types::PrReviewResponse,
     crate::metrics::AiStats,
@@ -668,6 +613,44 @@ pub(crate) enum DedupOutcome {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
+
+    /// Cap-break path: files past the 200KB pre-append cap are dropped and
+    /// reported in the returned coverage (`dropped_files`, `dropped_bytes`).
+    #[test]
+    fn test_reconstruct_diff_reports_coverage_when_cap_exceeded() {
+        let big_patch = "x".repeat(200_100);
+        let small_patch = "y".repeat(10);
+        let files = [
+            crate::ai::types::PrFile {
+                filename: "big.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some(big_patch.clone()),
+                patch_truncated: false,
+                full_content: None,
+            },
+            crate::ai::types::PrFile {
+                filename: "late.rs".to_string(),
+                status: "modified".to_string(),
+                additions: 1,
+                deletions: 1,
+                patch: Some(small_patch.clone()),
+                patch_truncated: false,
+                full_content: None,
+            },
+        ];
+
+        // Act: reconstruct the diff; the first file pushes past the cap, so
+        // the second must be dropped and reported.
+        let (diff, coverage) = reconstruct_diff_from_pr(&files);
+
+        // Assert: small file content is absent, and coverage reports the drop.
+        assert!(diff.contains("big.rs"));
+        assert!(!diff.contains("late.rs"));
+        assert_eq!(coverage.dropped_files, vec!["late.rs".to_string()]);
+        assert_eq!(coverage.dropped_bytes, "late.rs".len() + small_patch.len());
+    }
 
     /// Minimal `PrDetails` for routing-estimate tests.
     fn make_pr() -> PrDetails {
@@ -708,45 +691,10 @@ mod tests {
         );
     }
 
-    /// Verifies the conservative fallback fold: models absent from the registry
-    /// listing are excluded, the minimum is taken over resolved windows, and
-    /// when nothing resolves there is no minimum (degrades to unbounded).
-    #[test]
-    fn test_fold_model_windows_excludes_unresolved_and_takes_min() {
-        use crate::ai::registry::CachedModel;
-        let make_model = |id: &str, window: u32| CachedModel {
-            id: id.to_string(),
-            name: None,
-            is_free: None,
-            context_window: Some(window),
-            provider: "openrouter".to_string(),
-            capabilities: vec![],
-            pricing: None,
-        };
-        let listed = [make_model("small", 200_000), make_model("tiny", 8_000)];
-
-        // "missing" is not in the listing, so it must be excluded; the min is
-        // taken over the resolved windows only.
-        let (min_window, resolved) =
-            fold_model_windows(&listed, "openrouter", &["small", "missing", "tiny"], None);
-        assert_eq!(resolved, 2, "unresolved models must not count as resolved");
-        assert_eq!(min_window, Some(8_000), "min must be over resolved windows");
-
-        // No model resolves -> no minimum (degrades to unbounded upstream).
-        let (none_min, none_resolved) =
-            fold_model_windows(&listed, "openrouter", &["missing"], None);
-        assert_eq!(none_resolved, 0);
-        assert_eq!(none_min, None);
-    }
-
     /// Minimal `ReviewContext` wrapping `make_pr` for re-trim helper tests.
     fn make_ctx() -> crate::ai::review_context::ReviewContext {
         crate::ai::review_context::ReviewContext {
             pr: make_pr(),
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
             max_chars_per_file: 1_000,
             max_diff_chars: 10_000,
             max_patch_chars_per_file: 1_000,
@@ -783,7 +731,11 @@ mod tests {
             || {
                 panic!("retrim must not run when the first attempt succeeds");
                 #[allow(unreachable_code)]
-                std::future::ready(Err(AptuError::CircuitOpen))
+                std::future::ready(Err(AptuError::AI {
+                    provider: "mock".to_string(),
+                    message: "mock failure".to_string(),
+                    status: None,
+                }))
             },
         )
         .await
@@ -801,7 +753,7 @@ mod tests {
         let first_calls = std::cell::Cell::new(0u32);
         let retrim_calls = std::cell::Cell::new(0u32);
         let mut retrimmed = make_ctx();
-        retrimmed.budget_drops.push("call_graph".to_string());
+        retrimmed.budget_drops.push("full_content".to_string());
 
         let (value, used_ctx) = retry_once_on_context_length(
             || {
@@ -820,7 +772,7 @@ mod tests {
         assert_eq!(retrim_calls.get(), 1, "exactly one re-trim retry");
         assert_eq!(
             used_ctx.budget_drops,
-            vec!["call_graph".to_string()],
+            vec!["full_content".to_string()],
             "telemetry must come from the re-trimmed context"
         );
     }

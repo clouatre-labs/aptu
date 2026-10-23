@@ -19,7 +19,7 @@ Core library for Aptu - AI-powered issue-triage and PR-review harness.
 - **Security Scanning** - Built-in security pattern detection with SARIF output
 - **Multiple Providers** - Anthropic, Gemini, `OpenRouter` (default), and Z.AI
 - **GitHub Integration** - Auth, issues, PRs, and GraphQL queries
-- **Resilient** - Exponential backoff, circuit breaker, rate limit handling
+- **Resilient** - Exponential backoff, rate limit handling
 
 ## Installation
 
@@ -37,7 +37,6 @@ aptu-core = "*"
 | Feature | Description |
 |---------|-------------|
 | `keyring` | Secure token storage using system keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager) |
-| `ast-context` | AST and call-graph context injection for PR reviews (Rust, Go, Python, TypeScript, JS, C/C++, C#, Java, Fortran) |
 
 To enable optional features:
 

@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! PR review and labeling facade functions.
+//! PR review facade functions.
 
 /// Default review comment side used for GitHub PR review comments.
 pub(crate) const DEFAULT_COMMENT_SIDE: &str = "RIGHT";
 
 mod analyze;
-mod label;
 mod post;
 
 pub use crate::github::pulls::{ReviewPostOutcome, SummaryPostOutcome};
 pub use analyze::{analyze_pr, fetch_pr_for_review};
-pub use label::{LabelPrOutcome, label_pr};
 pub use post::post_pr_review;
 
 #[allow(unused_imports)]
@@ -57,7 +55,7 @@ mod tests {
     #[test]
     fn pr_write_gate_denies_below_write_on_pr_path() {
         use crate::github::graphql::ViewerPermission;
-        // Same gate as post_pr_review and label_pr: READ/TRIAGE deny writes,
+        // Same gate as post_pr_review: READ/TRIAGE deny writes,
         // while None/unknown and WRITE-or-above allow them.
         assert!(!pr_write_allowed(Some(ViewerPermission::Read)));
         assert!(!pr_write_allowed(Some(ViewerPermission::Triage)));
@@ -180,8 +178,6 @@ mod tests {
             allow_paid_models: true,
             max_tokens: 2000,
             temperature: 0.7,
-            circuit_breaker_threshold: 3,
-            circuit_breaker_reset_seconds: 60,
             retry_max_attempts: 3,
             tasks: None,
             fallback: None,
@@ -189,10 +185,11 @@ mod tests {
             validation_enabled: false,
             openrouter_data_collection: "deny".to_string(),
             openrouter_zdr: true,
+            context_windows: None,
         };
 
         let provider = MockProvider;
-        let result = analyze_pr(&provider, &pr, &ai_config, None).await;
+        let result = analyze_pr(&provider, &pr, &ai_config).await;
 
         // Verify that the function returns a SecurityScan error
         match result {
@@ -201,35 +198,6 @@ mod tests {
             }
             other => panic!("Expected SecurityScan error, got: {other:?}"),
         }
-    }
-
-    #[test]
-    fn test_call_graph_auto_enabled_within_budget() {
-        // This test verifies that call graph is retained when remaining budget > 20k.
-        // The auto-enable logic in review_pr() checks:
-        // remaining_budget = max_prompt_chars - size_without_call_graph
-        // if remaining_budget > CALL_GRAPH_AUTO_THRESHOLD (20_000), skip first drop check.
-        // Example: max=100k, size_without_cg=70k, remaining=30k > 20k -> retain call_graph
-        let max_prompt_chars: usize = 100_000;
-        let size_without_call_graph: usize = 70_000;
-        let remaining_budget = max_prompt_chars.saturating_sub(size_without_call_graph);
-        assert!(
-            remaining_budget > 20_000,
-            "Remaining budget should exceed threshold"
-        );
-    }
-
-    #[test]
-    fn test_call_graph_suppressed_when_over_threshold() {
-        // This test verifies that call graph is dropped when remaining budget < 20k.
-        // Example: max=100k, size_without_cg=85k, remaining=15k < 20k -> drop call_graph
-        let max_prompt_chars: usize = 100_000;
-        let size_without_call_graph: usize = 85_000;
-        let remaining_budget = max_prompt_chars.saturating_sub(size_without_call_graph);
-        assert!(
-            remaining_budget < 20_000,
-            "Remaining budget should be below threshold"
-        );
     }
 
     #[test]

@@ -5,7 +5,7 @@
 //! Provides free-function versions of the trait's HTTP methods:
 //! - `send_request_inner`: bare HTTP send with error handling
 //! - `try_request`: single HTTP send + JSON parse attempt
-//! - `send_and_parse`: retry loop around `try_request` with circuit breaker
+//! - `send_and_parse`: retry loop around `try_request` with backoff
 
 use anyhow::{Context, Result};
 use serde_json::Value;
@@ -267,7 +267,7 @@ pub(super) async fn try_request<T: serde::de::DeserializeOwned>(
 /// Sends a chat completion request and parses the response with retry logic.
 ///
 /// This method wraps the HTTP request in a retry loop (via `try_request`) and retries
-/// on transient errors, including truncated JSON responses. Includes circuit breaker
+/// on transient errors, including truncated JSON responses.
 /// handling before the first attempt.
 ///
 /// # Arguments
@@ -290,13 +290,6 @@ pub(super) async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
     request: &ChatCompletionRequest,
 ) -> Result<(T, AiStats, Vec<String>)> {
     use tracing::{info, warn};
-
-    // Check circuit breaker before attempting request
-    if let Some(cb) = provider.circuit_breaker()
-        && cb.is_open()
-    {
-        return Err(AptuError::CircuitOpen.into());
-    }
 
     // Start timing (outside retry loop to measure total time including retries)
     let start = std::time::Instant::now();
@@ -395,11 +388,6 @@ pub(super) async fn send_and_parse<T: serde::de::DeserializeOwned + Send>(
             }
         }
     };
-
-    // Record success in circuit breaker
-    if let Some(cb) = provider.circuit_breaker() {
-        cb.record_success();
-    }
 
     // Calculate duration (total time including any retries)
     #[allow(clippy::cast_possible_truncation)]
@@ -567,59 +555,6 @@ mod tests {
         let body = r#"{"error":{"message":"prompt is too long"}}"#;
         let err = map_http_error(500, "openrouter", "OPENROUTER_API_KEY", None, body).unwrap_err();
         assert!(matches!(err, AptuError::AI { .. }));
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    struct CircuitOpenProvider {
-        breaker: crate::ai::CircuitBreaker,
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    impl AiProvider for CircuitOpenProvider {
-        fn config(&self) -> &crate::ai::registry::ProviderConfig {
-            &crate::ai::provider::test_utils::TEST_PROVIDER_CONFIG
-        }
-
-        fn http_client(&self) -> &reqwest::Client {
-            unimplemented!()
-        }
-
-        fn api_key(&self) -> &secrecy::SecretString {
-            unimplemented!()
-        }
-
-        fn circuit_breaker(&self) -> Option<&crate::ai::CircuitBreaker> {
-            Some(&self.breaker)
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[tokio::test]
-    async fn test_send_and_parse_circuit_open() {
-        let breaker = crate::ai::CircuitBreaker::new(1, 60);
-        breaker.record_failure();
-        assert!(breaker.is_open());
-
-        let provider = CircuitOpenProvider { breaker };
-        let request = ChatCompletionRequest {
-            model: "test-model".to_string(),
-            messages: vec![],
-            max_tokens: None,
-            temperature: None,
-            response_format: None,
-            session_id: None,
-        };
-
-        let result = send_and_parse::<crate::ai::provider::test_utils::ErrorTestResponse>(
-            &provider, &request,
-        )
-        .await;
-
-        let err = result.unwrap_err();
-        let aptu_err = err
-            .downcast_ref::<AptuError>()
-            .unwrap_or_else(|| panic!("unexpected error: {err:#}"));
-        assert!(matches!(aptu_err, AptuError::CircuitOpen));
     }
 
     /// Build a minimal HTTP/1.1 200 response with a JSON body for mock servers.

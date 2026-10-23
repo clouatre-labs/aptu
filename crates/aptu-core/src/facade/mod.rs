@@ -42,11 +42,10 @@ pub(crate) fn block_on_prompt_injection(
 #[cfg(target_arch = "wasm32")]
 pub(crate) use wasm_unsupported;
 
-pub mod ai_client;
 pub mod issues;
 pub mod pr_review;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use issues::{analyze_issue, apply_triage_labels, fetch_issue_for_triage, post_triage_comment};
 #[cfg(not(target_arch = "wasm32"))]
-pub use pr_review::{analyze_pr, fetch_pr_for_review, label_pr, post_pr_review};
+pub use pr_review::{analyze_pr, fetch_pr_for_review, post_pr_review};

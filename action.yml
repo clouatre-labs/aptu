@@ -1,5 +1,5 @@
 name: Aptu
-description: "GitHub automation: AI issue triage, AI PR review, PR labeling, security scanning, and PR queue ranking"
+description: "GitHub automation: AI issue triage, AI PR review, security scanning, and PR queue ranking"
 author: Aptu Contributors
 
 branding:
@@ -76,14 +76,14 @@ inputs:
   repo:
     description: >
       Target repository (owner/repo) for repository_dispatch invocations. When set alongside
-      pull-number or issue-number, the PR label, PR review, and issue triage steps fire on
+      pull-number or issue-number, the PR review and issue triage steps fire on
       repository_dispatch events.
     required: false
     default: ''
   pull-number:
     description: >
       PR number for repository_dispatch invocations. Must be set alongside repo to trigger
-      PR label and PR review steps on repository_dispatch events.
+      PR review and issue triage steps on repository_dispatch events.
     required: false
     default: ''
   issue-number:
@@ -92,20 +92,6 @@ inputs:
       the issue triage step on repository_dispatch events.
     required: false
     default: ''
-  since:
-    description: >
-      For scheduled batch triage: triage all issues without labels created since this date
-      (YYYY-MM-DD or RFC3339). If empty, all unlabeled issues in the repository are triaged.
-      Only used when the workflow is triggered by a schedule event.
-    required: false
-    default: ''
-  issue-state:
-    description: >
-      For scheduled batch triage: filter issues by state (open, closed, all).
-      Only used when the workflow is triggered by a schedule event.
-    required: false
-    default: 'open'
-
   # --- PR review ---
   instructions-file:
     description: >
@@ -113,20 +99,11 @@ inputs:
       When set, overrides the default AGENTS.md and .github/instructions/pr-review.md files.
       Leave empty to use default file discovery.
     required: false
-  repo-path:
-    description: >
-      Path to the local repository root for AST context injection into PR review prompts.
-      When set (or inferred from the current working directory when omitted), `aptu pr review`
-      will analyse changed source files (Rust, Python, Go, Java, TypeScript, TSX, JavaScript,
-      C, C++, C#, Fortran) and append function signatures and call-graph context to the prompt.
-      Set to an explicit path to override CWD inference.
-    required: false
-    default: ''
   max-prompt-chars:
     description: >
       Total prompt character budget for PR review. When the assembled prompt exceeds
-      this limit, sections are dropped in order: call graph, AST, full file content,
-      diff hunks. System prompt and PR metadata are never dropped.
+      this limit, sections are dropped in order: full file content, then diff
+      hunks. System prompt and PR metadata are never dropped.
       Maps to [review] max_prompt_chars in config.toml.
     required: false
     default: '120000'
@@ -360,19 +337,11 @@ runs:
         APTU_AI__MODEL: ${{ inputs.model }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         DRY_RUN: ${{ inputs.dry-run }}
-        ISSUE_STATE: ${{ inputs.issue-state }}
         NO_COMMENT: ${{ inputs.no-comment }}
-        SINCE: ${{ inputs.since }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
         ARGS=(--repo "$REPO")
-        if [[ -n "$SINCE" ]]; then
-          ARGS+=(--since "$SINCE")
-        fi
-        if [[ -n "$ISSUE_STATE" && "$ISSUE_STATE" != "open" ]]; then
-          ARGS+=(--state "$ISSUE_STATE")
-        fi
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS+=(--dry-run)
         fi
@@ -384,39 +353,6 @@ runs:
         fi
         echo "Running: aptu issue triage ${ARGS[*]}"
         aptu issue triage "${ARGS[@]}"
-
-    - name: Run aptu PR label
-      if: github.event_name == 'pull_request' || (github.event_name == 'repository_dispatch' && inputs.repo != '' && inputs['pull-number'] != '')
-      shell: bash
-      env:
-        PR_NUMBER: ${{ github.event_name == 'repository_dispatch' && inputs['pull-number'] || github.event.pull_request.number }}
-        REPO: ${{ github.event_name == 'repository_dispatch' && inputs.repo || github.repository }}
-        GH_TOKEN: ${{ inputs.github-token || github.token }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        ZAI_API_KEY: ${{ inputs.zai-api-key }}
-        APTU_AI__PROVIDER: ${{ inputs.provider }}
-        APTU_AI__MODEL: ${{ inputs.model }}
-        DRY_RUN: ${{ inputs.dry-run }}
-        APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
-      run: |
-        set -e
-
-        if [[ -z "$REPO" || -z "$PR_NUMBER" ]]; then
-          echo "::error::repository_dispatch: both 'repo' and 'pull-number' inputs are required but one or both are empty (REPO='${REPO}', PR_NUMBER='${PR_NUMBER}')"
-          exit 1
-        fi
-
-        PR_REF="${REPO}#${PR_NUMBER}"
-        ARGS=()
-
-        if [[ "$DRY_RUN" == "true" ]]; then
-          ARGS+=(--dry-run)
-        fi
-
-        echo "Running: aptu pr label ${ARGS[*]} $PR_REF"
-        aptu pr label "${ARGS[@]}" "$PR_REF"
 
     - name: Run aptu PR review
       id: pr-review
@@ -437,7 +373,6 @@ runs:
         DRY_RUN: ${{ inputs.dry-run }}
         INSTRUCTIONS_FILE: ${{ inputs.instructions-file }}
         NO_COMMENT: ${{ inputs.no-comment }}
-        REPO_PATH: ${{ inputs.repo-path }}
         APTU_REVIEW__MAX_PROMPT_CHARS: ${{ inputs.max-prompt-chars }}
         APTU_REVIEW__MAX_FULL_CONTENT_FILES: ${{ inputs.max-full-content-files }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
@@ -465,9 +400,6 @@ runs:
           ARGS+=(--no-comment)
         fi
 
-        if [[ -n "$REPO_PATH" ]]; then
-          ARGS+=(--repo-path "$REPO_PATH")
-        fi
         if [[ -n "$INSTRUCTIONS_FILE" ]]; then
           ARGS+=(--instructions-file "$INSTRUCTIONS_FILE")
         fi

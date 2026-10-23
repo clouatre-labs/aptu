@@ -2,10 +2,8 @@
 
 //! Review context policy layer for PR analysis.
 //!
-//! Centralizes all enrichment decisions (AST context, call graph, dependency enrichments)
-//! and CWD inference into a single `ReviewContext` struct and `build_review_context()` function.
-
-use std::path::PathBuf;
+//! Centralizes all enrichment decisions (dependency enrichments)
+//! into a single `ReviewContext` struct and `build_review_context()` function.
 
 use crate::ai::types::PrDetails;
 
@@ -17,14 +15,6 @@ use crate::ai::types::PrDetails;
 pub struct ReviewContext {
     /// Pull request details.
     pub pr: PrDetails,
-    /// AST context for changed files (empty if not available or feature disabled).
-    pub ast_context: String,
-    /// Call graph context for changed files (empty if not available or feature disabled).
-    pub call_graph: String,
-    /// Inferred repository path from CWD (if available).
-    pub inferred_repo_path: Option<PathBuf>,
-    /// Whether the repository path was inferred from CWD.
-    pub cwd_inferred: bool,
     /// Maximum characters per file's full content in the prompt (from `ReviewConfig`).
     pub max_chars_per_file: usize,
     /// Maximum total diff characters across all files in the prompt (from `ReviewConfig`).
@@ -58,35 +48,12 @@ pub struct ReviewContext {
 impl ReviewContext {
     /// Returns a formatted pre-flight summary for verbose output.
     ///
-    /// Includes package names, character counts, and CWD inference status.
+    /// Includes character counts and truncation status.
     #[must_use]
     pub fn verbose_summary(&self) -> String {
         use std::fmt::Write;
 
         let mut summary = String::new();
-
-        // Repo path info
-        if let Some(path) = &self.inferred_repo_path {
-            let inferred_label = if self.cwd_inferred { " (inferred)" } else { "" };
-            let _ = writeln!(
-                summary,
-                "Repository path: {}{}",
-                path.display(),
-                inferred_label
-            );
-        }
-
-        // Context sizes
-        let mut context_sizes = Vec::new();
-        if !self.ast_context.is_empty() {
-            context_sizes.push(format!("AST: {} chars", self.ast_context.len()));
-        }
-        if !self.call_graph.is_empty() {
-            context_sizes.push(format!("call graph: {} chars", self.call_graph.len()));
-        }
-        if !context_sizes.is_empty() {
-            let _ = writeln!(summary, "Context: {}", context_sizes.join(", "));
-        }
 
         // Truncation summary
         if self.files_truncated > 0 {
@@ -134,10 +101,6 @@ impl Default for ReviewContext {
                 instructions: None,
                 prior_findings: None,
             },
-            ast_context: String::new(),
-            call_graph: String::new(),
-            inferred_repo_path: None,
-            cwd_inferred: false,
             max_chars_per_file: crate::config::ReviewConfig::default().max_chars_per_file,
             max_diff_chars: crate::config::ReviewConfig::default().max_diff_chars,
             max_patch_chars_per_file: crate::config::ReviewConfig::default()
@@ -171,13 +134,7 @@ pub(crate) use budget::drop_full_content_by_size;
 #[allow(unused_imports)]
 pub(crate) use budget::drop_patches_by_size;
 #[allow(unused_imports)]
-pub(crate) use budget::should_enable_call_graph;
-#[allow(unused_imports)]
-pub(crate) use budget::{
-    PROMPT_OVERHEAD_CHARS, apply_budget_drops, build_file_outline, estimate_pr_size,
-};
-#[allow(unused_imports)]
-pub(crate) use builder::{build_ctx_ast, build_ctx_call_graph};
+pub(crate) use budget::{PROMPT_OVERHEAD_CHARS, apply_budget_drops, estimate_pr_size};
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -216,35 +173,24 @@ mod tests {
     }
 
     /// Verifies that `apply_budget_drops` enforces the documented drop order:
-    /// `call_graph` -> `ast_context` -> `patches` -> `full_content`.
+    /// `full_content` -> patches.
     #[test]
     fn test_apply_budget_drops_order() {
         let mut pr = make_pr_with_content(500, 500);
-        let mut ast_context = "a".repeat(300);
-        let mut call_graph = "b".repeat(300);
 
-        // Budget tight enough that call_graph must be dropped first.
-        // Total with all: patch(500) + full_content(500) + ast(300) + call_graph(300)
-        //                + metadata(~30) + PROMPT_OVERHEAD_CHARS(1000) = ~2630
-        // Set budget to force call_graph drop.
+        // Budget tight enough that full_content must be dropped first.
+        // Total with all: patch(500) + full_content(500)
+        //                + metadata(~30) + PROMPT_OVERHEAD_CHARS(1000) = ~2030
+        // Set budget to force full_content drop.
         let max_prompt_chars = 600;
 
         let mut drops = Vec::new();
-        // Priority order: call_graph -> ast_context -> patches -> full_content
-        apply_budget_drops(
-            &mut pr,
-            &mut ast_context,
-            &mut call_graph,
-            max_prompt_chars,
-            0,
-            &mut drops,
-            None,
-        );
+        apply_budget_drops(&mut pr, max_prompt_chars, 0, &mut drops);
 
-        // call_graph dropped first (over budget)
+        // full_content dropped first (over budget)
         assert!(
-            call_graph.is_empty(),
-            "call_graph should be dropped first when over budget"
+            pr.files[0].full_content.is_none(),
+            "full_content should be dropped first when over budget"
         );
     }
 
@@ -252,35 +198,17 @@ mod tests {
     /// Regression test for telemetry accuracy bug where empty-section drops were unconditionally recorded.
     #[test]
     fn test_apply_budget_drops_empty_sections() {
-        let mut pr = make_pr_with_content(100, 100);
-        // All context sections are empty -- no content to drop
-        let mut ast_context = String::new();
-        let mut call_graph = String::new();
+        let mut pr = make_pr_with_content(0, 0);
 
         // Tight budget to trigger drop attempts, but sections are empty
         let max_prompt_chars = 500;
 
         let mut drops = Vec::new();
-        apply_budget_drops(
-            &mut pr,
-            &mut ast_context,
-            &mut call_graph,
-            max_prompt_chars,
-            0,
-            &mut drops,
-            None,
-        );
+        apply_budget_drops(&mut pr, max_prompt_chars, 0, &mut drops);
 
         // Empty sections should NOT appear in budget_drops
         // (they were cleared but no content was actually dropped)
-        assert!(
-            !drops.contains(&"call_graph".to_string()),
-            "empty call_graph should not appear in budget_drops"
-        );
-        assert!(
-            !drops.contains(&"ast_context".to_string()),
-            "empty ast_context should not appear in budget_drops"
-        );
+        assert_eq!(drops.len(), 0, "no content means no drops: {drops:?}");
     }
 
     /// Verifies that populated sections DO appear in `budget_drops` telemetry.
@@ -288,55 +216,31 @@ mod tests {
     #[test]
     fn test_apply_budget_drops_populated_sections() {
         let mut pr = make_pr_with_content(100, 100);
-        // Populate all context sections with meaningful content
-        let mut ast_context = "a".repeat(300);
-        let mut call_graph = "b".repeat(300);
 
         // Tight budget to force drops, with populated sections
         let max_prompt_chars = 600;
 
         let mut drops = Vec::new();
-        apply_budget_drops(
-            &mut pr,
-            &mut ast_context,
-            &mut call_graph,
-            max_prompt_chars,
-            0,
-            &mut drops,
-            None,
-        );
+        apply_budget_drops(&mut pr, max_prompt_chars, 0, &mut drops);
 
         // Populated sections should appear in budget_drops (in priority order)
-        // Priority order: call_graph -> ast_context
         assert!(
-            drops.contains(&"call_graph".to_string()),
-            "populated call_graph should appear in budget_drops"
+            drops.contains(&"file_content:src/lib.rs".to_string()),
+            "populated full_content should appear in budget_drops"
         );
-        // ast_context presence depends on budget constraints,
-        // but at least call_graph must be present for this test
     }
 
     /// Regression test for issue #1548: verifies patch and `full_content` budget drops
-    /// use distinct prefixes ("patch_truncated:" vs "`file_content`:") to avoid collision.
+    /// use distinct prefixes ("`patch_truncated`:" vs "`file_content`:") to avoid collision.
     #[test]
     fn test_budget_drops_distinguish_patch_from_full_content() {
         let mut pr = make_pr_with_content(500, 500);
-        let mut ast_context = String::new();
-        let mut call_graph = String::new();
 
         // Budget tight enough to force BOTH a patch truncation and a full_content drop
         let max_prompt_chars = 50;
 
         let mut drops = Vec::new();
-        apply_budget_drops(
-            &mut pr,
-            &mut ast_context,
-            &mut call_graph,
-            max_prompt_chars,
-            0,
-            &mut drops,
-            None,
-        );
+        apply_budget_drops(&mut pr, max_prompt_chars, 0, &mut drops);
 
         // The patch is truncated to leading hunks (final tier), not dropped
         let patch = pr.files[0]
@@ -396,7 +300,7 @@ mod tests {
 
     /// Verifies the final budget tier truncates remaining patches to their
     /// leading hunks with the marker, decrements the estimated size, and
-    /// records `patch_truncated:` telemetry entries (happy path).
+    /// records `patch_truncated`: telemetry entries (happy path).
     #[test]
     fn test_drop_patches_by_size_final_tier_truncates_with_marker() {
         let mut files = vec![
@@ -535,64 +439,9 @@ mod tests {
         );
     }
 
-    /// Creates a temp directory containing a single fixture file, for tests that
-    /// need `analyze_file` to run against a real file on disk.
-    #[cfg(feature = "ast-context")]
-    fn make_outline_fixture(filename: &str, source: &str) -> tempfile::TempDir {
-        let dir = tempfile::tempdir().expect("failed to create temp dir");
-        std::fs::write(dir.path().join(filename), source).expect("failed to write fixture file");
-        dir
-    }
-
-    /// Verifies that when the signature outline fits within the remaining budget,
-    /// `drop_full_content_by_size` substitutes it into `full_content` and records
-    /// the `file_content_outline:` label instead of clearing the file entirely.
-    #[cfg(feature = "ast-context")]
-    #[test]
-    fn test_drop_full_content_by_size_outline_fits_budget() {
-        let dir = make_outline_fixture(
-            "fixture.rs",
-            "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
-        );
-        let repo_path = dir.path().to_string_lossy().into_owned();
-
-        let mut files = vec![crate::ai::types::PrFile {
-            filename: "fixture.rs".to_string(),
-            status: "modified".to_string(),
-            patch: None,
-            patch_truncated: false,
-            full_content: Some("y".repeat(2000)),
-            additions: 1,
-            deletions: 0,
-        }];
-        let mut estimated_size = 2000;
-        let max_prompt_chars = 100;
-        let mut drops = Vec::new();
-
-        drop_full_content_by_size(
-            &mut files,
-            &mut estimated_size,
-            max_prompt_chars,
-            &mut drops,
-            Some(&repo_path),
-        );
-
-        assert!(
-            files[0]
-                .full_content
-                .as_deref()
-                .is_some_and(|c| c.contains("fn add")),
-            "full_content should be replaced with a signature outline"
-        );
-        assert!(
-            drops.contains(&"file_content_outline:fixture.rs".to_string()),
-            "budget_drops should record the outline substitution"
-        );
-    }
-
-    /// Verifies that when the outline itself still exceeds the remaining budget,
-    /// `drop_full_content_by_size` falls back to fully clearing `full_content`
-    /// without panicking.
+    /// Verifies that when the outline cannot fit (feature retired, so the
+    /// substitution path no longer exists), `drop_full_content_by_size` falls
+    /// back to fully clearing `full_content` without panicking.
     #[test]
     fn test_drop_full_content_by_size_outline_still_exceeds_budget() {
         let mut files = vec![crate::ai::types::PrFile {
@@ -605,9 +454,8 @@ mod tests {
             deletions: 0,
         }];
         let mut estimated_size = 2000;
-        // A zero budget can never be satisfied by any non-empty outline, so this
-        // exercises the fallback regardless of whether the ast-context feature
-        // is enabled.
+        // A zero budget can never be satisfied, so this
+        // exercises the full-clear fallback path.
         let max_prompt_chars = 0;
         let mut drops = Vec::new();
 
@@ -616,7 +464,6 @@ mod tests {
             &mut estimated_size,
             max_prompt_chars,
             &mut drops,
-            Some("/nonexistent/repo/path"),
         );
 
         assert!(
@@ -629,8 +476,8 @@ mod tests {
         );
     }
 
-    /// Verifies that an unsupported file extension skips `analyze_file` entirely
-    /// and falls back to fully clearing `full_content`.
+    /// Verifies that an unsupported file extension falls back to fully clearing
+    /// `full_content` (the outline substitution path was retired).
     #[test]
     fn test_drop_full_content_by_size_unsupported_extension_falls_back() {
         let mut files = vec![crate::ai::types::PrFile {
@@ -646,15 +493,12 @@ mod tests {
         let max_prompt_chars = 50;
         let mut drops = Vec::new();
 
-        // repo_path points at a directory that does not exist; if analyze_file were
-        // called, it would error, but the unsupported extension must short-circuit
-        // before that call happens.
+        // The unsupported extension must take the plain full-clear path.
         drop_full_content_by_size(
             &mut files,
             &mut estimated_size,
             max_prompt_chars,
             &mut drops,
-            Some("/nonexistent/repo/path"),
         );
 
         assert!(
@@ -666,61 +510,12 @@ mod tests {
             "budget_drops should record the full clear for the unsupported extension"
         );
     }
-
-    /// Automated benchmark for issue #1592: measures the outline's actual size
-    /// reduction against this crate's own real source files (not synthetic
-    /// fixtures), confirming the substitution meaningfully shrinks prompt size
-    /// on typical Rust files with real function counts and import lists.
-    #[cfg(feature = "ast-context")]
-    #[test]
-    fn test_outline_size_reduction_on_real_source_files() {
-        let repo_path = env!("CARGO_MANIFEST_DIR");
-        let candidates = [
-            "src/ai/review_context.rs",
-            "src/ast_context.rs",
-            "src/ai/types.rs",
-        ];
-
-        let mut measured = 0;
-        for filename in candidates {
-            let full_path = std::path::Path::new(repo_path).join(filename);
-            let Ok(full_content) = std::fs::read_to_string(&full_path) else {
-                continue;
-            };
-            let Some(outline) = build_file_outline(repo_path, filename) else {
-                continue;
-            };
-
-            let reduction_pct = 100 - (outline.len() * 100 / full_content.len().max(1));
-            println!(
-                "{filename}: full_content={} chars, outline={} chars, reduction={reduction_pct}%",
-                full_content.len(),
-                outline.len()
-            );
-
-            assert!(
-                outline.len() < full_content.len() / 2,
-                "{filename}: outline ({} chars) should be well under half of full content ({} chars)",
-                outline.len(),
-                full_content.len()
-            );
-            measured += 1;
-        }
-
-        assert!(
-            measured > 0,
-            "expected at least one real source file to produce a measurable outline"
-        );
-    }
-
     /// Regression test for issue #1596: `full_content` must be evicted before patches,
     /// so a PR with a small diff but a large `full_content` still keeps its patch.
     #[test]
     fn test_apply_budget_drops_full_content_evicted_before_patch() {
         // patch is small, full_content alone is large enough to blow the budget.
         let mut pr = make_pr_with_content(50, 1000);
-        let mut ast_context = String::new();
-        let mut call_graph = String::new();
 
         // Base without full_content: patch(50) + metadata(~30) + overhead(1000) = ~1080.
         // With full_content: + 1000 = ~2080. Budget sits between the two, so only
@@ -728,15 +523,7 @@ mod tests {
         let max_prompt_chars = 1500;
 
         let mut drops = Vec::new();
-        apply_budget_drops(
-            &mut pr,
-            &mut ast_context,
-            &mut call_graph,
-            max_prompt_chars,
-            0,
-            &mut drops,
-            None,
-        );
+        apply_budget_drops(&mut pr, max_prompt_chars, 0, &mut drops);
 
         assert!(
             pr.files[0].full_content.is_none(),
@@ -758,7 +545,7 @@ mod tests {
 
     /// Regression test for issue #1596 review feedback: when both `full_content` and
     /// patches must be reduced across multiple files, `budget_drops` must record every
-    /// `file_content:` entry before any `patch_truncated:` entry, matching the call order.
+    /// `file_content:` entry before any `patch_truncated`: entry, matching the call order.
     #[test]
     fn test_apply_budget_drops_records_full_content_before_patch_order() {
         let mut pr = make_pr_with_content(500, 100);
@@ -771,22 +558,12 @@ mod tests {
             additions: 1,
             deletions: 0,
         });
-        let mut ast_context = String::new();
-        let mut call_graph = String::new();
         // Tight enough that full_content is dropped AND both patches (500 chars each)
         // exceed the per-patch budget (900 / 2 = 450) and get truncated.
         let max_prompt_chars = 900;
 
         let mut drops = Vec::new();
-        apply_budget_drops(
-            &mut pr,
-            &mut ast_context,
-            &mut call_graph,
-            max_prompt_chars,
-            0,
-            &mut drops,
-            None,
-        );
+        apply_budget_drops(&mut pr, max_prompt_chars, 0, &mut drops);
 
         let last_file_content_idx = drops.iter().rposition(|d| d.starts_with("file_content:"));
         let first_patch_idx = drops.iter().position(|d| d.starts_with("patch_truncated:"));
@@ -799,43 +576,6 @@ mod tests {
             "every file_content: entry must precede every patch_truncated: entry in budget_drops: {drops:?}"
         );
     }
-
-    #[test]
-    fn test_verbose_summary_all_fields() {
-        // Arrange: ReviewContext with repo path (inferred), ast, call graph
-        let pr = make_pr_with_content(10, 0);
-        let ctx = ReviewContext {
-            pr,
-            ast_context: "fn foo() {}".to_string(),
-            call_graph: "foo -> bar".to_string(),
-            inferred_repo_path: Some(std::path::PathBuf::from("/tmp/repo")),
-            cwd_inferred: true,
-            ..Default::default()
-        };
-
-        // Act
-        let summary = ctx.verbose_summary();
-
-        // Assert: repo path with inferred label
-        assert!(
-            summary.contains("/tmp/repo"),
-            "summary should contain the repo path"
-        );
-        assert!(
-            summary.contains("(inferred)"),
-            "summary should mark CWD-inferred path"
-        );
-        // Assert: context sizes
-        assert!(
-            summary.contains("AST:"),
-            "summary should include AST char count"
-        );
-        assert!(
-            summary.contains("call graph:"),
-            "summary should include call graph char count"
-        );
-    }
-
     #[test]
     fn test_verbose_summary_empty_context() {
         // Arrange: ReviewContext with no enrichments and no repo path
@@ -886,33 +626,6 @@ mod tests {
             "verbose_summary must omit truncation line when files_truncated == 0"
         );
     }
-
-    #[test]
-    fn test_should_enable_call_graph_budget_boundary() {
-        // budget_remaining == min_budget_for_call_graph -> false (strict >)
-        let config = ReviewConfig {
-            min_budget_for_call_graph: 20_000,
-            ..ReviewConfig::default()
-        };
-        assert!(
-            !should_enable_call_graph(20_000, &config),
-            "should_enable_call_graph must be false when budget_remaining equals min_budget_for_call_graph"
-        );
-    }
-
-    #[test]
-    fn test_should_enable_call_graph_budget_below_threshold() {
-        // budget_remaining < min_budget_for_call_graph -> false
-        let config = ReviewConfig {
-            min_budget_for_call_graph: 20_000,
-            ..ReviewConfig::default()
-        };
-        assert!(
-            !should_enable_call_graph(10_000, &config),
-            "should_enable_call_graph must be false when budget_remaining < min_budget_for_call_graph"
-        );
-    }
-
     // -----------------------------------------------------------------------
     // truncate_at_line_boundary tests
     // -----------------------------------------------------------------------
@@ -962,65 +675,6 @@ mod tests {
         // Every char should be the emoji
         assert!(result.chars().all(|c| c == '\u{1F600}'));
     }
-
-    #[test]
-    fn test_estimate_pr_size_includes_call_graph() {
-        // Verify estimate_pr_size includes call_graph chars and PROMPT_OVERHEAD_CHARS
-        let pr = make_pr_with_content(0, 0);
-        let ast_context = "";
-        let call_graph = "fn foo() -> bar\nfn baz() -> qux";
-        let size = estimate_pr_size(&pr, ast_context, call_graph, 0);
-        let without_call_graph = estimate_pr_size(&pr, ast_context, "", 0);
-        // Delta between with and without call_graph should be exactly call_graph.len()
-        assert_eq!(size - without_call_graph, call_graph.len());
-        // Total should include PROMPT_OVERHEAD_CHARS
-        assert!(size >= PROMPT_OVERHEAD_CHARS);
-    }
-
-    #[test]
-    fn test_build_review_context_estimated_size_pre_budget() {
-        // Verify estimate_pr_size accounts for call_graph + overhead before budget drops
-        // using a non-minimal PrDetails with patches and full_content
-        let pr = make_pr_with_content(50, 100);
-        let ast_context = "fn foo() {}";
-        let call_graph = "caller -> callee\nother -> thing";
-        let size = estimate_pr_size(&pr, ast_context, call_graph, 0);
-        assert!(
-            size >= call_graph.len() + PROMPT_OVERHEAD_CHARS,
-            "estimated size {} should be >= call_graph.len() {} + overhead {}",
-            size,
-            call_graph.len(),
-            PROMPT_OVERHEAD_CHARS
-        );
-    }
-
-    /// Shared fixture for the ast/call-graph opt-in tests: builds a review context
-    /// for a PR touching a real Rust source file in this crate, with
-    /// min_budget_for_call_graph=0 to force call_graph building regardless of
-    /// prompt budget (mirrors the fixture setup pattern used by ast_context.rs's
-    /// own build_ast_context tests), and `ast_enabled` controlling the opt-in flag.
-    async fn build_context_with_ast_optin(ast_enabled: bool) -> ReviewContext {
-        let repo_path = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-        let mut pr = make_pr_with_content(0, 0);
-        pr.files = vec![PrFile {
-            filename: "src/ast_context.rs".to_string(),
-            status: "modified".to_string(),
-            patch: Some("+// touched".to_string()),
-            patch_truncated: false,
-            full_content: None,
-            additions: 1,
-            deletions: 0,
-        }];
-        let review_config = ReviewConfig {
-            min_budget_for_call_graph: 0,
-            ast_context: ast_enabled,
-            ..ReviewConfig::default()
-        };
-        build_review_context(pr, Some(repo_path), &review_config, None, 0, None, None)
-            .await
-            .expect("build_review_context should succeed for a valid repo_path")
-    }
-
     /// The prior-findings summary is rendered into the prompt, so the size
     /// estimate for a context built with `prior_findings` must exceed the same
     /// context built without it, and the estimate must still stay within the
@@ -1029,11 +683,10 @@ mod tests {
     async fn test_build_review_context_prior_findings_counted_in_estimate() {
         // Arrange: identical PR, budget that fits the base context plus the
         // capped prior-findings summary, with and without prior findings.
-        let repo_path = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
         let make_pr = || {
             let mut pr = make_pr_with_content(0, 0);
             pr.files = vec![PrFile {
-                filename: "src/ast_context.rs".to_string(),
+                filename: "src/lib.rs".to_string(),
                 status: "modified".to_string(),
                 patch: Some("+// touched".to_string()),
                 patch_truncated: false,
@@ -1043,29 +696,17 @@ mod tests {
             }];
             pr
         };
-        let review_config = ReviewConfig {
-            ast_context: false,
-            ..ReviewConfig::default()
-        };
+        let review_config = ReviewConfig::default();
         // Maximal prior-findings summary: cap + per-entry overhead guard
         // matches the bound asserted in builder.rs's prior_findings_tests.
         let prior_findings = "x".repeat(super::builder::PRIOR_FINDINGS_MAX_CHARS);
 
         // Act
-        let without = build_review_context(
-            make_pr(),
-            Some(repo_path.clone()),
-            &review_config,
-            None,
-            0,
-            None,
-            None,
-        )
-        .await
-        .expect("context without prior findings");
+        let without = build_review_context(make_pr(), &review_config, None, 0, None, None)
+            .await
+            .expect("context without prior findings");
         let with = build_review_context(
             make_pr(),
-            Some(repo_path),
             &review_config,
             None,
             0,
@@ -1090,53 +731,6 @@ mod tests {
             max_prompt_chars
         );
     }
-
-    /// Regression test for #1571 (structural graph removal): `build_review_context()`
-    /// no longer threads a `GraphConfig` or builds `graph_context`/`graph_cache_hit`, but
-    /// its `ast_context` and `call_graph` enrichment paths must be completely unaffected
-    /// by that removal.
-    #[tokio::test]
-    async fn test_build_review_context_preserves_ast_and_call_graph() {
-        // Act
-        let ctx = build_context_with_ast_optin(true).await;
-
-        // Assert: shape is exactly what the standalone builders produce -- empty when
-        // the `ast-context` feature is off, well-formed XML-tagged output when it's on.
-        assert!(
-            ctx.ast_context.is_empty() || ctx.ast_context.contains("<ast_context>"),
-            "ast_context should be empty or well-formed XML-tagged output"
-        );
-        assert!(
-            ctx.call_graph.is_empty() || ctx.call_graph.contains("<call_graph>"),
-            "call_graph should be empty or well-formed XML-tagged output"
-        );
-
-        #[cfg(feature = "ast-context")]
-        assert!(
-            !ctx.ast_context.is_empty(),
-            "ast_context should be populated for a real Rust fixture file when the ast-context feature is enabled"
-        );
-    }
-
-    /// AST/call-graph enrichment is opt-in (#1760): with the default config
-    /// (`ast_context = false`), both sections must stay empty even when a real
-    /// repo path is available and the budget would allow them.
-    #[tokio::test]
-    async fn test_build_review_context_omits_ast_and_call_graph_by_default() {
-        // Act: default config (ast_context=false), real repo path, min budget 0
-        let ctx = build_context_with_ast_optin(false).await;
-
-        // Assert: both sections are omitted entirely when opt-in is off
-        assert!(
-            ctx.ast_context.is_empty(),
-            "ast_context must be empty when ast_context opt-in is false"
-        );
-        assert!(
-            ctx.call_graph.is_empty(),
-            "call_graph must be empty when ast_context opt-in is false"
-        );
-    }
-
     /// A non-empty PR whose patches exceed the budget must yield a truncated-patch
     /// context (with the truncation marker), never `EmptyReviewContext`.
     #[tokio::test]
@@ -1149,17 +743,8 @@ mod tests {
             ..ReviewConfig::default()
         };
 
-        // Act: repo_path points nowhere so ast_context/call_graph building is a no-op.
-        let result = build_review_context(
-            pr,
-            Some("/nonexistent-aptu-test-repo-path".to_string()),
-            &review_config,
-            None,
-            0,
-            None,
-            None,
-        )
-        .await;
+        // Act
+        let result = build_review_context(pr, &review_config, None, 0, None, None).await;
 
         // Assert
         let ctx = match result {
@@ -1202,16 +787,7 @@ mod tests {
         };
 
         // Act
-        let result = build_review_context(
-            pr,
-            Some("/nonexistent-aptu-test-repo-path".to_string()),
-            &review_config,
-            None,
-            0,
-            None,
-            None,
-        )
-        .await;
+        let result = build_review_context(pr, &review_config, None, 0, None, None).await;
 
         // Assert
         assert!(
@@ -1231,17 +807,8 @@ mod tests {
         pr.files[0].patch = None;
         let review_config = ReviewConfig::default();
 
-        // Act: repo_path points nowhere so ast_context/call_graph building is a no-op.
-        let result = build_review_context(
-            pr,
-            Some("/nonexistent-aptu-test-repo-path".to_string()),
-            &review_config,
-            None,
-            0,
-            None,
-            None,
-        )
-        .await;
+        // Act
+        let result = build_review_context(pr, &review_config, None, 0, None, None).await;
 
         // Assert
         assert!(

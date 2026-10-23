@@ -52,7 +52,7 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 | Claude OAuth | - | Yes | - |
 | Permission-Aware Triage/Review Writes | Yes | Yes | Yes |
 
-AST and cross-file call-graph context are added to `pr review` prompts automatically when the remaining prompt budget exceeds `min_budget_for_call_graph`. CLI and Action support four providers: Anthropic, Gemini, OpenRouter (default), and Z.AI; the App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names). Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required.
+CLI and Action support four providers: Anthropic, Gemini, OpenRouter (default), and Z.AI; the App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names). Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required.
 
 ## Architecture Benchmark
 
@@ -164,7 +164,7 @@ See [SECURITY.md](https://github.com/clouatre-labs/aptu/blob/main/SECURITY.md) f
 
 ## Architecture
 
-Aptu assembles structured context (AST, cross-file call-graph, and security scanner output) before any AI call. A prompt-injection byte cap and local-only security scanning ensure no raw source code is sent to external services without explicit review. The GitHub App, CLI, and GitHub Action share a common `aptu-core` library; see [docs/ARCHITECTURE.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ARCHITECTURE.md) for the full crate structure, data flow, and key dependencies.
+Aptu assembles structured context (security scanner output) before any AI call. A prompt-injection byte cap and local-only security scanning ensure no raw source code is sent to external services without explicit review. The GitHub App, CLI, and GitHub Action share a common `aptu-core` library; see [docs/ARCHITECTURE.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ARCHITECTURE.md) for the full crate structure, data flow, and key dependencies.
 
 For the governance model behind Aptu's harness design, see [AI SDLC Governance: Three Layers for Engineering Leaders](https://clouatre.ca/posts/ai-sdlc-governance-stack/).
 

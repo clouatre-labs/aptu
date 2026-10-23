@@ -269,7 +269,7 @@ diff --git a/test.rs b/test.rs
     fn test_scan_empty_diff() {
         let scanner = SecurityScanner::new();
         let findings = scanner.scan_diff("");
-        assert!(findings.is_empty());
+        assert_eq!(findings, Vec::<Finding>::new());
     }
 
     #[test]

@@ -271,10 +271,10 @@ mod tests {
     #[test]
     fn test_fence_spans_close_rules() {
         // Tilde opener is not closed by a backtick line.
-        assert!(fence_spans("~~~\ncode\n```").is_empty());
+        assert_eq!(fence_spans("~~~\ncode\n```"), []);
         // Closing fence with a longer marker still closes.
         assert_eq!(fence_spans("```\ncode\n`````"), vec![(0, 2)]);
         // Closing fence cannot have an info string.
-        assert!(fence_spans("```\ncode\n``` text").is_empty());
+        assert_eq!(fence_spans("```\ncode\n``` text"), []);
     }
 }

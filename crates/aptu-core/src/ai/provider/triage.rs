@@ -7,11 +7,11 @@
 use anyhow::Result;
 use tracing::{debug, instrument};
 
+use super::build_chat_request;
 use super::http::send_and_parse;
-use super::parse::provider_response_format;
 use crate::ai::AiResponse;
 use crate::ai::provider::AiProvider;
-use crate::ai::types::{ChatCompletionRequest, ChatMessage, IssueDetails, TriageResponse};
+use crate::ai::types::{IssueDetails, TriageResponse};
 
 use crate::ai::prompts::build_triage_system_prompt;
 
@@ -54,36 +54,12 @@ pub(super) async fn analyze_issue(
     #[cfg(target_arch = "wasm32")]
     let system_content = build_system_prompt(provider.custom_guidance());
 
-    let mut messages = vec![
-        ChatMessage {
-            role: "system".to_string(),
-            content: Some(system_content),
-            reasoning: None,
-            cache_control: None,
-        },
-        ChatMessage {
-            role: "user".to_string(),
-            content: Some(crate::ai::prompts::build_user_prompt(issue)),
-            reasoning: None,
-            cache_control: None,
-        },
-    ];
-
-    // Inject cache control on system message for Anthropic
-    if provider.is_anthropic()
-        && let Some(msg) = messages.first_mut()
-    {
-        msg.cache_control = Some(crate::ai::types::CacheControl::ephemeral());
-    }
-
-    let request = ChatCompletionRequest {
-        model: provider.model().to_string(),
-        messages,
-        response_format: provider_response_format(provider),
-        max_tokens: Some(provider.max_tokens()),
-        temperature: Some(provider.temperature()),
-        session_id: provider.session_id("triage"),
-    };
+    let request = build_chat_request(
+        provider,
+        system_content,
+        crate::ai::prompts::build_user_prompt(issue),
+        "triage",
+    );
 
     // Send request and parse JSON with retry logic
     let (triage, ai_stats, _finish_reasons) =

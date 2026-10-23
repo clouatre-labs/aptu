@@ -37,7 +37,7 @@ The `ci-result` job in `ci.yml` aggregates all matrix and lint jobs. It is the s
 
 | Tool | Command | Purpose |
 |------|---------|---------|
-| `cargo clippy` | `cargo clippy --locked --profile ci --features aptu-core/ast-context -- -D warnings -W clippy::cognitive_complexity` | Lint; all warnings are errors in CI |
+| `cargo clippy` | `cargo clippy --locked --profile ci -- -D warnings -W clippy::cognitive_complexity` | Lint; all warnings are errors in CI |
 | `cargo fmt` | `cargo fmt --check` | Format enforcement |
 | `cargo deny` | `cargo deny check` | Dependency audit (CVEs and license policy) |
 | `trufflehog` | `trufflesecurity/trufflehog-action` with `--only-verified` in `security.yml` | Secret detection in source; replaces gitleaks |

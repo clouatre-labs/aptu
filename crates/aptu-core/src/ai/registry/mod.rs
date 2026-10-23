@@ -3,10 +3,7 @@
 //! Centralized provider configuration registry.
 //!
 //! This module provides a static registry of all AI providers supported by Aptu,
-//! including their metadata, API endpoints, and available models.
-//!
-//! It also provides runtime model validation infrastructure via the `ModelRegistry` trait
-//! with a simple sync implementation using static model lists.
+//! including their metadata and API endpoints.
 //!
 //! # Examples
 //!
@@ -24,16 +21,9 @@
 
 pub mod config;
 pub mod consts;
-pub mod parsing;
 
 // Re-export provider constants
 pub use consts::{PROVIDER_ANTHROPIC, PROVIDER_GEMINI, PROVIDER_OPENROUTER, PROVIDER_ZAI};
 
 // Re-export configuration items
 pub use config::{PROVIDERS, ProviderConfig, all_providers, get_provider};
-
-// Re-export parsing and model types
-pub use parsing::{CachedModel, Capability, ModelRegistry, PricingInfo, RegistryError};
-
-#[cfg(not(target_arch = "wasm32"))]
-pub use parsing::CachedModelRegistry;

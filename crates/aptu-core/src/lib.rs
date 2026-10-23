@@ -99,7 +99,7 @@ pub use facade::issues::WriteOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 pub use facade::{
     analyze_issue, analyze_pr, apply_triage_labels, fetch_issue_for_triage, fetch_pr_for_review,
-    label_pr, post_pr_review, post_triage_comment,
+    post_pr_review, post_triage_comment,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use github::issues::ApplyResult;
@@ -111,7 +111,6 @@ pub use github::pulls::{ReviewPostOutcome, SummaryPostOutcome};
 // ============================================================================
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use security::FindingCache;
 pub use security::{
     Confidence, Finding, PatternEngine, SarifReport, SecurityConfig, SecurityScanner, Severity,
     needs_security_scan,
@@ -122,11 +121,8 @@ pub use security::{
 // ============================================================================
 
 pub mod ai;
-#[cfg(feature = "ast-context")]
-pub mod ast_context;
 pub mod auth;
 pub mod bulk;
-pub mod cache;
 pub mod config;
 pub mod error;
 pub mod facade;

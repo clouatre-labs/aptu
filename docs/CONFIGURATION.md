@@ -145,7 +145,6 @@ When fallback triggers, Aptu tries each provider in the chain in order. If a fal
 **Notes:**
 
 - Fallback triggers for non-retryable errors, and for rate-limit errors after in-loop retries are exhausted
-- Circuit breaker errors do not trigger fallback
 - Each fallback provider must have a valid API key configured
 - Model overrides are optional; if not specified, the primary model is used
 - Fallback attempts are logged with `warn` level tracing
@@ -260,43 +259,23 @@ max_chars_per_file = 32000         # Max chars of full file content per file (de
 max_diff_chars = 200000            # Max total diff characters across all files in the prompt (default: 200 000)
 max_patch_chars_per_file = 25000   # Max chars per individual file patch; patches exceeding this are dropped entirely (default: 25 000)
 max_instructions_chars = 1500      # Max chars of instructions file content included in review prompt (default: 1 500)
-min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
-ast_context = false                # Opt-in AST context and call-graph enrichment (default: false)
 verify_enabled = true              # AI verification pass on candidate findings before posting (default: true)
 min_confidence = 0.7               # Minimum verified confidence (0.0-1.0) to keep a finding (default: 0.7)
 suppress_info = true               # Suppress info-severity findings from the posted review (default: true)
 ```
 
-AST context and call-graph enrichment are opt-in: set `ast_context = true` to inject
-function signatures and call-graph context into the review prompt (a repository path
-must be available via `--repo-path`, CWD inference, or the GitHub Action `repo-path` input).
-When `ast_context = false` (the default), both sections are omitted regardless of budget.
-
-The call graph is enabled only when `ast_context = true` and `budget_remaining > min_budget_for_call_graph`, where
-`budget_remaining = max_prompt_chars - estimated_size` (estimated size excludes the call graph itself).
-Setting `min_budget_for_call_graph >= max_prompt_chars` disables call graph enrichment entirely.
-Setting it above half of `max_prompt_chars` means call graph will only be built for the largest diffs.
-The prefix section "When the assembled prompt exceeds..." describes how call graph is the first section dropped,
-so a value that rarely enables call graph is typically acceptable.
-
-When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest first), diff patches (largest first). The system prompt and PR metadata are never dropped.
+When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: full file content (largest first), diff patches (largest first). The system prompt and PR metadata are never dropped.
 
 ## Cache Configuration
 
-Control caching behavior for issues, repositories, and file-based cache entries:
-
 ```toml
 [cache]
-issue_ttl_minutes = 60      # TTL for cached issue responses (default: 60)
-repo_ttl_hours = 24         # TTL for cached repository metadata (default: 24)
-file_eviction_days = 7      # Age threshold for evicting file-based cache entries (default: 7)
+curated_repos_url = "https://raw.githubusercontent.com/clouatre-labs/aptu/main/data/curated-repos.json"
 ```
 
-- **`issue_ttl_minutes`**: How long (in minutes) to cache AI responses for issue triage before refetching. Set to 0 to disable caching.
-- **`repo_ttl_hours`**: How long (in hours) to cache repository metadata (stars, description, topics, etc.) before refetching. Set to 0 to disable caching.
-- **`file_eviction_days`**: Age threshold (in days) for removing stale cache files from disk. Must be greater than 0. Older cache files are automatically cleaned up.
+- **`curated_repos_url`**: URL of the curated repository list fetched at startup.
 
-All three keys are optional. Omitting any key restores the default listed above.
+The key is optional. Omitting it restores the default listed above.
 
 ## Prompt Injection Protection
 
@@ -388,7 +367,6 @@ Supported operation names:
 |------|----------|
 | `~/.config/aptu/prompts/triage_system.md` | Issue triage system prompt |
 | `~/.config/aptu/prompts/pr_review_system.md` | PR review system prompt |
-| `~/.config/aptu/prompts/pr_label_system.md` | PR label suggestion system prompt |
 
 **Example:** customize the triage prompt for a monorepo:
 

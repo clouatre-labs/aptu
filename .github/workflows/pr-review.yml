@@ -62,7 +62,6 @@ jobs:
           fallback-provider: 'openrouter'
           fallback-model: 'inception/mercury-2'
           instructions-file: .github/instructions/pr-review.md
-          repo-path: ${{ github.workspace }}
 
       - name: Warn on review failure
         if: always() && steps.review.outputs.pr-review-outcome == 'failure'

@@ -17,7 +17,6 @@ This document describes the project direction across three time horizons. Items 
 - **GitHub App** (#94): `aptu-dev` GitHub App with config-as-code opt-in, mention commands, automatic security scanning, per-installation quotas, and per-repository AI key model. Installed from [github.com/apps/aptu-dev](https://github.com/apps/aptu-dev).
 - **Model-tier routing** (#1416): routes large PRs to a higher-capability model tier automatically based on estimated prompt size
 - **Prompt optimisation** (#1415): minified schemas, examples moved to user turn (~2.6k chars saved per call)
-- **File-based TTL cache eviction** (#1172): `[cache]` config now supports per-field TTL settings (`issue_ttl_minutes`, `repo_ttl_hours`, `file_eviction_days`); stale cache entries are automatically pruned on startup.
 - **Per-task AI timeouts** (#1682): `timeout_seconds` is configurable per task via `[ai.tasks.<task>]`, extending the default request timeout for long-running reviews.
 - **Structured review verdict/severity badges** (#1683, #1685): PR review comments render verdict and severity badges for machine-scannable findings.
 - **Claude Max/Pro/Team OAuth**: authenticate via an existing Claude subscription (`credentials.json` from the `claude` CLI) as an alternative to a dedicated API key.
@@ -27,7 +26,6 @@ This document describes the project direction across three time horizons. Items 
 
 These items address known gaps and complete features already partially implemented.
 
-- **Bulk triage improvements**: better progress reporting, per-repo rate limit awareness, and configurable concurrency
 - **SARIF v2.2 full compliance**: complete SARIF export for security scan results, including rule metadata and suppression entries
 - **Config validation**: `aptu config validate` reports missing keys and unknown fields on startup
 - **API key memory hygiene**: apply `zeroize` on drop to all secret-typed fields in `aptu-core`; prevents secrets from lingering in freed memory after deallocation (single-dependency hardening)

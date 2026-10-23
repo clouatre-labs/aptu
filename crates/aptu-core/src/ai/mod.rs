@@ -4,7 +4,6 @@
 //!
 //! Provides AI-assisted issue triage using multiple AI providers (Gemini, `OpenRouter`, Z.AI, Anthropic).
 
-pub mod circuit_breaker;
 pub mod client;
 pub mod context;
 pub mod prompts;
@@ -13,7 +12,6 @@ pub mod registry;
 pub mod review_context;
 pub mod types;
 
-pub use circuit_breaker::CircuitBreaker;
 pub use client::{AiClient, AuthMethod, is_free_model, resolve_anthropic_credential};
 pub use provider::AiProvider;
 pub use registry::{PROVIDER_ANTHROPIC, ProviderConfig, all_providers, get_provider};

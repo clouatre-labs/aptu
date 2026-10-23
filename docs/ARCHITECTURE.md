@@ -34,7 +34,7 @@ External APIs (GitHub, AI Provider)
 Format & Display Output
 ```
 
-A typical aptu invocation proceeds as follows: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a review prompt with AST and call-graph context (both opt-in via `review.ast_context`, disabled by default); the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
+A typical aptu invocation proceeds as follows: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a review prompt (enrichments are budget-dropped largest-first when the prompt exceeds `review.max_prompt_chars`); the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
 
 The GitHub App path: a Cloudflare Worker receives webhook events, validates HMAC signatures, reads `.github/aptu.yml` from the repository, and dispatches `repository_dispatch` events to a central workflow. The central workflow runs the same `aptu-core` triage, review, and scan logic as the CLI, posting results as the `aptu[bot]` GitHub App user.
 
@@ -64,14 +64,12 @@ Abstracts AI model invocation across multiple providers (Gemini, OpenRouter, Z.A
 
 1. Fetch PR diff and metadata via Octocrab. If a prior Aptu bot review carries an `<!-- APTU_REVIEW:<sha> -->` marker whose SHA differs from the current head, only the compare-commits range (`last_sha..head`) is fetched instead (incremental review). Any failure along this path (missing or unchanged marker SHA, compare API error, empty range) falls back to the full file set; the incremental path never fails the review
 2. Fetch full file content for changed files via GitHub Contents API (capped at `max_full_content_files`, `max_chars_per_file`)
-3. Build AST context (only when `review.ast_context = true`; disabled by default): function signatures and imports for each changed file using `aptu-coder-core` (supports Rust, Python, Go, Java, TypeScript, TSX, JavaScript, C, C++, C#, Fortran)
-4. Build call-graph context (only when `review.ast_context = true`; disabled by default): cross-file caller chains for changed functions; modified symbols are derived from PR diff hunks (declaration lines matching `fn`/`async fn`, `struct`, `enum`, `trait`, `impl` via a `SYMBOL_RE` static regex), not from the full graph; callers residing only in files the PR does not touch are intentionally excluded
-5. Enforce prompt budget (`max_prompt_chars`): drop sections in order (`call_graph` -> `ast_context` -> file `full_content` -> file patches) until budget is met
-6. Verify findings (one extra small-model call when `review.verify_enabled = true`, default): each candidate finding is checked against the diff; findings with a `drop` verdict or confidence below `review.min_confidence` (default 0.7) are dropped, and info-severity findings are suppressed when `review.suppress_info = true` (default). When verification is disabled, only the local info-suppression filter applies
-7. Post inline review comments via GitHub REST API
-8. Post or update the review summary as an issue comment: the summary carries an `<!-- APTU_REVIEW:<sha> -->` marker keyed to the PR head SHA. An existing Aptu bot summary for the same head SHA is left untouched (dedup); a summary for a different or unknown SHA is updated in place; a missing summary is created after the review posts
+3. Enforce prompt budget (`max_prompt_chars`): drop sections in order (file `full_content` -> file patches) until budget is met
+4. Verify findings (one extra small-model call when `review.verify_enabled = true`, default): each candidate finding is checked against the diff; findings with a `drop` verdict or confidence below `review.min_confidence` (default 0.7) are dropped, and info-severity findings are suppressed when `review.suppress_info = true` (default). When verification is disabled, only the local info-suppression filter applies
+5. Post inline review comments via GitHub REST API
+6. Post or update the review summary as an issue comment: the summary carries an `<!-- APTU_REVIEW:<sha> -->` marker keyed to the PR head SHA. An existing Aptu bot summary for the same head SHA is left untouched (dedup); a summary for a different or unknown SHA is updated in place; a missing summary is created after the review posts
 
-The `ReviewContext` struct centralizes all enrichment decisions: AST context, call graph, instructions, and budget enforcement are all managed there before the prompt is assembled. Repo-path is inferred from CWD when not explicitly supplied via `--repo-path`. On incremental reviews, a short prior-findings summary (file plus first line of each prior comment, capped to 2,000 characters within the existing prompt budget) is rendered as a `<prior_findings>` prompt section so the AI only reports new findings.
+The `ReviewContext` struct centralizes all enrichment decisions: instructions and budget enforcement are all managed there before the prompt is assembled. On incremental reviews, a short prior-findings summary (file plus first line of each prior comment, capped to 2,000 characters within the existing prompt budget) is rendered as a `<prior_findings>` prompt section so the AI only reports new findings.
 
 ### Facade Functions
 
@@ -79,7 +77,6 @@ The `ReviewContext` struct centralizes all enrichment decisions: AST context, ca
 
 | File | Key exports |
 |------|-------------|
-| `ai_client.rs` | AI client construction and fallback-chain helpers |
 | `issues.rs` | `analyze_issue()`, `fetch_issue_for_triage()`, `post_triage_comment()`, `apply_triage_labels()` |
 | `pr_review/` | `fetch_pr_for_review()`, `analyze_pr()`, `post_pr_review()`, `label_pr()` |
 
@@ -87,11 +84,7 @@ Each function accepts a `&dyn TokenProvider` for credential resolution. Function
 
 Write operations (triage comment, labels, PR review) are gated on viewer permission and yield `WriteOutcome::Skipped` when the viewer lacks write access. Permission lookups are memoized process-wide with a 60s TTL.
 
-AI client construction and fallback-provider resolution live in `facade/ai_client.rs`: the `[ai.fallback]` config section defines an ordered chain of fallback entries (provider name or `{provider, model}`), each with its own client so a failing primary provider can be retried downstream.
-
-### AstContextOutput
-
-`AstContextOutput` (in `ast_context.rs`) is returned by the AST context builder instead of a plain string. It carries `text: String`, the rendered AST summary for prompt injection.
+AI client construction and fallback-provider resolution live in `ai/client.rs`: the `[ai.fallback]` config section defines an ordered chain of fallback entries (provider name or `{provider, model}`), each with its own client so a failing primary provider can be retried downstream.
 
 ### Prompt System
 

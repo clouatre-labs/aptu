@@ -158,7 +158,7 @@ pub async fn analyze_issue(
         ai_config.resolve_for_task(TaskType::Triage, Some(issue.body.len()));
 
     // Use fallback chain if configured
-    let ai_response = super::ai_client::try_with_fallback(
+    let ai_response = crate::ai::client::try_with_fallback(
         provider,
         &provider_name,
         &model_name,
@@ -603,8 +603,6 @@ mod tests {
             allow_paid_models: true,
             max_tokens: 2000,
             temperature: 0.7,
-            circuit_breaker_threshold: 3,
-            circuit_breaker_reset_seconds: 60,
             retry_max_attempts: 3,
             tasks: None,
             fallback: None,
@@ -612,6 +610,7 @@ mod tests {
             validation_enabled: false,
             openrouter_data_collection: "deny".to_string(),
             openrouter_zdr: true,
+            context_windows: None,
         };
 
         let provider = MockProvider;

@@ -7,7 +7,6 @@
 //! request sending, and response parsing.
 
 pub mod http;
-pub mod label;
 pub mod parse;
 pub mod review;
 pub mod triage;
@@ -19,11 +18,61 @@ use secrecy::SecretString;
 
 use crate::ai::registry::ProviderConfig;
 use crate::ai::types::{
-    ChatCompletionRequest, ChatCompletionResponse, IssueDetails, PrReviewResponse,
+    ChatCompletionRequest, ChatCompletionResponse, ChatMessage, IssueDetails, PrReviewResponse,
 };
 use crate::metrics::AiStats;
 
+pub(super) use crate::ai::provider::parse::provider_response_format;
 pub(crate) use crate::ai::provider::parse::{SCHEMA_PREAMBLE, sanitize_prompt_field};
+
+/// Builds a [`ChatCompletionRequest`] with the system and user messages.
+///
+/// Injects cache control on the system message for Anthropic providers.
+///
+/// # Arguments
+///
+/// * `provider` - The AI provider (supplies model, limits, and session ID).
+/// * `system_content` - The assembled system prompt content.
+/// * `user_content` - The assembled user prompt content.
+/// * `session_kind` - Session kind passed to `session_id` (e.g. "triage", "review").
+#[must_use]
+pub(super) fn build_chat_request(
+    provider: &(impl AiProvider + ?Sized),
+    system_content: String,
+    user_content: String,
+    session_kind: &str,
+) -> ChatCompletionRequest {
+    let mut messages = vec![
+        ChatMessage {
+            role: "system".to_string(),
+            content: Some(system_content),
+            reasoning: None,
+            cache_control: None,
+        },
+        ChatMessage {
+            role: "user".to_string(),
+            content: Some(user_content),
+            reasoning: None,
+            cache_control: None,
+        },
+    ];
+
+    // Inject cache control on system message for Anthropic
+    if provider.is_anthropic()
+        && let Some(msg) = messages.first_mut()
+    {
+        msg.cache_control = Some(crate::ai::types::CacheControl::ephemeral());
+    }
+
+    ChatCompletionRequest {
+        model: provider.model().to_string(),
+        messages,
+        response_format: provider_response_format(provider),
+        max_tokens: Some(provider.max_tokens()),
+        temperature: Some(provider.temperature()),
+        session_id: provider.session_id(session_kind),
+    }
+}
 
 /// Maximum length for issue body to stay within token limits.
 pub const MAX_BODY_LENGTH: usize = 4000;
@@ -95,11 +144,6 @@ pub trait AiProvider: Send + Sync {
     /// Returns the maximum retry attempts for rate-limited requests.
     fn max_attempts(&self) -> u32 {
         3
-    }
-
-    /// Returns the circuit breaker for this provider (optional).
-    fn circuit_breaker(&self) -> Option<&crate::ai::CircuitBreaker> {
-        None
     }
 
     /// Builds HTTP headers for API requests.
@@ -184,16 +228,6 @@ pub trait AiProvider: Send + Sync {
         self::review::verify_findings(self, comments, diff, review_config).await
     }
 
-    /// Suggests labels for a pull request using the provider's API.
-    async fn suggest_pr_labels(
-        &self,
-        title: &str,
-        body: &str,
-        file_paths: &[String],
-    ) -> Result<(Vec<String>, AiStats)> {
-        self::label::suggest_pr_labels(self, title, body, file_paths).await
-    }
-
     /// Builds the system prompt for PR review.
     #[must_use]
     fn build_pr_review_system_prompt(custom_guidance: Option<&str>) -> String {
@@ -204,18 +238,6 @@ pub trait AiProvider: Send + Sync {
     #[must_use]
     fn build_pr_review_user_prompt(ctx: &mut crate::ai::review_context::ReviewContext) -> String {
         self::review::build_pr_review_user_prompt(ctx)
-    }
-
-    /// Builds the system prompt for PR label suggestion.
-    #[must_use]
-    fn build_pr_label_system_prompt(custom_guidance: Option<&str>) -> String {
-        self::label::build_pr_label_system_prompt_fn(custom_guidance)
-    }
-
-    /// Builds the user prompt for PR label suggestion.
-    #[must_use]
-    fn build_pr_label_user_prompt(title: &str, body: &str, file_paths: &[String]) -> String {
-        self::label::build_pr_label_user_prompt(title, body, file_paths)
     }
 }
 

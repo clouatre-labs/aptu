@@ -13,7 +13,6 @@ This document contains the help content for the `aptu` command-line program.
 * [`aptu issue triage`↴](#aptu-issue-triage)
 * [`aptu pr`↴](#aptu-pr)
 * [`aptu pr review`↴](#aptu-pr-review)
-* [`aptu pr label`↴](#aptu-pr-label)
 * [`aptu scan-security`↴](#aptu-scan-security)
 
 ## `aptu`
@@ -114,19 +113,6 @@ Triage an issue with AI assistance
 ###### **Options:**
 
 * `-r`, `--repo <REPO>` — Repository for bare issue numbers (e.g., "block/goose")
-* `--since <SINCE>` — Triage all issues without labels created since this date (YYYY-MM-DD or RFC3339 format)
-* `-s`, `--state <STATE>` — Filter issues by state when using --since (open, closed, or all)
-
-  Default value: `open`
-
-  Possible values:
-  - `open`:
-    Only open issues (default)
-  - `closed`:
-    Only closed issues
-  - `all`:
-    Both open and closed issues
-
 * `--dry-run` — Preview triage without posting to GitHub
 * `--no-apply` — Skip applying AI-suggested labels and milestone to the issue
 * `--no-comment` — Skip posting triage comment to GitHub
@@ -143,7 +129,6 @@ Work with pull requests
 ###### **Subcommands:**
 
 * `review` — Review a pull request with AI assistance
-* `label` — Auto-label a pull request based on conventional commit prefix and file paths
 
 
 
@@ -168,25 +153,7 @@ Review a pull request with AI assistance
 * `--no-comment` — Skip posting review comment to GitHub
 * `--no-dedup-summary` — Disable review summary dedup (always post a new summary comment)
 * `-f`, `--force` — Bypass confirmation prompts
-* `--repo-path <PATH>` — Path to the local repository root for AST context injection. Optional when running from within the repo
 * `--instructions-file <PATH>` — Path to repository instructions file (overrides default AGENTS.md and .github/instructions/pr-review.md)
-
-
-
-## `aptu pr label`
-
-Auto-label a pull request based on conventional commit prefix and file paths
-
-**Usage:** `aptu pr label [OPTIONS] <REFERENCE>`
-
-###### **Arguments:**
-
-* `<REFERENCE>` — PR reference (URL, owner/repo#number, or number)
-
-###### **Options:**
-
-* `-r`, `--repo <REPO>` — Repository for bare PR numbers (e.g., "block/goose")
-* `--dry-run` — Preview labels without applying
 
 
 

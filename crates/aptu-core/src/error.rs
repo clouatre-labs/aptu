@@ -92,10 +92,6 @@ pub enum AptuError {
     #[error("Keyring error: {0}")]
     Keyring(#[from] keyring_core::error::Error),
 
-    /// Circuit breaker is open - AI provider is unavailable.
-    #[error("Circuit breaker is open - AI provider is temporarily unavailable")]
-    CircuitOpen,
-
     /// Type mismatch: reference is a different type than expected.
     #[error("#{number} is {actual}, not {expected}")]
     TypeMismatch {
@@ -105,13 +101,6 @@ pub enum AptuError {
         expected: ResourceType,
         /// Actual type.
         actual: ResourceType,
-    },
-
-    /// Model registry error (runtime model validation).
-    #[error("Model registry error: {message}")]
-    ModelRegistry {
-        /// Error message.
-        message: String,
     },
 
     /// Model validation error - invalid model ID with suggestions.

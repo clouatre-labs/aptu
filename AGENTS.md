@@ -12,7 +12,7 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 
 - `aptu-cli` - CLI interface (Clap derive); binary: `aptu`
 - `aptu-core` - Core library: AI providers, GitHub API, security scanner, triage engine, cache, contribution recording, retry, bulk processing
-  - `facade/` - High-level CLI/FFI entry points (ai_client, issues, pr_review)
+  - `facade/` - High-level CLI/FFI entry points (issues, pr_review)
 
 ## Config & Data Paths (XDG)
 
@@ -24,7 +24,7 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 ```bash
 cargo build
 cargo nextest run --workspace --locked --no-fail-fast
-cargo nextest run -p aptu-core --locked --no-fail-fast --features ast-context
+cargo nextest run -p aptu-core --locked --no-fail-fast
 cargo clippy -- -W clippy::cognitive_complexity
 cargo fmt --check
 cargo deny check advisories licenses
@@ -37,7 +37,7 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 
 ### AI & Transport
 
-- All providers share an OpenAI-compatible interface; registry in `aptu-core::ai::registry`; circuit breaker in `aptu-core::ai::circuit_breaker`
+- All providers share an OpenAI-compatible interface; registry in `aptu-core::ai::registry`
 - `AiProvider` trait (`ai/provider/mod.rs`) splits operation logic across `provider/{triage,review,label,http,parse}.rs`
 - User-prompt builders live in `ai/prompts/mod.rs`; do not inline them in provider files
 - Exponential backoff retry with `is_retryable_*` helpers in `aptu-core::retry`
@@ -52,9 +52,8 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 
 ### GitHub Integration
 
-- PR review injects AST + call-graph context from GitHub Contents API; multi-language (Rust, Go, Python, TS, JS, C/C++, C#, Java, Fortran)
 - Model-tier routing selects `small_model` or `large_model` based on estimated prompt size
-- Review context budgets in `[review]` (`ReviewConfig`): `max_diff_chars` 200k, `max_patch_chars_per_file` 25k; patches exceeding the per-file limit are dropped; `ReviewConfig::validate_consistency()` warns on misconfigured `min_budget_for_call_graph`; runs at `AppConfig` load time
+- Review context budgets in `[review]` (`ReviewConfig`): `max_diff_chars` 200k, `max_patch_chars_per_file` 25k; patches exceeding the per-file limit are dropped; `ReviewConfig::validate_consistency()` warns when `max_diff_chars` exceeds `max_prompt_chars`; runs at `AppConfig` load time
 - Inline comment dedup keys on `(path, line, side)`; `line=None` comments excluded from map; unchanged body skipped; changed body PATCH-updated in place
 - GitHub OAuth device flow; credentials stored in OS keyring; no `GITHUB_TOKEN` env var needed
 

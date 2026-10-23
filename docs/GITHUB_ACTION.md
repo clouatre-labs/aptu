@@ -70,7 +70,7 @@ jobs:
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
-By default, the action reviews all changed files without AST/call-graph enrichment; both are opt-in via `[review] ast_context = true` (see [PR Review with AST Context](#pr-review-with-ast-context) below). On `synchronize` events, if a prior Aptu review marker records a different head SHA, the action reviews only the range diff since the last reviewed commit; any failure to fetch that range falls back to a full review of all changed files.
+By default, the action reviews all changed files using patches and (where available) full file content. On `synchronize` events, if a prior Aptu review marker records a different head SHA, the action reviews only the range diff since the last reviewed commit; any failure to fetch that range falls back to a full review of all changed files.
 
 ## Configuration
 
@@ -115,7 +115,7 @@ Token usage is also written to `$RUNNER_TEMP/aptu-token-usage.jsonl` and uploade
 | Permission | Required For |
 |------------|--------------|
 | `issues: write` | Issue triage (comments, labels) |
-| `pull-requests: write` | PR labeling and review (comments, labels) |
+| `pull-requests: write` | PR review (comments, labels) |
 | `contents: read` | Repository context (all features) |
 | `attestations: read` | SLSA binary verification (`gh attestation verify`) |
 
@@ -145,10 +145,7 @@ Each line is a JSON object (`ReviewContextRecord`) with the following fields:
 | `files_with_patch` | integer | Number of files with a non-empty diff patch. |
 | `files_truncated` | integer | Number of files whose full content was truncated. |
 | `truncated_chars_dropped` | integer | Total characters dropped from truncated files. |
-| `ast_context_chars` | integer | Characters in AST context. |
-| `call_graph_chars` | integer | Characters in call graph context. |
-| `budget_drops` | string[] | Names of context items dropped due to budget (e.g. `call_graph`, `file_content:<path>`, `patch:<path>`). |
-| `cwd_inferred` | boolean | Whether the repository path was inferred from CWD. |
+| `budget_drops` | string[] | Names of context items dropped due to budget (e.g. `file_content:<path>`, `patch_truncated:<path>`). |
 | `prompt_chars_final` | integer | Final assembled prompt character count. |
 | `finish_reasons` | string[] | Finish reasons from the AI response. |
 | `max_prompt_chars` | integer | Maximum prompt character budget from review config. |
@@ -179,63 +176,9 @@ Each appended line contains only the following counters plus `run_id` and `times
 Sample appended line:
 
 ```json
-{"reviews_total":3,"truncation_events_total":2,"files_truncated_total":3,"budget_drop_reason_counts":{"call_graph":2},"finish_reasons_counts":{"stop":3},"model_tier_counts":{"gpt-4":3},"prompt_budget_pct_histogram":{"explicit_bounds":[25,50,75,90],"bucket_counts":[0,0,2,0,1]},"run_id":"123456","timestamp":"2026-01-01T00:00:00Z"}
+{"reviews_total":3,"truncation_events_total":2,"files_truncated_total":3,"budget_drop_reason_counts":{"file_content:src/foo.ts":2},"finish_reasons_counts":{"stop":3},"model_tier_counts":{"gpt-4":3},"prompt_budget_pct_histogram":{"explicit_bounds":[25,50,75,90],"bucket_counts":[0,0,2,0,1]},"run_id":"123456","timestamp":"2026-01-01T00:00:00Z"}
 ```
 
-## Scheduled Batch Triage
-
-Triage all unlabeled issues on a schedule:
-
-```yaml
-name: Aptu scheduled triage
-
-on:
-  schedule:
-    - cron: '0 8 * * 1'   # every Monday at 08:00 UTC
-
-jobs:
-  triage:
-    runs-on: ubuntu-24.04-arm  # arm64 runner; ~50% cheaper; aptu ships native arm64 binary
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - name: Get last week's date
-        id: date
-        run: echo "since=$(date -d '7 days ago' +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
-
-      - uses: clouatre-labs/aptu@v0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-          since: ${{ steps.date.outputs.since }}
-          issue-state: open
-```
-
-## PR Review with AST Context
-
-AST context and call-graph enrichment are opt-in and disabled by default. To inject function signatures and call-graph context into the review prompt, enable `ast_context` in the `[review]` section of your `config.toml` and pass the checked-out repository path:
-
-```toml
-# ~/.config/aptu/config.toml (or $XDG_CONFIG_HOME/aptu/config.toml)
-[review]
-ast_context = true
-```
-
-Alternatively, set the `APTU_REVIEW__AST_CONTEXT: "true"` environment variable in the workflow step. The action loads its configuration from the standard aptu config location on the runner; copying the workflow below without this configuration leaves enrichment disabled.
-
-```yaml
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: clouatre-labs/aptu@v0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-          repo-path: ${{ github.workspace }}
-        env:
-          APTU_REVIEW__AST_CONTEXT: "true"
-```
 
 ## aptu-dev GitHub App
 

@@ -1315,7 +1315,7 @@ mod tree_tests {
     #[test]
     fn get_extensions_for_language_unknown() {
         let exts = get_extensions_for_language("unknown_language");
-        assert!(exts.is_empty());
+        assert_eq!(exts, Vec::<String>::new());
     }
 }
 
@@ -1557,7 +1557,7 @@ mod tests {
     fn extract_keywords_empty_title() {
         let title = "the a an and or";
         let keywords = extract_keywords(title);
-        assert!(keywords.is_empty());
+        assert_eq!(keywords, Vec::<String>::new());
     }
 
     #[test]
