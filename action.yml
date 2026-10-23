@@ -92,20 +92,6 @@ inputs:
       the issue triage step on repository_dispatch events.
     required: false
     default: ''
-  since:
-    description: >
-      For scheduled batch triage: triage all issues without labels created since this date
-      (YYYY-MM-DD or RFC3339). If empty, all unlabeled issues in the repository are triaged.
-      Only used when the workflow is triggered by a schedule event.
-    required: false
-    default: ''
-  issue-state:
-    description: >
-      For scheduled batch triage: filter issues by state (open, closed, all).
-      Only used when the workflow is triggered by a schedule event.
-    required: false
-    default: 'open'
-
   # --- PR review ---
   instructions-file:
     description: >
@@ -360,19 +346,11 @@ runs:
         APTU_AI__MODEL: ${{ inputs.model }}
         APPLY_LABELS: ${{ inputs.apply-labels }}
         DRY_RUN: ${{ inputs.dry-run }}
-        ISSUE_STATE: ${{ inputs.issue-state }}
         NO_COMMENT: ${{ inputs.no-comment }}
-        SINCE: ${{ inputs.since }}
         APTU_METRICS_FILE: ${{ runner.temp }}/aptu-token-usage.jsonl
       run: |
         set -e
         ARGS=(--repo "$REPO")
-        if [[ -n "$SINCE" ]]; then
-          ARGS+=(--since "$SINCE")
-        fi
-        if [[ -n "$ISSUE_STATE" && "$ISSUE_STATE" != "open" ]]; then
-          ARGS+=(--state "$ISSUE_STATE")
-        fi
         if [[ "$DRY_RUN" == "true" ]]; then
           ARGS+=(--dry-run)
         fi

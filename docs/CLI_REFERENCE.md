@@ -113,19 +113,6 @@ Triage an issue with AI assistance
 ###### **Options:**
 
 * `-r`, `--repo <REPO>` — Repository for bare issue numbers (e.g., "block/goose")
-* `--since <SINCE>` — Triage all issues without labels created since this date (YYYY-MM-DD or RFC3339 format)
-* `-s`, `--state <STATE>` — Filter issues by state when using --since (open, closed, or all)
-
-  Default value: `open`
-
-  Possible values:
-  - `open`:
-    Only open issues (default)
-  - `closed`:
-    Only closed issues
-  - `all`:
-    Both open and closed issues
-
 * `--dry-run` — Preview triage without posting to GitHub
 * `--no-apply` — Skip applying AI-suggested labels and milestone to the issue
 * `--no-comment` — Skip posting triage comment to GitHub

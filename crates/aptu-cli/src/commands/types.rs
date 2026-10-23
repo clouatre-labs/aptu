@@ -53,29 +53,6 @@ pub struct TriageResult {
     pub is_maintainer: bool,
 }
 
-/// Outcome of a single triage operation in a bulk operation.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-#[allow(clippy::large_enum_variant)]
-pub enum SingleTriageOutcome {
-    /// Triage succeeded.
-    Success(Box<TriageResult>),
-    /// Triage was skipped (e.g., already triaged).
-    Skipped(String),
-    /// Triage failed with an error.
-    Failed(String),
-}
-
-impl SingleTriageOutcome {
-    /// Extract `TriageResult` if this is a Success outcome.
-    pub fn as_triage_result(&self) -> Option<&TriageResult> {
-        match self {
-            SingleTriageOutcome::Success(result) => Some(result),
-            _ => None,
-        }
-    }
-}
-
 /// Conversion from a core bulk outcome to a CLI single outcome.
 ///
 /// Implemented by the per-command single-outcome enums so `report_outcome`
@@ -92,47 +69,6 @@ pub trait OutcomeInfo: Sized {
 
     /// Wrap a failure error message.
     fn from_failed(err: String) -> Self;
-}
-
-impl OutcomeInfo for SingleTriageOutcome {
-    type Inner = TriageResult;
-
-    fn from_success(inner: Self::Inner) -> Self {
-        SingleTriageOutcome::Success(Box::new(inner))
-    }
-
-    fn from_skipped(msg: String) -> Self {
-        SingleTriageOutcome::Skipped(msg)
-    }
-
-    fn from_failed(err: String) -> Self {
-        SingleTriageOutcome::Failed(err)
-    }
-}
-
-/// Result from a bulk triage operation.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct BulkTriageResult {
-    /// Number of issues successfully triaged.
-    pub succeeded: usize,
-    /// Number of issues that failed.
-    pub failed: usize,
-    /// Number of issues that were skipped.
-    pub skipped: usize,
-    /// Individual outcomes for each issue.
-    pub outcomes: Vec<(String, SingleTriageOutcome)>,
-}
-
-impl BulkTriageResult {
-    /// Check if any outcomes are dry-run operations.
-    pub fn has_dry_run(&self) -> bool {
-        self.outcomes.iter().any(|(_, outcome)| {
-            outcome
-                .as_triage_result()
-                .is_some_and(|result| result.dry_run)
-        })
-    }
 }
 
 /// Result from the PR review command.

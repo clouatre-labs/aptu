@@ -182,36 +182,6 @@ Sample appended line:
 {"reviews_total":3,"truncation_events_total":2,"files_truncated_total":3,"budget_drop_reason_counts":{"call_graph":2},"finish_reasons_counts":{"stop":3},"model_tier_counts":{"gpt-4":3},"prompt_budget_pct_histogram":{"explicit_bounds":[25,50,75,90],"bucket_counts":[0,0,2,0,1]},"run_id":"123456","timestamp":"2026-01-01T00:00:00Z"}
 ```
 
-## Scheduled Batch Triage
-
-Triage all unlabeled issues on a schedule:
-
-```yaml
-name: Aptu scheduled triage
-
-on:
-  schedule:
-    - cron: '0 8 * * 1'   # every Monday at 08:00 UTC
-
-jobs:
-  triage:
-    runs-on: ubuntu-24.04-arm  # arm64 runner; ~50% cheaper; aptu ships native arm64 binary
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - name: Get last week's date
-        id: date
-        run: echo "since=$(date -d '7 days ago' +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
-
-      - uses: clouatre-labs/aptu@v0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-          since: ${{ steps.date.outputs.since }}
-          issue-state: open
-```
-
 ## PR Review with AST Context
 
 AST context and call-graph enrichment are opt-in and disabled by default. To inject function signatures and call-graph context into the review prompt, enable `ast_context` in the `[review]` section of your `config.toml` and pass the checked-out repository path:

@@ -24,18 +24,6 @@ pub enum OutputFormat {
     GithubAnnotations,
 }
 
-/// Issue state filter for triage operations.
-#[derive(Clone, Copy, Default, ValueEnum)]
-pub enum IssueState {
-    /// Only open issues (default)
-    #[default]
-    Open,
-    /// Only closed issues
-    Closed,
-    /// Both open and closed issues
-    All,
-}
-
 /// Global output configuration passed to commands.
 #[derive(Clone)]
 pub struct OutputContext {
@@ -74,39 +62,6 @@ impl OutputContext {
     pub fn is_verbose(&self) -> bool {
         self.verbose
     }
-}
-
-/// Parses a date string in YYYY-MM-DD or RFC3339 format and returns RFC3339 string.
-///
-/// Converts YYYY-MM-DD to RFC3339 format (midnight UTC) for GraphQL filtering.
-///
-/// # Arguments
-///
-/// * `date_str` - Date string in YYYY-MM-DD or RFC3339 format
-///
-/// # Returns
-///
-/// RFC3339 formatted date string, or the input if already in RFC3339 format
-///
-/// # Errors
-///
-/// Returns an error if the date format is invalid.
-pub fn parse_date_to_rfc3339(date_str: &str) -> anyhow::Result<String> {
-    // Try RFC3339 format first
-    if chrono::DateTime::parse_from_rfc3339(date_str).is_ok() {
-        return Ok(date_str.to_string());
-    }
-
-    // Try YYYY-MM-DD format
-    if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
-        let datetime = date
-            .and_hms_opt(0, 0, 0)
-            .ok_or_else(|| anyhow::anyhow!("Failed to create datetime from date {date_str}"))?;
-        let rfc3339 = format!("{}Z", datetime.format("%Y-%m-%dT%H:%M:%S"));
-        return Ok(rfc3339);
-    }
-
-    anyhow::bail!("Invalid date format. Expected YYYY-MM-DD or RFC3339 format, got: {date_str}")
 }
 
 /// Aptu - Gamified OSS issue triage with AI assistance.
@@ -203,14 +158,6 @@ pub enum IssueCommand {
         /// Repository for bare issue numbers (e.g., "block/goose")
         #[arg(long, short = 'r')]
         repo: Option<String>,
-
-        /// Triage all issues without labels created since this date (YYYY-MM-DD or RFC3339 format)
-        #[arg(long)]
-        since: Option<String>,
-
-        /// Filter issues by state when using --since (open, closed, or all)
-        #[arg(long, short = 's', default_value = "open")]
-        state: IssueState,
 
         /// Preview triage without posting to GitHub
         #[arg(long)]
