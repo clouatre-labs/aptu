@@ -702,7 +702,7 @@ mod tests {
         let trigger = super::deterministic_skip_trigger(&issue);
 
         // Assert
-        assert!(!lint.violations.is_empty());
+        assert_ne!(lint.violations, []);
         assert_eq!(trigger, None);
     }
 

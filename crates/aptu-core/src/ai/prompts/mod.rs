@@ -1287,7 +1287,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn test_build_user_prompt_multibyte_comment_straddling_budget_no_panic() {
         let comment_body = "x".repeat(499) + &"é".repeat(100);
         let comment = super::super::types::IssueComment {
@@ -1515,7 +1514,7 @@ mod tests {
     }
 
     /// A file that is both per-file budget-truncated and flagged
-    /// patch_truncated by the GitHub API is recorded exactly once.
+    /// `patch_truncated` by the GitHub API is recorded exactly once.
     #[test]
     fn test_budget_truncated_and_api_flagged_recorded_once() {
         use super::super::types::PrFile;
@@ -1554,7 +1553,7 @@ mod tests {
         );
     }
 
-    /// A file flagged patch_truncated by the GitHub API carries the
+    /// A file flagged `patch_truncated` by the GitHub API carries the
     /// API-truncation annotation and is recorded; an unflagged file gets
     /// neither.
     #[test]

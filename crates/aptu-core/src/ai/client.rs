@@ -926,7 +926,7 @@ mod tests {
     fn test_from_claude_credentials_empty_token() {
         let empty_token = r#"{"access_token": ""}"#;
         let creds: ClaudeCredentials = serde_json::from_str(empty_token).expect("should parse");
-        assert!(creds.access_token.is_empty());
+        assert_eq!(creds.access_token, "");
     }
 
     #[test]

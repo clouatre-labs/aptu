@@ -231,7 +231,7 @@ mod tests {
     }
 
     /// Regression test for issue #1548: verifies patch and `full_content` budget drops
-    /// use distinct prefixes ("patch_truncated:" vs "`file_content`:") to avoid collision.
+    /// use distinct prefixes ("`patch_truncated`:" vs "`file_content`:") to avoid collision.
     #[test]
     fn test_budget_drops_distinguish_patch_from_full_content() {
         let mut pr = make_pr_with_content(500, 500);
@@ -300,7 +300,7 @@ mod tests {
 
     /// Verifies the final budget tier truncates remaining patches to their
     /// leading hunks with the marker, decrements the estimated size, and
-    /// records `patch_truncated:` telemetry entries (happy path).
+    /// records `patch_truncated`: telemetry entries (happy path).
     #[test]
     fn test_drop_patches_by_size_final_tier_truncates_with_marker() {
         let mut files = vec![
@@ -545,7 +545,7 @@ mod tests {
 
     /// Regression test for issue #1596 review feedback: when both `full_content` and
     /// patches must be reduced across multiple files, `budget_drops` must record every
-    /// `file_content:` entry before any `patch_truncated:` entry, matching the call order.
+    /// `file_content:` entry before any `patch_truncated`: entry, matching the call order.
     #[test]
     fn test_apply_budget_drops_records_full_content_before_patch_order() {
         let mut pr = make_pr_with_content(500, 100);

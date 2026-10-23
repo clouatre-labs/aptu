@@ -234,7 +234,7 @@ mod prior_findings_tests {
         let summary = prior_findings_summary(&comments);
 
         // Assert: blank-bodied comments contribute no entry.
-        assert!(summary.is_empty());
+        assert_eq!(summary, "");
     }
 
     #[test]
@@ -259,6 +259,6 @@ mod prior_findings_tests {
 
     #[test]
     fn test_summary_empty_when_no_comments() {
-        assert!(prior_findings_summary(&[]).is_empty());
+        assert_eq!(prior_findings_summary(&[]), "");
     }
 }

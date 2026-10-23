@@ -123,7 +123,6 @@ pub use security::{
 pub mod ai;
 pub mod auth;
 pub mod bulk;
-pub mod cache;
 pub mod config;
 pub mod error;
 pub mod facade;

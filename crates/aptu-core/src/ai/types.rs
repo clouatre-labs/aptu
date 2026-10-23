@@ -630,10 +630,10 @@ mod tests {
     fn test_pr_review_response_null_vec_fields() {
         let json = r#"{"summary":"Test","verdict":"approve","strengths":null,"concerns":null,"comments":null,"suggestions":null}"#;
         let review: PrReviewResponse = serde_json::from_str(json).unwrap();
-        assert!(review.strengths.is_empty());
-        assert!(review.concerns.is_empty());
-        assert!(review.comments.is_empty());
-        assert!(review.suggestions.is_empty());
+        assert_eq!(review.strengths.len(), 0);
+        assert_eq!(review.concerns.len(), 0);
+        assert_eq!(review.comments.len(), 0);
+        assert_eq!(review.suggestions.len(), 0);
     }
 
     #[test]

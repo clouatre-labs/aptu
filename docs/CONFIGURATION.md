@@ -268,20 +268,14 @@ When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in th
 
 ## Cache Configuration
 
-Control caching behavior for issues, repositories, and file-based cache entries:
-
 ```toml
 [cache]
-issue_ttl_minutes = 60      # TTL for cached issue responses (default: 60)
-repo_ttl_hours = 24         # TTL for cached repository metadata (default: 24)
-file_eviction_days = 7      # Age threshold for evicting file-based cache entries (default: 7)
+curated_repos_url = "https://raw.githubusercontent.com/clouatre-labs/aptu/main/data/curated-repos.json"
 ```
 
-- **`issue_ttl_minutes`**: How long (in minutes) to cache AI responses for issue triage before refetching. Set to 0 to disable caching.
-- **`repo_ttl_hours`**: How long (in hours) to cache repository metadata (stars, description, topics, etc.) before refetching. Set to 0 to disable caching.
-- **`file_eviction_days`**: Age threshold (in days) for removing stale cache files from disk. Must be greater than 0. Older cache files are automatically cleaned up.
+- **`curated_repos_url`**: URL of the curated repository list fetched at startup.
 
-All three keys are optional. Omitting any key restores the default listed above.
+The key is optional. Omitting it restores the default listed above.
 
 ## Prompt Injection Protection
 

@@ -457,12 +457,12 @@ pub async fn fetch_pr_files_since(
     {
         Ok(comparison) => {
             let files = comparison.files.unwrap_or_default();
-            if !compare_range_complete(files.len()) {
-                debug!(last_sha = %last_sha, head_sha = %head_sha, "Compare range hit API file cap; falling back to full review");
-                IncrementalFiles::Fallback(IncrementalFallbackReason::ApiCap)
-            } else {
+            if compare_range_complete(files.len()) {
                 let mapped = compare_files_to_pr_files(&files);
                 classify_incremental_files(mapped)
+            } else {
+                debug!(last_sha = %last_sha, head_sha = %head_sha, "Compare range hit API file cap; falling back to full review");
+                IncrementalFiles::Fallback(IncrementalFallbackReason::ApiCap)
             }
         }
         Err(e) => {
@@ -1579,7 +1579,7 @@ mod tests {
         let inline = build_inline_comments(&comments);
 
         // Assert: empty slice produces empty array, which serializes as [].
-        assert!(inline.is_empty());
+        assert_eq!(inline.len(), 0);
         let serialized = serde_json::to_string(&inline).unwrap();
         assert_eq!(serialized, "[]");
     }

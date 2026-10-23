@@ -79,12 +79,6 @@ impl ConfigSource for TomlConfigSource {
 
         let app_config: AppConfig = config.try_deserialize()?;
 
-        // Validate cache configuration
-        app_config
-            .cache
-            .validate()
-            .map_err(|e| AptuError::Config { message: e })?;
-
         // Validate review configuration consistency at load time (non-fatal warnings).
         for warning in app_config.review.validate_consistency() {
             tracing::warn!("{}", warning);
@@ -306,7 +300,6 @@ mod tests {
         assert_eq!(config.github.api_timeout_seconds, 10);
         assert!(config.ui.color);
         assert!(config.ui.confirm_before_post);
-        assert_eq!(config.cache.issue_ttl_minutes, 60);
     }
 
     #[test]

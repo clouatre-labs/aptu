@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn test_security_config_default_has_sensible_paths() {
         let config = SecurityConfig::default();
-        assert!(config.ignore_patterns.is_empty());
+        assert_eq!(config.ignore_patterns, Vec::<String>::new());
         assert_eq!(config.ignore_paths.len(), 13);
         assert!(config.ignore_paths.contains(&"tests/".to_string()));
         assert!(config.ignore_paths.contains(&"test/".to_string()));
@@ -246,8 +246,8 @@ mod tests {
     #[test]
     fn test_empty_config() {
         let config = SecurityConfig::empty();
-        assert!(config.ignore_patterns.is_empty());
-        assert!(config.ignore_paths.is_empty());
+        assert_eq!(config.ignore_patterns, Vec::<String>::new());
+        assert_eq!(config.ignore_paths, Vec::<String>::new());
     }
 
     #[test]
@@ -255,7 +255,7 @@ mod tests {
     fn test_with_defaults_deprecated() {
         // with_defaults is deprecated but should still work
         let config = SecurityConfig::with_defaults();
-        assert!(config.ignore_patterns.is_empty());
+        assert_eq!(config.ignore_patterns, Vec::<String>::new());
         assert_eq!(config.ignore_paths.len(), 13);
     }
 
@@ -405,7 +405,7 @@ mod tests {
         let path = PathBuf::from("/nonexistent/path/security.toml");
         let config = SecurityConfig::load_from_path(&path).expect("load default");
         // When file doesn't exist, should return sensible defaults
-        assert!(config.ignore_patterns.is_empty());
+        assert_eq!(config.ignore_patterns, Vec::<String>::new());
         assert_eq!(config.ignore_paths.len(), 13);
     }
 
