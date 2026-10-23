@@ -2,6 +2,8 @@
 
 //! AI provider configuration.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// Default `OpenRouter` model identifier.
@@ -148,6 +150,23 @@ pub struct AiConfig {
     pub openrouter_data_collection: String,
     /// `OpenRouter` Zero Data Retention requirement (default: `true`).
     pub openrouter_zdr: bool,
+    /// Model context windows (tokens), keyed by model identifier.
+    ///
+    /// Overrides the built-in defaults for prompt budgeting. Models absent
+    /// from both this map and the built-in defaults resolve to `None`
+    /// (treated as unbounded), which preserves the historical behavior for
+    /// providers that advertise no window.
+    pub context_windows: Option<BTreeMap<String, u32>>,
+}
+
+/// Built-in context-window defaults for aptu's default models.
+///
+/// `mistralai/mistral-small-2603` = 262144 is verified against the live
+/// `OpenRouter` API. Default models without a verified window (e.g. the
+/// `Gemini` default) are deliberately absent: lookups degrade to `None`
+/// (unbounded) with a debug log rather than guessing a value.
+fn builtin_context_windows() -> BTreeMap<String, u32> {
+    BTreeMap::from([(DEFAULT_OPENROUTER_MODEL.to_string(), 262_144)])
 }
 
 impl Default for AiConfig {
@@ -168,11 +187,88 @@ impl Default for AiConfig {
             validation_enabled: true,
             openrouter_data_collection: "deny".to_string(),
             openrouter_zdr: true,
+            context_windows: None,
         }
     }
 }
 
+/// Fold a list of optional context windows into their minimum, conservatively
+/// excluding models with no window. Returns the minimum and the number of
+/// models that resolved (advertised a window).
+#[must_use]
+pub fn fold_context_windows(windows: &[Option<u32>]) -> (Option<u32>, usize) {
+    let mut min_window: Option<u32> = None;
+    let mut resolved = 0;
+    for window in windows.iter().flatten() {
+        resolved += 1;
+        min_window = Some(min_window.map_or(*window, |cur| cur.min(*window)));
+    }
+    (min_window, resolved)
+}
+
 impl AiConfig {
+    /// Look up the context window (tokens) for `model`.
+    ///
+    /// Resolution order: user config (`context_windows`) -> built-in defaults
+    /// -> `None` (unbounded). Pure string lookup; no network access. A miss
+    /// for one of aptu's built-in default models logs a debug message so
+    /// mis-sized budgets are visible in trace output.
+    #[must_use]
+    pub fn context_window_for(&self, model: &str) -> Option<u32> {
+        if let Some(window) = self
+            .context_windows
+            .as_ref()
+            .and_then(|map| map.get(model).copied())
+        {
+            return Some(window);
+        }
+        if let Some(window) = builtin_context_windows().get(model).copied() {
+            return Some(window);
+        }
+        if model == DEFAULT_OPENROUTER_MODEL || model == DEFAULT_GEMINI_MODEL {
+            tracing::debug!(
+                model = model,
+                "Default model has no built-in context window; budget treated as unbounded"
+            );
+        }
+        None
+    }
+
+    /// Resolve the effective context window across the selected model and the
+    /// fallback chain.
+    ///
+    /// Semantics are intentionally conservative: a model with no configured
+    /// window is EXCLUDED from the minimum rather than constraining it (an
+    /// unknown model means unbounded, which matches the historical behavior
+    /// for providers that advertise no window). Only when no model at all
+    /// resolves does this degrade to `None` (unbounded), with a debug log.
+    #[must_use]
+    pub fn effective_context_window(&self, provider_name: &str, model_name: &str) -> Option<u32> {
+        let mut targets: Vec<(&str, &str)> = vec![(provider_name, model_name)];
+        if let Some(fallback) = &self.fallback {
+            for entry in &fallback.chain {
+                targets.push((
+                    entry.provider.as_str(),
+                    entry.model.as_deref().unwrap_or(self.model.as_str()),
+                ));
+            }
+        }
+
+        let windows: Vec<Option<u32>> = targets
+            .iter()
+            .map(|(_, model)| self.context_window_for(model))
+            .collect();
+        let (min_window, resolved) = fold_context_windows(&windows);
+        if resolved == 0 {
+            tracing::debug!(
+                provider = provider_name,
+                model = model_name,
+                "No configured context window for selected model or fallback chain; budget treated as unbounded"
+            );
+        }
+        min_window
+    }
+
     /// Resolve provider and model for a specific task type.
     ///
     /// Returns a tuple of (provider, model) by checking task-specific overrides first,
@@ -371,5 +467,88 @@ mod tests {
         assert_eq!(model, "small-verify");
         let (_, large_model) = config.resolve_for_task(TaskType::Verify, Some(10_000));
         assert_eq!(large_model, "large-verify");
+    }
+
+    #[test]
+    fn test_context_window_defaults_and_unknown_models() {
+        let config = AiConfig::default();
+
+        // Zero-config happy path: the verified OpenRouter default resolves.
+        assert_eq!(
+            config.context_window_for(DEFAULT_OPENROUTER_MODEL),
+            Some(262_144)
+        );
+
+        // Unknown strings and models whose window we could not verify
+        // (Gemini default, anthropic, zai) degrade to None -- identical to
+        // the historical behavior where those providers advertised no window.
+        assert_eq!(config.context_window_for("totally-unknown-model"), None);
+        assert_eq!(config.context_window_for(DEFAULT_GEMINI_MODEL), None);
+        assert_eq!(config.context_window_for("claude-sonnet-4"), None);
+        assert_eq!(config.context_window_for("glm-4.7"), None);
+    }
+
+    #[test]
+    fn test_context_window_user_config_overrides_builtin() {
+        let config = AiConfig {
+            context_windows: Some(BTreeMap::from([(
+                DEFAULT_OPENROUTER_MODEL.to_string(),
+                1_000,
+            )])),
+            ..AiConfig::default()
+        };
+        assert_eq!(
+            config.context_window_for(DEFAULT_OPENROUTER_MODEL),
+            Some(1_000)
+        );
+    }
+
+    #[test]
+    fn test_effective_context_window_takes_min_across_fallback_chain() {
+        let config = AiConfig {
+            fallback: Some(FallbackConfig {
+                chain: vec![FallbackEntry {
+                    provider: "openrouter".to_string(),
+                    model: Some("tiny-model".to_string()),
+                }],
+            }),
+            context_windows: Some(BTreeMap::from([
+                ("big-model".to_string(), 200_000),
+                ("tiny-model".to_string(), 8_000),
+                ("missing-window".to_string(), 4_000),
+            ])),
+            ..AiConfig::default()
+        };
+
+        // Min across the chain; a fallback with no configured window
+        // ("unset-window") is excluded from the minimum, not a constraint.
+        assert_eq!(
+            config.effective_context_window("openrouter", "big-model"),
+            Some(8_000)
+        );
+
+        // No model resolves -> unbounded (None). No fallback chain so only
+        // the selected model is considered (also proves anthropic models
+        // resolve None today, unchanged from the registry era).
+        let bare = AiConfig::default();
+        assert_eq!(
+            bare.effective_context_window("anthropic", "claude-unknown"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_fold_context_windows_excludes_unresolved_and_takes_min() {
+        let windows = [Some(200_000), None, Some(8_000)];
+
+        // Unresolved (None) entries are excluded; min is over resolved only.
+        let (min_window, resolved) = fold_context_windows(&windows);
+        assert_eq!(resolved, 2, "unresolved entries must not count as resolved");
+        assert_eq!(min_window, Some(8_000), "min must be over resolved windows");
+
+        // No model resolves -> no minimum (degrades to unbounded upstream).
+        let (none_min, none_resolved) = fold_context_windows(&[None, None]);
+        assert_eq!(none_resolved, 0);
+        assert_eq!(none_min, None);
     }
 }

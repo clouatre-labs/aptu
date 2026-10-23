@@ -192,103 +192,17 @@ fn reconstruct_diff_from_pr(files: &[crate::ai::types::PrFile]) -> String {
 
 /// Resolves the minimum context window (in tokens) across the selected model
 /// and any configured fallback models, so the prompt budget respects the
-/// smallest window the request could target.
-///
-/// Semantics are intentionally conservative: a model whose registry lookup
-/// fails (provider registry unreachable, or model absent from the listing) is
-/// EXCLUDED from the minimum rather than silently continuing with the known
-/// windows. Only when no model at all resolves (selected plus every fallback)
-/// does this degrade to `None` (treated as unbounded), with a debug log. A
-/// model that resolves but advertises no `context_window` is also treated as
-/// unbounded and does not constrain the minimum.
-/// Folds the context windows of `models` resolved from the registry listing
-/// `listed` into `min_window` (conservatively excluding models that are absent
-/// from the listing). Returns the updated minimum and the number of models
-/// that resolved.
+/// Resolves the effective context window for the selected model and its
+/// fallback chain from config-declared windows (user config layered over
+/// built-in defaults). Pure string lookup; see
+/// [`AiConfig::effective_context_window`] for the conservative fold semantics.
 #[cfg(not(target_arch = "wasm32"))]
-fn fold_model_windows(
-    listed: &[crate::ai::registry::CachedModel],
-    prov: &str,
-    models: &[&str],
-    mut min_window: Option<u32>,
-) -> (Option<u32>, usize) {
-    let mut resolved = 0;
-    for model in models {
-        // Conservative: a model that cannot be resolved in the registry is
-        // excluded from the minimum instead of silently continuing with the
-        // known windows.
-        match listed.iter().find(|m| m.id == *model) {
-            Some(found) => {
-                resolved += 1;
-                if let Some(window) = found.context_window {
-                    min_window = Some(min_window.map_or(window, |cur| cur.min(window)));
-                }
-            }
-            None => {
-                debug!(
-                    provider = prov,
-                    model = model,
-                    "Model not found in registry; excluded from context-window cap"
-                );
-            }
-        }
-    }
-    (min_window, resolved)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn resolve_context_window(
-    provider: &dyn TokenProvider,
+fn resolve_context_window(
     ai_config: &AiConfig,
     provider_name: &str,
     model_name: &str,
 ) -> Option<u32> {
-    use crate::ai::registry::{CachedModelRegistry, ModelRegistry};
-    use std::collections::BTreeMap;
-
-    let registry = CachedModelRegistry::new(
-        crate::cache::cache_dir(),
-        crate::cache::DEFAULT_MODEL_TTL_SECS,
-        provider,
-    );
-
-    // Collect (provider -> models) pairs: selected model plus the fallback chain.
-    let mut targets: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    targets.entry(provider_name).or_default().push(model_name);
-    if let Some(fallback) = &ai_config.fallback {
-        for entry in &fallback.chain {
-            targets
-                .entry(entry.provider.as_str())
-                .or_default()
-                .push(entry.model.as_deref().unwrap_or(ai_config.model.as_str()));
-        }
-    }
-
-    let mut min_window: Option<u32> = None;
-    let mut resolved_any = false;
-    for (prov, models) in targets {
-        match registry.list_models(prov).await {
-            Ok(listed) => {
-                let (folded, resolved) = fold_model_windows(&listed, prov, &models, min_window);
-                min_window = folded;
-                resolved_any = resolved_any || resolved > 0;
-            }
-            Err(e) => {
-                debug!(
-                    provider = prov,
-                    error = %e,
-                    "Model registry unavailable; provider models excluded from context-window cap"
-                );
-            }
-        }
-    }
-    if !resolved_any {
-        debug!(
-            "No models resolved from registry (selected plus fallbacks); context window treated as unbounded"
-        );
-        return None;
-    }
-    min_window
+    ai_config.effective_context_window(provider_name, model_name)
 }
 
 /// Computes a pre-context routing size estimate: the user-prompt content plus
@@ -471,8 +385,7 @@ pub async fn analyze_pr(
     let routing_estimate = routing_size_estimate(pr_details, instructions_overhead);
     let (provider_name, model_name) =
         ai_config.resolve_for_task(TaskType::Review, Some(routing_estimate));
-    let context_window =
-        resolve_context_window(provider, ai_config, &provider_name, &model_name).await;
+    let context_window = resolve_context_window(ai_config, &provider_name, &model_name);
 
     // Build review context with all enrichment decisions centralized
     let ctx = crate::ai::review_context::build_review_context(
@@ -706,37 +619,6 @@ mod tests {
             5_000,
             "instructions overhead must be included additively in the routing estimate"
         );
-    }
-
-    /// Verifies the conservative fallback fold: models absent from the registry
-    /// listing are excluded, the minimum is taken over resolved windows, and
-    /// when nothing resolves there is no minimum (degrades to unbounded).
-    #[test]
-    fn test_fold_model_windows_excludes_unresolved_and_takes_min() {
-        use crate::ai::registry::CachedModel;
-        let make_model = |id: &str, window: u32| CachedModel {
-            id: id.to_string(),
-            name: None,
-            is_free: None,
-            context_window: Some(window),
-            provider: "openrouter".to_string(),
-            capabilities: vec![],
-            pricing: None,
-        };
-        let listed = [make_model("small", 200_000), make_model("tiny", 8_000)];
-
-        // "missing" is not in the listing, so it must be excluded; the min is
-        // taken over the resolved windows only.
-        let (min_window, resolved) =
-            fold_model_windows(&listed, "openrouter", &["small", "missing", "tiny"], None);
-        assert_eq!(resolved, 2, "unresolved models must not count as resolved");
-        assert_eq!(min_window, Some(8_000), "min must be over resolved windows");
-
-        // No model resolves -> no minimum (degrades to unbounded upstream).
-        let (none_min, none_resolved) =
-            fold_model_windows(&listed, "openrouter", &["missing"], None);
-        assert_eq!(none_resolved, 0);
-        assert_eq!(none_min, None);
     }
 
     /// Minimal `ReviewContext` wrapping `make_pr` for re-trim helper tests.

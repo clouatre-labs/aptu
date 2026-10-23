@@ -189,6 +189,7 @@ mod tests {
             validation_enabled: false,
             openrouter_data_collection: "deny".to_string(),
             openrouter_zdr: true,
+            context_windows: None,
         };
 
         let provider = MockProvider;

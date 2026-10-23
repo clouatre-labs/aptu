@@ -107,13 +107,6 @@ pub enum AptuError {
         actual: ResourceType,
     },
 
-    /// Model registry error (runtime model validation).
-    #[error("Model registry error: {message}")]
-    ModelRegistry {
-        /// Error message.
-        message: String,
-    },
-
     /// Model validation error - invalid model ID with suggestions.
     #[error("Invalid model ID: {model_id}. Did you mean one of these?\n{suggestions}")]
     ModelValidation {
