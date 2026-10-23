@@ -465,7 +465,7 @@ impl AiProvider for AiClient {
 fn validate_provider_model(provider: &str, model: &str) -> crate::Result<()> {
     // Simple static validation: check if provider exists
     if crate::ai::registry::get_provider(provider).is_none() {
-        return Err(AptuError::ModelRegistry {
+        return Err(AptuError::Config {
             message: format!("Provider not found: {provider}"),
         });
     }
@@ -756,6 +756,7 @@ mod tests {
             validation_enabled: true,
             openrouter_data_collection: "deny".to_string(),
             openrouter_zdr: true,
+            context_windows: None,
         }
     }
 
