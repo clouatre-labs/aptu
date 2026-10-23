@@ -102,8 +102,8 @@ inputs:
   max-prompt-chars:
     description: >
       Total prompt character budget for PR review. When the assembled prompt exceeds
-      this limit, sections are dropped in order: call graph, AST, full file content,
-      diff hunks. System prompt and PR metadata are never dropped.
+      this limit, sections are dropped in order: full file content, then diff
+      hunks. System prompt and PR metadata are never dropped.
       Maps to [review] max_prompt_chars in config.toml.
     required: false
     default: '120000'

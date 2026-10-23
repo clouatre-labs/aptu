@@ -37,7 +37,6 @@ aptu-core = "*"
 | Feature | Description |
 |---------|-------------|
 | `keyring` | Secure token storage using system keyring (macOS Keychain, Linux Secret Service, Windows Credential Manager) |
-| `ast-context` | AST and call-graph context injection for PR reviews (Rust, Go, Python, TypeScript, JS, C/C++, C#, Java, Fortran) |
 
 To enable optional features:
 

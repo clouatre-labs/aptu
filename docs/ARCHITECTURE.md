@@ -34,7 +34,7 @@ External APIs (GitHub, AI Provider)
 Format & Display Output
 ```
 
-A typical aptu invocation proceeds as follows: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a review prompt with AST and call-graph context (both opt-in via `review.ast_context`, disabled by default); the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
+A typical aptu invocation proceeds as follows: the CLI parses the command and fetches PR or issue data from the GitHub API (Octocrab); the core library assembles a review prompt (enrichments are budget-dropped largest-first when the prompt exceeds `review.max_prompt_chars`); the AI provider returns a structured JSON response; the CLI writes labels or review comments back to GitHub and optionally appends token metrics to a JSONL file.
 
 The GitHub App path: a Cloudflare Worker receives webhook events, validates HMAC signatures, reads `.github/aptu.yml` from the repository, and dispatches `repository_dispatch` events to a central workflow. The central workflow runs the same `aptu-core` triage, review, and scan logic as the CLI, posting results as the `aptu[bot]` GitHub App user.
 

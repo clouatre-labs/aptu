@@ -24,7 +24,7 @@ Rust 2024 + Tokio + Clap (derive) + Octocrab + multi-provider AI (OpenAI-compati
 ```bash
 cargo build
 cargo nextest run --workspace --locked --no-fail-fast
-cargo nextest run -p aptu-core --locked --no-fail-fast --features ast-context
+cargo nextest run -p aptu-core --locked --no-fail-fast
 cargo clippy -- -W clippy::cognitive_complexity
 cargo fmt --check
 cargo deny check advisories licenses
@@ -52,9 +52,8 @@ Cargo profiles in workspace `Cargo.toml`: `release` (size-optimized, LTO, strip)
 
 ### GitHub Integration
 
-- PR review injects AST + call-graph context from GitHub Contents API; multi-language (Rust, Go, Python, TS, JS, C/C++, C#, Java, Fortran)
 - Model-tier routing selects `small_model` or `large_model` based on estimated prompt size
-- Review context budgets in `[review]` (`ReviewConfig`): `max_diff_chars` 200k, `max_patch_chars_per_file` 25k; patches exceeding the per-file limit are dropped; `ReviewConfig::validate_consistency()` warns on misconfigured `min_budget_for_call_graph`; runs at `AppConfig` load time
+- Review context budgets in `[review]` (`ReviewConfig`): `max_diff_chars` 200k, `max_patch_chars_per_file` 25k; patches exceeding the per-file limit are dropped; `ReviewConfig::validate_consistency()` warns when `max_diff_chars` exceeds `max_prompt_chars`; runs at `AppConfig` load time
 - Inline comment dedup keys on `(path, line, side)`; `line=None` comments excluded from map; unchanged body skipped; changed body PATCH-updated in place
 - GitHub OAuth device flow; credentials stored in OS keyring; no `GITHUB_TOKEN` env var needed
 

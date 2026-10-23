@@ -259,26 +259,12 @@ max_chars_per_file = 32000         # Max chars of full file content per file (de
 max_diff_chars = 200000            # Max total diff characters across all files in the prompt (default: 200 000)
 max_patch_chars_per_file = 25000   # Max chars per individual file patch; patches exceeding this are dropped entirely (default: 25 000)
 max_instructions_chars = 1500      # Max chars of instructions file content included in review prompt (default: 1 500)
-min_budget_for_call_graph = 20000  # Prompt chars remaining threshold below which call graph enrichment is skipped; set to 0 to always include call graph when repo-path is available (default: 20 000)
-ast_context = false                # Opt-in AST context and call-graph enrichment (default: false)
 verify_enabled = true              # AI verification pass on candidate findings before posting (default: true)
 min_confidence = 0.7               # Minimum verified confidence (0.0-1.0) to keep a finding (default: 0.7)
 suppress_info = true               # Suppress info-severity findings from the posted review (default: true)
 ```
 
-AST context and call-graph enrichment are opt-in: set `ast_context = true` to inject
-function signatures and call-graph context into the review prompt (a repository path
-must be available via `--repo-path`, CWD inference, or the GitHub Action `repo-path` input).
-When `ast_context = false` (the default), both sections are omitted regardless of budget.
-
-The call graph is enabled only when `ast_context = true` and `budget_remaining > min_budget_for_call_graph`, where
-`budget_remaining = max_prompt_chars - estimated_size` (estimated size excludes the call graph itself).
-Setting `min_budget_for_call_graph >= max_prompt_chars` disables call graph enrichment entirely.
-Setting it above half of `max_prompt_chars` means call graph will only be built for the largest diffs.
-The prefix section "When the assembled prompt exceeds..." describes how call graph is the first section dropped,
-so a value that rarely enables call graph is typically acceptable.
-
-When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: call-graph context, AST context, full file content (largest first), diff patches (largest first). The system prompt and PR metadata are never dropped.
+When the assembled prompt exceeds `max_prompt_chars`, sections are dropped in this order: full file content (largest first), diff patches (largest first). The system prompt and PR metadata are never dropped.
 
 ## Cache Configuration
 

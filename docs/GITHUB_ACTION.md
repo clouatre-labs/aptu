@@ -176,7 +176,7 @@ Each appended line contains only the following counters plus `run_id` and `times
 Sample appended line:
 
 ```json
-{"reviews_total":3,"truncation_events_total":2,"files_truncated_total":3,"budget_drop_reason_counts":{"call_graph":2},"finish_reasons_counts":{"stop":3},"model_tier_counts":{"gpt-4":3},"prompt_budget_pct_histogram":{"explicit_bounds":[25,50,75,90],"bucket_counts":[0,0,2,0,1]},"run_id":"123456","timestamp":"2026-01-01T00:00:00Z"}
+{"reviews_total":3,"truncation_events_total":2,"files_truncated_total":3,"budget_drop_reason_counts":{"file_content:src/foo.ts":2},"finish_reasons_counts":{"stop":3},"model_tier_counts":{"gpt-4":3},"prompt_budget_pct_histogram":{"explicit_bounds":[25,50,75,90],"bucket_counts":[0,0,2,0,1]},"run_id":"123456","timestamp":"2026-01-01T00:00:00Z"}
 ```
 
 
