@@ -208,11 +208,29 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        ACTION_REF: ${{ github.action_ref }}
       run: |
-        echo "::group::Resolving latest aptu v0.x release"
-        APTU_VERSION=$(gh api repos/clouatre-labs/aptu/releases \
-          --jq '[.[] | select(.tag_name | startswith("v0."))] | first | .tag_name' \
-          | sed 's/^v//')
+        set -euo pipefail
+        # Invariant: for SHA-pinned consumers, the aptu binary must come from the
+        # same release as the action scripts, or subcommand drift (e.g. v0.14.1
+        # removing `aptu pr label`) breaks pinned consumers silently.
+        APTU_VERSION=""
+        if [[ "$ACTION_REF" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::group::Resolving aptu version from action ref"
+          # /repos/.../tags returns peeled commit SHAs (unlike /git/refs).
+          APTU_VERSION=$(gh api "repos/clouatre-labs/aptu/tags?per_page=100" \
+            --jq '.[] | select(.commit.sha==env.ACTION_REF) | .name' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 \
+            | sed 's/^v//' || true)
+          echo "::endgroup::"
+        fi
+        if [[ -z "$APTU_VERSION" ]]; then
+          echo "::group::Resolving latest aptu v0.x release"
+          APTU_VERSION=$(gh api repos/clouatre-labs/aptu/releases \
+            --jq '[.[] | select(.tag_name | startswith("v0."))] | first | .tag_name' \
+            | sed 's/^v//')
+          echo "::endgroup::"
+        fi
         if [[ -z "$APTU_VERSION" ]]; then
           echo "::error::Could not resolve latest aptu v0.x release"
           exit 1
