@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "aptu-cli"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "aptu-core",
@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "aptu-core"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "apple-native-keyring-store",
