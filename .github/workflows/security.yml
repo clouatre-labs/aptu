@@ -36,12 +36,12 @@ jobs:
       # requires a GITLEAKS_LICENSE org secret for GitHub Organisation repos (free tier
       # available but requires registration). TruffleHog has no per-org licensing gate.
       - name: Scan for committed secrets
-        uses: trufflesecurity/trufflehog@c85580b712841eda4c53bc28fc6ace6100e8c16c # v3.99.4
+        uses: trufflesecurity/trufflehog@31ce31ee1abbcc7dc8eee5764c17121c3044c8b2 # v3.99.7
         with:
           extra_args: --only-verified
       - name: Audit GitHub Actions workflows
         if: always() && steps.filter.outputs.workflows == 'true'
-        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
         with:
           min-severity: medium
           advanced-security: true
