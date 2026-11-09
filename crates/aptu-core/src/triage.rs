@@ -595,7 +595,7 @@ pub fn render_pr_review_review_body(
     files: &[PrFile],
     head_sha: &str,
 ) -> String {
-    let verdict_badge = verdict_badge(&review.verdict);
+    let verdict_badge = verdict_badge(&review.verdict, &review.comments);
     // Extended marker carries the diff hash so re-runs can skip posting when
     // only the head SHA changed but the diff is unchanged (force-push revert).
     let hash = diff_hash(files);
@@ -628,11 +628,34 @@ fn render_structured_sections(body: &mut String, review: &PrReviewResponse) {
     }
 }
 
-fn verdict_badge(verdict: &str) -> &'static str {
-    match verdict {
-        "approve" => "✅ Approved",
-        "request_changes" | "request-changes" => "❌ Request Changes",
-        _ => "💬 Comments",
+/// Pure blocking decision: a review blocks when the verdict is
+/// `request_changes`, or when an `approve` verdict carries any issue-severity
+/// finding. Shared by the verdict badge and the posted review event so the
+/// two can never disagree.
+#[must_use]
+pub fn is_blocking_review(verdict: &str, comments: &[PrReviewComment]) -> bool {
+    let has_critical = comments
+        .iter()
+        .any(|c| c.severity == CommentSeverity::Issue);
+    matches!(verdict, "request_changes" | "request-changes")
+        || (verdict == "approve" && has_critical)
+}
+
+/// Verdict badge table: blocking reviews get a blocking badge, non-blocking
+/// `approve` verdicts get "Approved with comments", everything else gets the
+/// generic comments badge.
+fn verdict_badge(verdict: &str, comments: &[PrReviewComment]) -> &'static str {
+    if is_blocking_review(verdict, comments) {
+        if matches!(verdict, "request_changes" | "request-changes") {
+            "❌ Request Changes"
+        } else {
+            "🚫 Blocking"
+        }
+    } else {
+        match verdict {
+            "approve" => "✅ Approved with comments",
+            _ => "💬 Comments",
+        }
     }
 }
 
@@ -873,6 +896,18 @@ mod tests {
         }
     }
 
+    /// Candidate comment with the given severity.
+    fn make_comment(severity: CommentSeverity) -> PrReviewComment {
+        PrReviewComment {
+            file: "a.rs".to_string(),
+            line: Some(1),
+            comment: "finding".to_string(),
+            severity,
+            confidence: 0.9,
+            suggested_code: None,
+        }
+    }
+
     #[test]
     #[allow(deprecated)]
     fn test_render_pr_review_markdown_deprecated_alias_matches_review_body() {
@@ -955,6 +990,64 @@ mod tests {
         assert!(render_pr_review_review_body(&r, &[], "s").contains("❌ Request Changes"));
         r.verdict = "comment".to_string();
         assert!(render_pr_review_review_body(&r, &[], "s").contains("💬 Comments"));
+    }
+
+    #[test]
+    fn test_verdict_badge_table() {
+        // Table: (verdict, findings) -> expected badge.
+        let cases: &[(&str, Vec<PrReviewComment>, &str)] = &[
+            // request_changes verdict + findings -> Changes Requested
+            (
+                "request_changes",
+                vec![make_comment(CommentSeverity::Issue)],
+                "❌ Request Changes",
+            ),
+            // approve + critical finding -> Blocking
+            (
+                "approve",
+                vec![make_comment(CommentSeverity::Issue)],
+                "🚫 Blocking",
+            ),
+            // approve + low (non-critical) findings -> Approved with comments
+            (
+                "approve",
+                vec![make_comment(CommentSeverity::Suggestion)],
+                "✅ Approved with comments",
+            ),
+            // approve + no findings -> Approved with comments
+            ("approve", vec![], "✅ Approved with comments"),
+            // unknown verdict -> generic comments badge
+            ("unknown", vec![], "💬 Comments"),
+        ];
+        for (verdict, comments, expected) in cases {
+            assert_eq!(
+                verdict_badge(verdict, comments),
+                *expected,
+                "verdict {verdict:?} with {} finding(s)",
+                comments.len()
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_blocking_review() {
+        // request_changes verdict blocks regardless of findings
+        assert!(is_blocking_review("request_changes", &[]));
+        assert!(is_blocking_review("request-changes", &[]));
+        // approve + issue-severity finding blocks
+        assert!(is_blocking_review(
+            "approve",
+            &[make_comment(CommentSeverity::Issue)]
+        ));
+        // approve + low findings does not block
+        assert!(!is_blocking_review(
+            "approve",
+            &[make_comment(CommentSeverity::Suggestion)]
+        ));
+        // approve with no findings does not block
+        assert!(!is_blocking_review("approve", &[]));
+        // comment verdict does not block
+        assert!(!is_blocking_review("comment", &[]));
     }
 
     fn make_walkthrough_file(filename: &str, additions: u64, deletions: u64) -> PrFile {

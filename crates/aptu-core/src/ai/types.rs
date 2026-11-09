@@ -524,6 +524,9 @@ pub enum FindingVerdict {
     Keep,
     /// Finding could not be verified; drop it.
     Drop,
+    /// Finding is confirmed but more severe than originally reported; keep it
+    /// with its severity bumped one level.
+    Escalate,
 }
 
 /// Per-finding verification result from the verification pass.

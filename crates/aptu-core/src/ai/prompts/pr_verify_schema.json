@@ -2,7 +2,7 @@
   "findings": [
     {
       "index": 0,
-      "verdict": "keep|drop",
+      "verdict": "keep|drop|escalate",
       "confidence": 0.9
     }
   ]
