@@ -414,6 +414,12 @@ fn write_pr_files_section(prompt: &mut String, ctx: &mut ReviewContext) {
             "\n[{files_skipped} files omitted due to size limits (file count, patch size, or per-file content budget)]",
         );
     }
+
+    // Diff-only caveat: when no file carries full content (never fetched or
+    // dropped by the prompt budget), tell the model it sees diffs only.
+    if let Some(caveat) = crate::ai::review_context::diff_only_caveat(&ctx.pr.files) {
+        let _ = writeln!(prompt, "\n{caveat}");
+    }
 }
 
 /// Writes the `<existing_review_comments>` section into `prompt`, if any comments exist.
@@ -481,7 +487,9 @@ pub fn build_pr_review_user_prompt(ctx: &mut ReviewContext) -> String {
             "The following findings were already reported by a previous review of this PR:\n",
         );
         prompt.push_str(prior);
-        prompt.push_str("Do not repeat these findings; only report NEW issues in the changed range.\n</prior_findings>\n");
+        prompt.push_str(
+            "These findings carry forward from the previous review and are still open. Do not repeat them; only report NEW issues introduced in the changed range.\n</prior_findings>\n",
+        );
     }
 
     prompt
@@ -1652,5 +1660,81 @@ mod tests {
             "system prompt must stay within the 5000-char budget, got {}",
             prompt.len()
         );
+    }
+    #[test]
+    fn test_diff_only_caveat_present_when_no_full_content() {
+        // Arrange: files carry patches only; no full_content anywhere.
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 1,
+            patch: Some("+a".to_string()),
+            patch_truncated: false,
+            full_content: None,
+        }];
+        let mut ctx = super::super::review_context::ReviewContext {
+            pr: test_pr(1, files),
+            ..Default::default()
+        };
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: the diff-only caveat line appears in the prompt.
+        assert!(
+            prompt.contains(
+                "[APTU: only diffs are shown; full file contents are unavailable -- do not speculate on unchanged code]"
+            ),
+            "prompt without any full_content must carry the diff-only caveat"
+        );
+    }
+
+    #[test]
+    fn test_no_diff_only_caveat_when_full_content_present() {
+        // Arrange: at least one file carries full content.
+        let files = vec![PrFile {
+            filename: "src/lib.rs".to_string(),
+            status: "modified".to_string(),
+            additions: 1,
+            deletions: 1,
+            patch: Some("+a".to_string()),
+            patch_truncated: false,
+            full_content: Some("fn main() {}".to_string()),
+        }];
+        let mut ctx = super::super::review_context::ReviewContext {
+            pr: test_pr(1, files),
+            ..Default::default()
+        };
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: no caveat when full content is available.
+        assert!(
+            !prompt.contains("only diffs are shown"),
+            "prompt with full_content must not carry the diff-only caveat"
+        );
+    }
+
+    #[test]
+    fn test_prior_findings_carry_forward_phrasing() {
+        // Arrange: prior findings summary threaded into the context.
+        let mut ctx = super::super::review_context::ReviewContext {
+            pr: test_pr(1, vec![]),
+            prior_findings: Some("- src/lib.rs:15: Possible unwrap panic\n".to_string()),
+            ..Default::default()
+        };
+
+        // Act
+        let prompt = build_pr_review_user_prompt(&mut ctx);
+
+        // Assert: carry-forward phrasing present, prior finding listed.
+        assert!(
+            prompt.contains("carry forward"),
+            "prior_findings section must use carry-forward phrasing"
+        );
+        assert!(prompt.contains("<prior_findings>"));
+        assert!(prompt.contains("- src/lib.rs:15: Possible unwrap panic"));
     }
 }

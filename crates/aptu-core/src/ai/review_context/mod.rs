@@ -134,6 +134,8 @@ pub(crate) use budget::drop_full_content_by_size;
 #[allow(unused_imports)]
 pub(crate) use budget::drop_patches_by_size;
 #[allow(unused_imports)]
+pub(crate) use budget::{DIFF_ONLY_CAVEAT, diff_only_caveat};
+#[allow(unused_imports)]
 pub(crate) use budget::{PROMPT_OVERHEAD_CHARS, apply_budget_drops, estimate_pr_size};
 #[cfg(test)]
 mod tests {
