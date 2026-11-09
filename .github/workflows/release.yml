@@ -131,7 +131,7 @@ jobs:
       - name: Create GitHub release
         if: ${{ env.DRY_RUN != 'true' }}
         id: create_release
-        uses: taiki-e/create-gh-release-action@eba8ea96c86cca8a37f1b56e94b4d13301fba651 # v1
+        uses: taiki-e/create-gh-release-action@045e5c0ed9c50cc1f96de7e891a09ad3daea245f # v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Draft until all assets are uploaded: GitHub immutable releases lock a
