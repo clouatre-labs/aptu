@@ -222,10 +222,11 @@ pub async fn verify_findings(
 ///
 /// Drops findings whose verdict is `drop` or whose confidence is below
 /// `min_confidence`; additionally drops info-severity findings when
-/// `suppress_info` is set. Verdicts are keyed by the model-provided explicit
-/// finding `index`, not by array position, so reordered or sparse responses
-/// cannot apply one verdict to a different comment. Fail closed: candidate
-/// findings with no matching verdict entry are dropped.
+/// `suppress_info` is set. Findings with an `escalate` verdict are kept with
+/// their severity bumped one level. Verdicts are keyed by the model-provided
+/// explicit finding `index`, not by array position, so reordered or sparse
+/// responses cannot apply one verdict to a different comment. Fail closed:
+/// candidate findings with no matching verdict entry are dropped.
 #[must_use]
 pub fn filter_verified_findings(
     comments: Vec<PrReviewComment>,
@@ -236,18 +237,36 @@ pub fn filter_verified_findings(
     comments
         .into_iter()
         .enumerate()
-        .filter(|(i, comment)| {
+        .filter_map(|(i, mut comment)| {
             if suppress_info && comment.severity == CommentSeverity::Info {
-                return false;
+                return None;
             }
-            match u32::try_from(*i) {
-                Ok(idx) => matches!(verdicts.iter().find(|v| v.index == idx), Some(v)
-                    if v.verdict == FindingVerdict::Keep && v.confidence >= min_confidence),
-                Err(_) => false,
+            let idx = u32::try_from(i).ok()?;
+            let v = verdicts.iter().find(|v| v.index == idx)?;
+            if v.confidence < min_confidence {
+                return None;
+            }
+            match v.verdict {
+                FindingVerdict::Keep => Some(comment),
+                FindingVerdict::Escalate => {
+                    comment.severity = escalate_severity(&comment.severity);
+                    Some(comment)
+                }
+                FindingVerdict::Drop => None,
             }
         })
-        .map(|(_, comment)| comment)
         .collect()
+}
+
+/// Bumps a severity one level: info to suggestion, suggestion to warning,
+/// warning to issue; issue is already the maximum and stays unchanged.
+#[must_use]
+pub fn escalate_severity(severity: &CommentSeverity) -> CommentSeverity {
+    match severity {
+        CommentSeverity::Info => CommentSeverity::Suggestion,
+        CommentSeverity::Suggestion => CommentSeverity::Warning,
+        CommentSeverity::Warning | CommentSeverity::Issue => CommentSeverity::Issue,
+    }
 }
 
 /// Drops info-severity findings from the candidate comments.
@@ -313,6 +332,64 @@ mod tests {
             1,
             "drop verdict and below-threshold confidence must be filtered out"
         );
+    }
+
+    #[test]
+    fn test_filter_verified_findings_escalates_kept_with_severity_bump() {
+        // Arrange: a confirmed finding reported at suggestion severity gets
+        // kept with its severity bumped one level.
+        let comments = vec![make_comment(CommentSeverity::Suggestion)];
+        let verdicts = vec![verdict(0, FindingVerdict::Escalate, 0.9)];
+
+        // Act
+        let kept = filter_verified_findings(comments, &verdicts, 0.7, false);
+
+        // Assert
+        assert_eq!(kept.len(), 1, "escalated finding must be kept");
+        assert_eq!(
+            kept[0].severity,
+            CommentSeverity::Warning,
+            "escalated finding severity must be bumped one level"
+        );
+    }
+
+    #[test]
+    fn test_filter_verified_findings_drops_refuted_and_missing() {
+        // Arrange: three candidates; verdicts refute index 1 and omit index 2.
+        let comments = vec![
+            make_comment(CommentSeverity::Warning),
+            make_comment(CommentSeverity::Warning),
+            make_comment(CommentSeverity::Warning),
+        ];
+        let verdicts = vec![
+            verdict(0, FindingVerdict::Keep, 0.9),
+            verdict(1, FindingVerdict::Drop, 0.9),
+        ];
+
+        // Act
+        let kept = filter_verified_findings(comments, &verdicts, 0.7, false);
+
+        // Assert: refuted (drop) and missing (no verdict entry) are dropped.
+        assert_eq!(kept.len(), 1, "refuted and missing must be dropped");
+        assert_eq!(kept[0].severity, CommentSeverity::Warning);
+    }
+
+    #[test]
+    fn test_escalate_severity_mapping() {
+        use CommentSeverity::{Info, Issue, Suggestion, Warning};
+        let cases = [
+            (Info, Suggestion),
+            (Suggestion, Warning),
+            (Warning, Issue),
+            (Issue, Issue),
+        ];
+        for (from, to) in cases {
+            assert_eq!(
+                escalate_severity(&from),
+                to,
+                "{from:?} must escalate to {to:?}"
+            );
+        }
     }
 
     #[test]

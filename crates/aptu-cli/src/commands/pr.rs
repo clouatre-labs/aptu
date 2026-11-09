@@ -209,6 +209,30 @@ pub async fn post(
     Ok(())
 }
 
+/// Flag-less default review event derived from the review verdict so the
+/// verdict is consequential: blocking reviews request changes, plain approvals
+/// approve, everything else posts as a comment.
+#[must_use]
+pub fn default_review_event(review: &PrReviewResponse) -> aptu_core::ReviewEvent {
+    if aptu_core::is_blocking_review(&review.verdict, &review.comments) {
+        aptu_core::ReviewEvent::RequestChanges
+    } else if review.verdict == "approve" {
+        aptu_core::ReviewEvent::Approve
+    } else {
+        aptu_core::ReviewEvent::Comment
+    }
+}
+
+/// Resolves the review event: an explicit CLI flag always wins; the flag-less
+/// default derives the event from the review verdict.
+#[must_use]
+pub fn resolve_review_event(
+    explicit: Option<aptu_core::ReviewEvent>,
+    review: &PrReviewResponse,
+) -> aptu_core::ReviewEvent {
+    explicit.unwrap_or_else(|| default_review_event(review))
+}
+
 /// Run the PR review command.
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::fn_params_excessive_bools)]
@@ -353,5 +377,68 @@ mod tests {
         };
         let header = format_comment_header(&comment);
         assert_eq!(header, "src/lib.rs  [INFO]");
+    }
+
+    /// Review response with the given verdict and comments.
+    fn make_review(verdict: &str, comments: Vec<PrReviewComment>) -> PrReviewResponse {
+        PrReviewResponse {
+            summary: "s".to_string(),
+            verdict: verdict.to_string(),
+            strengths: vec![],
+            concerns: vec![],
+            comments,
+            suggestions: vec![],
+            disclaimer: None,
+        }
+    }
+
+    /// Candidate comment with the given severity.
+    fn make_comment(severity: CommentSeverity) -> PrReviewComment {
+        PrReviewComment {
+            file: "a.rs".to_string(),
+            line: Some(1),
+            comment: "finding".to_string(),
+            severity,
+            suggested_code: None,
+            confidence: 0.9,
+        }
+    }
+
+    #[test]
+    fn test_event_selection_flagless_request_changes_verdict() {
+        // Flag-less + request_changes verdict -> RequestChanges event.
+        let review = make_review(
+            "request_changes",
+            vec![make_comment(CommentSeverity::Issue)],
+        );
+        assert_eq!(
+            default_review_event(&review),
+            aptu_core::ReviewEvent::RequestChanges
+        );
+    }
+
+    #[test]
+    fn test_event_selection_explicit_approve_overrides() {
+        // Explicit --approve flag wins over the flag-less verdict-derived
+        // default, even when the verdict would map elsewhere.
+        let review = make_review(
+            "request_changes",
+            vec![make_comment(CommentSeverity::Issue)],
+        );
+        assert_eq!(
+            resolve_review_event(Some(aptu_core::ReviewEvent::Approve), &review),
+            aptu_core::ReviewEvent::Approve
+        );
+    }
+
+    #[test]
+    fn test_event_selection_flagless_approve_low_findings() {
+        // Flag-less + approve verdict with low (non-critical) findings ->
+        // Approve event.
+        let review = make_review("approve", vec![make_comment(CommentSeverity::Suggestion)]);
+        assert_eq!(
+            default_review_event(&review),
+            aptu_core::ReviewEvent::Approve
+        );
     }
 }

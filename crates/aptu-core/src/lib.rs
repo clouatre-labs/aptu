@@ -73,8 +73,9 @@ pub use ai::types::CreditsStatus;
 #[allow(deprecated)]
 pub use triage::{
     APTU_SIGNATURE, AptuSummaryMarker, REVIEW_SUMMARY_MARKER_PREFIX, TriageStatus,
-    check_already_triaged, diff_hash, parse_aptu_summary_marker, render_pr_review_comment_body,
-    render_pr_review_markdown, render_pr_review_review_body, render_triage_markdown,
+    check_already_triaged, diff_hash, is_blocking_review, parse_aptu_summary_marker,
+    render_pr_review_comment_body, render_pr_review_markdown, render_pr_review_review_body,
+    render_triage_markdown,
 };
 
 // ============================================================================

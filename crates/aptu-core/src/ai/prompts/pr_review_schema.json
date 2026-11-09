@@ -1,6 +1,6 @@
 {
   "summary": "",
-  "verdict": "approve|request_changes|comment",
+  "verdict": "approve|request_changes|comment (use request_changes when any comment severity is issue)",
   "strengths": ["strength1", "strength2"],
   "concerns": ["concern1", "concern2"],
   "comments": [

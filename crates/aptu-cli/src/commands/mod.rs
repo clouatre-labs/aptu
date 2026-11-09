@@ -462,24 +462,28 @@ async fn review_single_pr(
         ai_stats: ai_stats.clone(),
     };
 
-    // Handle posting if review type specified and --no-comment not set
-    if let Some(event) = review_type {
-        if !opts.no_comment {
-            pr::post(
-                &analyze_result,
-                reference,
-                repo_context,
-                event,
-                opts.dry_run,
-                opts.yes,
-                ctx.is_verbose(),
-                opts.no_dedup_summary,
-            )
-            .await?;
-        }
+    // Resolve the review event: an explicit CLI flag always wins; the
+    // flag-less default derives the event from the review verdict so the
+    // verdict is consequential (#1802).
+    let event = pr::resolve_review_event(review_type, &review);
+
+    // Handle posting unless --no-comment is set
+    if !opts.no_comment {
+        pr::post(
+            &analyze_result,
+            reference,
+            repo_context,
+            event,
+            opts.dry_run,
+            opts.yes,
+            ctx.is_verbose(),
+            opts.no_dedup_summary,
+        )
+        .await?;
     } else if !opts.dry_run && matches!(ctx.format, OutputFormat::Text) {
         eprintln!(
-            "hint: run with --comment, --approve, or --request-changes to post this review to GitHub."
+            "hint: posting skipped (--no-comment); review verdict was {}.",
+            review.verdict
         );
     }
 

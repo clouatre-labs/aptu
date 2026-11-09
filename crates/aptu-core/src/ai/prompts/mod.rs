@@ -63,6 +63,10 @@ pub fn build_verify_findings_system_prompt() -> String {
     format!(
         "You are an adversarial code reviewer. Your mission is to verify candidate review \
          findings against the actual diff and drop any finding you cannot confirm.\n\n\
+         Verdicts: `keep` a finding the diff confirms; `drop` a finding the diff refutes \
+         or gives no basis for; `escalate` a confirmed finding whose real-world impact is \
+         more severe than reported (severity is raised one level: info to suggestion, \
+         suggestion to warning, warning to issue). Escalate only with evidence from the diff.\n\n\
          {SCHEMA_PREAMBLE}{PR_VERIFY_SCHEMA}"
     )
 }
