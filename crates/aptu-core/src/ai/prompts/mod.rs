@@ -1605,4 +1605,48 @@ mod tests {
             "patch_truncated=false filename must not be recorded"
         );
     }
+
+    /// Regression test for issue #1801: the hedging clause that instructed the
+    /// model to return an empty comments array when uncertain or multi-file
+    /// must be gone from the review guidelines.
+    #[test]
+    fn test_review_guidelines_hedging_clause_removed() {
+        assert!(
+            !PR_REVIEW_GUIDELINES.contains("empty comments array"),
+            "hedging clause must be removed from the review guidelines"
+        );
+        assert!(
+            !PR_REVIEW_GUIDELINES.contains("when uncertain or multi-file"),
+            "uncertainty/multi-file suppression language must be gone"
+        );
+    }
+
+    /// Regression test for issue #1801: the Correctness Checks section must
+    /// name all four defect families the audit identified.
+    #[test]
+    fn test_review_guidelines_correctness_checks_section_present() {
+        for family in [
+            "Arithmetic re-derivation",
+            "Schedule windows",
+            "Actions permissions and environment",
+            "Fail-open parsing",
+        ] {
+            assert!(
+                PR_REVIEW_GUIDELINES.contains(family),
+                "Correctness Checks section must cover family: {family}"
+            );
+        }
+    }
+
+    /// Regression test for issue #1801: the assembled PR review system prompt
+    /// must stay within the 5000-char budget even with the new section.
+    #[test]
+    fn test_pr_review_system_prompt_within_budget() {
+        let prompt = build_pr_review_system_prompt("");
+        assert!(
+            prompt.len() <= 5000,
+            "system prompt must stay within the 5000-char budget, got {}",
+            prompt.len()
+        );
+    }
 }
