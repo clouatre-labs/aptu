@@ -87,6 +87,25 @@ pub(crate) fn apply_budget_drops(
     );
 }
 
+/// Caveat appended to the review prompt when no file carries `full_content`,
+/// so the model knows it sees diffs only and must not speculate about code
+/// outside the changed hunks.
+pub(crate) const DIFF_ONLY_CAVEAT: &str = "[APTU: only diffs are shown; full file contents are unavailable -- do not speculate on unchanged code]";
+
+/// Returns the diff-only caveat when no file in `files` carries non-empty
+/// `full_content`, `None` otherwise. Pure so the prompt builder can decide
+/// whether to append the caveat line.
+pub(crate) fn diff_only_caveat(files: &[crate::ai::types::PrFile]) -> Option<&'static str> {
+    let has_full_content = files
+        .iter()
+        .any(|f| f.full_content.as_deref().is_some_and(|c| !c.is_empty()));
+    if has_full_content {
+        None
+    } else {
+        Some(DIFF_ONLY_CAVEAT)
+    }
+}
+
 /// Minimal chars kept for a budget-truncated patch. Guarantees the diff header
 /// plus at least one hunk slice survives truncation, so a patch is never
 /// emptied by the final-tier truncation path.

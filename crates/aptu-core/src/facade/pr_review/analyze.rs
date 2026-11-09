@@ -97,16 +97,30 @@ pub async fn fetch_pr_for_review(
             .await
             {
                 IncrementalFiles::Files(files) => {
-                    debug!(
-                        last_sha = %last_sha,
-                        head_sha = %pr.head_sha,
-                        count = files.len(),
-                        "Using incremental file set since last review"
-                    );
-                    pr.prior_findings = Some(crate::ai::review_context::prior_findings_summary(
-                        &pr.review_comments,
-                    ));
-                    pr.files = files;
+                    // Delta gate: only review the range diff when the prior
+                    // review actually reported findings. A zero-finding prior
+                    // review gives no signal that the earlier full review
+                    // covered the base, so the review falls back to the full
+                    // file set (the zero-finding detection is an approximation
+                    // spanning all APTU comments PR-wide).
+                    let summary =
+                        crate::ai::review_context::prior_findings_summary(&pr.review_comments);
+                    if delta_mode(Some(&summary)) {
+                        debug!(
+                            last_sha = %last_sha,
+                            head_sha = %pr.head_sha,
+                            count = files.len(),
+                            "Using incremental file set since last review"
+                        );
+                        pr.prior_findings = Some(summary);
+                        pr.files = files;
+                    } else {
+                        debug!(
+                            last_sha = %last_sha,
+                            head_sha = %pr.head_sha,
+                            "Prior review reported no findings; falling back to full review"
+                        );
+                    }
                 }
                 IncrementalFiles::Empty => {
                     debug!(
@@ -150,9 +164,16 @@ fn incremental_range<'a>(marker_sha: Option<&'a str>, head_sha: &str) -> Option<
     }
 }
 
+/// Decides whether delta (incremental) mode applies: only when the prior
+/// review's findings summary is non-empty. A zero-finding prior review falls
+/// back to the full file set.
+fn delta_mode(prior_findings: Option<&str>) -> bool {
+    prior_findings.is_some_and(|p| !p.is_empty())
+}
+
 #[cfg(test)]
 mod incremental_range_tests {
-    use super::incremental_range;
+    use super::{delta_mode, incremental_range};
 
     #[test]
     fn test_incremental_range_uses_marker_sha_when_different_from_head() {
@@ -167,6 +188,21 @@ mod incremental_range_tests {
         assert_eq!(incremental_range(Some(""), "def"), None);
         // Head SHA unchanged since the last review.
         assert_eq!(incremental_range(Some("def"), "def"), None);
+    }
+
+    #[test]
+    fn test_delta_mode_zero_finding_prior_uses_full_diff() {
+        // Arrange: prior review left no findings (empty summary) or none at all.
+        // Act / Assert: delta mode is off, so the full file set is used.
+        assert!(!delta_mode(Some("")));
+        assert!(!delta_mode(None));
+    }
+
+    #[test]
+    fn test_delta_mode_finding_bearing_prior_uses_delta() {
+        // Arrange: prior review reported at least one finding.
+        // Act / Assert: delta mode is on, so the range diff is used.
+        assert!(delta_mode(Some("- src/lib.rs:15: Possible unwrap panic\n")));
     }
 }
 
