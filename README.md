@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/aptu-cli.svg?style=flat-square&color=fc8d62&logo=rust)](https://crates.io/crates/aptu-cli) [![docs.rs](https://img.shields.io/badge/docs.rs-aptu--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs)](https://docs.rs/aptu-core) [![REUSE](https://img.shields.io/reuse/compliance/github.com/clouatre-labs/aptu?style=flat-square)](https://api.reuse.software/info/github.com/clouatre-labs/aptu) [![SLSA Level 3](https://img.shields.io/badge/SLSA-Level%203-green?style=flat-square)](https://slsa.dev) [![OpenSSF Best Practices](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fwww.bestpractices.dev%2Fprojects%2F11662.json&query=%24.badge_level&label=OpenSSF%20Best%20Practices&style=flat-square)](https://www.bestpractices.dev/projects/11662)
 
-Aptu is an AI SDLC review harness for GitHub (GitHub App, CLI, and GitHub Action) that assembles structured context before every AI call, so review quality does not depend on which surface you use.
+aptu is an AI SDLC review harness for coding agents on GitHub (GitHub App, CLI, and GitHub Action): it assembles structured context before every AI call, so review quality does not depend on which surface or agent harness you use.
 
 ## GitHub App
 
@@ -39,20 +39,12 @@ See [docs/GITHUB_APP.md](https://github.com/clouatre-labs/aptu/blob/main/docs/GI
 
 ## Features
 
-| Feature | App | CLI | Action |
-|---------|-----|-----|--------|
-| Config-as-code (`.github/aptu.yml`) | Yes | - | - |
-| AI Triage | Yes | Yes | Yes |
-| PR Analysis | Yes | Yes | Yes |
-| Multiple Providers | Yes | Yes | Yes |
-| Prompt Customization | Yes | Yes | Yes |
-| Observability | - | Yes | Yes |
-| Model-Tier Routing | - | Yes | Yes |
-| Multiple Outputs | - | Yes | - |
-| Claude OAuth | - | Yes | - |
-| Permission-Aware Triage/Review Writes | Yes | Yes | Yes |
+- **All surfaces** (App, CLI, Action): AI triage, PR analysis, multiple providers, prompt customization, permission-aware triage/review writes
+- **CLI and Action only**: observability, model-tier routing
+- **CLI only**: multiple outputs, Claude OAuth (via `~/.claude/credentials.json` written by the Claude desktop app; no API key required)
+- **App only**: config-as-code (`.github/aptu.yml`)
 
-CLI and Action support four providers: Anthropic, Gemini, OpenRouter (default), and Z.AI; the App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names). Claude OAuth authenticates via `~/.claude/credentials.json` (written by the Claude desktop app); no API key required.
+CLI and Action support four providers: Anthropic, Gemini, OpenRouter (default), and Z.AI; the App is limited to Anthropic, Gemini, and OpenRouter (BYOK: the dispatch handler maps `ai.provider` to one of three fixed repository-secret names).
 
 ## Architecture Benchmark
 
@@ -166,7 +158,7 @@ See [SECURITY.md](https://github.com/clouatre-labs/aptu/blob/main/SECURITY.md) f
 
 Aptu assembles structured context (security scanner output) before any AI call. A prompt-injection byte cap and local-only security scanning ensure no raw source code is sent to external services without explicit review. The GitHub App, CLI, and GitHub Action share a common `aptu-core` library; see [docs/ARCHITECTURE.md](https://github.com/clouatre-labs/aptu/blob/main/docs/ARCHITECTURE.md) for the full crate structure, data flow, and key dependencies.
 
-For the governance model behind Aptu's harness design, see [AI SDLC Governance: Three Layers for Engineering Leaders](https://clouatre.ca/posts/ai-sdlc-governance-stack/).
+For the governance model behind Aptu's harness design and further reading, see the author's [blog](https://clouatre.ca/blog/), starting with [AI SDLC Governance: Three Layers for Engineering Leaders](https://clouatre.ca/posts/ai-sdlc-governance-stack/).
 
 ## Roadmap
 
