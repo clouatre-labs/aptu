@@ -66,7 +66,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
-          toolchain: "1.99.1"
+          toolchain: "1.100.0"
           targets: ${{ inputs.target }}
       - name: Install cross-compilation tools
         if: ${{ inputs.cross }}
@@ -80,7 +80,7 @@ jobs:
           key: ${{ inputs.target }}
       - name: Install cargo-deb
         if: ${{ startsWith(inputs.target, 'x86_64-unknown-linux') || startsWith(inputs.target, 'aarch64-unknown-linux') }}
-        uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-deb
       - name: Build and upload aptu
