@@ -5,7 +5,6 @@
   <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img alt="REUSE" src="https://img.shields.io/reuse/compliance/github.com/clouatre-labs/aptu?style=for-the-badge" height="28"></a>
   <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://img.shields.io/badge/SLSA-Level%203-green.svg?style=for-the-badge" height="28"></a>
   <a href="https://www.bestpractices.dev/projects/11662"><img alt="OpenSSF Best Practices" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fwww.bestpractices.dev%2Fprojects%2F11662.json&query=%24.badge_level&label=OpenSSF%20Best%20Practices&style=for-the-badge" height="28"></a>
-  <a href="https://github.com/clouatre-labs/aptu/security/analyses"><img alt="OpenSSF Scorecard" src="https://api.securityscorecards.dev/badge/github.com/clouatre-labs/aptu?style=for-the-badge" height="28"></a>
 </p>
 
 <h1 align="center">Aptu</h1>
