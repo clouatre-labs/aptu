@@ -1,9 +1,10 @@
 <p align="center">
-  <a href="https://github.com/clouatre-labs/aptu/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/badge/CI-passing-brightgreen.svg?style=for-the-badge" height="20"></a>
-  <a href="https://github.com/clouatre-labs/aptu/actions/workflows/release.yml"><img alt="Release" src="https://img.shields.io/badge/Release-signed%20tags-blue.svg?style=for-the-badge" height="20"></a>
-  <a href="https://github.com/clouatre-labs/aptu/actions/workflows/scorecard.yml"><img alt="Scorecard" src="https://img.shields.io/badge/Scorecard-enabled-blue.svg?style=for-the-badge" height="20"></a>
-  <a href="https://github.com/clouatre-labs/aptu/actions/workflows/security-lint.yml"><img alt="Security" src="https://img.shields.io/badge/Security-linted-blue.svg?style=for-the-badge" height="20"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg?style=for-the-badge" height="20"></a>
+  <a href="https://crates.io/crates/aptu-cli"><img alt="crates.io" src="https://img.shields.io/crates/v/aptu-cli.svg?style=for-the-badge&logo=rust" height="28"></a>
+  <a href="https://docs.rs/aptu-core"><img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-aptu--core-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" height="28"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache--2.0-blue.svg?style=for-the-badge" height="28"></a>
+  <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu"><img alt="REUSE" src="https://img.shields.io/reuse/compliance/github.com/clouatre-labs/aptu?style=for-the-badge" height="28"></a>
+  <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://img.shields.io/badge/SLSA-Level%203-green.svg?style=for-the-badge" height="28"></a>
+  <a href="https://www.bestpractices.dev/projects/11662"><img alt="OpenSSF Best Practices" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fwww.bestpractices.dev%2Fprojects%2F11662.json&query=%24.badge_level&label=OpenSSF%20Best%20Practices&style=for-the-badge" height="28"></a>
 </p>
 
 <h1 align="center">Aptu</h1>
@@ -11,7 +12,7 @@
 aptu is an AI SDLC review harness for coding agents on GitHub (GitHub App, CLI, and GitHub Action): it assembles structured context before every AI call, so review quality does not depend on which surface or agent harness you use.
 
 <p align="center">
-  <img alt="Architecture diagram: the CLI, GitHub App webhook, and GitHub Action surfaces feed aptu-core, which fans out to the GitHub API, AI providers, and the system keychain, and posts triage and review output back to GitHub" src="docs/diagrams/architecture.svg" width="560">
+  <img alt="Architecture diagram: the CLI, GitHub App webhook, and GitHub Action surfaces feed aptu-core, which fans out to the GitHub API, AI providers, and the system keychain" src="docs/diagrams/architecture.svg" width="720">
 </p>
 
 *Figure 1: Entry surfaces converge on aptu-core, which fans out to GitHub, AI providers, and the keychain.*

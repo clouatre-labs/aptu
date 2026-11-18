@@ -1,12 +1,7 @@
-graph TD
+graph LR
     CLI[CLI] --> CORE[aptu-core]
     ACTION[Action] --> CORE
-    APP[App webhook] --> WORKER[Worker]
-    WORKER --> WF[Central workflow]
-    WF --> CORE
+    APP[App webhook] --> WF[Workflow] --> CORE
     CORE --> GITHUB[GitHub API]
     CORE --> AI[AI provider]
-    CORE --> KEYCHAIN[System keychain]
-    CORE --> TRIAGE[Triage]
-    CORE --> REVIEW[Review]
-    CORE --> SCAN[Scan]
+    CORE --> KEY[Keychain]
