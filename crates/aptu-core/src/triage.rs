@@ -110,8 +110,7 @@ fn render_complexity_markdown(output: &mut String, triage: &TriageResponse) {
     };
     let loc_str = c
         .estimated_loc
-        .map(|l| format!(" (~{l} LOC)"))
-        .unwrap_or_default();
+        .map_or_else(String::new, |l| format!(" (~{l} LOC)"));
     let _ = writeln!(output, "**Level:** {level_str}{loc_str}");
     if c.affected_areas.is_empty() {
         output.push('\n');

@@ -289,7 +289,10 @@ async fn fetch_pr_comments(
             }
             Some(crate::ai::types::PrReviewCommentDetails {
                 id: c.id.0,
-                author: c.user.as_ref().map(|u| u.login.clone()).unwrap_or_default(),
+                author: c
+                    .user
+                    .as_ref()
+                    .map_or_else(String::new, |u| u.login.clone()),
                 is_bot: c.user.as_ref().is_some_and(|u| u.r#type.as_str() == "Bot"),
                 body: c.body.clone(),
                 path: c.path,
@@ -386,8 +389,7 @@ pub async fn fetch_pr_details(
         url: pr
             .html_url
             .as_ref()
-            .map(std::string::ToString::to_string)
-            .unwrap_or_default(),
+            .map_or_else(String::new, std::string::ToString::to_string),
         labels,
         review_comments,
         instructions: None,
@@ -1303,11 +1305,16 @@ pub async fn list_pr_reviews(
         .with_context(|| format!("Failed to list reviews for PR #{number}"))?;
 
     loop {
-        reviews.extend(page.items.into_iter().map(|r| PullReviewEntry {
-            id: r.id.0,
-            author: r.user.as_ref().map(|u| u.login.clone()).unwrap_or_default(),
-            author_is_bot: r.user.is_some_and(|u| u.r#type.as_str() == "Bot"),
-            body: r.body.unwrap_or_default(),
+        reviews.extend(page.items.into_iter().map(|r| {
+            PullReviewEntry {
+                id: r.id.0,
+                author: r
+                    .user
+                    .as_ref()
+                    .map_or_else(String::new, |u| u.login.clone()),
+                author_is_bot: r.user.is_some_and(|u| u.r#type.as_str() == "Bot"),
+                body: r.body.unwrap_or_default(),
+            }
         }));
 
         // Cap at 300 to mirror the review-comment listing limit.
