@@ -21,7 +21,7 @@ jobs:
       contents: read
       security-events: write # needed for SARIF upload
       actions: read # codeql-action upload bookkeeping
-    uses: clouatre-labs/.github/.github/workflows/security-lint-sarif.yml@dddff268e62daa940dd879112b17739cf920c797
+    uses: clouatre-labs/.github/.github/workflows/security-lint-sarif.yml@5ad3d723a6dbdf1df4f91888eb5a39129ca84ff6
     with:
       label: ubuntu-26.04-arm
       markdown-lint: false

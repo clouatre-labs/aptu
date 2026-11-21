@@ -66,7 +66,7 @@ jobs:
     permissions:
       contents: read
     if: github.event_name == 'pull_request'
-    uses: clouatre-labs/.github/.github/workflows/lint-commits.yml@3945fce6160418daaee3333d28f526dc27eb7a40 # reusable lint-commits
+    uses: clouatre-labs/.github/.github/workflows/lint-commits.yml@5ad3d723a6dbdf1df4f91888eb5a39129ca84ff6 # reusable lint-commits
     with:
       base-sha: ${{ github.event.pull_request.base.sha }}
       head-sha: ${{ github.event.pull_request.head.sha }}
