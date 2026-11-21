@@ -150,8 +150,7 @@ pub fn render_triage_content(
         };
         let loc_str = c
             .estimated_loc
-            .map(|l| format!(" (~{l} LOC)"))
-            .unwrap_or_default();
+            .map_or_else(String::new, |l| format!(" (~{l} LOC)"));
         let _ = writeln!(output, "  {level_label}{loc_str}");
         if !c.affected_areas.is_empty() {
             let _ = writeln!(output, "  {}", style("Affected areas:").dim());
