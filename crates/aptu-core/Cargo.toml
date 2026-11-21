@@ -34,7 +34,7 @@ keyring-core = { workspace = true, optional = true }
 
 
 # History
-chrono = { workspace = true }
+jiff = { workspace = true }
 uuid = { workspace = true }
 
 # Logging

@@ -1122,10 +1122,10 @@ pub async fn fetch_issues_needing_triage(
         .collect();
 
     if let Some(since_date) = since
-        && let Ok(since_timestamp) = chrono::DateTime::parse_from_rfc3339(since_date)
+        && let Ok(since_timestamp) = since_date.parse::<jiff::Timestamp>()
     {
         issues_needing_triage.retain(|issue| {
-            if let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(&issue.created_at) {
+            if let Ok(created_at) = issue.created_at.parse::<jiff::Timestamp>() {
                 created_at >= since_timestamp
             } else {
                 true
