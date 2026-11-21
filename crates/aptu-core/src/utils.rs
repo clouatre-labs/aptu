@@ -5,7 +5,7 @@
 //! Provides reusable text formatting utilities for truncation and relative time display.
 //! These functions are used by CLI, and will be available to iOS and MCP consumers.
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use regex::Regex;
 use std::process::Command;
 
@@ -60,41 +60,43 @@ pub fn truncate(text: &str, max_len: usize) -> String {
     truncate_with_suffix(text, max_len, "...")
 }
 
-/// Formats a `DateTime<Utc>` as relative time (e.g., "3 days ago").
+/// Formats a `jiff::Timestamp` as relative time (e.g., "3 days ago").
 ///
 /// # Examples
 ///
 /// ```
-/// use chrono::{Utc, Duration};
+/// use jiff::SignedDuration;
+/// use jiff::Timestamp;
 /// use aptu_core::utils::format_relative_time;
 ///
-/// let now = Utc::now();
+/// let now = Timestamp::now();
 /// assert_eq!(format_relative_time(&now), "just now");
 ///
-/// let yesterday = now - Duration::days(1);
+/// let yesterday = now - SignedDuration::from_hours(24);
 /// assert_eq!(format_relative_time(&yesterday), "1 day ago");
 /// ```
 #[must_use]
-pub fn format_relative_time(dt: &DateTime<Utc>) -> String {
-    let now = Utc::now();
-    let duration = now.signed_duration_since(*dt);
+pub fn format_relative_time(dt: &Timestamp) -> String {
+    let now = Timestamp::now();
+    let duration = now.duration_since(*dt).abs();
+    let secs = duration.as_secs();
+    let days = secs / 86_400;
+    let hours = secs / 3_600;
 
-    if duration.num_days() > 30 {
-        let months = duration.num_days() / 30;
+    if days > 30 {
+        let months = days / 30;
         if months == 1 {
             "1 month ago".to_string()
         } else {
             format!("{months} months ago")
         }
-    } else if duration.num_days() > 0 {
-        let days = duration.num_days();
+    } else if days > 0 {
         if days == 1 {
             "1 day ago".to_string()
         } else {
             format!("{days} days ago")
         }
-    } else if duration.num_hours() > 0 {
-        let hours = duration.num_hours();
+    } else if hours > 0 {
         if hours == 1 {
             "1 hour ago".to_string()
         } else {
@@ -124,7 +126,7 @@ pub fn format_relative_time(dt: &DateTime<Utc>) -> String {
 /// ```
 #[must_use]
 pub fn parse_and_format_relative_time(timestamp: &str) -> String {
-    match timestamp.parse::<DateTime<Utc>>() {
+    match timestamp.parse::<Timestamp>() {
         Ok(dt) => format_relative_time(&dt),
         Err(_) => timestamp.to_string(),
     }
@@ -263,7 +265,7 @@ pub fn infer_repo_from_git() -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
+    use jiff::SignedDuration;
 
     // ========================================================================
     // truncate() tests
@@ -333,43 +335,43 @@ mod tests {
 
     #[test]
     fn relative_time_just_now() {
-        let now = Utc::now();
+        let now = Timestamp::now();
         assert_eq!(format_relative_time(&now), "just now");
     }
 
     #[test]
     fn relative_time_one_hour() {
-        let one_hour_ago = Utc::now() - Duration::hours(1);
+        let one_hour_ago = Timestamp::now() - SignedDuration::from_hours(1);
         assert_eq!(format_relative_time(&one_hour_ago), "1 hour ago");
     }
 
     #[test]
     fn relative_time_multiple_hours() {
-        let five_hours_ago = Utc::now() - Duration::hours(5);
+        let five_hours_ago = Timestamp::now() - SignedDuration::from_hours(5);
         assert_eq!(format_relative_time(&five_hours_ago), "5 hours ago");
     }
 
     #[test]
     fn relative_time_one_day() {
-        let one_day_ago = Utc::now() - Duration::days(1);
+        let one_day_ago = Timestamp::now() - SignedDuration::from_hours(24);
         assert_eq!(format_relative_time(&one_day_ago), "1 day ago");
     }
 
     #[test]
     fn relative_time_multiple_days() {
-        let three_days_ago = Utc::now() - Duration::days(3);
+        let three_days_ago = Timestamp::now() - SignedDuration::from_hours(72);
         assert_eq!(format_relative_time(&three_days_ago), "3 days ago");
     }
 
     #[test]
     fn relative_time_one_month() {
-        let one_month_ago = Utc::now() - Duration::days(31);
+        let one_month_ago = Timestamp::now() - SignedDuration::from_hours(744);
         assert_eq!(format_relative_time(&one_month_ago), "1 month ago");
     }
 
     #[test]
     fn relative_time_multiple_months() {
-        let two_months_ago = Utc::now() - Duration::days(65);
+        let two_months_ago = Timestamp::now() - SignedDuration::from_hours(1560);
         assert_eq!(format_relative_time(&two_months_ago), "2 months ago");
     }
 
@@ -379,7 +381,7 @@ mod tests {
 
     #[test]
     fn parse_valid_timestamp() {
-        let three_days_ago = (Utc::now() - Duration::days(3)).to_rfc3339();
+        let three_days_ago = (Timestamp::now() - SignedDuration::from_hours(72)).to_string();
         assert_eq!(
             parse_and_format_relative_time(&three_days_ago),
             "3 days ago"

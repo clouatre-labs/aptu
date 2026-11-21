@@ -6,7 +6,12 @@
 
 [advisories]
 version = 2
-ignore = []
+ignore = [
+  # RUSTSEC-2026-0543: chrono is unmaintained. Direct usage was migrated to
+  # jiff; the remaining dependency is transitive via octocrab 0.54 (latest).
+  # Remove this once octocrab drops chrono.
+  "RUSTSEC-2026-0543",
+]
 
 [licenses]
 version = 2
