@@ -10,7 +10,6 @@ Living reference mapping every CI artifact, workflow, and tooling choice to its 
 | `.github/workflows/release.yml` | push `v*.*.*` tag, workflow_dispatch | Build release binaries, attest provenance, publish to GitHub Releases, Homebrew, and GitHub Marketplace (via the `update-marketplace-tag` job) | Single pipeline owns the full release lifecycle |
 | `.github/workflows/build-and-attest.yml` | workflow_call (from release.yml) | Build release binaries and attest provenance | SLSA Level 3 provenance attestation; reusable workflow isolation satisfies SLSA v1.0 Build Level 3 |
 | `.github/workflows/reuse.yml` | push/PR | REUSE SPDX compliance check | Apache-2.0 license attribution is machine-verifiable |
-| `.github/workflows/scorecard.yml` | schedule weekly, push main | OpenSSF Scorecard security posture analysis | Tracks supply-chain security best practices over time |
 | `.github/workflows/issue-triage.yml` | issue opened | Auto-triage and label new issues | Reduces maintainer triage overhead |
 | `.github/workflows/pr-review.yml` | pull_request (opened, synchronize), workflow_dispatch | AI PR review and labeling; path-filtered to code changes | Advisory review on every code-touching PR |
 | `.github/workflows/security.yml` | push/PR main | TruffleHog secret scan and zizmor workflow audit in a single `security-result` job | Consolidated security gate; zizmor step runs even if the secret scan fails |
@@ -66,7 +65,6 @@ Do not raise the global threshold to accommodate a single outlier. The required 
 | zizmor | Step in `security-result` job (`security.yml`), gated `if: always()` so it still runs if the secret scan step fails, and skipped when `.github/workflows/**` didn't change | Enforces SHA pinning and flags unsafe workflow patterns |
 | REUSE compliance | SPDX headers on every source file; checked in `reuse.yml` | Apache-2.0 license attribution is machine-verifiable |
 | Least-privilege permissions | Top-level `permissions: contents: read` in every workflow; elevated scopes declared per-job | Limits blast radius if a step is compromised |
-| OpenSSF Scorecard | `scorecard.yml` on schedule and push to main | Tracks supply-chain security best practices over time |
 | cargo-deny | `cargo deny check` | Audit Rust dependency tree for CVEs and license policy |
 
 ## Dependency Management
