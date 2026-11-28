@@ -54,7 +54,7 @@ indicatif = "0.18"
 dialoguer = "0.12"
 console = "0.16"
 comfy-table = "8"
-jiff = { version = "0.2", default-features = false, features = ["std", "serde"] }
+jiff = { version = "1.0", default-features = false, features = ["std", "serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 # Schemas
